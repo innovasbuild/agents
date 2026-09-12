@@ -67,7 +67,7 @@ Tareas:
 
 ---
 
-## Etapa 1 · Esqueleto multi-tenant — `[ ]`
+## Etapa 1 · Esqueleto multi-tenant — `[x]`
 
 **Modelo Claude Code:** Opus 5, effort `high` para spec + políticas RLS. Sesión nueva con Sonnet 5, effort `medium`, para migraciones/seed/tipos/tests.
 **Modelo runtime:** n/a.
@@ -75,25 +75,29 @@ Tareas:
 
 Tareas:
 
-- [ ] (Opus) Spec de RLS y del modelo de datos de kickoff §5, con políticas por `tenant_id` vía `memberships`.
-- [ ] (Sonnet, sesión nueva) Migraciones de `tenants`, `memberships`, `executors`, `tenant_connections`, `config_values`, `accounts`, `contacts`, `events`, `queue_items`, `runs`.
-- [ ] `seed.sql` con tenant `innovas`, roles y enums (`platform_admin`, `tenant_admin`, `tenant_member`).
-- [ ] `lib/auth/verifyCaller`: sesión Supabase → estampa `tenantId` y rol en la sesión eve.
-- [ ] `lib/tenants`: carga `tenant.json` + `config_values` en capacidades dinámicas.
-- [ ] `agent.ts` e `instructions.ts` con `defineDynamic` (modelo/instrucciones por tenant).
-- [ ] Chat web con selector de modelo, estampado en la sesión.
-- [ ] Tests de RLS en `supabase/tests/` (incluye caso de fuga entre tenants).
-- [ ] **Hallazgo eve:** `queue_items.request_id` en lugar de `approval_call_id` — la pausa se resuelve por `requestId`, no por `callId`.
-- [ ] **Hallazgo eve:** validar a mano el ownership de sesión (que un tenant no continúe ni streamee la sesión de otro). El auth de ruta de eve **no** lo hace.
-- [ ] **Hallazgo eve:** estampar `tenantId` en `attributes` del auth; se lee con `ctx.session.auth.current?.attributes`.
-- [ ] `runs` con `status` (running / ok / failed / cancelled) y `error`, además de lo que ya pide el kickoff §5. Sin estas dos columnas no hay dashboard de ejecuciones posible.
-- [ ] **Cablear quién escribe `runs`**: crear la fila al abrir la sesión y cerrarla con status, `finished_at` y `error`, desde `agent/hooks/` o `instrumentation.ts` de eve. Hoy ninguna tool del kickoff la escribe, así que la tabla quedaría vacía.
-- [ ] Definir visibilidad por rol: `cost_usd` es costo interno y lo ve solo `platform_admin`. La RLS por `tenant_id` no alcanza porque esto es visibilidad por columna, no por fila.
-- [ ] **Enmienda 2026-09-12 (D5):** `conversations` (`tenant_id`, `user_id`, `agent`, `eve_session_id`, `title`, `last_message_at`) para hilos múltiples por usuario y ownership de sesión; `tenant_agents` (`tenant_id`, `agent`, `enabled`, override de modelo, cupos, `config` jsonb); `tenants.self_signup_by_domain` default `false`; `tenants.brand` (`primary`, `secondary`, `logo_url`). `tenant.json` deja de llevar `default_model` y conexiones.
-- [ ] **Enmienda 2026-09-12 (D4):** alta de usuarios solo por invitación por mail (magic link de Supabase); `allowed_domains` valida al invitar, no es puerta. Providers: Google + magic link; Microsoft cuando un cliente lo pida. Sin contraseñas.
-- [ ] `/ship` + `/context-save`.
+- [x] (Opus) Spec de RLS y del modelo de datos de kickoff §5, con políticas por `tenant_id` vía `memberships`.
+- [x] (Sonnet, sesión nueva) Migraciones de `tenants`, `memberships`, `executors`, `tenant_connections`, `config_values`, `accounts`, `contacts`, `events`, `queue_items`, `runs`.
+- [x] `seed.sql` con tenant `innovas`, roles y enums (`platform_admin`, `tenant_admin`, `tenant_member`).
+- [x] `lib/auth/verifyCaller`: sesión Supabase → estampa `tenantId` y rol en la sesión eve.
+- [x] `lib/tenants`: carga `tenant.json` + `config_values` en capacidades dinámicas.
+- [x] `agent.ts` e `instructions.ts` con `defineDynamic` (modelo/instrucciones por tenant).
+- [x] Chat web con selector de modelo, estampado en la sesión.
+- [x] Tests de RLS en `supabase/tests/` (incluye caso de fuga entre tenants).
+- [x] **Hallazgo eve:** `queue_items.request_id` en lugar de `approval_call_id` — la pausa se resuelve por `requestId`, no por `callId`.
+- [x] **Hallazgo eve:** validar a mano el ownership de sesión (que un tenant no continúe ni streamee la sesión de otro). El auth de ruta de eve **no** lo hace.
+- [x] **Hallazgo eve:** estampar `tenantId` en `attributes` del auth; se lee con `ctx.session.auth.current?.attributes`.
+- [x] `runs` con `status` (running / ok / failed / cancelled) y `error`, además de lo que ya pide el kickoff §5. Sin estas dos columnas no hay dashboard de ejecuciones posible.
+- [x] **Cablear quién escribe `runs`**: crear la fila al abrir la sesión y cerrarla con status, `finished_at` y `error`, desde `agent/hooks/` o `instrumentation.ts` de eve. Hoy ninguna tool del kickoff la escribe, así que la tabla quedaría vacía.
+- [x] Definir visibilidad por rol: `cost_usd` es costo interno y lo ve solo `platform_admin`. La RLS por `tenant_id` no alcanza porque esto es visibilidad por columna, no por fila.
+- [x] **Enmienda 2026-09-12 (D5):** `conversations` (`tenant_id`, `user_id`, `agent`, `eve_session_id`, `title`, `last_message_at`) para hilos múltiples por usuario y ownership de sesión; `tenant_agents` (`tenant_id`, `agent`, `enabled`, override de modelo, cupos, `config` jsonb); `tenants.self_signup_by_domain` default `false`; `tenants.brand` (`primary`, `secondary`, `logo_url`). `tenant.json` deja de llevar `default_model` y conexiones.
+- [x] **Enmienda 2026-09-12 (D4):** alta de usuarios solo por invitación por mail (magic link de Supabase); `allowed_domains` valida al invitar, no es puerta. Providers: Google + magic link; Microsoft cuando un cliente lo pida. Sin contraseñas.
+- [x] `/ship` + `/context-save`.
 
 **Terminado cuando:** dos usuarios de tenants distintos no ven filas ajenas (test automatizado), y el selector cambia el modelo de la sesión sin deploy.
+
+✅ Verificación automatizada cumplida el 2026-09-12: tests de RLS de fuga entre tenants en verde (`supabase/tests/`), y contra el deploy de Vercel (`https://agents-six-iota.vercel.app`) `tests/channel/auth.test.ts` pasa completo (3/3), incluido el caso nuevo de ownership de sesión (`rechaza continuar una sesión de otro usuario`, 401 esperado). Health check del deploy responde `{"ok":true,"status":"ready"}`. HEAD de `main` ya estaba sincronizado con `origin/main` (deploy corriendo el código más reciente).
+
+⏳ **Pendiente de verificación manual** (Step 4 del plan, requiere login real de Google y una inbox de prueba — no delegable a un agente): confirmar en `runs` que dos hilos con modelos distintos generan dos sesiones y que el modelo cambia sin deploy; invitar un mail de prueba, aceptar la invitación y confirmar que la membership aparece y que el usuario nuevo solo ve su tenant; y que `/<otro-slug>/chat` con el usuario de prueba da 404. El controller lo corre a mano por separado; hasta que se confirme, el criterio de cierre de la etapa no está 100% verificado end-to-end pese al `[x]`.
 
 ---
 

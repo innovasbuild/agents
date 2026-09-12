@@ -15,4 +15,13 @@ describe.skipIf(!process.env.SPIKE_BASE_URL)("canal eve", () => {
 		const res = await fetch(`${BASE}/eve/agents/outreach/eve/v1/health`);
 		expect(res.status).toBe(200);
 	});
+
+	it("rechaza continuar una sesión de otro usuario", async () => {
+		const response = await fetch(
+			`${process.env.SPIKE_BASE_URL}/eve/agents/outreach/eve/v1/session/wrun_inexistente`,
+			{ method: "POST", body: JSON.stringify({ message: "hola" }) },
+		);
+
+		expect(response.status).toBe(401);
+	});
 });
