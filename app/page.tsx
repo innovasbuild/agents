@@ -18,9 +18,16 @@ export default async function HomePage() {
 
 	if (!auth.user) redirect("/login");
 
+	// user_id explícito, no solo lo que la RLS deja pasar: memberships_select
+	// también expone TODAS las filas del tenant a un tenant_admin, y TODAS las
+	// filas de la base a un platform_admin (para que puedan administrar
+	// usuarios en /settings/usuarios). Sin este filtro, esta pantalla — "a qué
+	// tenant quiero entrar yo" — le mostraría a un admin una fila por cada
+	// miembro de sus tenants, con tenants repetidos.
 	const { data: memberships } = await supabase
 		.from("memberships")
 		.select("role, tenants (slug, display_name)")
+		.eq("user_id", auth.user.id)
 		.order("created_at")
 		.returns<MembershipWithTenant[]>();
 
