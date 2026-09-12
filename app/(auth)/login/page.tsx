@@ -32,7 +32,14 @@ export default function LoginPage() {
 		event.preventDefault();
 		const { error } = await supabase.auth.signInWithOtp({
 			email: email.trim().toLowerCase(),
-			options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+			options: {
+				emailRedirectTo: `${window.location.origin}/auth/callback`,
+				// Sin esto, un mail nunca invitado crea igual una fila en auth.users
+				// y recibe un link — contradice "alta solo por invitación". Un
+				// invitado real ya tiene su fila (la crea admin.inviteUserByEmail al
+				// invitarlo), así que este flag no le rompe el login a nadie invitado.
+				shouldCreateUser: false,
+			},
 		});
 		// El mensaje no distingue mail existente de inexistente: no le confirmamos
 		// a nadie quién tiene cuenta en la plataforma.
