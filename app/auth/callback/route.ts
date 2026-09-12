@@ -73,5 +73,17 @@ export async function GET(request: Request) {
 		}
 	}
 
-	return NextResponse.redirect(new URL("/chat", requestUrl.origin));
+	// Alta solo por invitación: si hay invitaciones pendientes para este mail
+	// verificado, se convierten en memberships acá y en ningún otro lado.
+	const { error: acceptError } = await supabase.rpc(
+		"accept_pending_invitations",
+	);
+	if (acceptError) {
+		console.error(
+			"No se pudieron aceptar las invitaciones:",
+			acceptError.message,
+		);
+	}
+
+	return NextResponse.redirect(new URL("/", requestUrl.origin));
 }
