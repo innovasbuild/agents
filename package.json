@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "next dev",
@@ -14,9 +14,13 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
+    "@vercel/connect": "1.0.0",
+    "ai": "^7.0.93",
+    "eve": "0.54.2",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.5.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
