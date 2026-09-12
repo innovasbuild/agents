@@ -718,13 +718,33 @@ create policy tenant_agents_select on public.tenant_agents
   for select to authenticated
   using ((select public.is_member_of(tenant_id)) or (select public.is_platform_admin()));
 
-create policy tenant_agents_write on public.tenant_agents
-  for all to authenticated
-  using (
+-- Separado por comando, no "for all": con una sola política que repite la
+-- misma expresión en using y with check, el UPDATE de un no-admin no ve la
+-- fila (using la excluye) y Postgres devuelve "UPDATE 0" en silencio, sin
+-- tirar 42501. El using de update se amplía a nivel de membresía (mismo
+-- patrón anti-escalada que memberships_write en la Task 2): la fila pasa a
+-- ser visible para cualquier miembro, pero el with check sigue admin-only,
+-- así que el intento de escritura de un no-admin sí levanta 42501. No filtra
+-- nada nuevo: tenant_agents_select ya deja leer la fila completa a cualquier
+-- miembro.
+create policy tenant_agents_insert on public.tenant_agents
+  for insert to authenticated
+  with check (
     (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
     or (select public.is_platform_admin())
-  )
+  );
+
+create policy tenant_agents_update on public.tenant_agents
+  for update to authenticated
+  using ((select public.is_member_of(tenant_id)) or (select public.is_platform_admin()))
   with check (
+    (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
+    or (select public.is_platform_admin())
+  );
+
+create policy tenant_agents_delete on public.tenant_agents
+  for delete to authenticated
+  using (
     (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
     or (select public.is_platform_admin())
   );
