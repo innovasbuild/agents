@@ -81,6 +81,8 @@ En `"scripts"`, después de `"lint:fix"`:
 "db:types": "supabase gen types typescript --linked > lib/supabase/database.types.ts"
 ```
 
+**Nota que se vuelve relevante en la Task 6:** `db:test` tal como queda acá corre pgTAP contra lo que ya esté en la base — hoy eso es correcto porque no existe `supabase/seed.sql` todavía. Cuando la Task 6 agregue un seed, `db:test` deja de ser correcto sin ajustar (ver esa task).
+
 - [ ] **Step 5: Correr el test y verificar que pasa**
 
 Run: `npm run db:test`
@@ -998,6 +1000,7 @@ git commit -m "feat: runs y events con costo restringido por columna"
 - Create: `supabase/seed.sql`
 - Create: `supabase/migrations/<timestamp>_brand_bucket.sql`
 - Create: `lib/supabase/database.types.ts` (generado)
+- Modify: `package.json` (script `db:test`, separarlo del seed)
 - Modify: `CLAUDE.md`
 
 **Interfaces:**
@@ -1089,10 +1092,25 @@ create policy "brand_update_admins" on storage.objects
 
 En esta etapa el logo se sube a mano desde el dashboard de Supabase a `brand/<slug>/logo.png`, y el valor va en `tenants.brand->>'logo_url'` como `<slug>/logo.png`. La pantalla de carga es Etapa 4.
 
-- [ ] **Step 3: Verificar que el reset con seed queda consistente**
+- [ ] **Step 3: Separar `db:test` del seed, y verificar los dos caminos**
 
-Run: `npm run db:reset && npm run db:test`
-Expected: el reset aplica el seed sin errores y los cinco tests siguen en verde.
+`supabase/config.toml` tiene `[db.seed] enabled = true`: `supabase db reset` aplica `seed.sql` después de las migraciones, siempre. Eso rompe el aislamiento que los tests de pgTAP daban por sentado: la aserción de la Task 2 "el platform_admin ve los tres tenants" cuenta filas de `tenants` **sin acotar por su propio fixture**, porque `platform_admin` ve todo. Antes de esta task no había ningún tenant persistente fuera de cada transacción de test (que hace `rollback`), así que "los tres del fixture" y "todos los que ve platform_admin" coincidían. Con el seed committeado, cualquier test que cuente filas de forma global dejó de ser determinístico: pasa a ver también los tenants del seed.
+
+La CLI de Supabase tiene un flag para esto (`supabase db reset --help` lo confirma): `--no-seed`. La solución es que **`db:test` nunca dependa de lo que haya hecho un `db:reset` previo**: se resetea a sí mismo, sin seed, y corre pgTAP en un solo paso. `db:reset` (con seed) queda para cuando alguien quiere levantar `npm run dev` con datos de ejemplo para navegar la UI.
+
+Modificar `package.json` (el `db:test` de la Task 1):
+
+```json
+"db:test": "supabase db reset --no-seed && supabase test db",
+```
+
+(`db:reset` no cambia.)
+
+Run: `npm run db:reset` (sin encadenar nada más)
+Expected: aplica las migraciones y el seed sin errores SQL. Es la única verificación de que el seed en sí es válido — este comando ya no corre los tests.
+
+Run: `npm run db:test`
+Expected: resetea de nuevo (esta vez sin seed, por su cuenta) y corre los cinco archivos de pgTAP. Los 24 asserts en verde, exactamente igual que antes de que existiera el seed — porque para `db:test` el seed ahora no existe.
 
 - [ ] **Step 4: Aplicar las migraciones a la nube**
 
