@@ -1010,12 +1010,14 @@ git commit -m "feat: runs y events con costo restringido por columna"
 
 **IDs deliberadamente distintos de los que usan los fixtures de pgTAP** (Tasks 2-5 usan el prefijo `aaaaaaaa-0000-...` para tenants y `11111111.../22222222.../33333333.../44444444.../55555555.../66666666...` para usuarios). El seed corre antes que los tests, como estado persistente de la base; si comparte un ID con un fixture, el `insert` del test choca contra una fila que el seed ya dejó committeada y el test entero falla por violación de unicidad. Por eso el seed usa el prefijo `99999999-...`, que ningún test toca:
 
+**El mail también tiene que ser disjunto, no solo el ID**: `auth.users` tiene un índice unique parcial sobre `email`. `admin@innov.as` ya lo usa el fixture de la Task 2 (con un `id` distinto) — por eso el seed usa `admin-seed@innov.as`, no `admin@innov.as`.
+
 ```sql
 -- Usuarios de prueba locales. En la nube estos usuarios no existen: la
 -- membership real de Innovas se crea con un SQL puntual (Step 5).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
-  ('99999999-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'admin@innov.as', now()),
+  ('99999999-1111-1111-1111-111111111111', 'authenticated', 'authenticated', 'admin-seed@innov.as', now()),
   ('99999999-2222-2222-2222-222222222222', 'authenticated', 'authenticated', 'ana@demo.test', now())
 on conflict (id) do nothing;
 
