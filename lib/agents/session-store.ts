@@ -55,7 +55,7 @@ export async function bindSessionToConversation(
 
 export async function openRun(input: OpenRunInput): Promise<void> {
 	const admin = createAdminClient();
-	await admin.from("runs").insert({
+	const { error } = await admin.from("runs").insert({
 		tenant_id: input.tenantId,
 		agent: input.agent,
 		trigger: "chat",
@@ -64,11 +64,12 @@ export async function openRun(input: OpenRunInput): Promise<void> {
 		conversation_id: input.conversationId,
 		status: "running",
 	});
+	if (error) console.error("openRun:", error.message);
 }
 
 export async function closeRun(input: CloseRunInput): Promise<void> {
 	const admin = createAdminClient();
-	await admin
+	const { error } = await admin
 		.from("runs")
 		.update({
 			status: input.status,
@@ -77,4 +78,5 @@ export async function closeRun(input: CloseRunInput): Promise<void> {
 		})
 		.eq("eve_session_id", input.sessionId)
 		.eq("eve_turn_id", input.turnId);
+	if (error) console.error("closeRun:", error.message);
 }
