@@ -19,7 +19,7 @@ export async function createServerSupabase() {
 						}
 					} catch {
 						// setAll llamado desde un Server Component sin permiso de
-						// escritura. El refresco lo hace middleware.ts, así que
+						// escritura. El refresco lo hace proxy.ts, así que
 						// perder esta escritura no desloguea a nadie.
 					}
 				},

@@ -7,7 +7,7 @@ import { type NextRequest, NextResponse } from "next/server";
  * que volver a loguearse. Las rutas de eve quedan afuera del matcher para no
  * meterse con el streaming.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
 	let response = NextResponse.next({ request });
 
 	const supabase = createServerClient(
