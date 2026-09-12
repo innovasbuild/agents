@@ -61,9 +61,9 @@ Tareas:
 - [x] Test de rechazo sin cookie contra `/info`, **no** contra `/health` (que es público por diseño).
 - [x] Deploy a preview y correr el flujo completo ahí.
 - [x] **Prueba de fuego:** un mail real sale de tu Gmail después de aprobarlo en el chat del preview, confirmado contra el evento `input.resolved`.
-- [ ] `/ship` del PR de bootstrap + `/context-save`.
+- [x] `/ship` del PR de bootstrap + `/context-save`. (Nota: el spike se trabajó directo sobre `main` y quedó sincronizado con `origin/main`, sin PR separado — la revisión final de branch se hizo igual sobre los 13 commits antes de cerrar.)
 
-**Terminado cuando:** un mail real sale de tu Gmail después de aprobarlo en el chat web del preview de Vercel.
+**Terminado cuando:** un mail real sale de tu Gmail después de aprobarlo en el chat web del preview de Vercel. ✅ Cumplido el 2026-09-12: mail real enviado y recibido tras aprobar en el chat del deploy de Vercel; rechazo verificado sin envío; `localDev()` confirmado ausente en el deploy.
 
 ---
 
