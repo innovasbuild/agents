@@ -1317,7 +1317,13 @@ export async function resolveTenantAccess(slug: string): Promise<TenantAccess | 
 		.eq("role", "platform_admin")
 		.maybeSingle();
 
-	const role = (membership?.role ?? platformAdmin?.role) as TenantRole | undefined;
+	// platform_admin siempre gana, igual que en la RLS (todas las políticas lo
+	// chequean como condición aparte, nunca subordinada al rol local). Si se
+	// resolviera al revés, un platform_admin que además tuviera una membership
+	// local en un tenant (tenant_member, por ejemplo) se vería degradado en la
+	// UI aunque la base le siga dando acceso completo — la Task 9 usa este rol
+	// para decidir quién ve /settings/usuarios.
+	const role = (platformAdmin?.role ?? membership?.role) as TenantRole | undefined;
 	if (!role) return null;
 
 	return {
