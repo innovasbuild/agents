@@ -55,7 +55,7 @@ create table public.tenants (
   display_name text not null,
   allowed_domains text[] not null default '{}',
   default_model text not null default 'anthropic/claude-sonnet-5',
-  allowed_models text[] not null default '{anthropic/claude-sonnet-5,anthropic/claude-haiku-4-5}',
+  allowed_models text[] not null default '{anthropic/claude-sonnet-5,anthropic/claude-haiku-4.5}',
   self_signup_by_domain boolean not null default false,
   brand jsonb not null default '{}'::jsonb,
   active boolean not null default true,

@@ -88,11 +88,11 @@ Tres hábitos que ahorran más tokens que el modelo elegido:
 | Tarea del agente | Modelo runtime | Por qué |
 |---|---|---|
 | Chat principal con el ejecutor | `anthropic/claude-sonnet-5` (selector permite subir a Opus) | Conversación, decisiones de flujo, tool calls. Sonnet alcanza y es 2.5× más barato que Opus. |
-| Subagente `researcher` | `anthropic/claude-haiku-4-5` | Lee mucho, decide poco. Lo caro es el input. |
+| Subagente `researcher` | `anthropic/claude-haiku-4.5` | Lee mucho, decide poco. Lo caro es el input. |
 | Redacción del primer toque en frío | `anthropic/claude-opus-5`, effort `high` | Es el mensaje que decide la tasa de respuesta. Vale el 2.5×. Son pocos tokens de output. |
 | Follow-ups y respuestas en hilo abierto | `anthropic/claude-sonnet-5` | Tiene el hilo como contexto; la creatividad pesa menos. |
-| Gate de estilo | Código determinístico + `anthropic/claude-haiku-4-5` solo para el chequeo semántico | La lista de vetados es regex. Haiku solo confirma tono e idioma. |
-| `morning-sweep` (clasificar respuestas) | `anthropic/claude-haiku-4-5` | Clasificación en pocas categorías, alto volumen. |
+| Gate de estilo | Código determinístico + `anthropic/claude-haiku-4.5` solo para el chequeo semántico | La lista de vetados es regex. Haiku solo confirma tono e idioma. |
+| `morning-sweep` (clasificar respuestas) | `anthropic/claude-haiku-4.5` | Clasificación en pocas categorías, alto volumen. |
 | Evals del agente | `anthropic/claude-sonnet-5` como juez | Suficiente para verificar formato, vetados y claim. |
 
 Prompt caching en eve va solo si `instructions.md` y las skills son estables por tenant; por eso el canon se versiona y no se lee de Drive en cada turno.
@@ -304,7 +304,7 @@ Entregables: migraciones de §5 con RLS; `seed.sql` con tenant `innovas`, roles 
 ### Etapa 2 · Conexiones del tenant `innovas`
 
 **Modelo Claude Code:** **Sonnet 5**, effort `high`. Es wiring sobre docs conocidas. Opus solo si el OAuth de HubSpot vía Vercel Connect necesita diseño.
-**Modelo runtime:** `anthropic/claude-haiku-4-5` para probar las conexiones desde el chat.
+**Modelo runtime:** `anthropic/claude-haiku-4.5` para probar las conexiones desde el chat.
 
 Entregables: `connections/crm.ts` dinámica (HubSpot MCP para `innovas`, `null` para tenants sin CRM); `connections/brain.ts` con la key del tenant; `coldiq.ts`; `places.ts`; `gmail.ts` con `connect("<uid>")`; propiedades custom de outreach creadas en HubSpot; `tenant_connections` como fuente de las URLs y refs de secretos.
 **Terminado cuando:** desde el chat, `crm__search_contacts` y `brain__brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
@@ -312,7 +312,7 @@ Entregables: `connections/crm.ts` dinámica (HubSpot MCP para `innovas`, `null` 
 ### Etapa 3 · Agente de outreach v1
 
 **Modelo Claude Code:** Opus 5 para `instructions.ts`, el gate de estilo y las evals (effort `high`); **Sonnet 5** en sesión nueva para tools, subagente y wiring (effort `high`). Incorporar acá el plugin `innovas-outreach` cuando Mati lo pase: sus skills alimentan `tenants/innovas/skills/`.
-**Modelo runtime:** chat `anthropic/claude-sonnet-5`; `researcher` `anthropic/claude-haiku-4-5`; redacción del primer toque `anthropic/claude-opus-5`.
+**Modelo runtime:** chat `anthropic/claude-sonnet-5`; `researcher` `anthropic/claude-haiku-4.5`; redacción del primer toque `anthropic/claude-opus-5`.
 
 Entregables: constitución en `instructions.ts` (cinco frenos, cola para frío, claim por persona); `tenants/innovas/skills/` con ICP, redacción, hooks, objeciones (vía `sync-brain`); tools de §4; `lib/outreach` con `contact_key`, dedup y gate (TDD); subagente `researcher`; evals del gate y del claim.
 **Terminado cuando:** corrida piloto de **5 contactos reales**: CSV → research → redacción → cola → aprobación → envío → `events` + atribución en HubSpot, con evals en verde.
@@ -328,7 +328,7 @@ Entregables: `/cola` (aprobar, editar, rechazar; resuelve la pausa de eve), `/pi
 ### Etapa 5 · Escucha, follow-ups y fuentes
 
 **Modelo Claude Code:** **Sonnet 5**, effort `high`. Debugging de Cron en Vercel con Opus si hace falta.
-**Modelo runtime:** `morning-sweep` y clasificación `anthropic/claude-haiku-4-5`; follow-ups `anthropic/claude-sonnet-5`.
+**Modelo runtime:** `morning-sweep` y clasificación `anthropic/claude-haiku-4.5`; follow-ups `anthropic/claude-sonnet-5`.
 
 Entregables: `schedules/morning-sweep.ts` y `schedules/followups.ts` iterando tenants activos; `read_replies` con clasificación de respuestas; ColdIQ y Places como flujo de carga desde el chat; `sync-brain` en CI.
 **Terminado cuando:** una respuesta real en tu Gmail mueve el contacto a `respondio` sin intervención, y el follow-up vencido aparece en la cola a la mañana.

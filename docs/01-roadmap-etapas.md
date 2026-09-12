@@ -104,7 +104,7 @@ Tareas:
 ## Etapa 2 · Conexiones del tenant `innovas` — `[ ]`
 
 **Modelo Claude Code:** Sonnet 5, effort `high` (Opus solo si el OAuth de HubSpot vía Vercel Connect necesita diseño).
-**Modelo runtime:** `anthropic/claude-haiku-4-5` para probar conexiones desde el chat.
+**Modelo runtime:** `anthropic/claude-haiku-4.5` para probar conexiones desde el chat.
 **Spec/Plan:** `docs/superpowers/specs/02-conexiones-innovas.md` · `docs/superpowers/plans/02-conexiones-innovas.md`
 
 Tareas:
@@ -129,7 +129,7 @@ Tareas:
 ## Etapa 3 · Agente de outreach v1 — `[ ]`
 
 **Modelo Claude Code:** Opus 5, effort `high` para `instructions.ts`, gate de estilo y evals. Sesión nueva con Sonnet 5, effort `high`, para tools/subagente/wiring.
-**Modelo runtime:** chat `anthropic/claude-sonnet-5` · `researcher` `anthropic/claude-haiku-4-5` · primer toque en frío `anthropic/claude-opus-5`.
+**Modelo runtime:** chat `anthropic/claude-sonnet-5` · `researcher` `anthropic/claude-haiku-4.5` · primer toque en frío `anthropic/claude-opus-5`.
 **Spec/Plan:** `docs/superpowers/specs/03-agente-outreach-v1.md` · `docs/superpowers/plans/03-agente-outreach-v1.md`
 
 - [ ] Incorporar el plugin `innovas-outreach` cuando esté disponible; sus skills alimentan `tenants/innovas/skills/`.
@@ -178,7 +178,7 @@ Tareas:
 ## Etapa 5 · Escucha, follow-ups y fuentes — `[ ]`
 
 **Modelo Claude Code:** Sonnet 5, effort `high` (Opus para debugging de Cron en Vercel si hace falta).
-**Modelo runtime:** `morning-sweep` y clasificación en `anthropic/claude-haiku-4-5` · follow-ups en `anthropic/claude-sonnet-5`.
+**Modelo runtime:** `morning-sweep` y clasificación en `anthropic/claude-haiku-4.5` · follow-ups en `anthropic/claude-sonnet-5`.
 **Spec/Plan:** `docs/superpowers/specs/05-escucha-followups.md` · `docs/superpowers/plans/05-escucha-followups.md`
 
 - [ ] **Hallazgo eve (leer antes de diseñar):** los schedules son root-only y corren con el principal de la app (`eve:app`, tipo runtime) — no llevan `tenantId` ni pueden parkear esperando aprobación en modo markdown. Hay que usar la forma `run` despachando por un canal autenticado como usuario.
@@ -266,7 +266,7 @@ Tareas:
 ## Etapa 10 · Agentes inbound y handoff a un comercial — `[ ]`
 
 **Modelo Claude Code:** Opus 5, effort `high` para la spec (modelo de conversación, handoff, canal entrante). Sesión nueva con Sonnet 5 para tools, canal y UI.
-**Modelo runtime:** calificación de leads en `anthropic/claude-haiku-4-5`; conversación con el prospecto en `anthropic/claude-sonnet-5`.
+**Modelo runtime:** calificación de leads en `anthropic/claude-haiku-4.5`; conversación con el prospecto en `anthropic/claude-sonnet-5`.
 **Spec/Plan:** `docs/superpowers/specs/10-inbound-handoff.md` · `docs/superpowers/plans/10-inbound-handoff.md`
 
 Agregada el 2026-09-12 (`docs/superpowers/specs/2026-09-12-arquitectura-plataforma-design.md`, D1). Segunda familia de agentes: atención de pedidos por sitio web o WhatsApp, calificación de leads, con memoria, despertados por webhook. Se abre recién cerrado el ciclo outbound completo (Etapas 1 a 9). Prerrequisitos que las etapas anteriores dejan listos: `conversations` (Etapa 1), canal WhatsApp vía Chat SDK (Etapa 8), observabilidad por tenant (Etapa 9).

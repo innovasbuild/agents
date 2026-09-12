@@ -222,7 +222,7 @@ create table public.tenants (
   display_name text not null,
   allowed_domains text[] not null default '{}',
   default_model text not null default 'anthropic/claude-sonnet-5',
-  allowed_models text[] not null default '{anthropic/claude-sonnet-5,anthropic/claude-haiku-4-5}',
+  allowed_models text[] not null default '{anthropic/claude-sonnet-5,anthropic/claude-haiku-4.5}',
   self_signup_by_domain boolean not null default false,
   brand jsonb not null default '{}'::jsonb,
   active boolean not null default true,
@@ -2750,29 +2750,29 @@ git commit -m "feat: hooks de sesion y de runs"
 import { describe, expect, it } from "vitest";
 import { pickModel } from "@/lib/agents/model";
 
-const allowed = ["anthropic/claude-sonnet-5", "anthropic/claude-haiku-4-5"];
+const allowed = ["anthropic/claude-sonnet-5", "anthropic/claude-haiku-4.5"];
 
 describe("pickModel", () => {
 	it("prioriza el override del agente en el tenant", () => {
 		expect(
 			pickModel({
-				agentModel: "anthropic/claude-haiku-4-5",
+				agentModel: "anthropic/claude-haiku-4.5",
 				conversationModel: "anthropic/claude-sonnet-5",
 				defaultModel: "anthropic/claude-sonnet-5",
 				allowedModels: allowed,
 			}),
-		).toBe("anthropic/claude-haiku-4-5");
+		).toBe("anthropic/claude-haiku-4.5");
 	});
 
 	it("usa el modelo que eligió el usuario en el hilo", () => {
 		expect(
 			pickModel({
 				agentModel: null,
-				conversationModel: "anthropic/claude-haiku-4-5",
+				conversationModel: "anthropic/claude-haiku-4.5",
 				defaultModel: "anthropic/claude-sonnet-5",
 				allowedModels: allowed,
 			}),
-		).toBe("anthropic/claude-haiku-4-5");
+		).toBe("anthropic/claude-haiku-4.5");
 	});
 
 	it("cae al default del tenant si no hay elección", () => {
