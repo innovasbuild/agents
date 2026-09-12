@@ -46,3 +46,26 @@ export async function renameConversation(
 		.eq("id", conversationId);
 	revalidatePath(`/${slug}/chat`);
 }
+
+/**
+ * Backstop de bind-session.ts (hook server-side de eve): guarda el
+ * eve_session_id apenas el cliente lo conoce (onSessionChange), en vez de
+ * esperar únicamente a que el hook lo ate de forma asíncrona. Así, si el
+ * usuario navega o refresca mientras el primer turno de un hilo nuevo sigue
+ * corriendo, el remount encuentra `eve_session_id` seteado y puede pasar
+ * `resume: true` en vez de arrancar una sesión nueva sin relación con la que
+ * ya está corriendo en el servidor. Ver node_modules/eve/docs/guides/frontend/
+ * overview.mdx, sección "Resumable sessions".
+ */
+export async function persistSessionId(
+	conversationId: string,
+	sessionId: string,
+	slug: string,
+) {
+	const supabase = await createServerSupabase();
+	await supabase
+		.from("conversations")
+		.update({ eve_session_id: sessionId })
+		.eq("id", conversationId);
+	revalidatePath(`/${slug}/chat`);
+}

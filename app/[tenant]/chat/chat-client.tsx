@@ -2,9 +2,13 @@
 
 import { useEveAgent } from "eve/react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { createConversation, renameConversation } from "./actions";
+import {
+	createConversation,
+	persistSessionId,
+	renameConversation,
+} from "./actions";
 
 interface Thread {
 	id: string;
@@ -102,9 +106,24 @@ export function ChatClient({
 function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const [text, setText] = useState("");
 
+	// bind-session.ts (hook server-side) ata eve_session_id de forma asíncrona
+	// cuando arranca la sesión. Para un hilo nuevo, ese hook puede tardar más
+	// que una navegación o un refresh del usuario; onSessionChange guarda el
+	// id apenas el cliente lo conoce, así un remount en el medio del primer
+	// turno encuentra el id y puede resumir en vez de arrancar de cero. Ref en
+	// vez de state: no debe disparar un re-render, solo evitar escrituras
+	// repetidas mientras dura la misma sesión.
+	const persistedSessionId = useRef(thread.eve_session_id);
+
 	const agent = useEveAgent({
 		agent: "outreach",
 		headers: { "x-innovas-conversation": thread.id },
+		onSessionChange: (session) => {
+			if (session && session.sessionId !== persistedSessionId.current) {
+				persistedSessionId.current = session.sessionId;
+				void persistSessionId(thread.id, session.sessionId, slug);
+			}
+		},
 		...(thread.eve_session_id
 			? {
 					initialSession: { sessionId: thread.eve_session_id, streamIndex: 0 },
