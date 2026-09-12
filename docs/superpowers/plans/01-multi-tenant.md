@@ -2407,10 +2407,23 @@ Run: `npm run dev` en una terminal y en otra:
 
 ```bash
 curl -s localhost:3000/eve/agents/outreach/eve/v1/health
+```
+
+Expected: el health devuelve `{"ok":true,...}` — es público en cualquier entorno.
+
+**El resto del canal no se puede probar con `npm run dev` a secas**: `localDev()` sigue en el auth walk cuando `VERCEL_ENV` no está seteado (que es siempre el caso en local), y acepta la request antes de que `supabaseAuth()`/`resolveChannelContext` corran — es la conveniencia de desarrollo local que ya traía la Etapa 0, no algo que esta task cambie. Para probar el rechazo real, hay que simular un entorno de Vercel:
+
+```bash
+VERCEL_ENV=preview npm run dev
+```
+
+Y en otra terminal:
+
+```bash
 curl -s -o /dev/null -w "%{http_code}\n" localhost:3000/eve/agents/outreach/eve/v1/info
 ```
 
-Expected: el health devuelve `{"ok":true,...}`; el `info` sin cookie devuelve `401`.
+Expected: `401` — con `VERCEL_ENV` seteado, `localDev()` queda afuera del array y `supabaseAuth()` es el único autenticador.
 
 - [ ] **Step 3: Correr typecheck y tests**
 
