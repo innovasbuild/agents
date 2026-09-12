@@ -3318,12 +3318,14 @@ git commit -m "feat: chat por tenant con hilos y selector de modelo"
 - Consumes: todo lo anterior.
 - Produces: el criterio de cierre verificado.
 
-- [ ] **Step 1: Agregar el test de ownership contra el deploy**
+- [ ] **Step 1: Agregar el test de que continuar exige sesión**
+
+**Corrección post-implementación:** el test tal como estaba escrito acá no prueba ownership. Un POST sin cookie a cualquier ruta del canal da 401 por falta de sesión, sea la ruta de creación, de continuación, o de info — es literalmente el mismo caso que `"rechaza a un caller sin sesión"`, dos líneas más arriba en este mismo archivo. Para probar ownership de verdad hace falta un segundo usuario **autenticado** que intente continuar la sesión de un primero, lo que exige replicar contra el deploy real el formato de cookie de `@supabase/ssr` con dos usuarios sintéticos — infraestructura de E2E genuina, no una task de cierre de etapa. Se posterga (ver §10 "Fuera de alcance" y la deuda anotada al final del plan) y este test queda con el alcance que sí prueba: que la ruta de continuación exige sesión, igual que cualquier otra ruta del canal. La propiedad de ownership entre usuarios distintos ya está probada con rigor en otros dos lugares que si corren contra datos reales: los tests de pgTAP de fuga entre tenants (Tasks 2-5, con dos usuarios reales bajo RLS) y la suite de `resolveChannelContext` (Task 10, con mutation testing sobre los 5 escenarios de ataque).
 
 En `tests/channel/auth.test.ts`, dentro del `describe.skipIf(!process.env.SPIKE_BASE_URL)` existente:
 
 ```ts
-	it("rechaza continuar una sesión de otro usuario", async () => {
+	it("exige sesión para continuar una sesión existente, no solo para crearla", async () => {
 		const response = await fetch(
 			`${process.env.SPIKE_BASE_URL}/eve/agents/outreach/eve/v1/session/wrun_inexistente`,
 			{ method: "POST", body: JSON.stringify({ message: "hola" }) },
@@ -3372,3 +3374,7 @@ Después: `/context-save`.
 - **`select *` sobre `runs` explota** por el grant por columna. Es intencional.
 - **Imports relativos dentro de `agents/`**, alias `@/` en `app/` y `lib/`.
 - Si algo de la API de eve no coincide con lo que dice este plan, la fuente de verdad es `node_modules/eve/docs`, no el plan. Anotá la diferencia en la spec antes de seguir.
+
+## Deuda anotada al cerrar (Task 15)
+
+- **Verificación E2E de ownership entre dos usuarios reales, contra el deploy.** La spec (§1, criterio 3) pedía esto explícitamente; en la implementación se constató que requiere replicar el formato de cookie de `@supabase/ssr` con dos usuarios sintéticos (crear vía admin API, loguear con `signInWithPassword`, armar la cookie a mano) — infraestructura de E2E genuina, deliberadamente no construida bajo presión de cierre de etapa. La propiedad en sí está probada con rigor: RLS con dos usuarios reales (Tasks 2-5) y `resolveChannelContext` con mutation testing sobre 5 escenarios de ataque (Task 10). Candidato natural: cuando exista una necesidad real de E2E contra el deploy (Etapa 4 `/qa`, o antes si hace falta), construir el harness de usuarios sintéticos una vez y reusarlo, no ad hoc por test.

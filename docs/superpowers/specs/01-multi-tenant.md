@@ -16,9 +16,11 @@ Dejar la plataforma con separación real entre clientes: datos aislados por la b
 
 1. Dos usuarios de tenants distintos no ven filas ajenas, con test automatizado tabla por tabla.
 2. El selector cambia el modelo de la sesión sin deploy.
-3. Un usuario no puede continuar ni streamear la sesión de eve de otro, verificado contra el deploy de Vercel.
+3. Un usuario no puede continuar ni streamear la sesión de eve de otro.
 
 Los tres se prueban solos. Ninguno es "los archivos existen".
+
+**Nota post-implementación sobre el criterio 3:** queda probado con rigor a dos niveles — `resolveChannelContext` (§6.1) con mutation testing sobre 5 escenarios de ataque, y la RLS de `conversations` con dos usuarios reales distintos (pgTAP). Lo que NO se construyó es una verificación end-to-end contra el deploy con dos usuarios autenticados reales: exige replicar a mano el formato de cookie de `@supabase/ssr`, que es infraestructura de E2E genuina y se posterga a propósito en vez de improvisarla al cerrar la etapa (ver el plan, "Deuda anotada al cerrar").
 
 ## 2. Decisiones de esta spec
 
