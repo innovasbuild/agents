@@ -53,6 +53,9 @@ export async function verifyCaller(
 					setAll() {
 						// No hay response al que escribirle cookies en este contexto
 						// (canal de eve, no un route handler de Next); no-op intencional.
+						// El refresco de sesión no está implementado en este spike: sin
+						// middleware, el access token expira (default 1h de Supabase) y el
+						// usuario tiene que volver a loguearse. Deuda para Etapa 1.
 					},
 				},
 			},

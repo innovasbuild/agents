@@ -357,3 +357,4 @@ Las de HubSpot, brain, ColdIQ, Places y `CRON_SECRET` entran en sus etapas.
 | Etapa 2 | `google_tokens` se absorbe en `executors`; refresh token a Vault |
 | Etapa 2 | Verificación de la app de Google o migración a Vercel Connect |
 | Etapa 5 | Los schedules no llevan tenant ni parkean: forma `run` por canal autenticado (hallazgo 5) |
+| Etapa 1 | No hay middleware de refresh de sesión de Supabase; el access token expira y el usuario debe re-loguearse |

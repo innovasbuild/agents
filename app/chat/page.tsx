@@ -32,7 +32,9 @@ export default function ChatPage() {
 			}
 			const request = part.toolMetadata?.eve?.inputRequest;
 			if (!request) return [];
-			return [{ requestId: request.requestId, input: part.input as SendEmailInput }];
+			return [
+				{ requestId: request.requestId, input: part.input as SendEmailInput },
+			];
 		}),
 	);
 
@@ -44,9 +46,13 @@ export default function ChatPage() {
 				{agent.data.messages.map((message) => (
 					<article key={message.id}>
 						<strong>{message.role}:</strong>{" "}
-						{message.parts.map((part, index) =>
-							part.type === "text" ? <span key={index}>{part.text}</span> : null,
-						)}
+						{message.parts
+							.filter((part) => part.type === "text")
+							.map((part) => (
+								<span key={`${message.id}-text-${part.stepIndex}`}>
+									{part.text}
+								</span>
+							))}
 					</article>
 				))}
 			</section>
@@ -89,7 +95,10 @@ export default function ChatPage() {
 					event.preventDefault();
 					const message = text.trim();
 					if (message.length > 0 && !isResuming) {
-						void agent.send(message, isBusy ? { turnPolicy: "steer" } : undefined);
+						void agent.send(
+							message,
+							isBusy ? { turnPolicy: "steer" } : undefined,
+						);
 						setText("");
 					}
 				}}

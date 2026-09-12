@@ -15,6 +15,9 @@ export default defineTool({
 	async execute(input, ctx) {
 		const userId = ctx.session.auth.current?.principalId;
 		if (!userId) throw new Error("send_email requiere un usuario autenticado");
+		if (ctx.session.auth.current?.principalType !== "user") {
+			throw new Error("send_email requiere un principal de tipo user");
+		}
 		return sendMail(userId, input);
 	},
 });

@@ -18,8 +18,10 @@ export async function createServerSupabase() {
 							cookieStore.set(name, value, options);
 						}
 					} catch {
-						// setAll llamado desde un Server Component sin permiso de escritura;
-						// el middleware/route handler se encarga de refrescar la sesión.
+						// setAll llamado desde un Server Component sin permiso de escritura.
+						// El refresco de sesión no está implementado en este spike: sin
+						// middleware, el access token expira (default 1h de Supabase) y el
+						// usuario tiene que volver a loguearse. Deuda para Etapa 1.
 					}
 				},
 			},
