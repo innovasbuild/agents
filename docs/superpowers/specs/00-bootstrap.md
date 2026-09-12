@@ -50,15 +50,24 @@ El chat de esta etapa es andamio para probar la aprobación, no la UI del produc
 
 ## 4. Hallazgos de la doc de eve que corrigen el kickoff
 
-Verificados contra `https://eve.dev/llms-full.txt` (corpus completo de la doc). Los cinco afectan código que se escribe en esta etapa o en las próximas.
+Verificados contra `https://eve.dev/llms-full.txt` (corpus completo de la doc) y, durante la implementación, contra `node_modules/eve/docs/` de la versión instalada (`0.54.2`). Los primeros cinco vienen del brainstorming original; el sexto se agregó durante la implementación de la Task 9.
 
 1. **`eve dev` no se corre aparte con Next.js.** `npm run dev` bootea el dev server de eve al lado y reescribe las rutas hacia él. El `npm run dev && npx eve dev` del kickoff §Etapa 0 sobra. Para producción local: `eve build`, después `next build && next start` (eve en puerto `4274`).
 2. **`eve init .` genera `agent/` en singular, con `instructions.md`** (markdown, no `instructions.ts`), y `evals/` va **al lado** de `agent/`, no adentro. Hay que mover a `agents/outreach/` para que matchee `withEve({ agents: { outreach: ... } })`.
 3. **La pausa se resuelve por `requestId`, no por `callId`.** La columna `queue_items.approval_call_id` del kickoff §5 tiene que ser `request_id`. El `callId` llega en el request pero la respuesta se keyea por `requestId`. → **Deuda para Etapa 1.**
 4. **El auth de ruta no valida ownership de sesión.** eve autentica al caller pero no verifica que la sesión que quiere continuar o streamear sea suya. Hay que chequearlo a mano. → **Deuda para Etapas 1 y 4.**
 5. **Los schedules corren sin tenant.** Son root-only y arrancan con `principalId: "eve:app"`, `principalType: "runtime"`; en modo markdown no llevan `tenantId` ni pueden parkear esperando aprobación. `morning-sweep` y `followups` necesitan la forma `run` despachando por un canal autenticado como usuario. → **Deuda para Etapa 5.**
+6. **El input real de la tool no viaja en `part.toolMetadata.eve.inputRequest`.** Ese objeto (el que muestra el ejemplo de `guides/frontend/overview.mdx`) solo trae `requestId`, `kind`, `prompt`, `options`, `display`, `allowFreeform` — nunca el input de la tool en pausa. El `to`/`subject`/`body` de `send_email` está en `part.input` del propio `dynamic-tool` part cuando `state === "approval-requested"` (confirmado en `node_modules/eve/dist/src/client/message-reducer-types.d.ts`). Un chat de aprobación tiene que combinar ambas fuentes: `inputRequest.requestId` para `respond()`, `part.input` para mostrarle al usuario qué está por aprobar. → Afecta cualquier UI de aprobación futura (Etapa 4 `/cola`).
 
 Dato operativo: eve requiere **Node.js 24+**.
+
+### 4.1 Hallazgos operativos del deploy (Task 10, fuera de la doc de eve)
+
+No son hallazgos de la doc de eve sino de la infraestructura de Vercel/Supabase, descubiertos al desplegar por primera vez. Quedan anotados porque las próximas etapas van a redeployar sobre el mismo proyecto:
+
+- **El proyecto de Vercel se linkeó (Task 1) antes de que existiera el scaffold de Next.js (Task 2).** Vercel lo detectó como Framework Preset "Other" y servía `public/` como sitio estático, dando 404 en cualquier ruta real. Fix: `vercel.json` con `{"framework": "nextjs"}` en la raíz del repo, que fuerza el framework independientemente de la detección automática del proyecto.
+- **Las URLs de preview individuales (`agents-<hash>-innovasbuild.vercel.app`) están protegidas por Vercel Deployment Protection (SSO)** por default en proyectos de team — un curl sin sesión de Vercel redirige a `vercel.com/sso-api`. El alias estable de producción (`https://agents-six-iota.vercel.app`) no tiene esa protección y es el que se usó para las verificaciones automatizadas de esta etapa (health check, test de auth contra el deploy real). Deuda para cuando haga falta CI contra previews: usar el bypass token de Vercel (`x-vercel-protection-bypass`) o desactivar la protección para el entorno Preview.
+- **Un typo manual en `.env.local` (`NEXT_PUBLIC_SUPABASE_URL` con un project-ref distinto al de las JWT `ANON_KEY`/`SERVICE_ROLE_KEY`)** se corrigió localmente pero no se replicó en las env vars de Vercel, causando `ERR_NAME_NOT_RESOLVED` al clickear "Entrar con Google" en el deploy. Verificar siempre que el `ref` de la URL coincida con el claim `ref` de las JWT antes de dar por buena una configuración de Supabase (se puede decodificar el payload de la anon key, que es pública, sin tocar la service role key).
 
 ## 5. Flujo del spike, de punta a punta
 

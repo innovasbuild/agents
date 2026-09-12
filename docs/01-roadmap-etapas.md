@@ -25,7 +25,7 @@ Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` c
 
 ---
 
-## Etapa 0 · Bootstrap y spike de riesgo — `[ ]`
+## Etapa 0 · Bootstrap y spike de riesgo — `[x]`
 
 **Modelo Claude Code:** Opus 5, effort `high` (subir a Fable 5.1 solo si el spike de Gmail no destraba en dos intentos).
 **Modelo runtime:** `anthropic/claude-sonnet-5` (tool de prueba).
@@ -37,30 +37,30 @@ Decisiones del brainstorming (detalle en la spec): el token de Gmail sale de **S
 
 Tareas:
 
-- [ ] **Accesos primero** (bloquea todo lo demás): proyecto en Google Cloud + client OAuth Web application + pantalla de consentimiento en modo testing con tu mail como test user + redirect URI al callback de Supabase.
-- [ ] Proyecto Supabase `innovas-agents` con provider Google configurado con ese client.
-- [ ] Proyecto Vercel linkeado al repo de GitHub, con Supabase enchufado desde el Marketplace (`vercel link && vercel env pull .env.local`).
-- [ ] Verificar **Node 24+** (lo exige eve).
-- [ ] Scaffold Next.js 15 App Router (`create-next-app` con ts/app/tailwind) y commit inicial.
-- [ ] Instalar `eve@0.54.2` **exacto, sin caret**, más `ai`, `zod`, `@supabase/supabase-js`, `@supabase/ssr`.
-- [ ] Instalar y configurar Biome + Vitest.
-- [ ] Copiar `CLAUDE.md`, `.claude/settings.json`, `.claude/launch.json`, `.claude/hooks/check-gstack.sh` (contenido en kickoff §7).
-- [ ] `npx eve@latest init .` y mover `agent/` → `agents/outreach/` (el init genera `agent/` en singular, con `instructions.md`, y `evals/` al lado).
-- [ ] `next.config.ts` con `withEve(nextConfig, { agents: { outreach: "./agents/outreach" } })`.
-- [ ] `agents/outreach/agent.ts` con `model: "anthropic/claude-sonnet-5"` (obligatorio si el archivo existe).
-- [ ] Health en local: `curl localhost:3000/eve/agents/outreach/eve/v1/health` devuelve `{ ok: true, status: "ready" }`. **Ojo:** `npm run dev` ya bootea el dev server de eve; **no** correr `npx eve dev` aparte.
-- [ ] Migración `google_tokens` con RLS habilitada sin políticas + `revoke` a `anon` y `authenticated`.
-- [ ] Login con Google por Supabase pidiendo `gmail.send` y `gmail.readonly`, con `access_type=offline` y `prompt=consent`.
-- [ ] `app/auth/callback/route.ts`: `exchangeCodeForSession` y upsert del `provider_refresh_token`.
-- [ ] `lib/auth/verifyCaller`: sesión Supabase → `{ userId, email }` o `null`.
-- [ ] `agents/outreach/channels/eve.ts` con el auth walk y `localDev()` **condicionado por `VERCEL_ENV`** (si queda activo en un deploy, la puerta queda abierta a internet).
-- [ ] `lib/gmail/mime.ts` con TDD: headers, subject con tildes y eñe en RFC 2047, base64url sin padding.
-- [ ] `lib/gmail/send.ts`: refresh token → access token → API de Gmail (`users/me`).
-- [ ] `agents/outreach/tools/send_email.ts` con `approval: always()` y sin campo de credencial en el `inputSchema`.
-- [ ] Chat web mínimo con `useEveAgent({ agent: "outreach" })` que muestre y resuelva la aprobación (leer la doc local de eve antes de escribirlo).
-- [ ] Test de rechazo sin cookie contra `/info`, **no** contra `/health` (que es público por diseño).
-- [ ] Deploy a preview y correr el flujo completo ahí.
-- [ ] **Prueba de fuego:** un mail real sale de tu Gmail después de aprobarlo en el chat del preview, confirmado contra el evento `input.resolved`.
+- [x] **Accesos primero** (bloquea todo lo demás): proyecto en Google Cloud + client OAuth Web application + pantalla de consentimiento en modo testing con tu mail como test user + redirect URI al callback de Supabase.
+- [x] Proyecto Supabase `innovas-agents` con provider Google configurado con ese client.
+- [x] Proyecto Vercel linkeado al repo de GitHub, con Supabase enchufado desde el Marketplace (`vercel link && vercel env pull .env.local`).
+- [x] Verificar **Node 24+** (lo exige eve).
+- [x] Scaffold Next.js 15 App Router (`create-next-app` con ts/app/tailwind) y commit inicial.
+- [x] Instalar `eve@0.54.2` **exacto, sin caret**, más `ai`, `zod`, `@supabase/supabase-js`, `@supabase/ssr`.
+- [x] Instalar y configurar Biome + Vitest.
+- [x] Copiar `CLAUDE.md`, `.claude/settings.json`, `.claude/launch.json`, `.claude/hooks/check-gstack.sh` (contenido en kickoff §7).
+- [x] `npx eve@latest init .` y mover `agent/` → `agents/outreach/` (el init genera `agent/` en singular, con `instructions.md`, y `evals/` al lado).
+- [x] `next.config.ts` con `withEve(nextConfig, { agents: { outreach: "./agents/outreach" } })`.
+- [x] `agents/outreach/agent.ts` con `model: "anthropic/claude-sonnet-5"` (obligatorio si el archivo existe).
+- [x] Health en local: `curl localhost:3000/eve/agents/outreach/eve/v1/health` devuelve `{ ok: true, status: "ready" }`. **Ojo:** `npm run dev` ya bootea el dev server de eve; **no** correr `npx eve dev` aparte.
+- [x] Migración `google_tokens` con RLS habilitada sin políticas + `revoke` a `anon` y `authenticated`.
+- [x] Login con Google por Supabase pidiendo `gmail.send` y `gmail.readonly`, con `access_type=offline` y `prompt=consent`.
+- [x] `app/auth/callback/route.ts`: `exchangeCodeForSession` y upsert del `provider_refresh_token`.
+- [x] `lib/auth/verifyCaller`: sesión Supabase → `{ userId, email }` o `null`.
+- [x] `agents/outreach/channels/eve.ts` con el auth walk y `localDev()` **condicionado por `VERCEL_ENV`** (si queda activo en un deploy, la puerta queda abierta a internet).
+- [x] `lib/gmail/mime.ts` con TDD: headers, subject con tildes y eñe en RFC 2047, base64url sin padding.
+- [x] `lib/gmail/send.ts`: refresh token → access token → API de Gmail (`users/me`).
+- [x] `agents/outreach/tools/send_email.ts` con `approval: always()` y sin campo de credencial en el `inputSchema`.
+- [x] Chat web mínimo con `useEveAgent({ agent: "outreach" })` que muestre y resuelva la aprobación (leer la doc local de eve antes de escribirlo).
+- [x] Test de rechazo sin cookie contra `/info`, **no** contra `/health` (que es público por diseño).
+- [x] Deploy a preview y correr el flujo completo ahí.
+- [x] **Prueba de fuego:** un mail real sale de tu Gmail después de aprobarlo en el chat del preview, confirmado contra el evento `input.resolved`.
 - [ ] `/ship` del PR de bootstrap + `/context-save`.
 
 **Terminado cuando:** un mail real sale de tu Gmail después de aprobarlo en el chat web del preview de Vercel.
