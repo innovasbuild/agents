@@ -11,6 +11,7 @@ Si falta: STOP y pedir instalación.
 - Nada específico de un tenant en código. Va a tenants/<slug>/ o a la base.
 - Español rioplatense en UI, instrucciones y skills. Código e identificadores en inglés.
 - Comandos: npm run dev · npm run typecheck · npm test · npm run lint:fix
+- Base: npm run db:start · npm run db:reset · npm run db:test · npm run db:types (necesitan Docker abierto)
 
 ## Skill routing
 Diseño nuevo → superpowers:brainstorming · Bug → /investigate · Probar en navegador → /qa · PR → /ship

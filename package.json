@@ -15,7 +15,7 @@
 		"db:start": "npx supabase start",
 		"db:stop": "npx supabase stop",
 		"db:reset": "npx supabase db reset",
-		"db:test": "npx supabase test db",
+		"db:test": "npx supabase db reset --no-seed && npx supabase test db",
 		"db:types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts"
 	},
 	"dependencies": {
