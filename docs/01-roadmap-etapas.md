@@ -89,6 +89,8 @@ Tareas:
 - [ ] `runs` con `status` (running / ok / failed / cancelled) y `error`, además de lo que ya pide el kickoff §5. Sin estas dos columnas no hay dashboard de ejecuciones posible.
 - [ ] **Cablear quién escribe `runs`**: crear la fila al abrir la sesión y cerrarla con status, `finished_at` y `error`, desde `agent/hooks/` o `instrumentation.ts` de eve. Hoy ninguna tool del kickoff la escribe, así que la tabla quedaría vacía.
 - [ ] Definir visibilidad por rol: `cost_usd` es costo interno y lo ve solo `platform_admin`. La RLS por `tenant_id` no alcanza porque esto es visibilidad por columna, no por fila.
+- [ ] **Enmienda 2026-09-12 (D5):** `conversations` (`tenant_id`, `user_id`, `agent`, `eve_session_id`, `title`, `last_message_at`) para hilos múltiples por usuario y ownership de sesión; `tenant_agents` (`tenant_id`, `agent`, `enabled`, override de modelo, cupos, `config` jsonb); `tenants.self_signup_by_domain` default `false`; `tenants.brand` (`primary`, `secondary`, `logo_url`). `tenant.json` deja de llevar `default_model` y conexiones.
+- [ ] **Enmienda 2026-09-12 (D4):** alta de usuarios solo por invitación por mail (magic link de Supabase); `allowed_domains` valida al invitar, no es puerta. Providers: Google + magic link; Microsoft cuando un cliente lo pida. Sin contraseñas.
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** dos usuarios de tenants distintos no ven filas ajenas (test automatizado), y el selector cambia el modelo de la sesión sin deploy.
@@ -110,6 +112,7 @@ Tareas:
 - [ ] `connections/gmail.ts` con `connect("<uid vercel connect>")`, `principalType: user`.
 - [ ] Crear propiedades custom de outreach en HubSpot (`contact_key`, `outreach_segmento`, `outreach_canal`, `outreach_hook`, `outreach_status`, `outreach_owner`, `outreach_fecha_msg1`, `outreach_fecha_respuesta`).
 - [ ] `tenant_connections` como fuente de URLs y `secret_ref` de cada conexión.
+- [ ] **Enmienda 2026-09-12 (D2, D3):** catálogo de conectores por capacidad (`lib/connectors/catalog.ts`: `crm`, `leads`, `enrichment`, `brain`, `mail`) con binding por tenant en `tenant_connections`; llaves de API por tenant en **Supabase Vault** (`secret_ref` = id en Vault), cargadas write-only desde el dashboard por Innovas al inicio; OAuth por Vercel Connect donde exista el proveedor, `defineInteractiveAuthorization` donde no. En env vars de Vercel solo secretos de plataforma. Decidir brain como conexión MCP, memory slot o ambos.
 - [ ] **Deuda de Etapa 0:** absorber `google_tokens` en `executors` y mover el refresh token a Supabase Vault.
 - [ ] **Deuda de Etapa 0:** verificar la app de Google (en modo testing los refresh tokens caducan a los 7 días) o migrar Gmail a Vercel Connect.
 - [ ] Nota: `connect()` exige un principal de tipo user en la sesión, ya estampado desde Etapa 0.
@@ -151,6 +154,8 @@ Tareas:
 **Modelo runtime:** n/a.
 **Spec/Plan:** `docs/superpowers/specs/04-dashboard.md` · `docs/superpowers/plans/04-dashboard.md`
 
+- [ ] **Enmienda 2026-09-12 (D6), antes de la primera pantalla:** design system sobre Tailwind + shadcn/ui, un solo set de componentes; marca por tenant (`tenants.brand`: primario, secundario, logo en Storage) aplicada como CSS variables de shadcn en `app/[tenant]/layout.tsx`, foreground derivado por contraste. Innovas usa su propia marca como un tenant más.
+- [ ] `/settings/conexiones`: carga write-only de llaves a Vault por `platform_admin`; el `tenant_admin` ve qué está conectado. Autoservicio del tenant cuando haya más de 5 clientes.
 - [ ] `/cola`: aprobar, editar, rechazar (resuelve la pausa de eve).
 - [ ] `/pipeline`.
 - [ ] `/contactos`.
@@ -251,6 +256,28 @@ Tareas:
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** un `tenant_admin` del segundo tenant entra, ve sus propias ejecuciones con sus fallas, y el test confirma que no ve ni el costo ni nada de otro tenant.
+
+---
+
+## Etapa 10 · Agentes inbound y handoff a un comercial — `[ ]`
+
+**Modelo Claude Code:** Opus 5, effort `high` para la spec (modelo de conversación, handoff, canal entrante). Sesión nueva con Sonnet 5 para tools, canal y UI.
+**Modelo runtime:** calificación de leads en `anthropic/claude-haiku-4-5`; conversación con el prospecto en `anthropic/claude-sonnet-5`.
+**Spec/Plan:** `docs/superpowers/specs/10-inbound-handoff.md` · `docs/superpowers/plans/10-inbound-handoff.md`
+
+Agregada el 2026-09-12 (`docs/superpowers/specs/2026-09-12-arquitectura-plataforma-design.md`, D1). Segunda familia de agentes: atención de pedidos por sitio web o WhatsApp, calificación de leads, con memoria, despertados por webhook. Se abre recién cerrado el ciclo outbound completo (Etapas 1 a 9). Prerrequisitos que las etapas anteriores dejan listos: `conversations` (Etapa 1), canal WhatsApp vía Chat SDK (Etapa 8), observabilidad por tenant (Etapa 9).
+
+Tareas:
+
+- [ ] Agente `agents/atencion/` por capacidad, nunca por cliente; habilitado por tenant en `tenant_agents`.
+- [ ] Canal entrante: WhatsApp Cloud API vía Chat SDK y webhook genérico para el sitio web del cliente.
+- [ ] Calificación de leads con criterios del tenant (`config_values`), memoria por conversación y por prospecto (memory slot scoped por tenant).
+- [ ] Estado `handoff` en `conversations` e inbox del equipo comercial: un humano sigue la conversación por el mismo canal desde la plataforma.
+- [ ] Observabilidad propia: conversaciones por canal, tasa de calificación, tiempo hasta handoff, resolución.
+- [ ] Decidir proveedor de LinkedIn (tercero) si un cliente lo pide; no hay API oficial.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** un prospecto escribe por WhatsApp al número de un cliente, el agente lo califica, deriva a un comercial, y el comercial le contesta desde la plataforma sin salir de ella.
 
 ---
 
