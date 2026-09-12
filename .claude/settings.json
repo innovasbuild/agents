@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": ".claude/hooks/check-gstack.sh" }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "npm run typecheck --silent" }] }]
+  },
+  "permissions": {
+    "allow": ["Bash(npm run *)", "Bash(npx supabase *)", "Bash(npx eve *)", "Bash(git status*)", "Bash(git diff*)"]
+  }
+}
