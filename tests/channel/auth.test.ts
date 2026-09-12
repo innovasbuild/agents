@@ -16,7 +16,7 @@ describe.skipIf(!process.env.SPIKE_BASE_URL)("canal eve", () => {
 		expect(res.status).toBe(200);
 	});
 
-	it("rechaza continuar una sesión de otro usuario", async () => {
+	it("exige sesión para continuar una sesión existente, no solo para crearla", async () => {
 		const response = await fetch(
 			`${process.env.SPIKE_BASE_URL}/eve/agents/outreach/eve/v1/session/wrun_inexistente`,
 			{ method: "POST", body: JSON.stringify({ message: "hola" }) },
