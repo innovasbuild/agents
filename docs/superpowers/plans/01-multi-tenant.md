@@ -1012,6 +1012,10 @@ git commit -m "feat: runs y events con costo restringido por columna"
 
 **El mail también tiene que ser disjunto, no solo el ID**: `auth.users` tiene un índice unique parcial sobre `email`. `admin@innov.as` ya lo usa el fixture de la Task 2 (con un `id` distinto) — por eso el seed usa `admin-seed@innov.as`, no `admin@innov.as`.
 
+**Y el slug del tenant, por la misma razón**: `tenants.slug` es `unique` a secas, no compuesto con nada. `innovas` ya lo usa el fixture de la Task 2 (con un `id` distinto) — por eso el seed usa `innovas-seed`, no `innovas`. El slug `innovas` de verdad se crea en la nube en el Step 6, sin relación con este seed local.
+
+Barrido completo hecho contra los cinco archivos de test (`00` a `04`): todo lo demás que el seed inserta es una clave compuesta con `tenant_id` (`memberships (tenant_id, user_id)`, `tenant_agents (tenant_id, agent)`) o una tabla que el seed no toca (`conversations`, `invitations`, `runs`) — disjunto automáticamente porque el `tenant_id` del seed (`99999999-...`) nunca coincide con el de un fixture (`aaaaaaaa-...`). Solo los tres valores marcados arriba (dos ids con prefijo `99999999-...`, un mail, un slug) necesitaban un valor explícito distinto.
+
 ```sql
 -- Usuarios de prueba locales. En la nube estos usuarios no existen: la
 -- membership real de Innovas se crea con un SQL puntual (Step 5).
@@ -1023,7 +1027,7 @@ on conflict (id) do nothing;
 
 insert into public.tenants (id, slug, display_name, allowed_domains, brand)
 values
-  ('99999999-0000-0000-0000-000000000001', 'innovas', 'INNOV.AS', '{innov.as}',
+  ('99999999-0000-0000-0000-000000000001', 'innovas-seed', 'INNOV.AS', '{innov.as}',
    '{"primary": "#1D4ED8", "secondary": "#0F172A"}'::jsonb),
   ('99999999-0000-0000-0000-000000000002', 'demo', 'Demo', '{demo.test}',
    '{"primary": "#059669", "secondary": "#064E3B"}'::jsonb)
