@@ -14,6 +14,7 @@
     "lint:fix": "biome check --write ."
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "@vercel/connect": "1.0.0",
     "ai": "^7.0.93",
     "eve": "0.54.2",
