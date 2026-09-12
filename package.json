@@ -11,7 +11,12 @@
 		"start": "next start",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"lint:fix": "biome check --write ."
+		"lint:fix": "biome check --write .",
+		"db:start": "npx supabase start",
+		"db:stop": "npx supabase stop",
+		"db:reset": "npx supabase db reset",
+		"db:test": "npx supabase test db",
+		"db:types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.7",
