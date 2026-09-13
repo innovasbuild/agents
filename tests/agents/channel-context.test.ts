@@ -29,14 +29,25 @@ vi.mock("../../lib/supabase/admin", () => ({
 					return builder;
 				},
 				maybeSingle: async () => {
+					// conversations: al igual que tenant_agents/memberships más abajo,
+					// no alcanza con mirar qué COLUMNA se usó en .eq() -- hay que
+					// chequear que el VALOR consultado sea el de la fila que se quiere
+					// devolver. C1 (secuestro de sesión por eve_session_id escribible)
+					// le sube el precio a este mock: un bug que buscara por el id
+					// equivocado sobre la columna correcta debe fallar el test, no
+					// pasar por casualidad.
 					if (table === "conversations") {
-						return {
-							data:
-								builder._kind === "bySession"
-									? rows.conversationBySession
-									: rows.conversationById,
-							error: null,
-						};
+						if (builder._kind === "bySession") {
+							const row = rows.conversationBySession;
+							const matches =
+								row !== null &&
+								row.eve_session_id === builder._filters.eve_session_id;
+							return { data: matches ? row : null, error: null };
+						}
+
+						const row = rows.conversationById;
+						const matches = row !== null && row.id === builder._filters.id;
+						return { data: matches ? row : null, error: null };
 					}
 
 					// tenant_agents y memberships solo devuelven su row si los
@@ -77,6 +88,10 @@ const CONVERSATION = {
 	tenant_id: "aaaaaaaa-0000-0000-0000-000000000002",
 	user_id: "22222222-2222-2222-2222-222222222222",
 	agent: "outreach",
+	// Mismo valor que las URLs ".../session/wrun_A" de los tests de
+	// continue-path más abajo: el mock ahora compara por VALOR (M2), así que
+	// tiene que coincidir con lo que esos tests consultan.
+	eve_session_id: "wrun_A",
 	tenants: { slug: "lagomarcino" },
 };
 

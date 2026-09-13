@@ -18,7 +18,14 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "no autenticado" }, { status: 401 });
 	}
 
-	const parsed = bodySchema.safeParse(await request.json());
+	let body: unknown;
+	try {
+		body = await request.json();
+	} catch {
+		return NextResponse.json({ error: "payload inválido" }, { status: 400 });
+	}
+
+	const parsed = bodySchema.safeParse(body);
 	if (!parsed.success) {
 		return NextResponse.json({ error: "payload inválido" }, { status: 400 });
 	}
@@ -84,6 +91,21 @@ export async function POST(request: Request) {
 	);
 
 	if (inviteError) {
+		const alreadyExists =
+			inviteError.code === "email_exists" ||
+			inviteError.code === "user_already_exists";
+
+		if (!alreadyExists) {
+			// Fallo real (rate limit, SMTP caído, etc.), no "ya existe": no le
+			// mentimos al caller devolviendo 201 como si el mail hubiera
+			// salido. La fila en `invitations` queda pendiente igual.
+			console.error("inviteUserByEmail:", inviteError.message);
+			return NextResponse.json(
+				{ error: "no se pudo enviar el mail de invitación" },
+				{ status: 502 },
+			);
+		}
+
 		// El usuario ya existe en Auth: no hace falta mail de alta, la
 		// invitación pendiente se acepta la próxima vez que entre.
 		console.warn("inviteUserByEmail:", inviteError.message);

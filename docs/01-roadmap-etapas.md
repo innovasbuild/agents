@@ -76,10 +76,10 @@ Tareas:
 Tareas:
 
 - [x] (Opus) Spec de RLS y del modelo de datos de kickoff §5, con políticas por `tenant_id` vía `memberships`.
-- [x] (Sonnet, sesión nueva) Migraciones de `tenants`, `memberships`, `executors`, `tenant_connections`, `config_values`, `accounts`, `contacts`, `events`, `queue_items`, `runs`.
+- [x] (Sonnet, sesión nueva) Migraciones de `tenants`, `memberships`, `events`, `runs` (`executors`, `tenant_connections`, `config_values`, `accounts`, `contacts`, `queue_items` quedan diferidas a Etapas 2-3 por la decisión D1 de la spec; no existen todavía).
 - [x] `seed.sql` con tenant `innovas`, roles y enums (`platform_admin`, `tenant_admin`, `tenant_member`).
 - [x] `lib/auth/verifyCaller`: sesión Supabase → estampa `tenantId` y rol en la sesión eve.
-- [x] `lib/tenants`: carga `tenant.json` + `config_values` en capacidades dinámicas.
+- [x] `lib/tenants/resolve.ts`: resuelve el tenant y el rol del caller directo desde las filas de `tenants`/`memberships` (no hay `tenant.json` ni `config_values`; eso queda diferido a Etapas 2-3 por D1).
 - [x] `agent.ts` e `instructions.ts` con `defineDynamic` (modelo/instrucciones por tenant).
 - [x] Chat web con selector de modelo, estampado en la sesión.
 - [x] Tests de RLS en `supabase/tests/` (incluye caso de fuga entre tenants).

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function createConversation(
@@ -50,12 +51,11 @@ export async function renameConversation(
 /**
  * Backstop de bind-session.ts (hook server-side de eve): guarda el
  * eve_session_id apenas el cliente lo conoce (onSessionChange), en vez de
- * esperar únicamente a que el hook lo ate de forma asíncrona. Así, si el
- * usuario navega o refresca mientras el primer turno de un hilo nuevo sigue
- * corriendo, el remount encuentra `eve_session_id` seteado y puede pasar
- * `resume: true` en vez de arrancar una sesión nueva sin relación con la que
- * ya está corriendo en el servidor. Ver node_modules/eve/docs/guides/frontend/
- * overview.mdx, sección "Resumable sessions".
+ * esperar únicamente a que el hook lo ate de forma asíncrona. Usa el cliente
+ * admin porque conversations_update ya no deja escribir esta columna con el
+ * cliente de sesión (fix de la revisión final: era el vector de secuestro de
+ * sesión C1) — y por eso el chequeo de ownership tiene que ir acá, explícito
+ * en la query, ya que el admin bypassea RLS.
  */
 export async function persistSessionId(
 	conversationId: string,
@@ -63,9 +63,17 @@ export async function persistSessionId(
 	slug: string,
 ) {
 	const supabase = await createServerSupabase();
-	await supabase
+	const { data: auth } = await supabase.auth.getUser();
+	if (!auth.user) return;
+
+	const admin = createAdminClient();
+	await admin
 		.from("conversations")
-		.update({ eve_session_id: sessionId })
-		.eq("id", conversationId);
+		.update({
+			eve_session_id: sessionId,
+			last_message_at: new Date().toISOString(),
+		})
+		.eq("id", conversationId)
+		.eq("user_id", auth.user.id);
 	revalidatePath(`/${slug}/chat`);
 }
