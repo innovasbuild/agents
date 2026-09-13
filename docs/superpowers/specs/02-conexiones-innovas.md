@@ -136,7 +136,7 @@ type CatalogEntry = {
 
 ### 5.2 Auth por tipo
 
-**`connect_api_key`:** `getToken` de `@vercel/connect` con `binding.connectorUid` y `subject: { type: "app" }`. Connect devuelve la llave cruda, sin prefijo (§10.1 S5). El valor va en el header que declara la entrada (`headers` como función) o como bearer (`auth.getToken`). El SDK cachea el token en proceso hasta su `expiresAt` (~15 min). Ante un 401 del proveedor, `deleteTokenCacheEntry` con los mismos parámetros y un solo reintento: así una llave rotada (§9.1) no queda rechazada hasta que venza el caché. El resolver **nunca** elige un `connector_uid` que no venga del binding del tenant de la sesión.
+**`connect_api_key`:** `getToken` de `@vercel/connect` con `binding.connectorUid` y `subject: { type: "app" }`. Connect devuelve la llave cruda, sin prefijo (§10.1 S5). El valor va en el header que declara la entrada (`headers` como función) o como bearer (`auth.getToken`). El SDK cachea el token en proceso hasta su `expiresAt` (~15 min). Con `auth.getToken`, se le pasa ese `expiresAt` a eve (vía `getTokenResponse`) para que renueve antes de que venza. No hay reintento propio ante un 401: en las conexiones, el 401 lo recibe eve y no nuestro código. Por eso la rotación de §9.1 deja convivir las dos llaves mientras dura el caché. El resolver **nunca** elige un `connector_uid` que no venga del binding del tenant de la sesión.
 
 **`connect_oauth`:** `tenantScopedConnect(connector, tenantId, scopes?)` en `lib/connectors/auth.ts`, que envuelve `connect()` de `@vercel/connect/eve`:
 
@@ -275,7 +275,12 @@ npm run connections:bind -- --tenant innovas --capability leads --provider coldi
 DIR=$(mktemp -d); vercel env pull "$DIR/.env" --environment=development --yes >/dev/null 2>&1; OIDC=$(grep '^VERCEL_OIDC_TOKEN=' "$DIR/.env" | cut -d= -f2- | tr -d '"'); rm -rf "$DIR"; TOKEN=$(curl -s -X POST https://api.vercel.com/v1/connect/token/<uid> -H "Authorization: Bearer $OIDC" -H "Content-Type: application/json" -d '{"subject":{"type":"app"}}' | jq -r '.token // empty'); curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" <endpoint de lectura del proveedor>
 ```
 
-**Rotación.** Se genera la llave nueva en el proveedor; en Vercel, Connect → conector → Settings → API Keys → New API Key, y guardar; se borra la llave vieja en el proveedor. No cambia el UID ni el binding. Connect entrega la llave nueva en el próximo pedido, pero las instancias en ejecución pueden seguir usando la vieja hasta que vence su token cacheado (~15 min) o hasta el primer 401 (§5.2).
+**Rotación.**
+1. Generar la llave nueva en el proveedor, sin borrar la vieja.
+2. En Vercel, Connect → conector → Settings → API Keys → New API Key, y guardar.
+3. **Esperar al menos 15 minutos** y recién entonces borrar la llave vieja en el proveedor.
+
+No cambia el UID ni el binding. Connect entrega la llave nueva en el próximo pedido, pero las instancias en ejecución siguen usando la vieja hasta que vence su token cacheado (§5.2). Si la llave vieja está comprometida y hay que borrarla ya, se acepta ese rato de errores.
 
 ### 9.2 Conectores de plataforma (una vez)
 

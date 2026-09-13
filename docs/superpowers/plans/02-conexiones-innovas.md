@@ -10,6 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/02-conexiones-innovas.md`
 
+**Spike aplicado (2026-09-13, spec §10.1).** Este plan ya incorpora el resultado del spike:
+- HubSpot sirve por Connect con una MCP auth app; el mismo conector sirve para MCP y para REST, así que no hay `hubspot-api`.
+- ColdIQ no tiene MCP remoto: es una conexión OpenAPI con documento inline y Bearer.
+- El brain queda aislado en la Task 5B, bloqueada hasta que termine su rediseño.
+- Los tokens de Connect duran ~15 min: se le pasa `expiresAt` a eve.
+- El team de Vercel está en Hobby y hay que pasarlo a Pro antes de la Entrega 4.
+- Conectores que ya existen: `mcp.hubspot.com/hubspot` y `innovas-coldiq`.
+
 ## Global Constraints
 
 - Toda tabla lleva `tenant_id` y RLS. `events` es append-only: nunca UPDATE ni DELETE.
@@ -32,13 +40,14 @@
 
 | Archivo | Responsabilidad | Task |
 |---|---|---|
-| `lib/connectors/platform.ts` | Constantes de plataforma verificadas en el spike (UIDs, URLs, listas de tools). No secretas | 1 |
+| `lib/connectors/platform.ts` | Constantes de plataforma verificadas en el spike (UIDs, URLs, tools de HubSpot). No secretas | 1 |
 | `supabase/migrations/<ts>_tenant_connections_executors.sql` | Enum, `tenant_connections`, `executors`, RLS y grants | 2 |
 | `supabase/tests/06_tenant_connections.test.sql` | Aislamiento y bloqueo de escritura | 2 |
 | `lib/connectors/providers.ts` | Registro puro de proveedores y `Binding`. Sin imports: lo importa el script de Node | 3 |
 | `lib/connectors/auth.ts` | Único puente con Connect: `apiKeyHeaders`, `apiKeyBearer`, `tenantScopedConnect` | 4 |
 | `lib/connectors/leads/google-places.openapi.ts` | Documento OpenAPI mínimo de Places | 5 |
-| `lib/connectors/catalog.ts` | Builders por proveedor y `buildTenantConnections` | 5, 8 |
+| `lib/connectors/leads/coldiq.openapi.ts` | Documento OpenAPI inline de ColdIQ: 7 operaciones individuales de "GTM Verbs" | 5 |
+| `lib/connectors/catalog.ts` | Builders por proveedor y `buildTenantConnections` | 5, 5B, 8 |
 | `lib/connectors/bindings.ts` | Lectura de bindings con el cliente admin | 6 |
 | `lib/connectors/resolve.ts` | `resolveTenantConnections`: lógica del resolver, testeable | 6 |
 | `agents/outreach/connections/tenant.ts` | El `defineDynamic` | 6 |
@@ -63,19 +72,18 @@
 - Test: `tests/connectors/platform.test.ts`
 
 **Interfaces:**
-- Consumes: la sección `## 10.1 Resultado del spike` de la spec (la escribe la sesión paralela del spike).
+- Consumes: la sección `## 10.1 Resultado del spike` de la spec (commit `a5fd05b`).
 - Produces:
   ```ts
   export const HUBSPOT_MCP_URL: string;
   export const HUBSPOT_CONNECTOR_UID: string;
   export const HUBSPOT_READ_TOOLS: readonly string[];
   export const HUBSPOT_SEARCH_CONTACTS_TOOL: string;
-  export const HUBSPOT_REST_CONNECTOR_UID: string;
   export const GOOGLE_CONNECTOR_UID: string;
-  export const COLDIQ_MCP_URL: string;
-  export const COLDIQ_AUTH: { scheme: "header"; header: string } | { scheme: "bearer" };
-  export const COLDIQ_ALLOW_TOOLS: readonly string[];
+  export const COLDIQ_BASE_URL: string;
   ```
+
+El UID del conector de HubSpot sirve también para la API REST (S3): no hay constante aparte. Las operaciones de ColdIQ no viven acá sino en `lib/connectors/leads/coldiq.openapi.ts` (Task 5).
 
 - [ ] **Step 1: Verificar que la tarea de hardening de `anon` está en la rama**
 
@@ -87,18 +95,16 @@ Expected: existe al menos una migración con timestamp posterior a `202609130145
 Run: `grep -n "## 10.1 Resultado del spike" -A 40 docs/superpowers/specs/02-conexiones-innovas.md`
 Expected: una tabla con filas S1 a S6. Si no está: **STOP**. Reportar BLOCKED: "falta traer el commit del spike a la rama".
 
-- [ ] **Step 3: Evaluar los resultados que invalidan el diseño**
+- [ ] **Step 3: Estado del brain**
 
-Leer las filas. **STOP y reportar BLOCKED con la fila textual** si:
-- S1 dice que Connect no puede emitir un token que acepte el MCP de HubSpot.
-- S5 dice que un conector `api-key` no sirve para el brain.
-
-Estos dos casos requieren una decisión de diseño del usuario. Cualquier otro resultado se absorbe en las constantes.
+El spike no invalidó el diseño: S1 salió positivo y S5 es positivo en la mecánica. Lo único abierto es el brain, cuya arquitectura se rediseña aparte. Revisar spec §6.2:
+- Si todavía tiene el aviso **"En suspenso"**, la Task 5B queda BLOCKED y **no se implementa**. El resto de la etapa sigue igual, sin frenar.
+- Si §6.2 ya fue reescrita por el rediseño, adaptar la Task 5B a esa sección antes de ejecutarla. Si el brain dejó de ser un MCP remoto con llave, reportar NEEDS_CONTEXT con el texto nuevo de §6.2.
 
 - [ ] **Step 4: Verificar los conectores de plataforma**
 
 Run: `vercel connect list --format json | jq -r '.[] | [.uid, .service, .type] | @tsv'`
-Expected: aparecen el conector del MCP de HubSpot (el UID que dice S1) y un conector de Google (`service` google, `type` oauth). Si falta el de Google: **STOP**. Reportar NEEDS_CONTEXT: "el usuario tiene que crear y atar el conector de Google según spec §9.2 y pasar su UID".
+Expected: aparecen `mcp.hubspot.com/hubspot` (oauth), `innovas-coldiq` (api-key) y un conector de Google (`service` google, `type` oauth). Si falta el de Google: **STOP**. Reportar NEEDS_CONTEXT: "el usuario tiene que crear y atar el conector de Google según spec §9.2 y pasar su UID". Si el formato de `--format json` no es un array, ajustar el `jq` mirando la salida; no inventar UIDs.
 
 - [ ] **Step 5: Escribir el test de forma**
 
@@ -112,17 +118,16 @@ describe("constantes de plataforma del spike", () => {
 		for (const value of [
 			platform.HUBSPOT_MCP_URL,
 			platform.HUBSPOT_CONNECTOR_UID,
-			platform.HUBSPOT_REST_CONNECTOR_UID,
 			platform.GOOGLE_CONNECTOR_UID,
-			platform.COLDIQ_MCP_URL,
+			platform.COLDIQ_BASE_URL,
 		]) {
 			expect(value.trim()).not.toBe("");
 		}
 	});
 
-	it("las URLs de MCP son https", () => {
+	it("las URLs son https", () => {
 		expect(platform.HUBSPOT_MCP_URL).toMatch(/^https:\/\//);
-		expect(platform.COLDIQ_MCP_URL).toMatch(/^https:\/\//);
+		expect(platform.COLDIQ_BASE_URL).toMatch(/^https:\/\//);
 	});
 
 	it("la tool de búsqueda de contactos está entre las de lectura", () => {
@@ -131,15 +136,9 @@ describe("constantes de plataforma del spike", () => {
 		);
 	});
 
-	it("ColdIQ no expone operaciones de configuración", () => {
-		expect(platform.COLDIQ_ALLOW_TOOLS).not.toContain("setup_website_visitors");
-		expect(platform.COLDIQ_ALLOW_TOOLS).not.toContain("cancel_bulk_job");
-		expect(platform.COLDIQ_ALLOW_TOOLS.length).toBeGreaterThan(0);
-	});
-
-	it("el esquema de auth de ColdIQ nombra el header si no es bearer", () => {
-		if (platform.COLDIQ_AUTH.scheme === "header") {
-			expect(platform.COLDIQ_AUTH.header.trim()).not.toBe("");
+	it("HubSpot no expone tools de escritura", () => {
+		for (const tool of platform.HUBSPOT_READ_TOOLS) {
+			expect(tool).not.toMatch(/^(manage_|submit_)/);
 		}
 	});
 });
@@ -150,21 +149,9 @@ describe("constantes de plataforma del spike", () => {
 Run: `npm test -- tests/connectors/platform.test.ts`
 Expected: FAIL, "Cannot find module '@/lib/connectors/platform'".
 
-- [ ] **Step 7: Escribir las constantes con los valores textuales del spike**
+- [ ] **Step 7: Escribir las constantes**
 
-Cada constante sale de una fila de §10.1, copiada sin reinterpretar:
-
-| Constante | Fila | Qué copiar |
-|---|---|---|
-| `HUBSPOT_MCP_URL` | S1 | URL del endpoint MCP que aceptó el token |
-| `HUBSPOT_CONNECTOR_UID` | S1 | UID del conector del MCP |
-| `HUBSPOT_READ_TOOLS` | S2 | Solo las tools de lectura y búsqueda |
-| `HUBSPOT_SEARCH_CONTACTS_TOOL` | S2 | La tool que busca contactos |
-| `HUBSPOT_REST_CONNECTOR_UID` | S3 | Si S3 es positivo, el mismo UID que `HUBSPOT_CONNECTOR_UID`; si es negativo, el UID del conector `hubspot-api` que indique la fila |
-| `GOOGLE_CONNECTOR_UID` | Step 4 | UID del conector de Google |
-| `COLDIQ_MCP_URL` | S4 | URL del MCP |
-| `COLDIQ_AUTH` | S4 | `{ scheme: "header", header: "<nombre>" }` o `{ scheme: "bearer" }` |
-| `COLDIQ_ALLOW_TOOLS` | S4 | Búsqueda y enriquecimiento individual, más las `*_bulk`; sin `setup_website_visitors` ni `cancel_bulk_job` |
+Todos los valores salen de spec §10.1, salvo `GOOGLE_CONNECTOR_UID`, que sale del Step 4:
 
 ```ts
 // lib/connectors/platform.ts
@@ -173,21 +160,26 @@ Cada constante sale de una fila de §10.1, copiada sin reinterpretar:
 // son identificadores de conectores de Vercel Connect y nombres de tools.
 // Si cambian, se cambian acá y en la spec, en el mismo commit.
 
-export const HUBSPOT_MCP_URL = "<S1: URL>";
-export const HUBSPOT_CONNECTOR_UID = "<S1: UID>";
-export const HUBSPOT_READ_TOOLS = [/* S2 */] as const satisfies readonly string[];
-export const HUBSPOT_SEARCH_CONTACTS_TOOL = "<S2>";
-export const HUBSPOT_REST_CONNECTOR_UID = "<S3>";
+export const HUBSPOT_MCP_URL = "https://mcp.hubspot.com/";
+// También autoriza la API REST de HubSpot (S3): no hay conector aparte.
+export const HUBSPOT_CONNECTOR_UID = "mcp.hubspot.com/hubspot";
+export const HUBSPOT_READ_TOOLS = [
+	"search_crm_objects",
+	"get_crm_objects",
+	"get_properties",
+	"search_properties",
+	"discover_hubspot_schema",
+	"search_owners",
+	"get_user_details",
+] as const satisfies readonly string[];
+export const HUBSPOT_SEARCH_CONTACTS_TOOL = "search_crm_objects";
 
 export const GOOGLE_CONNECTOR_UID = "<Step 4>";
 
-export const COLDIQ_MCP_URL = "<S4: URL>";
-export const COLDIQ_AUTH: { scheme: "header"; header: string } | { scheme: "bearer" } =
-	{ scheme: "header", header: "<S4>" };
-export const COLDIQ_ALLOW_TOOLS = [/* S4 */] as const satisfies readonly string[];
+export const COLDIQ_BASE_URL = "https://api.coldiq.com";
 ```
 
-Los `<...>` de este bloque son los valores de la tabla de arriba: el archivo commiteado no puede contener ningún `<` ni ningún comentario `/* S… */`.
+`<Step 4>` es el UID real del conector de Google: el archivo commiteado no puede contener ningún `<`.
 
 - [ ] **Step 8: Correr el test**
 
@@ -561,7 +553,7 @@ git commit -m "feat: registro puro de proveedores de conectores"
   ```ts
   export function tenantSubjectId(tenantId: string, userId: string): string;
   export function apiKeyHeaders(connectorUid: string, header: string, extra?: Record<string, string>): () => Promise<Record<string, string>>;
-  export function apiKeyBearer(connectorUid: string): { getToken: () => Promise<{ token: string }> };
+  export function apiKeyBearer(connectorUid: string): { getToken: () => Promise<{ token: string; expiresAt: number }> };
   export function tenantScopedConnect(connector: string, tenantId: string, scopes?: string[]): ReturnType<typeof connect>;
   ```
 
@@ -584,6 +576,10 @@ vi.mock("@vercel/connect", () => ({
 	getToken: async (...args: unknown[]) => {
 		calls.getToken.push(args);
 		return "llave-simulada";
+	},
+	getTokenResponse: async (...args: unknown[]) => {
+		calls.getToken.push(args);
+		return { token: "llave-simulada", expiresAt: 1_789_325_386_769 };
 	},
 }));
 
@@ -630,10 +626,15 @@ describe("apiKeyHeaders", () => {
 });
 
 describe("apiKeyBearer", () => {
-	it("devuelve la llave como token", async () => {
+	it("devuelve la llave como token con el vencimiento de Connect", async () => {
 		expect(await apiKeyBearer("innovas-coldiq").getToken()).toEqual({
 			token: "llave-simulada",
+			expiresAt: 1_789_325_386_769,
 		});
+		expect(calls.getToken[0]).toEqual([
+			"innovas-coldiq",
+			{ subject: { type: "app" } },
+		]);
 	});
 });
 
@@ -725,34 +726,42 @@ Expected: `auth.test.ts` FAIL por módulo inexistente; `import-rule.test.ts` PAS
 // lib/connectors/auth.ts
 // Único puente con Vercel Connect (spec 02 §5.2). Ningún otro archivo importa
 // @vercel/connect: tests/connectors/import-rule.test.ts lo hace cumplir.
-import { getToken } from "@vercel/connect";
+import { getToken, getTokenResponse } from "@vercel/connect";
 import { connect } from "@vercel/connect/eve";
 
 export function tenantSubjectId(tenantId: string, userId: string): string {
 	return `${tenantId}:${userId}`;
 }
 
-async function readApiKey(connectorUid: string): Promise<string> {
-	return getToken(connectorUid, { subject: { type: "app" } });
-}
+// Un conector api-key se pide como app: Connect devuelve la llave cruda, sin
+// prefijo (spec 02 §10.1 S5). El SDK la cachea en proceso hasta expiresAt.
+const APP_SUBJECT = { subject: { type: "app" } } as const;
 
 /**
  * Headers para un conector `api-key`. Se resuelven en cada llamada: la llave
- * nunca queda en el closure del resolver ni en el estado de la sesión. El SDK
- * de Connect cachea en proceso.
+ * nunca queda en el closure del resolver ni en el estado de la sesión.
  */
 export function apiKeyHeaders(
 	connectorUid: string,
 	header: string,
 	extra: Record<string, string> = {},
 ): () => Promise<Record<string, string>> {
-	return async () => ({ ...extra, [header]: await readApiKey(connectorUid) });
+	return async () => ({
+		...extra,
+		[header]: await getToken(connectorUid, APP_SUBJECT),
+	});
 }
 
+/** Bearer con `expiresAt`: eve renueva antes de que venza en vez de esperar un 401. */
 export function apiKeyBearer(connectorUid: string): {
-	getToken: () => Promise<{ token: string }>;
+	getToken: () => Promise<{ token: string; expiresAt: number }>;
 } {
-	return { getToken: async () => ({ token: await readApiKey(connectorUid) }) };
+	return {
+		getToken: async () => {
+			const { token, expiresAt } = await getTokenResponse(connectorUid, APP_SUBJECT);
+			return { token, expiresAt };
+		},
+	};
 }
 
 /**
@@ -787,6 +796,8 @@ export function tenantScopedConnect(
 }
 ```
 
+Si `tsc` rechaza `APP_SUBJECT` contra `ConnectTokenParams`, tiparlo con ese tipo exportado por `@vercel/connect` en lugar de `as const`.
+
 - [ ] **Step 5: Fijar la versión de `@vercel/connect`**
 
 Run: `grep '"@vercel/connect"' package.json`
@@ -807,20 +818,24 @@ git commit -m "feat: puente con vercel connect con grants atados a tenant y usua
 ### Task 5: Catálogo con los conectores de API key
 
 **Files:**
-- Create: `lib/connectors/leads/google-places.openapi.ts`, `lib/connectors/catalog.ts`
-- Test: `tests/connectors/catalog.test.ts`
+- Create: `lib/connectors/leads/google-places.openapi.ts`, `lib/connectors/leads/coldiq.openapi.ts`, `lib/connectors/catalog.ts`
+- Test: `tests/connectors/catalog.test.ts`, `tests/connectors/coldiq-openapi.test.ts`
 
 **Interfaces:**
-- Consumes: `Binding`, `PROVIDERS`, `isProviderKey`, `connectionName` (Task 3); `apiKeyHeaders`, `apiKeyBearer` (Task 4); `COLDIQ_MCP_URL`, `COLDIQ_AUTH`, `COLDIQ_ALLOW_TOOLS` (Task 1).
+- Consumes: `Binding`, `PROVIDERS`, `isProviderKey`, `connectionName` (Task 3); `apiKeyHeaders`, `apiKeyBearer` (Task 4); `COLDIQ_BASE_URL` (Task 1).
 - Produces:
   ```ts
   export const GOOGLE_PLACES_FIELD_MASK: string;
+  export const COLDIQ_OPERATIONS: readonly string[]; // coldiq.openapi.ts
+  export const coldiqOpenApi: object;                // coldiq.openapi.ts
   export function buildTenantConnections(bindings: Binding[]): Record<string, DynamicConnectionDefinition>;
   ```
 
+El brain **no** entra en esta task: está en la Task 5B, bloqueada por su rediseño. Mientras no exista su builder, un binding `brain` se omite con el warn de "binding incompleto".
+
 - [ ] **Step 1: Leer la doc**
 
-`node_modules/eve/docs/connections/mcp.mdx` (tool filters, approval policy con nombres calificados) y `node_modules/eve/docs/connections/openapi.mdx` (`spec` inline, `baseUrl`, `operations.allow`).
+`node_modules/eve/docs/connections/openapi.mdx` (`spec` inline, `baseUrl`, `operations.allow`, operaciones sin `operationId`) y `node_modules/eve/docs/connections/overview.mdx` §Static-token auth (`expiresAt`).
 
 - [ ] **Step 2: Escribir el test**
 
@@ -845,9 +860,11 @@ const { buildTenantConnections, GOOGLE_PLACES_FIELD_MASK } = await import(
 	"@/lib/connectors/catalog"
 );
 const platform = await import("@/lib/connectors/platform");
+const { COLDIQ_OPERATIONS, coldiqOpenApi } = await import(
+	"@/lib/connectors/leads/coldiq.openapi"
+);
 import type { Binding } from "@/lib/connectors/providers";
 
-type Policy = (args: { toolName: string }) => string;
 type AnyConnection = Record<string, unknown>;
 
 function binding(overrides: Partial<Binding>): Binding {
@@ -865,49 +882,6 @@ function binding(overrides: Partial<Binding>): Binding {
 let warn: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
 	warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-});
-
-describe("brain", () => {
-	it("arma la conexión con la URL del binding e instanceKey = id", () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<
-			string,
-			AnyConnection
-		>;
-		expect(brain.url).toBe("https://brain.test/mcp");
-		expect(brain.instanceKey).toBe("binding-1");
-		expect(brain.tools).toEqual({
-			allow: ["brain_search", "brain_read", "brain_upsert"],
-		});
-	});
-
-	it("pide aprobación solo para brain_upsert, con nombre calificado", () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<
-			string,
-			AnyConnection
-		>;
-		const approval = brain.approval as Policy;
-		expect(approval({ toolName: "brain__brain_upsert" })).toBe("user-approval");
-		expect(approval({ toolName: "brain__brain_search" })).toBe("not-applicable");
-	});
-
-	it("usa la llave del conector del binding en x-api-key", async () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<
-			string,
-			AnyConnection
-		>;
-		const headers = brain.headers as () => Promise<Record<string, string>>;
-		expect(await headers()).toEqual({ "x-api-key": "llave:tenant-a-brain" });
-	});
-
-	it("se omite si falta la URL o el conector", () => {
-		expect(
-			buildTenantConnections([binding({ config: {} })]),
-		).toEqual({});
-		expect(
-			buildTenantConnections([binding({ connectorUid: null })]),
-		).toEqual({});
-		expect(warn).toHaveBeenCalled();
-	});
 });
 
 describe("leads", () => {
@@ -934,21 +908,26 @@ describe("leads", () => {
 		]);
 	});
 
-	it("ColdIQ usa la URL y el allow del spike, con aprobación en *_bulk", () => {
+	it("ColdIQ es OpenAPI inline con Bearer del conector del binding", async () => {
 		const result = buildTenantConnections([coldiq]) as Record<
 			string,
 			AnyConnection
 		>;
 		const connection = result["leads-coldiq"];
-		expect(connection.url).toBe(platform.COLDIQ_MCP_URL);
-		expect(connection.tools).toEqual({ allow: [...platform.COLDIQ_ALLOW_TOOLS] });
-		const approval = connection.approval as Policy;
-		expect(approval({ toolName: "leads-coldiq__find_emails_bulk" })).toBe(
-			"user-approval",
-		);
-		expect(approval({ toolName: "leads-coldiq__find_email" })).toBe(
-			"not-applicable",
-		);
+		expect(connection.baseUrl).toBe(platform.COLDIQ_BASE_URL);
+		expect(connection.spec).toBe(coldiqOpenApi);
+		expect(connection.operations).toEqual({ allow: [...COLDIQ_OPERATIONS] });
+		expect(connection.instanceKey).toBe("binding-coldiq");
+		expect(connection.approval).toBeUndefined();
+		const auth = connection.auth as { uid: string };
+		expect(auth.uid).toBe("tenant-a-coldiq");
+	});
+
+	it("ColdIQ se omite sin conector", () => {
+		expect(
+			buildTenantConnections([{ ...coldiq, connectorUid: null }]),
+		).toEqual({});
+		expect(warn).toHaveBeenCalled();
 	});
 
 	it("Places expone solo searchText con field mask fijo", async () => {
@@ -987,10 +966,55 @@ describe("buildTenantConnections", () => {
 });
 ```
 
-- [ ] **Step 3: Verificar que falla**
+```ts
+// tests/connectors/coldiq-openapi.test.ts
+import { describe, expect, it } from "vitest";
+import {
+	COLDIQ_OPERATIONS,
+	coldiqOpenApi,
+} from "@/lib/connectors/leads/coldiq.openapi";
 
-Run: `npm test -- tests/connectors/catalog.test.ts`
-Expected: FAIL, módulo inexistente.
+type Schema = { type?: string; properties?: Record<string, Schema>; maximum?: number };
+type Operation = {
+	operationId: string;
+	requestBody: { content: { "application/json": { schema: Schema } } };
+};
+const paths = (coldiqOpenApi as { paths: Record<string, { post: Operation }> }).paths;
+const operations = Object.entries(paths).map(([path, item]) => ({ path, op: item.post }));
+
+describe("documento OpenAPI de ColdIQ", () => {
+	it("tiene exactamente las operaciones permitidas, con operationId", () => {
+		expect(operations.map((o) => o.op.operationId).sort()).toEqual(
+			[...COLDIQ_OPERATIONS].sort(),
+		);
+	});
+
+	it("no incluye operaciones bulk", () => {
+		for (const { path } of operations) expect(path).not.toMatch(/bulk|jobs/);
+	});
+
+	it("el body solo acepta input individual: sin lotes, proveedor ni tope de créditos", () => {
+		for (const { op } of operations) {
+			const body = op.requestBody.content["application/json"].schema;
+			expect(Object.keys(body.properties ?? {})).toEqual(["input"]);
+			expect(body.properties?.input.type).toBe("object");
+		}
+	});
+
+	it("ningún límite de resultados supera 25", () => {
+		for (const { op } of operations) {
+			const input = op.requestBody.content["application/json"].schema.properties?.input;
+			const limit = input?.properties?.limit;
+			if (limit) expect(limit.maximum).toBeLessThanOrEqual(25);
+		}
+	});
+});
+```
+
+- [ ] **Step 3: Verificar que fallan**
+
+Run: `npm test -- tests/connectors/catalog.test.ts tests/connectors/coldiq-openapi.test.ts`
+Expected: FAIL, módulos inexistentes.
 
 - [ ] **Step 4: Escribir el documento OpenAPI de Places**
 
@@ -1045,6 +1069,80 @@ export const googlePlacesOpenApi = {
 };
 ```
 
+- [ ] **Step 4B: Escribir el documento OpenAPI de ColdIQ**
+
+Bajar los esquemas de entrada del spec público (no son secretos):
+
+Run: `curl -s https://api.coldiq.com/openapi.json | jq '.components.schemas | {FindPeopleInput, SearchCompaniesInput, EnrichPersonIdentity, CompanyIdentity, PersonIdentity, EmailIdentity, FindSignalsInput}'`
+Expected: siete objetos `type: "object"`, sin `$ref` adentro (verificado en el spike: ninguno tiene dependencias).
+
+Pegar cada uno como constante, con estos cambios y ningún otro:
+- En `FindPeopleInput` y `SearchCompaniesInput`, `limit.maximum` pasa de 500 a 25. En `FindSignalsInput`, de 100 a 25.
+- Si una operación del spec ya no existe o su `input` pasó a referenciar otro esquema: **STOP** y reportar NEEDS_CONTEXT con la salida, sin adaptar a ciegas.
+
+```ts
+// lib/connectors/leads/coldiq.openapi.ts
+// Subconjunto escrito a mano de https://api.coldiq.com/openapi.json, tag
+// "GTM Verbs" (spec 02 §6.3). El spec público tiene 773 operaciones sin
+// operationId: acá van solo las individuales, con operationId propio.
+// El body solo expone `input`: sin `inputs` (lotes de hasta 50 por llamada),
+// `provider` ni `max_credits`, para que el modelo no dispare lotes ni elija
+// proveedores más caros. Los límites de resultados van topeados en 25.
+
+const FindPeopleInput = /* salida de jq, con limit.maximum = 25 */;
+const SearchCompaniesInput = /* salida de jq, con limit.maximum = 25 */;
+const EnrichPersonIdentity = /* salida de jq */;
+const CompanyIdentity = /* salida de jq */;
+const PersonIdentity = /* salida de jq */;
+const EmailIdentity = /* salida de jq */;
+const FindSignalsInput = /* salida de jq, con limit.maximum = 25 */;
+
+function operation(operationId: string, summary: string, input: object) {
+	return {
+		post: {
+			operationId,
+			summary,
+			requestBody: {
+				required: true,
+				content: {
+					"application/json": {
+						schema: { type: "object", required: ["input"], properties: { input } },
+					},
+				},
+			},
+			responses: { "200": { description: "Resultado del waterfall de proveedores de ColdIQ." } },
+		},
+	};
+}
+
+export const COLDIQ_OPERATIONS = [
+	"findPeople",
+	"searchCompanies",
+	"enrichPerson",
+	"enrichCompany",
+	"findEmail",
+	"verifyEmail",
+	"findSignals",
+] as const;
+
+export const coldiqOpenApi = {
+	openapi: "3.0.3",
+	info: { title: "ColdIQ API, subconjunto GTM Verbs", version: "1" },
+	servers: [{ url: "https://api.coldiq.com" }],
+	paths: {
+		"/v1/people/search": operation("findPeople", "Busca decisores en empresas por cargo, seniority, dominio o URL de LinkedIn de la empresa.", FindPeopleInput),
+		"/v1/companies/search": operation("searchCompanies", "Arma listas de cuentas por firmográficos, tecnologías, financiamiento, geografía o palabras clave; también lookalikes desde dominios semilla.", SearchCompaniesInput),
+		"/v1/person/enrich": operation("enrichPerson", "Completa el perfil de una persona (cargo, empresa, ubicación) desde email, LinkedIn o nombre y empresa.", EnrichPersonIdentity),
+		"/v1/company/enrich": operation("enrichCompany", "Completa firmográficos de una empresa (empleados, facturación, industria, financiamiento, tecnologías) desde dominio, nombre o LinkedIn.", CompanyIdentity),
+		"/v1/email/find": operation("findEmail", "Encuentra el email profesional de una persona desde nombre y empresa o dominio, o desde su LinkedIn.", PersonIdentity),
+		"/v1/email/verify": operation("verifyEmail", "Verifica si un email es entregable, riesgoso, catch-all o inválido.", EmailIdentity),
+		"/v1/signals/find": operation("findSignals", "Busca señales de compra: financiamiento, adquisiciones, búsquedas laborales, cambios de puesto, noticias o intención.", FindSignalsInput),
+	},
+};
+```
+
+Los `/* salida de jq … */` se reemplazan por los objetos literales: el archivo commiteado no puede contener `salida de jq`.
+
 - [ ] **Step 5: Escribir el catálogo**
 
 ```ts
@@ -1053,16 +1151,12 @@ export const googlePlacesOpenApi = {
 // devuelve la definición de eve, o null si el binding no alcanza para armarla.
 import {
 	type DynamicConnectionDefinition,
-	defineMcpClientConnection,
 	defineOpenAPIConnection,
 } from "eve/connections";
 import { apiKeyBearer, apiKeyHeaders } from "./auth";
+import { COLDIQ_OPERATIONS, coldiqOpenApi } from "./leads/coldiq.openapi";
 import { googlePlacesOpenApi } from "./leads/google-places.openapi";
-import {
-	COLDIQ_ALLOW_TOOLS,
-	COLDIQ_AUTH,
-	COLDIQ_MCP_URL,
-} from "./platform";
+import { COLDIQ_BASE_URL } from "./platform";
 import {
 	type Binding,
 	connectionName,
@@ -1083,16 +1177,6 @@ export const GOOGLE_PLACES_FIELD_MASK = [
 
 type Builder = (binding: Binding) => DynamicConnectionDefinition | null;
 
-function approvalFor(
-	needsApproval: (bareToolName: string) => boolean,
-): ({ toolName }: { toolName: string }) => "user-approval" | "not-applicable" {
-	// eve pasa el nombre calificado (<conexión>__<tool>).
-	return ({ toolName }) => {
-		const bare = toolName.split("__").pop() ?? toolName;
-		return needsApproval(bare) ? "user-approval" : "not-applicable";
-	};
-}
-
 function requireConnectorUid(binding: Binding): string | null {
 	return binding.connectorUid && binding.connectorUid.trim() !== ""
 		? binding.connectorUid
@@ -1100,34 +1184,17 @@ function requireConnectorUid(binding: Binding): string | null {
 }
 
 const BUILDERS: Partial<Record<ProviderKey, Builder>> = {
-	"innovas-brains": (binding) => {
-		const uid = requireConnectorUid(binding);
-		const url = typeof binding.config.url === "string" ? binding.config.url : null;
-		if (!uid || !url) return null;
-		return defineMcpClientConnection({
-			url,
-			description:
-				"Brain del cliente: canon comercial, ICP, tono, hooks y notas de cuentas. Buscá acá antes de investigar o redactar.",
-			instanceKey: binding.id,
-			headers: apiKeyHeaders(uid, "x-api-key"),
-			tools: { allow: ["brain_search", "brain_read", "brain_upsert"] },
-			approval: approvalFor((tool) => tool === "brain_upsert"),
-		});
-	},
-
 	coldiq: (binding) => {
 		const uid = requireConnectorUid(binding);
 		if (!uid) return null;
-		return defineMcpClientConnection({
-			url: COLDIQ_MCP_URL,
+		return defineOpenAPIConnection({
+			spec: coldiqOpenApi,
+			baseUrl: COLDIQ_BASE_URL,
 			description:
-				"ColdIQ: búsqueda de personas y empresas, enriquecimiento y emails. Cada llamada consume créditos del cliente.",
+				"ColdIQ: búsqueda de personas y empresas, enriquecimiento, emails y señales de compra, de a un registro. Cada llamada consume créditos del cliente.",
 			instanceKey: binding.id,
-			...(COLDIQ_AUTH.scheme === "header"
-				? { headers: apiKeyHeaders(uid, COLDIQ_AUTH.header) }
-				: { auth: apiKeyBearer(uid) }),
-			tools: { allow: [...COLDIQ_ALLOW_TOOLS] },
-			approval: approvalFor((tool) => tool.endsWith("_bulk")),
+			auth: apiKeyBearer(uid),
+			operations: { allow: [...COLDIQ_OPERATIONS] },
 		});
 	},
 
@@ -1180,7 +1247,109 @@ export function buildTenantConnections(
 }
 ```
 
-Si `tsc` rechaza el literal de `googlePlacesOpenApi` contra `OpenAPISpecSource`, o la firma de `approval`, ajustar el tipado según `node_modules/eve/dist/src/public/definitions/connections/openapi.d.ts` y `approval.d.ts` sin cambiar el comportamiento que prueban los tests.
+Si `tsc` rechaza los literales `googlePlacesOpenApi` o `coldiqOpenApi` contra `OpenAPISpecSource`, ajustar el tipado según `node_modules/eve/dist/src/public/definitions/connections/openapi.d.ts`, sin cambiar el comportamiento que prueban los tests.
+
+- [ ] **Step 6: Tests, typecheck y placeholders**
+
+Run: `npm test -- tests/connectors && npm run typecheck && ! grep -n "salida de jq" lib/connectors/leads/coldiq.openapi.ts`
+Expected: PASS, sin errores de tipos y sin placeholders.
+
+- [ ] **Step 7: Prueba real de ColdIQ (usuario, opcional)**
+
+Solo si el usuario la pide: consume créditos. Queda para la Entrega 4 si no.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add lib/connectors/catalog.ts lib/connectors/leads/google-places.openapi.ts lib/connectors/leads/coldiq.openapi.ts tests/connectors/catalog.test.ts tests/connectors/coldiq-openapi.test.ts
+git commit -m "feat: catalogo de conectores con coldiq y google places"
+```
+
+### Task 5B: Brain en el catálogo (BLOQUEADA hasta el rediseño del brain)
+
+**Estado:** no se ejecuta mientras spec §6.2 tenga el aviso "En suspenso". La arquitectura del brain (`innovas-brains-mcp`) se rediseña en una sesión aparte. Lo que sigue es el diseño original, válido solo si el brain termina siendo un **MCP remoto con llave en `x-api-key`**. Si el rediseño cambia eso (por ejemplo, un brain dentro del propio proyecto sobre Supabase, sin llave), reescribir esta task contra la §6.2 nueva antes de ejecutarla.
+
+**Files:**
+- Modify: `lib/connectors/catalog.ts`, `tests/connectors/catalog.test.ts`
+
+**Interfaces:**
+- Consumes: `apiKeyHeaders` (Task 4), `defineMcpClientConnection`.
+- Produces: el builder `"innovas-brains"` dentro de `BUILDERS`.
+
+- [ ] **Step 1: Gate**
+
+Run: `grep -n "En suspenso" docs/superpowers/specs/02-conexiones-innovas.md`
+Expected: sin coincidencias. Si aparece: **STOP**, reportar BLOCKED "el brain sigue en rediseño (spec §6.2)".
+
+- [ ] **Step 2: Verificar el conector del brain (usuario)**
+
+El conector `innovas-brain` tiene que existir (spec §9.1). Probarlo con el comando OIDC de spec §9.1 contra un endpoint de lectura del brain, con el header `x-api-key: $TOKEN` en vez de `Authorization`. Expected: `200`. Esto cierra la parte de S5 que quedó pendiente.
+
+- [ ] **Step 3: Agregar los tests**
+
+Al final de `tests/connectors/catalog.test.ts`:
+
+```ts
+type Policy = (args: { toolName: string }) => string;
+
+describe("brain", () => {
+	it("arma la conexión con la URL del binding e instanceKey = id", () => {
+		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
+		expect(brain.url).toBe("https://brain.test/mcp");
+		expect(brain.instanceKey).toBe("binding-1");
+		expect(brain.tools).toEqual({ allow: ["brain_search", "brain_read", "brain_upsert"] });
+	});
+
+	it("pide aprobación solo para brain_upsert, con nombre calificado", () => {
+		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
+		const approval = brain.approval as Policy;
+		expect(approval({ toolName: "brain__brain_upsert" })).toBe("user-approval");
+		expect(approval({ toolName: "brain__brain_search" })).toBe("not-applicable");
+	});
+
+	it("usa la llave del conector del binding en x-api-key", async () => {
+		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
+		const headers = brain.headers as () => Promise<Record<string, string>>;
+		expect(await headers()).toEqual({ "x-api-key": "llave:tenant-a-brain" });
+	});
+
+	it("se omite si falta la URL o el conector", () => {
+		expect(buildTenantConnections([binding({ config: {} })])).toEqual({});
+		expect(buildTenantConnections([binding({ connectorUid: null })])).toEqual({});
+		expect(warn).toHaveBeenCalled();
+	});
+});
+```
+
+- [ ] **Step 4: Verificar que falla**
+
+Run: `npm test -- tests/connectors/catalog.test.ts`
+Expected: FAIL en "arma la conexión" (sin builder, el binding se omite).
+
+- [ ] **Step 5: Implementar**
+
+En `lib/connectors/catalog.ts`: sumar `defineMcpClientConnection` al import de `eve/connections` y agregar al objeto `BUILDERS`:
+
+```ts
+	"innovas-brains": (binding) => {
+		const uid = requireConnectorUid(binding);
+		const url = typeof binding.config.url === "string" ? binding.config.url : null;
+		if (!uid || !url) return null;
+		return defineMcpClientConnection({
+			url,
+			description:
+				"Brain del cliente: canon comercial, ICP, tono, hooks y notas de cuentas. Buscá acá antes de investigar o redactar.",
+			instanceKey: binding.id,
+			headers: apiKeyHeaders(uid, "x-api-key"),
+			tools: { allow: ["brain_search", "brain_read", "brain_upsert"] },
+			// eve pasa el nombre calificado (<conexión>__<tool>).
+			approval: ({ toolName }) =>
+				toolName.endsWith("__brain_upsert") ? "user-approval" : "not-applicable",
+		});
+	},
+```
+
+Si `tsc` rechaza la firma de `approval`, ajustarla según `node_modules/eve/dist/src/public/definitions/approval.d.ts`.
 
 - [ ] **Step 6: Tests y typecheck**
 
@@ -1190,8 +1359,8 @@ Expected: PASS y sin errores.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add lib/connectors/catalog.ts lib/connectors/leads/google-places.openapi.ts tests/connectors/catalog.test.ts
-git commit -m "feat: catalogo de conectores con brain, coldiq y google places"
+git add lib/connectors/catalog.ts tests/connectors/catalog.test.ts
+git commit -m "feat: brain del tenant en el catalogo de conectores"
 ```
 
 ### Task 6: Resolver dinámico de conexiones
@@ -1630,8 +1799,8 @@ export function parseBindArgs(argv: string[]): BindArgs {
 // scripts/connections-bind.mts
 // Alta de un binding de conector para un tenant (spec 02 §9). No maneja
 // secretos: la llave ya está en Vercel Connect. Uso:
-//   npm run connections:bind -- --tenant innovas --capability brain \
-//     --provider innovas-brains --connector innovas-brain --url https://...
+//   npm run connections:bind -- --tenant innovas --capability leads \
+//     --provider coldiq --connector innovas-coldiq
 import { userInfo } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { parseBindArgs } from "./connections-bind-args.ts";
@@ -1779,7 +1948,7 @@ Expected: FAIL en "se llama crm" (el builder no existe; el binding se omite).
 
 - [ ] **Step 3: Implementar**
 
-En `lib/connectors/catalog.ts`: agregar `tenantScopedConnect` al import de `./auth`, sumar `HUBSPOT_CONNECTOR_UID`, `HUBSPOT_MCP_URL` y `HUBSPOT_READ_TOOLS` al import de `./platform`, y agregar al objeto `BUILDERS`:
+En `lib/connectors/catalog.ts`: agregar `defineMcpClientConnection` al import de `eve/connections` (si la Task 5B no lo agregó), `tenantScopedConnect` al import de `./auth`, sumar `HUBSPOT_CONNECTOR_UID`, `HUBSPOT_MCP_URL` y `HUBSPOT_READ_TOOLS` al import de `./platform`, y agregar al objeto `BUILDERS`:
 
 ```ts
 	hubspot: (binding) =>
@@ -1812,7 +1981,7 @@ git commit -m "feat: crm hubspot de solo lectura en el catalogo de conectores"
 - Test: `tests/connectors/hubspot.test.ts`, `tests/tools/crm-setup-outreach-properties.test.ts`
 
 **Interfaces:**
-- Consumes: `tenantScopedConnect` (Task 4), `hasEnabledBinding` (Task 6), `HUBSPOT_REST_CONNECTOR_UID` (Task 1).
+- Consumes: `tenantScopedConnect` (Task 4), `hasEnabledBinding` (Task 6), `HUBSPOT_CONNECTOR_UID` (Task 1). El mismo conector del MCP autoriza la API REST (spec §10.1 S3).
 - Produces:
   ```ts
   export const OUTREACH_PROPERTY_GROUP: { name: "outreach"; label: string };
@@ -2097,7 +2266,7 @@ import {
 	ensureOutreachProperties,
 	HubSpotUnauthorizedError,
 } from "../../../lib/connectors/crm/hubspot";
-import { HUBSPOT_REST_CONNECTOR_UID } from "../../../lib/connectors/platform";
+import { HUBSPOT_CONNECTOR_UID } from "../../../lib/connectors/platform";
 
 function attribute(value: unknown): string {
 	return typeof value === "string" ? value : "";
@@ -2125,7 +2294,7 @@ export default defineTool({
 			throw new Error("este tenant no tiene HubSpot conectado");
 		}
 
-		const provider = tenantScopedConnect(HUBSPOT_REST_CONNECTOR_UID, tenantId);
+		const provider = tenantScopedConnect(HUBSPOT_CONNECTOR_UID, tenantId);
 		const { token } = await ctx.getToken(provider, AUTH_OPTIONS);
 		try {
 			return await ensureOutreachProperties(token);
@@ -2141,6 +2310,8 @@ export default defineTool({
 
 Run: `npm test -- tests/connectors/hubspot.test.ts tests/tools && npm run typecheck`
 Expected: PASS y sin errores.
+
+**Riesgo abierto (spec §6.1):** el spike solo probó lectura REST con el token del MCP. Los scopes de una MCP auth app los fija el MCP de HubSpot, no nosotros. Si en la verificación del criterio 5 (Task 14) la creación del grupo o de una propiedad devuelve **403**, no agregar un conector nuevo: reportar BLOCKED con el cuerpo del error. La alternativa acordada es reescribir `ensureOutreachProperties` sobre la tool del MCP `manage_custom_properties`, lo que requiere revisar esta task.
 
 - [ ] **Step 8: Commit**
 
@@ -2705,17 +2876,18 @@ Expected: todo en verde.
 
 Pedirle al usuario: `npx supabase db push`. Después verificar con `npx supabase migration list` que las dos migraciones de la etapa figuran en `remote`, y regenerar tipos con `npm run db:types`. Commit de `lib/supabase/database.types.ts`.
 
-- [ ] **Step 3: Conectores y bindings de `innovas` (usuario)**
+- [ ] **Step 3: Conectores, plan de Vercel y bindings de `innovas` (usuario)**
 
 Pedirle al usuario, en este orden, según spec §9:
-1. Conectores `api-key` `innovas-brain`, `innovas-coldiq` e `innovas-places` con `--data @-` y `vercel connect attach` a production, preview y development.
-2. Bindings contra producción:
-   - `npm run connections:bind -- --tenant innovas --capability brain --provider innovas-brains --connector innovas-brain --url <url del brain>`
+1. **Pasar el team de Vercel de Hobby a Pro** (spec §13). En Hobby, Connect pausa a los 500 token requests por mes y la verificación puede cortarse a mitad de camino.
+2. Conectores `api-key` que falten: `innovas-coldiq` ya existe; crear `innovas-places` con el formulario de `vercel connect create` (spec §9.1: API Key, Shared API Keys, UID a mano). `innovas-brain` solo si la Task 5B se ejecutó. Verificar cada uno con el comando OIDC de spec §9.1, no con `vercel connect token`.
+3. Bindings contra producción:
    - `npm run connections:bind -- --tenant innovas --capability leads --provider coldiq --connector innovas-coldiq`
    - `npm run connections:bind -- --tenant innovas --capability leads --provider google-places --connector innovas-places`
    - `npm run connections:bind -- --tenant innovas --capability crm --provider hubspot`
    - `npm run connections:bind -- --tenant innovas --capability mail --provider gmail`
-3. Pasar la app de Google a producción en Google Cloud (spec §9.3, paso 2).
+   - Solo con la Task 5B hecha: `npm run connections:bind -- --tenant innovas --capability brain --provider innovas-brains --connector innovas-brain --url <url del brain>`
+4. Pasar la app de Google a producción en Google Cloud (spec §9.3, paso 2).
 
 - [ ] **Step 4: Deploy**
 
@@ -2723,7 +2895,8 @@ Pedirle permiso al usuario para `git push` a `main`. Esperar el build de Vercel 
 
 - [ ] **Step 5: Verificación manual del criterio de cierre (usuario, guiado)**
 
-1. **Criterio 1:** en `/innovas/chat`, hilo nuevo con `anthropic/claude-sonnet-5`, pedir "buscá en el CRM el contacto <mail conocido>". Tiene que aparecer el botón "Autorizar HubSpot"; autorizar; el agente responde usando la tool `crm__<HUBSPOT_SEARCH_CONTACTS_TOOL>`. Después pedir "buscá en el brain qué dice el ICP" y confirmar `brain__brain_search`.
+1. **Criterio 1:** en `/innovas/chat`, hilo nuevo con `anthropic/claude-sonnet-5`, pedir "buscá en el CRM el contacto <mail conocido>". Tiene que aparecer el botón "Autorizar HubSpot"; autorizar; el agente responde usando `crm__search_crm_objects`. Después pedir "buscá en el brain qué dice el ICP" y confirmar `brain__brain_search`. **Si la Task 5B no se ejecutó, la parte del brain queda pendiente:** anotarlo en el cierre como criterio 1 parcial, sin marcar la etapa como terminada.
+   - Extra ColdIQ: pedir "buscá el email de <persona conocida> en <empresa>" y confirmar `leads-coldiq__findEmail` con resultado.
 2. **Criterio 2:** crear un tenant de prueba sin bindings, entrar con un usuario miembro, pedir "¿qué conexiones tenés?". `connection_search` no puede listar `crm`.
 3. **Criterio 3:** pedir un mail de prueba a una casilla propia. Aprobar, autorizar Google, confirmar que llega. Confirmar en la base que `executors.gmail_authorized_at` quedó estampado para ese usuario en `innovas`.
 4. **Criterio 4 (S7):** el mismo usuario, miembro también del tenant de prueba con un binding `crm`/`hubspot` creado para esta verificación, abre un hilo ahí y pide una búsqueda en el CRM. **Tiene que volver a pedir "Autorizar HubSpot".** Si no lo pide, es una fuga de grant entre tenants: STOP, reportar como Critical.
@@ -2732,7 +2905,7 @@ Pedirle permiso al usuario para `git push` a `main`. Esperar el build de Vercel 
 
 - [ ] **Step 6: Documentar el cierre**
 
-- En la spec §1, reemplazar `crm__*` del criterio 1 por el nombre real.
+- En la spec, anotar en §10.1 el resultado de S7 (criterio 4) y, si hubo, el de la escritura de propiedades con el token del MCP (criterio 5).
 - En `docs/01-roadmap-etapas.md`, Etapa 2: marcar `[x]`, tildar tareas, aplicar las enmiendas de spec §14 y anotar bajo "Terminado cuando" la fecha y el resultado de cada criterio, incluido S7.
 
 - [ ] **Step 7: Commit**
@@ -2749,7 +2922,9 @@ Después: `/context-save`.
 ## Notas para quien implemente
 
 - **El orden de las Tasks 10 y 13 importa.** `send_email` deja de leer `google_tokens` antes de que la tabla se borre.
-- **La Task 1 puede frenar la etapa entera.** Si S1 o S5 salen negativos, no hay forma de absorberlos en constantes: vuelve al usuario.
+- **El brain es la única parte bloqueada.** La Task 5B no se ejecuta hasta que termine el rediseño del brain y spec §6.2 pierda el aviso "En suspenso". El resto de la etapa no depende de ella.
+- **Un conector `api-key` no se prueba con `vercel connect token <uid> --subject app`:** falla con "Token subject is not accessible to this requester" porque el subject `app` lo pide el proyecto. Usar el comando OIDC de spec §9.1.
+- **Los tokens de Connect duran ~15 min** y el SDK los cachea en proceso. Una llave rotada puede tardar eso en llegar a las instancias vivas: la rotación de spec §9.1 deja convivir las dos llaves ese rato.
 - **Los tests con `vi.mock` usan la ruta relativa desde `tests/`** (`../../lib/...`) cuando el módulo bajo prueba importa con ruta relativa, igual que `tests/agents/session-store.test.ts`. Si un mock no toma, revisar que la ruta resuelva al mismo archivo.
 - **`.eve/` tiene snapshots compilados** con código viejo (incluido `getAccessToken`). No son fuente: los greps y el test de import los excluyen.
 - **Nunca correr `connections:bind` contra producción** fuera de la Task 14, y nunca con valores inventados.
