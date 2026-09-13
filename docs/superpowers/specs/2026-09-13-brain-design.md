@@ -41,9 +41,11 @@ Descripciones en español, escritas para el modelo.
 
 | Tool | Entrada | Salida | Approval |
 |---|---|---|---|
-| `brain_search` | `query` (string, requerido), `category?`, `tag?`, `includeArchived?` (default `false`), `limit?` (1 a 20, default 8) | `{ results: [{ slug, title, category, status, tags, snippet, updatedAt }] }` | ninguna |
-| `brain_read` | `slug` | `{ slug, title, category, status, tags, frontmatter, body, revision, updatedAt }` | ninguna |
-| `brain_upsert` | `slug`, `title`, `category`, `status`, `tags`, `body`, `reason`, `baseRevision?` | `{ slug, revision }` | `always()`, respuesta limitada por rol |
+| `brain_search` | `query` (string, puede ir vacío si hay `category` o `tag`), `category?`, `tag?`, `includeArchived?` (default `false`), `limit?` (1 a 20, default 8) | `{ ok: true, results: [{ slug, title, category, status, tags, snippet, updatedAt }] }` | ninguna |
+| `brain_read` | `slug` | `{ ok: true, page: { slug, title, category, status, tags, frontmatter, body, revision, updatedAt } }` | ninguna |
+| `brain_upsert` | `slug`, `title`, `category`, `status`, `tags`, `body`, `reason`, `baseRevision?` | `{ ok: true, slug, revision }` | `always()`, respuesta limitada por rol |
+
+Los errores del brain no se lanzan al modelo: vuelven como `{ ok: false, error, message }` con `suggestions` (`not_found`), `currentRevision` (`conflict`) o `fields` (`validation`). Un error que no es del brain (base caída) sí se lanza.
 
 **Semántica de `brain_upsert`:**
 
@@ -99,7 +101,7 @@ type BrainWrite = {
 type BrainAuthor =
   | { kind: "agent"; userId: string | null; sessionId: string }
   | { kind: "user"; userId: string }
-  | { kind: "import"; userId: string | null; sourcePath: string };
+  | { kind: "import"; userId: string | null; sourcePath: string; sourceHash: string };
 
 interface BrainProvider {
   search(input: { query: string; category?: string; tag?: string; includeArchived?: boolean; limit?: number }): Promise<BrainPageSummary[]>;
@@ -188,7 +190,7 @@ Historial append-only.
 | `title`, `category`, `status`, `tags`, `frontmatter`, `body` | copia de la página | |
 | `author_kind` | `brain_author_kind` not null | Enum `user`, `agent`, `import` |
 | `author_user_id` | uuid → `auth.users` on delete set null | En `agent`, el usuario que inició la sesión |
-| `approved_by_user_id` | uuid → `auth.users` on delete set null | Quién aprobó el upsert del agente. Si eve no lo expone en el contexto de `execute`, queda nulo y se anota el desvío |
+| `approved_by_user_id` | uuid → `auth.users` on delete set null | Quién aprobó el upsert del agente. **Queda nulo en esta versión:** en eve 0.54.2 el `responder` solo llega a la política `approval.response`, no a `execute`, y la política puede correr más de una vez, así que no es lugar para escribir. La columna queda para cuando eve lo exponga |
 | `session_id` | text | Sesión de eve en `agent` |
 | `reason` | text not null | |
 | `created_at` | timestamptz not null default `now()` | |
@@ -315,7 +317,7 @@ Por página: acción (`crear`, `actualizar`, `sin cambios`, `salteada`, `error`)
 
 ## 10. Tests
 
-**pgTAP** (`supabase/tests/08_brain.test.sql`, después del `06_tenant_connections` de la Etapa 2):
+**pgTAP** (`supabase/tests/08_brain_tables.test.sql`, `09_brain_upsert.test.sql` y `10_brain_search.test.sql`, después del `06_tenant_connections` de la Etapa 2):
 - Un miembro de A no ve páginas ni revisiones de B.
 - `authenticated` y `anon` no pueden insertar, actualizar, borrar ni truncar en `brain_pages` ni `brain_revisions`, ni ejecutar `brain_upsert_page` ni `brain_search_pages` (42501).
 - Actualizar una página deja intacta la fila de la revisión anterior.
@@ -391,7 +393,7 @@ Se aplican en la rama que tiene el resultado del spike (`claude/jovial-gates-06e
 
 ## 14. Riesgos y verificaciones
 
-- **API de eve:** la forma de `approval.response` en tools dinámicas, y si `execute` recibe quién aprobó, se verifican contra `node_modules/eve` antes de escribir. Si no coincide, se anota el desvío acá.
+- **API de eve:** verificado en eve 0.54.2 que `approval` acepta `{ request, response }` y que `response` recibe `responder` con los `attributes` del canal (`tenantId`, `role`). `execute` no recibe quién aprobó: `approved_by_user_id` queda nulo (§5.3). Cualquier otro desvío que aparezca al implementar se anota acá.
 - **`unaccent` en columna generada:** requiere el wrapper `immutable` con el diccionario calificado. Si Supabase no permite la extensión en el esquema elegido, se busca sin quitar acentos y se anota.
 - **Tags de canon mal asignados:** la skill no encuentra el ICP. Se mitiga revisando el dry-run y con un test manual por tag desde el chat.
 - **Re-import durante la transición:** una página editada por el agente y luego en Drive queda salteada. El reporte lo muestra y se resuelve con `--force` o a mano.
