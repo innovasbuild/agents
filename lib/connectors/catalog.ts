@@ -79,19 +79,32 @@ export function buildTenantConnections(
 			continue;
 		}
 		const info = PROVIDERS[binding.provider];
-		if (info.kind !== "connection") continue;
+		if (info.kind !== "connection") {
+			console.warn(`conector omitido: no es una conexión de eve (${where})`);
+			continue;
+		}
 		if (info.capability !== binding.capability) {
 			console.warn(`conector omitido: capacidad no coincide (${where})`);
 			continue;
 		}
 
 		const build = BUILDERS[binding.provider];
-		const definition = build ? build(binding) : null;
+		if (!build) {
+			console.warn(`conector omitido: sin builder todavía (${where})`);
+			continue;
+		}
+		const definition = build(binding);
 		if (!definition) {
 			console.warn(`conector omitido: binding incompleto (${where})`);
 			continue;
 		}
-		connections[connectionName(binding.provider)] = definition;
+
+		const name = connectionName(binding.provider);
+		if (Object.hasOwn(connections, name)) {
+			console.warn(`conector omitido: nombre de conexión duplicado (${where})`);
+			continue;
+		}
+		connections[name] = definition;
 	}
 
 	return connections;

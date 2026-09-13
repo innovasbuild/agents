@@ -126,4 +126,56 @@ describe("buildTenantConnections", () => {
 			buildTenantConnections([binding({ capability: "crm" })]),
 		).toEqual({});
 	});
+
+	it("avisa y omite un binding cuyo proveedor no produce conexión de eve", () => {
+		expect(
+			buildTenantConnections([
+				binding({ capability: "mail", provider: "gmail" }),
+			]),
+		).toEqual({});
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("no es una conexión de eve"));
+	});
+
+	it("avisa 'sin builder todavía' para un proveedor sin builder registrado", () => {
+		expect(buildTenantConnections([binding({})])).toEqual({});
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("sin builder todavía"));
+	});
+
+	it("distingue 'binding incompleto' de 'sin builder todavía'", () => {
+		buildTenantConnections([
+			binding({
+				capability: "leads",
+				provider: "coldiq",
+				connectorUid: null,
+			}),
+		]);
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("binding incompleto"));
+		expect(warn).not.toHaveBeenCalledWith(
+			expect.stringContaining("sin builder todavía"),
+		);
+	});
+
+	it("avisa y omite en colisión de nombre de conexión", () => {
+		const first = binding({
+			id: "binding-coldiq-1",
+			capability: "leads",
+			provider: "coldiq",
+			connectorUid: "tenant-a-coldiq-1",
+		});
+		const second = binding({
+			id: "binding-coldiq-2",
+			capability: "leads",
+			provider: "coldiq",
+			connectorUid: "tenant-a-coldiq-2",
+		});
+		const result = buildTenantConnections([first, second]) as unknown as Record<
+			string,
+			{ instanceKey: string }
+		>;
+		expect(Object.keys(result)).toEqual(["leads-coldiq"]);
+		expect(result["leads-coldiq"].instanceKey).toBe("binding-coldiq-1");
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("nombre de conexión duplicado"),
+		);
+	});
 });
