@@ -16,7 +16,8 @@
 		"db:stop": "npx supabase stop",
 		"db:reset": "npx supabase db reset",
 		"db:test": "npx supabase db reset --no-seed && npx supabase test db",
-		"db:types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts"
+		"db:types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts",
+		"connections:bind": "node --env-file=.env.local scripts/connections-bind.mts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.7",
