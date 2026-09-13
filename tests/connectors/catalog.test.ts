@@ -6,7 +6,10 @@ vi.mock("@/lib/connectors/auth", () => ({
 			uid,
 			header,
 		}),
-	apiKeyBearer: (uid: string) => ({ uid, getToken: async () => ({ token: uid }) }),
+	apiKeyBearer: (uid: string) => ({
+		uid,
+		getToken: async () => ({ token: uid }),
+	}),
 	tenantScopedConnect: (connector: string, tenantId: string) => ({
 		connector,
 		tenantId,
@@ -20,6 +23,7 @@ const platform = await import("@/lib/connectors/platform");
 const { COLDIQ_OPERATIONS, coldiqOpenApi } = await import(
 	"@/lib/connectors/leads/coldiq.openapi"
 );
+
 import type { Binding } from "@/lib/connectors/providers";
 
 type AnyConnection = Record<string, unknown>;
@@ -28,10 +32,10 @@ function binding(overrides: Partial<Binding>): Binding {
 	return {
 		id: "binding-1",
 		tenantId: "tenant-a",
-		capability: "brain",
-		provider: "innovas-brains",
-		connectorUid: "tenant-a-brain",
-		config: { url: "https://brain.test/mcp" },
+		capability: "leads",
+		provider: "coldiq",
+		connectorUid: "tenant-a-coldiq",
+		config: {},
 		...overrides,
 	};
 }
@@ -87,9 +91,9 @@ describe("leads", () => {
 	});
 
 	it("ColdIQ se omite sin conector", () => {
-		expect(
-			buildTenantConnections([{ ...coldiq, connectorUid: null }]),
-		).toEqual({});
+		expect(buildTenantConnections([{ ...coldiq, connectorUid: null }])).toEqual(
+			{},
+		);
 		expect(warn).toHaveBeenCalled();
 	});
 
@@ -122,9 +126,9 @@ describe("buildTenantConnections", () => {
 	});
 
 	it("omite un binding cuya capacidad no coincide con la del proveedor", () => {
-		expect(
-			buildTenantConnections([binding({ capability: "crm" })]),
-		).toEqual({});
+		expect(buildTenantConnections([binding({ capability: "crm" })])).toEqual(
+			{},
+		);
 	});
 
 	it("avisa y omite un binding cuyo proveedor no produce conexión de eve", () => {
@@ -133,12 +137,25 @@ describe("buildTenantConnections", () => {
 				binding({ capability: "mail", provider: "gmail" }),
 			]),
 		).toEqual({});
-		expect(warn).toHaveBeenCalledWith(expect.stringContaining("no es una conexión de eve"));
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("no es una conexión de eve"),
+		);
 	});
 
 	it("avisa 'sin builder todavía' para un proveedor sin builder registrado", () => {
-		expect(buildTenantConnections([binding({})])).toEqual({});
-		expect(warn).toHaveBeenCalledWith(expect.stringContaining("sin builder todavía"));
+		// hubspot es "connection" (no "tool") pero todavía no tiene builder acá.
+		expect(
+			buildTenantConnections([
+				binding({
+					capability: "crm",
+					provider: "hubspot",
+					connectorUid: "tenant-a-hubspot",
+				}),
+			]),
+		).toEqual({});
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("sin builder todavía"),
+		);
 	});
 
 	it("distingue 'binding incompleto' de 'sin builder todavía'", () => {
@@ -149,7 +166,9 @@ describe("buildTenantConnections", () => {
 				connectorUid: null,
 			}),
 		]);
-		expect(warn).toHaveBeenCalledWith(expect.stringContaining("binding incompleto"));
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("binding incompleto"),
+		);
 		expect(warn).not.toHaveBeenCalledWith(
 			expect.stringContaining("sin builder todavía"),
 		);

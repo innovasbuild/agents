@@ -8,7 +8,6 @@ import {
 describe("registro de proveedores", () => {
 	it("nombra la conexión por capacidad cuando admite un solo proveedor", () => {
 		expect(connectionName("hubspot")).toBe("crm");
-		expect(connectionName("innovas-brains")).toBe("brain");
 	});
 
 	it("nombra capacidad-proveedor cuando admite varios", () => {
@@ -31,5 +30,14 @@ describe("registro de proveedores", () => {
 
 	it("gmail es una tool, no una conexión", () => {
 		expect(PROVIDERS.gmail.kind).toBe("tool");
+	});
+
+	it("wiki es una tool del brain sin llave", () => {
+		expect(PROVIDERS.wiki).toEqual({
+			capability: "brain",
+			multiple: false,
+			kind: "tool",
+			authKind: "none",
+		});
 	});
 });
