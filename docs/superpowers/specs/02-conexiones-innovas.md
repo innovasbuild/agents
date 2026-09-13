@@ -285,7 +285,12 @@ El brain no usa conector: se da de alta como en spec brain §11.
 ### 9.2 Conectores de plataforma (una vez)
 
 - HubSpot (hecho, UID `mcp.hubspot.com/hubspot`): con el usuario admin de la cuenta, en HubSpot → Development → MCP Auth Apps → Create MCP auth app, con Redirect URL `https://connect.vercel.com/callback`. Después, `vercel connect create https://mcp.hubspot.com` (sin `--connection-method`), nombre `hubspot`, y en el formulario OAuth pegar Client ID y Client Secret de esa app. Cada usuario autoriza su cuenta la primera vez que se pide un token.
-- Google: `vercel connect create google --connection-method oauth --data @archivo` con el client que ya existe, Gmail API habilitada.
+- Google (hecho, UID `google/google`, 2026-09-13):
+  - Se usó el cliente OAuth que ya existe (`GOOGLE_OAUTH_CLIENT_ID`).
+  - En Google Cloud: Gmail API habilitada, `https://connect.vercel.com/callback` agregado a los URIs de redirección del cliente web (sin tocar los del login de Supabase) y `gmail.send` declarado en Google Auth Platform → Acceso a los datos.
+  - Las credenciales entraron por stdin desde las env vars del proyecto: `jq -n --arg id "$CID" --arg s "$CSEC" '{clientId:$id, clientSecret:$s}' | vercel connect create google --connection-method oauth --name google --data @-`.
+  - Al crearse con `--data` no se ata solo al proyecto: va `vercel connect attach google/google`.
+  - Verificado: `vercel connect token google/google --scopes https://www.googleapis.com/auth/gmail.send` tras el consentimiento, y `tokeninfo` → `scope` `gmail.send`, `expires_in` 3550, `azp` del cliente correcto.
 - Los dos: `vercel connect attach`. Sus UIDs quedan en el catálogo.
 - Bindings OAuth de `innovas`: `npm run connections:bind -- --tenant innovas --capability crm --provider hubspot` y lo mismo para `mail`/`gmail`.
 
@@ -326,6 +331,7 @@ S1 a S6 se corrieron con el usuario en su terminal; el agente no vio llaves ni t
 |---|---|---|---|
 | `mcp.hubspot.com/hubspot` | `scl_Q2pqnG5s8T8GnXWUNIvlxg` | OAuth Customer Owned contra `https://mcp.hubspot.com` | Plataforma; grants por usuario |
 | `innovas-coldiq` | `scl_Vy4XBaAvB7QwpRrGeqw` | `api-key`, Shared API Keys, contra `https://api.coldiq.com` | Tenant `innovas` |
+| `google/google` | (no registrado) | OAuth con credenciales propias (cliente del login) | Plataforma; grants por usuario. Creado después del spike (§9.2) |
 
 | # | Respuesta | Evidencia (sin secretos) | Qué cambia |
 |---|---|---|---|
@@ -337,7 +343,7 @@ S1 a S6 se corrieron con el usuario en su terminal; el agente no vio llaves ni t
 | S6 | **Se edita en el lugar.** Connect → conector → Settings → API Keys → New API Key ("Leave blank to keep the current key"); también hay Add Key para convivir con dos llaves. La CLI no rota (`vercel connect update` solo cambia la marca). El cambio rige al instante en Connect; el token vive ~15 minutos y el SDK lo cachea en proceso hasta entonces | Llave nueva cargada y la vieja borrada en ColdIQ → nuevo pedido con otro `expiresAt` y `credits status: 200` | §9.1 rotación, §5.2, §13 |
 
 **Hallazgos laterales:**
-- El team de Vercel está en plan **Hobby**: Connect incluye 500 token requests cada 30 días y pausa el uso al llegar. §13 asumía Pro; se agrega el riesgo.
+- El team de Vercel estaba en plan **Hobby** (500 token requests cada 30 días, con pausa al llegar). Ya pasó a **Pro** el 2026-09-13.
 - Probar un conector `api-key` desde la terminal requiere el OIDC del proyecto (`vercel env pull`), no `vercel connect token` (§9.1).
 
 ## 11. Entregas
@@ -360,7 +366,7 @@ S1 a S6 se corrieron con el usuario en su terminal; el agente no vio llaves ni t
 
 ## 13. Riesgos
 
-- **Plan del team (§10.1):** el team de Vercel de Innovas está en **Hobby**, con 500 token requests cada 30 días; al llegar al límite Connect pausa el uso. Alcanza para desarrollo, pero con tokens de ~15 min y varios usuarios no alcanza para producción. Pasar el team a Pro antes de la verificación contra el deploy (Entrega 4).
+- **Plan del team (§10.1):** resuelto. El team pasó de Hobby (500 token requests cada 30 días, con pausa) a **Pro** el 2026-09-13, con uso medido.
 - **Costo por token request:** $3 cada 1.000 en Pro. El SDK cachea en proceso; se revisa el tablero de Observability de Connect al cerrar la etapa.
 - **Rate limit:** 200 `getToken` por minuto por team, compartido entre todos los conectores. Sin problema a este volumen; hay que mirarlo cuando lleguen los schedules.
 - **ColdIQ y Places cuestan por llamada** y no hay cupo hasta la Etapa 3: ColdIQ sin operaciones bulk (§6.3) y Places con field mask fijo.

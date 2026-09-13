@@ -15,8 +15,8 @@
 - ColdIQ no tiene MCP remoto: es una conexión OpenAPI con documento inline y Bearer.
 - El brain sale de este plan: la Task 5B queda reemplazada por `docs/superpowers/plans/2026-09-13-brain.md`, que corre después de las Tasks 2, 3, 6 y 7.
 - Los tokens de Connect duran ~15 min: se le pasa `expiresAt` a eve.
-- El team de Vercel está en Hobby y hay que pasarlo a Pro antes de la Entrega 4.
-- Conectores que ya existen: `mcp.hubspot.com/hubspot` y `innovas-coldiq`.
+- El team de Vercel ya está en Pro.
+- Conectores que ya existen: `mcp.hubspot.com/hubspot`, `innovas-coldiq` y `google/google` (verificado con `gmail.send`).
 
 ## Global Constraints
 
@@ -105,7 +105,7 @@ Expected: los dos existen. Si faltan: reportar NEEDS_CONTEXT "falta traer los co
 - [ ] **Step 4: Verificar los conectores de plataforma**
 
 Run: `vercel connect list --format json | jq -r '.[] | [.uid, .service, .type] | @tsv'`
-Expected: aparecen `mcp.hubspot.com/hubspot` (oauth), `innovas-coldiq` (api-key) y un conector de Google (`service` google, `type` oauth). Si falta el de Google: **STOP**. Reportar NEEDS_CONTEXT: "el usuario tiene que crear y atar el conector de Google según spec §9.2 y pasar su UID". Si el formato de `--format json` no es un array, ajustar el `jq` mirando la salida; no inventar UIDs.
+Expected: aparecen `mcp.hubspot.com/hubspot` (oauth), `innovas-coldiq` (api-key) y `google/google` (oauth). Si alguno falta o no está atado al proyecto: **STOP**. Reportar NEEDS_CONTEXT con la salida textual. Si el formato de `--format json` no es un array, ajustar el `jq` mirando la salida; no inventar UIDs.
 
 - [ ] **Step 5: Escribir el test de forma**
 
@@ -152,7 +152,7 @@ Expected: FAIL, "Cannot find module '@/lib/connectors/platform'".
 
 - [ ] **Step 7: Escribir las constantes**
 
-Todos los valores salen de spec §10.1, salvo `GOOGLE_CONNECTOR_UID`, que sale del Step 4:
+Todos los valores salen de spec §10.1 y §9.2:
 
 ```ts
 // lib/connectors/platform.ts
@@ -175,12 +175,12 @@ export const HUBSPOT_READ_TOOLS = [
 ] as const satisfies readonly string[];
 export const HUBSPOT_SEARCH_CONTACTS_TOOL = "search_crm_objects";
 
-export const GOOGLE_CONNECTOR_UID = "<Step 4>";
+export const GOOGLE_CONNECTOR_UID = "google/google";
 
 export const COLDIQ_BASE_URL = "https://api.coldiq.com";
 ```
 
-`<Step 4>` es el UID real del conector de Google: el archivo commiteado no puede contener ningún `<`.
+El archivo commiteado no puede contener ningún `<`.
 
 - [ ] **Step 8: Correr el test**
 
@@ -2786,7 +2786,7 @@ Pedirle al usuario: `npx supabase db push`. Después verificar con `npx supabase
 - [ ] **Step 3: Conectores, plan de Vercel y bindings de `innovas` (usuario)**
 
 Pedirle al usuario, en este orden, según spec §9:
-1. **Pasar el team de Vercel de Hobby a Pro** (spec §13). En Hobby, Connect pausa a los 500 token requests por mes y la verificación puede cortarse a mitad de camino.
+1. Confirmar que el team de Vercel sigue en **Pro** (se pasó el 2026-09-13, spec §13).
 2. Conectores `api-key` que falten: `innovas-coldiq` ya existe; crear `innovas-places` con el formulario de `vercel connect create` (spec §9.1: API Key, Shared API Keys, UID a mano). El brain no usa conector. Verificar cada uno con el comando OIDC de spec §9.1, no con `vercel connect token`.
 3. Bindings contra producción:
    - `npm run connections:bind -- --tenant innovas --capability leads --provider coldiq --connector innovas-coldiq`
