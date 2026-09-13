@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(5);
+select plan(7);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -50,6 +50,25 @@ select lives_ok(
   $$update public.conversations set title = 'nuevo título'
      where id = 'cccccccc-0000-0000-0000-000000000099'$$,
   'el dueño sí puede cambiar el título (columna permitida)'
+);
+
+reset role;
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"77777777-7777-7777-7777-777777777777","role":"authenticated"}';
+
+select throws_ok(
+  $$insert into public.conversations (tenant_id, user_id, agent, eve_session_id)
+     values ('aaaaaaaa-0000-0000-0000-000000000009', '77777777-7777-7777-7777-777777777777',
+             'outreach', 'wrun_secuestro_por_insert')$$,
+  '42501', null,
+  'no se puede crear una conversación seteando eve_session_id en el insert'
+);
+
+select lives_ok(
+  $$insert into public.conversations (tenant_id, user_id, agent, model)
+     values ('aaaaaaaa-0000-0000-0000-000000000009', '77777777-7777-7777-7777-777777777777',
+             'outreach', 'anthropic/claude-sonnet-5')$$,
+  'crear una conversación con solo las columnas permitidas funciona'
 );
 
 -- Nota de verificación (ver reporte de la fix wave): a diferencia del grant

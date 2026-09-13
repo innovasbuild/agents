@@ -11,6 +11,15 @@
 revoke update on public.conversations from authenticated, anon;
 grant update (title, model, last_message_at) on public.conversations to authenticated;
 
+-- Mismo vector que el UPDATE de arriba, pero por INSERT: authenticated podía
+-- crear una fila propia con eve_session_id/tenant_id arbitrarios en el
+-- mismo statement que la crea, sin pasar nunca por un UPDATE. La app solo
+-- necesita setear tenant_id, user_id, agent, model y (opcionalmente) title
+-- al crear una conversación — eve_session_id lo ata bindSessionToConversation
+-- después, con el cliente admin.
+revoke insert on public.conversations from authenticated, anon;
+grant insert (tenant_id, user_id, agent, model, title) on public.conversations to authenticated;
+
 -- Un tenant_admin puede degradar o borrar la membership de un platform_admin.
 -- El with check ya impedía ASCENDER a platform_admin, pero no actuar sobre
 -- una fila que YA es platform_admin: un UPDATE que la degrada pasa el check
