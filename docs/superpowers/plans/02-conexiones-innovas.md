@@ -13,7 +13,7 @@
 **Spike aplicado (2026-09-13, spec §10.1).** Este plan ya incorpora el resultado del spike:
 - HubSpot sirve por Connect con una MCP auth app; el mismo conector sirve para MCP y para REST, así que no hay `hubspot-api`.
 - ColdIQ no tiene MCP remoto: es una conexión OpenAPI con documento inline y Bearer.
-- El brain queda aislado en la Task 5B, bloqueada hasta que termine su rediseño.
+- El brain sale de este plan: la Task 5B queda reemplazada por `docs/superpowers/plans/2026-09-13-brain.md`, que corre después de las Tasks 2, 3, 6 y 7.
 - Los tokens de Connect duran ~15 min: se le pasa `expiresAt` a eve.
 - El team de Vercel está en Hobby y hay que pasarlo a Pro antes de la Entrega 4.
 - Conectores que ya existen: `mcp.hubspot.com/hubspot` y `innovas-coldiq`.
@@ -47,7 +47,7 @@
 | `lib/connectors/auth.ts` | Único puente con Connect: `apiKeyHeaders`, `apiKeyBearer`, `tenantScopedConnect` | 4 |
 | `lib/connectors/leads/google-places.openapi.ts` | Documento OpenAPI mínimo de Places | 5 |
 | `lib/connectors/leads/coldiq.openapi.ts` | Documento OpenAPI inline de ColdIQ: 7 operaciones individuales de "GTM Verbs" | 5 |
-| `lib/connectors/catalog.ts` | Builders por proveedor y `buildTenantConnections` | 5, 5B, 8 |
+| `lib/connectors/catalog.ts` | Builders por proveedor y `buildTenantConnections` | 5, 8 |
 | `lib/connectors/bindings.ts` | Lectura de bindings con el cliente admin | 6 |
 | `lib/connectors/resolve.ts` | `resolveTenantConnections`: lógica del resolver, testeable | 6 |
 | `agents/outreach/connections/tenant.ts` | El `defineDynamic` | 6 |
@@ -97,9 +97,10 @@ Expected: una tabla con filas S1 a S6. Si no está: **STOP**. Reportar BLOCKED: 
 
 - [ ] **Step 3: Estado del brain**
 
-El spike no invalidó el diseño: S1 salió positivo y S5 es positivo en la mecánica. Lo único abierto es el brain, cuya arquitectura se rediseña aparte. Revisar spec §6.2:
-- Si todavía tiene el aviso **"En suspenso"**, la Task 5B queda BLOCKED y **no se implementa**. El resto de la etapa sigue igual, sin frenar.
-- Si §6.2 ya fue reescrita por el rediseño, adaptar la Task 5B a esa sección antes de ejecutarla. Si el brain dejó de ser un MCP remoto con llave, reportar NEEDS_CONTEXT con el texto nuevo de §6.2.
+El spike no invalidó el diseño y el brain ya está rediseñado: pasa a ser tools propias sobre Supabase, sin conector (spec §6.2 y `docs/superpowers/specs/2026-09-13-brain-design.md`). Este plan no construye nada del brain. Verificar que el plan del brain esté en la rama:
+
+Run: `ls docs/superpowers/plans/2026-09-13-brain.md docs/superpowers/specs/2026-09-13-brain-design.md`
+Expected: los dos existen. Si faltan: reportar NEEDS_CONTEXT "falta traer los commits del rediseño del brain", sin frenar las demás tasks.
 
 - [ ] **Step 4: Verificar los conectores de plataforma**
 
@@ -831,7 +832,7 @@ git commit -m "feat: puente con vercel connect con grants atados a tenant y usua
   export function buildTenantConnections(bindings: Binding[]): Record<string, DynamicConnectionDefinition>;
   ```
 
-El brain **no** entra en esta task: está en la Task 5B, bloqueada por su rediseño. Mientras no exista su builder, un binding `brain` se omite con el warn de "binding incompleto".
+El brain **no** entra en el catálogo: sus tools las resuelve el plan del brain (`docs/superpowers/plans/2026-09-13-brain.md`), no una conexión. Hasta que su Task 2 reemplace `innovas-brains` por `wiki` (`kind: "tool"`), un binding `brain` se omite con el warn de "binding incompleto". Los fixtures de este plan que usan `innovas-brains` los actualiza esa misma Task 2.
 
 - [ ] **Step 1: Leer la doc**
 
@@ -1265,103 +1266,9 @@ git add lib/connectors/catalog.ts lib/connectors/leads/google-places.openapi.ts 
 git commit -m "feat: catalogo de conectores con coldiq y google places"
 ```
 
-### Task 5B: Brain en el catálogo (BLOQUEADA hasta el rediseño del brain)
+### Task 5B: Brain (reemplazada)
 
-**Estado:** no se ejecuta mientras spec §6.2 tenga el aviso "En suspenso". La arquitectura del brain (`innovas-brains-mcp`) se rediseña en una sesión aparte. Lo que sigue es el diseño original, válido solo si el brain termina siendo un **MCP remoto con llave en `x-api-key`**. Si el rediseño cambia eso (por ejemplo, un brain dentro del propio proyecto sobre Supabase, sin llave), reescribir esta task contra la §6.2 nueva antes de ejecutarla.
-
-**Files:**
-- Modify: `lib/connectors/catalog.ts`, `tests/connectors/catalog.test.ts`
-
-**Interfaces:**
-- Consumes: `apiKeyHeaders` (Task 4), `defineMcpClientConnection`.
-- Produces: el builder `"innovas-brains"` dentro de `BUILDERS`.
-
-- [ ] **Step 1: Gate**
-
-Run: `grep -n "En suspenso" docs/superpowers/specs/02-conexiones-innovas.md`
-Expected: sin coincidencias. Si aparece: **STOP**, reportar BLOCKED "el brain sigue en rediseño (spec §6.2)".
-
-- [ ] **Step 2: Verificar el conector del brain (usuario)**
-
-El conector `innovas-brain` tiene que existir (spec §9.1). Probarlo con el comando OIDC de spec §9.1 contra un endpoint de lectura del brain, con el header `x-api-key: $TOKEN` en vez de `Authorization`. Expected: `200`. Esto cierra la parte de S5 que quedó pendiente.
-
-- [ ] **Step 3: Agregar los tests**
-
-Al final de `tests/connectors/catalog.test.ts`:
-
-```ts
-type Policy = (args: { toolName: string }) => string;
-
-describe("brain", () => {
-	it("arma la conexión con la URL del binding e instanceKey = id", () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
-		expect(brain.url).toBe("https://brain.test/mcp");
-		expect(brain.instanceKey).toBe("binding-1");
-		expect(brain.tools).toEqual({ allow: ["brain_search", "brain_read", "brain_upsert"] });
-	});
-
-	it("pide aprobación solo para brain_upsert, con nombre calificado", () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
-		const approval = brain.approval as Policy;
-		expect(approval({ toolName: "brain__brain_upsert" })).toBe("user-approval");
-		expect(approval({ toolName: "brain__brain_search" })).toBe("not-applicable");
-	});
-
-	it("usa la llave del conector del binding en x-api-key", async () => {
-		const { brain } = buildTenantConnections([binding({})]) as Record<string, AnyConnection>;
-		const headers = brain.headers as () => Promise<Record<string, string>>;
-		expect(await headers()).toEqual({ "x-api-key": "llave:tenant-a-brain" });
-	});
-
-	it("se omite si falta la URL o el conector", () => {
-		expect(buildTenantConnections([binding({ config: {} })])).toEqual({});
-		expect(buildTenantConnections([binding({ connectorUid: null })])).toEqual({});
-		expect(warn).toHaveBeenCalled();
-	});
-});
-```
-
-- [ ] **Step 4: Verificar que falla**
-
-Run: `npm test -- tests/connectors/catalog.test.ts`
-Expected: FAIL en "arma la conexión" (sin builder, el binding se omite).
-
-- [ ] **Step 5: Implementar**
-
-En `lib/connectors/catalog.ts`: sumar `defineMcpClientConnection` al import de `eve/connections` y agregar al objeto `BUILDERS`:
-
-```ts
-	"innovas-brains": (binding) => {
-		const uid = requireConnectorUid(binding);
-		const url = typeof binding.config.url === "string" ? binding.config.url : null;
-		if (!uid || !url) return null;
-		return defineMcpClientConnection({
-			url,
-			description:
-				"Brain del cliente: canon comercial, ICP, tono, hooks y notas de cuentas. Buscá acá antes de investigar o redactar.",
-			instanceKey: binding.id,
-			headers: apiKeyHeaders(uid, "x-api-key"),
-			tools: { allow: ["brain_search", "brain_read", "brain_upsert"] },
-			// eve pasa el nombre calificado (<conexión>__<tool>).
-			approval: ({ toolName }) =>
-				toolName.endsWith("__brain_upsert") ? "user-approval" : "not-applicable",
-		});
-	},
-```
-
-Si `tsc` rechaza la firma de `approval`, ajustarla según `node_modules/eve/dist/src/public/definitions/approval.d.ts`.
-
-- [ ] **Step 6: Tests y typecheck**
-
-Run: `npm test -- tests/connectors && npm run typecheck`
-Expected: PASS y sin errores.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add lib/connectors/catalog.ts tests/connectors/catalog.test.ts
-git commit -m "feat: brain del tenant en el catalogo de conectores"
-```
+**Reemplazada** por `docs/superpowers/plans/2026-09-13-brain.md`, que se ejecuta después de las Tasks 2, 3, 6 y 7 de este plan. No se implementa nada acá.
 
 ### Task 6: Resolver dinámico de conexiones
 
@@ -1948,7 +1855,7 @@ Expected: FAIL en "se llama crm" (el builder no existe; el binding se omite).
 
 - [ ] **Step 3: Implementar**
 
-En `lib/connectors/catalog.ts`: agregar `defineMcpClientConnection` al import de `eve/connections` (si la Task 5B no lo agregó), `tenantScopedConnect` al import de `./auth`, sumar `HUBSPOT_CONNECTOR_UID`, `HUBSPOT_MCP_URL` y `HUBSPOT_READ_TOOLS` al import de `./platform`, y agregar al objeto `BUILDERS`:
+En `lib/connectors/catalog.ts`: agregar `defineMcpClientConnection` al import de `eve/connections`, `tenantScopedConnect` al import de `./auth`, sumar `HUBSPOT_CONNECTOR_UID`, `HUBSPOT_MCP_URL` y `HUBSPOT_READ_TOOLS` al import de `./platform`, y agregar al objeto `BUILDERS`:
 
 ```ts
 	hubspot: (binding) =>
@@ -2880,13 +2787,13 @@ Pedirle al usuario: `npx supabase db push`. Después verificar con `npx supabase
 
 Pedirle al usuario, en este orden, según spec §9:
 1. **Pasar el team de Vercel de Hobby a Pro** (spec §13). En Hobby, Connect pausa a los 500 token requests por mes y la verificación puede cortarse a mitad de camino.
-2. Conectores `api-key` que falten: `innovas-coldiq` ya existe; crear `innovas-places` con el formulario de `vercel connect create` (spec §9.1: API Key, Shared API Keys, UID a mano). `innovas-brain` solo si la Task 5B se ejecutó. Verificar cada uno con el comando OIDC de spec §9.1, no con `vercel connect token`.
+2. Conectores `api-key` que falten: `innovas-coldiq` ya existe; crear `innovas-places` con el formulario de `vercel connect create` (spec §9.1: API Key, Shared API Keys, UID a mano). El brain no usa conector. Verificar cada uno con el comando OIDC de spec §9.1, no con `vercel connect token`.
 3. Bindings contra producción:
    - `npm run connections:bind -- --tenant innovas --capability leads --provider coldiq --connector innovas-coldiq`
    - `npm run connections:bind -- --tenant innovas --capability leads --provider google-places --connector innovas-places`
    - `npm run connections:bind -- --tenant innovas --capability crm --provider hubspot`
    - `npm run connections:bind -- --tenant innovas --capability mail --provider gmail`
-   - Solo con la Task 5B hecha: `npm run connections:bind -- --tenant innovas --capability brain --provider innovas-brains --connector innovas-brain --url <url del brain>`
+   - El binding `wiki` del brain de `innovas` no va acá: lo da de alta el plan del brain (su Task 10).
 4. Pasar la app de Google a producción en Google Cloud (spec §9.3, paso 2).
 
 - [ ] **Step 4: Deploy**
@@ -2895,7 +2802,7 @@ Pedirle permiso al usuario para `git push` a `main`. Esperar el build de Vercel 
 
 - [ ] **Step 5: Verificación manual del criterio de cierre (usuario, guiado)**
 
-1. **Criterio 1:** en `/innovas/chat`, hilo nuevo con `anthropic/claude-sonnet-5`, pedir "buscá en el CRM el contacto <mail conocido>". Tiene que aparecer el botón "Autorizar HubSpot"; autorizar; el agente responde usando `crm__search_crm_objects`. Después pedir "buscá en el brain qué dice el ICP" y confirmar `brain__brain_search`. **Si la Task 5B no se ejecutó, la parte del brain queda pendiente:** anotarlo en el cierre como criterio 1 parcial, sin marcar la etapa como terminada.
+1. **Criterio 1:** en `/innovas/chat`, hilo nuevo con `anthropic/claude-sonnet-5`, pedir "buscá en el CRM el contacto <mail conocido>". Tiene que aparecer el botón "Autorizar HubSpot"; autorizar; el agente responde usando `crm__search_crm_objects`. Después pedir "buscá en el brain qué dice el ICP" y confirmar `brain_search`. **Si el plan del brain todavía no se ejecutó, la parte del brain queda pendiente:** anotarlo en el cierre como criterio 1 parcial, sin marcar la etapa como terminada.
    - Extra ColdIQ: pedir "buscá el email de <persona conocida> en <empresa>" y confirmar `leads-coldiq__findEmail` con resultado.
 2. **Criterio 2:** crear un tenant de prueba sin bindings, entrar con un usuario miembro, pedir "¿qué conexiones tenés?". `connection_search` no puede listar `crm`.
 3. **Criterio 3:** pedir un mail de prueba a una casilla propia. Aprobar, autorizar Google, confirmar que llega. Confirmar en la base que `executors.gmail_authorized_at` quedó estampado para ese usuario en `innovas`.
@@ -2922,7 +2829,7 @@ Después: `/context-save`.
 ## Notas para quien implemente
 
 - **El orden de las Tasks 10 y 13 importa.** `send_email` deja de leer `google_tokens` antes de que la tabla se borre.
-- **El brain es la única parte bloqueada.** La Task 5B no se ejecuta hasta que termine el rediseño del brain y spec §6.2 pierda el aviso "En suspenso". El resto de la etapa no depende de ella.
+- **El brain va por su propio plan** (`docs/superpowers/plans/2026-09-13-brain.md`), que corre después de las Tasks 2, 3, 6 y 7 y reemplaza a la Task 5B. Su Task 2 cambia `innovas-brains` por `wiki` en el registro y en `connections:bind`: los fixtures con `innovas-brains` de este plan son esperables hasta entonces.
 - **Un conector `api-key` no se prueba con `vercel connect token <uid> --subject app`:** falla con "Token subject is not accessible to this requester" porque el subject `app` lo pide el proyecto. Usar el comando OIDC de spec §9.1.
 - **Los tokens de Connect duran ~15 min** y el SDK los cachea en proceso. Una llave rotada puede tardar eso en llegar a las instancias vivas: la rotación de spec §9.1 deja convivir las dos llaves ese rato.
 - **Los tests con `vi.mock` usan la ruta relativa desde `tests/`** (`../../lib/...`) cuando el módulo bajo prueba importa con ruta relativa, igual que `tests/agents/session-store.test.ts`. Si un mock no toma, revisar que la ruta resuelva al mismo archivo.
