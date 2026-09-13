@@ -82,6 +82,22 @@ export async function POST(request: Request) {
 		);
 	}
 
+	if (external) {
+		// El evento de auditoría se registra acá, al momento de crear la
+		// invitación (que es cuando se tomó la decisión de permitir el
+		// dominio externo), no atado a que el mail de invitación salga bien:
+		// si inviteUserByEmail falla más abajo, la fila en `invitations`
+		// queda igual y la excepción de dominio tiene que quedar registrada
+		// una sola vez, sin importar el resultado del envío.
+		await admin.from("events").insert({
+			tenant_id: tenantId,
+			actor_user_id: auth.user.id,
+			type: "invitation.external",
+			summary: `Invitación fuera de los dominios del cliente: ${email}`,
+			payload: { email, role },
+		});
+	}
+
 	const origin = new URL(request.url).origin;
 	const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(
 		email,
@@ -109,16 +125,6 @@ export async function POST(request: Request) {
 		// El usuario ya existe en Auth: no hace falta mail de alta, la
 		// invitación pendiente se acepta la próxima vez que entre.
 		console.warn("inviteUserByEmail:", inviteError.message);
-	}
-
-	if (external) {
-		await admin.from("events").insert({
-			tenant_id: tenantId,
-			actor_user_id: auth.user.id,
-			type: "invitation.external",
-			summary: `Invitación fuera de los dominios del cliente: ${email}`,
-			payload: { email, role },
-		});
 	}
 
 	return NextResponse.json({ ok: true }, { status: 201 });

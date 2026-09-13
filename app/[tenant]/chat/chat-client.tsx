@@ -2,13 +2,9 @@
 
 import { useEveAgent } from "eve/react";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-	createConversation,
-	persistSessionId,
-	renameConversation,
-} from "./actions";
+import { createConversation, renameConversation } from "./actions";
 
 interface Thread {
 	id: string;
@@ -106,24 +102,17 @@ export function ChatClient({
 function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const [text, setText] = useState("");
 
-	// bind-session.ts (hook server-side) ata eve_session_id de forma asíncrona
-	// cuando arranca la sesión. Para un hilo nuevo, ese hook puede tardar más
-	// que una navegación o un refresh del usuario; onSessionChange guarda el
-	// id apenas el cliente lo conoce, así un remount en el medio del primer
-	// turno encuentra el id y puede resumir en vez de arrancar de cero. Ref en
-	// vez de state: no debe disparar un re-render, solo evitar escrituras
-	// repetidas mientras dura la misma sesión.
-	const persistedSessionId = useRef(thread.eve_session_id);
-
+	// eve_session_id lo ata únicamente bind-session.ts (hook server-side de
+	// eve), de forma asíncrona cuando arranca la sesión con
+	// ctx.session.id — nunca un valor que venga del cliente. Un refresh o
+	// remount inmediatamente después del primer mensaje de un hilo nuevo,
+	// antes de que el hook termine, puede reabrir el hilo sin poder resumir
+	// esa sesión puntual; es una molestia rara y menor, no una falla
+	// funcional: el turno se completa igual y queda en `runs`, y la próxima
+	// vez que se abra el hilo el eve_session_id ya va a estar escrito.
 	const agent = useEveAgent({
 		agent: "outreach",
 		headers: { "x-innovas-conversation": thread.id },
-		onSessionChange: (session) => {
-			if (session && session.sessionId !== persistedSessionId.current) {
-				persistedSessionId.current = session.sessionId;
-				void persistSessionId(thread.id, session.sessionId, slug);
-			}
-		},
 		...(thread.eve_session_id
 			? {
 					initialSession: { sessionId: thread.eve_session_id, streamIndex: 0 },
