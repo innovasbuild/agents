@@ -117,7 +117,7 @@ Tareas:
 Tareas:
 
 - [ ] `connections/crm.ts` dinámica: HubSpot MCP (`mcp.hubspot.com`) para `innovas`, `null` para tenants sin CRM.
-- [ ] `connections/brain.ts` con la key del tenant (`innovas-brains-mcp`, `x-api-key`).
+- [ ] Brain `wiki` (plan 2026-09-13-brain).
 - [ ] `connections/coldiq.ts`.
 - [ ] `connections/places.ts` (Google Places, OpenAPI).
 - [ ] `connections/gmail.ts` con `connect("<uid vercel connect>")`, `principalType: user`.
@@ -129,7 +129,7 @@ Tareas:
 - [ ] Nota: `connect()` exige un principal de tipo user en la sesión, ya estampado desde Etapa 0.
 - [ ] `/ship` + `/context-save`.
 
-**Terminado cuando:** desde el chat, `crm__search_contacts` y `brain__brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
+**Terminado cuando:** desde el chat, `crm__search_contacts` y `brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
 
 ---
 
@@ -139,9 +139,9 @@ Tareas:
 **Modelo runtime:** chat `anthropic/claude-sonnet-5` · `researcher` `anthropic/claude-haiku-4.5` · primer toque en frío `anthropic/claude-opus-5`.
 **Spec/Plan:** `docs/superpowers/specs/03-agente-outreach-v1.md` · `docs/superpowers/plans/03-agente-outreach-v1.md`
 
-- [ ] Incorporar el plugin `innovas-outreach` cuando esté disponible; sus skills alimentan `tenants/innovas/skills/`.
+- [ ] Incorporar el plugin `innovas-outreach` cuando esté disponible; sus skills alimentan `agents/outreach/skills/` y el canon del brain de Innovas.
 - [ ] (Opus) `instructions.ts`: constitución con cinco frenos, cola para frío, claim por persona.
-- [ ] `tenants/innovas/skills/`: ICP, redacción, hooks, objeciones (vía `sync-brain`).
+- [ ] Skills estáticas de outreach en `agents/outreach/skills/` que leen el canon del brain por tags `canon:*`.
 - [ ] `tools/research_account.ts` (delega en `researcher`, guarda en `accounts`).
 - [ ] `tools/draft_message.ts` (redacción con hook + gate de estilo).
 - [ ] `tools/queue_touch.ts` (crea `queue_item` pending).
@@ -174,6 +174,7 @@ Tareas:
 - [ ] `/metricas` (por hook, segmento, canal, ejecutor).
 - [ ] `/settings` (modelo default, ejecutores, cupos, conexiones del tenant).
 - [ ] Realtime en `/cola` y `/pipeline`.
+- [ ] Editor del brain (spec 2026-09-13-brain-design §8).
 - [ ] `/qa` en desktop y mobile.
 - [ ] `/design-review`.
 - [ ] `/ship` + `/context-save`.
@@ -193,7 +194,6 @@ Tareas:
 - [ ] `schedules/followups.ts` iterando tenants activos.
 - [ ] `read_replies` con clasificación de respuestas.
 - [ ] Flujo de carga desde el chat con ColdIQ y Places.
-- [ ] `sync-brain` corriendo en CI.
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** una respuesta real en tu Gmail mueve el contacto a `respondio` sin intervención, y el follow-up vencido aparece en la cola a la mañana.

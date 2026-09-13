@@ -28,7 +28,7 @@ Este documento está pensado para pegarlo en `docs/00-kickoff.md` del repo nuevo
 | Canal del primer agente | **Email desde la casilla de cada ejecutor** (Gmail vía Vercel Connect, Custom OAuth) | Automatizable de punta a punta con cola de aprobación; entregabilidad de casilla real. LinkedIn queda como cola asistida. |
 | CRM | **Por tenant, como conexión MCP.** `innovas` → **HubSpot** (MCP remoto oficial `mcp.hubspot.com`) | El Atomic CRM ya no existe. El agente escribe contactos, notas y atribución de outreach en el CRM del tenant; la plataforma guarda solo lo operativo (cola, eventos, runs). Otro tenant puede traer Tokko, Pipedrive o una planilla sin tocar código. |
 | Prospectos | Lista propia (CSV) + ColdIQ + Google Places | En ese orden. La lista propia destraba el primer envío. |
-| Brain | `innovas-brains-mcp` existente (Railway) como conexión MCP del tenant | `brain_read`, `brain_search`, `brain_upsert`. El canon comercial se versiona en `skills/` y se sincroniza desde el brain. |
+| Brain | Capacidad `brain` con proveedor `wiki` sobre Supabase, editable por el cliente; proveedor `mcp` para gbrain u otros | `brain_search`, `brain_read`, `brain_upsert` como tools propias del agente. Spec 2026-09-13-brain-design. |
 | Tenancy y acceso | Multi-tenant desde el día uno; entran el equipo de INNOV.AS y gente de cada cliente | Roles `platform_admin` (INNOV.AS opera la plataforma), `tenant_admin`, `tenant_member`. RLS por `tenant_id`. |
 | Código | Repo nuevo, aislado de `innovas/site` y de cualquier otro repo | Se integra por MCP/API, nunca por import. |
 | Outreach | El plugin `innovas-outreach` de Claude Code aporta el canon y el proceso | Se incorpora en la etapa 3 cuando Mati lo pase; hasta entonces se usa el diseño de referencia (§5). |
@@ -50,19 +50,19 @@ Supabase innovas-agents      Conexiones dinámicas por tenant       Vercel Conne
 Postgres + Auth + RLS        (defineDynamic en session.started)    └─ google-gmail (Custom OAuth,
 Realtime + Storage           tenant innovas:                          token por usuario)
 tenants · memberships        ├─ crm      → HubSpot MCP (mcp.hubspot.com)
-executors · config_values    ├─ brain    → innovas-brains-mcp (x-api-key)
+executors · config_values    ├─ brain    → wiki en Supabase (tools propias)
 accounts · contacts          ├─ coldiq   → ColdIQ MCP
 events · queue_items · runs  └─ places   → Google Places (OpenAPI)
 ```
 
-**Un agente, N tenants.** El agente `outreach` es uno solo en `agents/outreach/`. Lo que cambia por tenant se resuelve en runtime desde la base: modelo default, instrucciones y skills (canon comercial), conexiones (CRM, brain, fuentes), ejecutores y cupos. eve lo soporta con `defineDynamic` para modelo, instrucciones, skills, conexiones y subagentes. Un tenant nuevo es una fila en `tenants` más su canon en `tenants/<slug>/skills/`, no una carpeta de código.
+**Un agente, N tenants.** El agente `outreach` es uno solo en `agents/outreach/`. Lo que cambia por tenant se resuelve en runtime desde la base: modelo default, instrucciones, conexiones (CRM, fuentes), brain, ejecutores y cupos. eve lo soporta con `defineDynamic` para modelo, instrucciones, tools, conexiones y subagentes. Un tenant nuevo es una fila en `tenants` más su canon en el brain, no una carpeta de código.
 
 Principios:
 1. **El agente es el centro, los canales son puertas.** Chat web, MCP, y después Slack o WhatsApp llegan al mismo agente con las mismas tools y aprobaciones.
 2. **El modelo nunca ve credenciales.** Todo pasa por `connections/` de eve o por Vercel Connect.
 3. **Todo efecto externo con aprobación.** Enviar mail, crear contacto en el CRM, crear deal: `approval: always()` hasta que el flujo demuestre estar calibrado; después se relaja por tool y por tenant desde `config_values`.
 4. **Append-only para la verdad.** `events` no se edita; `contacts` y `queue_items` son estado derivado.
-5. **El canon vive en el brain del tenant, se versiona en el repo.** `scripts/sync-brain` baja ICP, tono y hooks a `tenants/<slug>/skills/`. Producción no depende de Drive para arrancar.
+5. **El canon del tenant vive en su brain; los procedimientos, en skills estáticas del agente.** Las skills de `agents/outreach/skills/` dicen qué leer y el agente lo lee con `brain_search` por tags de canon. Sin `sync-brain` ni `tenants/<slug>/skills/` (spec brain B5).
 6. **Nada especial para `innovas`.** Si una decisión solo sirve para INNOV.AS, va a datos del tenant, no a código.
 
 ## 3. Cómo elegir el modelo de Claude por etapa
@@ -128,7 +128,7 @@ innovas-agents/
 │       │   └── read_replies.ts       ← lee hilos del ejecutor
 │       ├── connections/
 │       │   ├── crm.ts                ← defineDynamic → HubSpot MCP para innovas, otro para otros
-│       │   ├── brain.ts              ← defineDynamic → innovas-brains-mcp con la key del tenant
+│       │   ├── brain.ts (en tools/)  ← defineDynamic → tools brain_* según el binding
 │       │   ├── coldiq.ts
 │       │   ├── places.ts
 │       │   └── gmail.ts              ← connect("<uid vercel connect>"), principalType user
@@ -143,7 +143,6 @@ innovas-agents/
 ├── tenants/
 │   └── innovas/
 │       ├── tenant.json               ← slug, dominios, default_model, conexiones habilitadas
-│       └── skills/                   ← icp.md · redaccion.md · hooks.md · objeciones.md (sync-brain)
 ├── lib/
 │   ├── supabase/                     ← clientes server/browser, tipos generados
 │   ├── auth/                         ← verifyCaller(): sesión Supabase → principal eve
@@ -152,7 +151,6 @@ innovas-agents/
 │   └── outreach/                     ← contact_key, dedup, gate de estilo (puro, testeable)
 ├── supabase/
 │   ├── config.toml · migrations/ · seed.sql · tests/ (RLS)
-├── scripts/sync-brain.ts
 ├── .claude/  (settings.json · launch.json · hooks/check-gstack.sh)
 ├── CLAUDE.md · next.config.ts · vercel.ts · biome.json · vitest.config.ts · package.json
 ```
@@ -307,14 +305,14 @@ Entregables: migraciones de §5 con RLS; `seed.sql` con tenant `innovas`, roles 
 **Modelo runtime:** `anthropic/claude-haiku-4.5` para probar las conexiones desde el chat.
 
 Entregables: `connections/crm.ts` dinámica (HubSpot MCP para `innovas`, `null` para tenants sin CRM); `connections/brain.ts` con la key del tenant; `coldiq.ts`; `places.ts`; `gmail.ts` con `connect("<uid>")`; propiedades custom de outreach creadas en HubSpot; `tenant_connections` como fuente de las URLs y refs de secretos.
-**Terminado cuando:** desde el chat, `crm__search_contacts` y `brain__brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
+**Terminado cuando:** desde el chat, `crm__search_contacts` y `brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
 
 ### Etapa 3 · Agente de outreach v1
 
-**Modelo Claude Code:** Opus 5 para `instructions.ts`, el gate de estilo y las evals (effort `high`); **Sonnet 5** en sesión nueva para tools, subagente y wiring (effort `high`). Incorporar acá el plugin `innovas-outreach` cuando Mati lo pase: sus skills alimentan `tenants/innovas/skills/`.
+**Modelo Claude Code:** Opus 5 para `instructions.ts`, el gate de estilo y las evals (effort `high`); **Sonnet 5** en sesión nueva para tools, subagente y wiring (effort `high`). Incorporar acá el plugin `innovas-outreach` cuando Mati lo pase: sus skills alimentan `agents/outreach/skills/` y el canon del brain de Innovas.
 **Modelo runtime:** chat `anthropic/claude-sonnet-5`; `researcher` `anthropic/claude-haiku-4.5`; redacción del primer toque `anthropic/claude-opus-5`.
 
-Entregables: constitución en `instructions.ts` (cinco frenos, cola para frío, claim por persona); `tenants/innovas/skills/` con ICP, redacción, hooks, objeciones (vía `sync-brain`); tools de §4; `lib/outreach` con `contact_key`, dedup y gate (TDD); subagente `researcher`; evals del gate y del claim.
+Entregables: constitución en `instructions.ts` (cinco frenos, cola para frío, claim por persona); skills estáticas en `agents/outreach/skills/` que leen el canon del brain por tags `canon:*`; tools de §4; `lib/outreach` con `contact_key`, dedup y gate (TDD); subagente `researcher`; evals del gate y del claim.
 **Terminado cuando:** corrida piloto de **5 contactos reales**: CSV → research → redacción → cola → aprobación → envío → `events` + atribución en HubSpot, con evals en verde.
 
 ### Etapa 4 · Dashboard
@@ -330,7 +328,7 @@ Entregables: `/cola` (aprobar, editar, rechazar; resuelve la pausa de eve), `/pi
 **Modelo Claude Code:** **Sonnet 5**, effort `high`. Debugging de Cron en Vercel con Opus si hace falta.
 **Modelo runtime:** `morning-sweep` y clasificación `anthropic/claude-haiku-4.5`; follow-ups `anthropic/claude-sonnet-5`.
 
-Entregables: `schedules/morning-sweep.ts` y `schedules/followups.ts` iterando tenants activos; `read_replies` con clasificación de respuestas; ColdIQ y Places como flujo de carga desde el chat; `sync-brain` en CI.
+Entregables: `schedules/morning-sweep.ts` y `schedules/followups.ts` iterando tenants activos; `read_replies` con clasificación de respuestas; ColdIQ y Places como flujo de carga desde el chat.
 **Terminado cuando:** una respuesta real en tu Gmail mueve el contacto a `respondio` sin intervención, y el follow-up vencido aparece en la cola a la mañana.
 
 ### Etapa 6 · Canal MCP (Claude / ChatGPT)
@@ -372,7 +370,7 @@ Entregables: `channels/slack.ts` o WhatsApp Cloud API vía `chatSdkChannel`, con
 ## 10. Qué NO entra en la v1
 
 - Editor visual de flujos.
-- Migrar `innovas-brains-mcp` a eve. Se consume tal cual.
+- `innovas-brains-mcp` se archiva sin desplegar (spec brain B4).
 - LinkedIn automático. Solo cola asistida si se pide.
 - Multi-idioma. es-AR único, con el chequeo cableado en el gate.
 - Facturación por tenant. Se mide `runs.cost_usd`; se cobra después.
@@ -385,4 +383,4 @@ Entregables: `channels/slack.ts` o WhatsApp Cloud API vía `chatSdkChannel`, con
 - HubSpot MCP remoto: https://mcp.hubspot.com
 - Chat SDK: https://chat-sdk.dev (etapa 8)
 - Diseño de outreach de referencia: `brain/comercial/outreach/00-fase0-descubrimiento.md` (Plunkton); plugin `innovas-outreach` (a incorporar en etapa 3)
-- Activo existente: `~/Sites/innovas/brains` (MCP brain + Workspace, Railway)
+- Activo existente: `~/Sites/innovas/brains` (MCP brain + Workspace, Railway) · archivado, no se despliega

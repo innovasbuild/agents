@@ -14,7 +14,7 @@ Que el agente `outreach` use las herramientas externas de cada tenant (CRM, brai
 
 **Terminado cuando:**
 
-1. Desde el chat en producción, en el tenant `innovas`, responden la tool de búsqueda de contactos de `crm__*` (con el nombre real que fije el spike, §10) y `brain__brain_search`.
+1. Desde el chat en producción, en el tenant `innovas`, responden `crm__search_crm_objects` buscando contactos (nombre fijado por S2, §10.1) y `brain_search`.
 2. Un tenant de prueba sin binding de `crm` no expone ninguna tool `crm__*`: test automatizado del resolver y verificación manual en `connection_search`.
 3. `send_email` envía por Vercel Connect y la tabla `google_tokens` ya no existe.
 4. El mismo usuario, miembro de dos tenants, no comparte el grant de HubSpot entre ellos: test del subject y verificación manual (el segundo tenant tiene que pedir consentimiento de nuevo).
@@ -30,7 +30,7 @@ Que el agente `outreach` use las herramientas externas de cada tenant (CRM, brai
 | D3 | Llaves de API: **un conector `api-key` por tenant y proveedor**. OAuth: **un conector de plataforma por proveedor**, grants por usuario | Los conectores `api-key` y Custom OAuth de Connect "reach exactly one account": no tienen instalaciones múltiples |
 | D4 | **HubSpot por usuario**: cada ejecutor autoriza su propia cuenta | Elección del usuario. Lo que escribe queda a su nombre en HubSpot. Consecuencia: un schedule sin usuario (Etapa 5) no puede tocar el CRM |
 | D5 | **El grant OAuth se ata a `tenant:usuario`, nunca solo al usuario** | Connect guarda por defecto `{ type: "user", id }`. Un usuario con memberships en dos tenants usaría el HubSpot de uno dentro del otro. Es un requisito de seguridad, con test |
-| D6 | **Brain solo como conexión MCP**, sin memory slot | Un memory slot hace recall en cada turno y capture después de cada turno, es decir que escribiría en el canon del cliente sin aprobación. El canon ya entra por skills versionadas |
+| D6 | **Brain como capacidad con tools propias**, sin memory slot | Un memory slot escribiría en el canon del cliente en cada turno sin aprobación. Diseño en `docs/superpowers/specs/2026-09-13-brain-design.md` |
 | D7 | **Un único resolver dinámico guiado por el catálogo** (`agents/outreach/connections/tenant.ts`) | Una consulta por arranque de sesión; sumar un proveedor es una entrada de catálogo; puede omitir conexiones, cosa que una conexión estática no puede |
 | D8 | **Gmail es una tool propia, no una conexión** | Gmail no tiene MCP ni OpenAPI utilizable. `send_email` pide el token a Connect con el mismo helper aislado |
 
@@ -51,7 +51,7 @@ Un binding de un tenant con un proveedor.
 | `id` | uuid pk | Es el `instanceKey` de la conexión en eve |
 | `tenant_id` | uuid not null → `tenants` on delete cascade | |
 | `capability` | `connector_capability` not null | |
-| `provider` | text not null | Clave del catálogo (`hubspot`, `innovas-brains`, `coldiq`, `google-places`, `gmail`). Se valida en código contra el catálogo, no con un enum: sumar un proveedor no requiere migración |
+| `provider` | text not null | Clave del catálogo (`hubspot`, `wiki`, `coldiq`, `google-places`, `gmail`). Se valida en código contra el catálogo, no con un enum: sumar un proveedor no requiere migración |
 | `connector_uid` | text | UID del conector de Connect para proveedores `api-key`. Nulo para proveedores OAuth de plataforma, cuyo UID está en el catálogo. No es secreto |
 | `config` | jsonb not null default `'{}'` | Solo datos no secretos: `url` del MCP cuando varía por tenant |
 | `enabled` | boolean not null default true | |
@@ -115,7 +115,7 @@ type CatalogEntry = {
 };
 ```
 
-- **Nombre de conexión:** `capability` si `multiple` es falso (`crm`, `brain`); `${capability}-${provider}` si es verdadero (`leads-coldiq`, `leads-google-places`). Tiene que cumplir la regla de eve: minúsculas, dígitos y guiones, empieza con letra, hasta 64 caracteres.
+- **Nombre de conexión:** `capability` si `multiple` es falso (`crm`); `${capability}-${provider}` si es verdadero (`leads-coldiq`, `leads-google-places`). Tiene que cumplir la regla de eve: minúsculas, dígitos y guiones, empieza con letra, hasta 64 caracteres.
 - **Descripciones en español**, escritas para el modelo: son la señal principal de `connection_search`.
 - **`lib/connectors/auth.ts`** traduce `ConnectorAuth` a lo que eve espera (§5.2). Es el único archivo que importa `@vercel/connect` y `@vercel/connect/eve`.
 
@@ -136,7 +136,7 @@ type CatalogEntry = {
 
 ### 5.2 Auth por tipo
 
-**`connect_api_key`:** `getToken` de `@vercel/connect` con `binding.connectorUid` y `subject: { type: "app" }`. El valor va en el header que declara la entrada (`headers` como función) o como bearer (`auth.getToken`). El SDK cachea en proceso. El resolver **nunca** elige un `connector_uid` que no venga del binding del tenant de la sesión.
+**`connect_api_key`:** `getToken` de `@vercel/connect` con `binding.connectorUid` y `subject: { type: "app" }`. Connect devuelve la llave cruda, sin prefijo (§10.1 S5). El valor va en el header que declara la entrada (`headers` como función) o como bearer (`auth.getToken`). El SDK cachea el token en proceso hasta su `expiresAt` (~15 min). Con `auth.getToken`, se le pasa ese `expiresAt` a eve (vía `getTokenResponse`) para que renueve antes de que venza. No hay reintento propio ante un 401: en las conexiones, el 401 lo recibe eve y no nuestro código. Por eso la rotación de §9.1 deja convivir las dos llaves mientras dura el caché. El resolver **nunca** elige un `connector_uid` que no venga del binding del tenant de la sesión.
 
 **`connect_oauth`:** `tenantScopedConnect(connector, tenantId, scopes?)` en `lib/connectors/auth.ts`, que envuelve `connect()` de `@vercel/connect/eve`:
 
@@ -159,8 +159,8 @@ connect({
 
 ### 6.1 `crm` · HubSpot
 
-- MCP remoto oficial `https://mcp.hubspot.com` (ruta exacta según el spike). `connect_oauth` con el conector de plataforma de HubSpot; `multiple: false`.
-- **Solo lectura en esta etapa:** `tools.allow` con las tools de búsqueda y lectura que liste el spike, sin `approval`. Las escrituras con aprobación y atribución son de la Etapa 3.
+- MCP remoto oficial `https://mcp.hubspot.com/` (la raíz responde `initialize`). `connect_oauth` con el conector de plataforma `mcp.hubspot.com/hubspot`; `multiple: false`.
+- **Solo lectura en esta etapa:** `tools.allow` con `search_crm_objects`, `get_crm_objects`, `get_properties`, `search_properties`, `discover_hubspot_schema`, `search_owners` y `get_user_details`, sin `approval`. Quedan afuera las demás tools de lectura (marketing, AEO, conversaciones, `query_crm_data`) y todas las de escritura (§10.1 S2). Las escrituras con aprobación y atribución son de la Etapa 3.
 - `config.url` no se usa: el endpoint es el mismo para todos los tenants.
 
 **Propiedades custom:** tool propia `agents/outreach/tools/crm_setup_outreach_properties.ts`.
@@ -184,20 +184,23 @@ connect({
 
 Las listas cerradas (segmento, hook, canal) se convierten en enumeraciones cuando exista `config_values` (Etapa 3).
 
-**Si el spike muestra que el token del MCP no sirve contra la API REST** (`/crm/v3/properties/contacts`): un segundo conector OAuth de plataforma, `hubspot-api`, contra la API REST, con el mismo `tenantScopedConnect`. Se anota como desvío en esta spec antes de seguir.
+**Desvío resuelto por S3:** el token del conector del MCP sirve contra la API REST (`GET /crm/v3/properties/contacts` → 200), así que **no hay conector `hubspot-api`**: la tool usa el mismo `tenantScopedConnect("mcp.hubspot.com/hubspot", ...)`. Falta probar la escritura (POST de propiedades y grupo) con ese token. Si falla por scope, la alternativa es la tool del MCP `manage_custom_properties` antes que un segundo conector.
 
-### 6.2 `brain` · innovas-brains-mcp
+### 6.2 `brain` · `wiki`
 
-- MCP; URL en `config.url` del binding; `connect_api_key` con header `x-api-key`; `multiple: false`.
-- `tools.allow`: `brain_search`, `brain_read`, `brain_upsert`.
-- `approval`: política por nombre. `brain_upsert` devuelve `"user-approval"`; el resto, `"not-applicable"`. El nombre llega calificado (`brain__brain_upsert`), así que se compara con `endsWith`.
+- Entrada de catálogo `kind: "tool"`, `authKind: "none"`, sin `build` ni `connector_uid`.
+- Las tools `brain_search`, `brain_read` y `brain_upsert` las resuelve `agents/outreach/tools/brain.ts` según el binding. `brain_upsert` pide aprobación siempre y solo la aprueba un `tenant_admin` o `platform_admin`.
+- Contrato, datos, import y tests en `docs/superpowers/specs/2026-09-13-brain-design.md`. Plan en `docs/superpowers/plans/2026-09-13-brain.md`.
 
 ### 6.3 `leads-coldiq` · ColdIQ
 
-- MCP; URL y esquema de la llave según el spike; `connect_api_key`; `multiple: true`.
-- `tools.allow` con las operaciones de búsqueda y enriquecimiento individual.
-- `approval`: toda tool cuyo nombre termine en `_bulk` devuelve `"user-approval"`.
-- Fuera del `allow` quedan, como mínimo, `setup_website_visitors` y `cancel_bulk_job`.
+> **Desvío (§10.1 S4):** ColdIQ no tiene MCP remoto. Pasa de conexión MCP a **conexión OpenAPI**, mismo patrón que Google Places.
+
+- OpenAPI con `spec` inline escrito a mano en `lib/connectors/leads/coldiq.openapi.ts`, a partir del tag "GTM Verbs" de `https://api.coldiq.com/openapi.json`. No se usa la URL del spec: tiene 773 operaciones sin `operationId`, y eve derivaría nombres de método y ruta. El documento inline pone `operationId` propios.
+- `baseUrl` `https://api.coldiq.com`. `connect_api_key` con `scheme: "bearer"`; `multiple: true`. Conector del tenant `innovas`: `innovas-coldiq`.
+- Operaciones, todas `POST` e individuales: `findPeople` (`/v1/people/search`), `searchCompanies` (`/v1/companies/search`), `enrichPerson` (`/v1/person/enrich`), `enrichCompany` (`/v1/company/enrich`), `findEmail` (`/v1/email/find`), `verifyEmail` (`/v1/email/verify`), `findSignals` (`/v1/signals/find`).
+- **Las operaciones bulk (`/bulk/submit`, resultados y cancelación) no entran al documento en esta etapa:** sin cupos por tenant (Etapa 3) no hay forma segura de acotar su costo. Sin bulk, tampoco hace falta la política de `approval` por sufijo `_bulk`.
+- Sin `approval`: son lecturas, aunque consumen créditos (§13).
 
 ### 6.4 `leads-google-places` · Google Places
 
@@ -256,19 +259,38 @@ Las listas cerradas (segmento, hook, canal) se convierten en enumeraciones cuand
 ### 9.1 Alta de un conector de API key (lo corre el usuario)
 
 ```bash
-vercel connect create <servicio> --connection-method api-key --name innovas-brain --data @-
-vercel connect attach innovas-brain
-npm run connections:bind -- --tenant innovas --capability brain --provider innovas-brains --connector innovas-brain --url <url del MCP>
+vercel connect create <url base del servicio> --name innovas-coldiq
+npm run connections:bind -- --tenant innovas --capability leads --provider coldiq --connector innovas-coldiq
 ```
 
-- La llave entra por stdin a la CLI de Vercel: no queda en el historial ni pasa por el agente.
+- `create` abre el formulario de Connect: elegir **API Key**, **Shared API Keys**, UID `<slug del tenant>-<proveedor>` (reemplazar el que propone, `<host>/<nombre>`), Scope y Expiration vacíos. La llave se pega en el formulario del navegador: no pasa por la terminal ni por el agente. `create` ya ata el conector a los tres entornos del proyecto.
 - Convención de UID: `<slug del tenant>-<proveedor>`.
 - `scripts/connections-bind.ts` valida `provider` contra el catálogo, hace upsert del binding con la service role y agrega `connection.bound` a `events`. No maneja secretos.
 
+**Probar un conector `api-key` desde la terminal.** `vercel connect token <uid> --subject app` falla con `Token subject is not accessible to this requester`: el subject `app` lo pide el proyecto, no un usuario. Se prueba igual que en runtime, con el OIDC del proyecto, sin imprimir la llave:
+
+```bash
+DIR=$(mktemp -d); vercel env pull "$DIR/.env" --environment=development --yes >/dev/null 2>&1; OIDC=$(grep '^VERCEL_OIDC_TOKEN=' "$DIR/.env" | cut -d= -f2- | tr -d '"'); rm -rf "$DIR"; TOKEN=$(curl -s -X POST https://api.vercel.com/v1/connect/token/<uid> -H "Authorization: Bearer $OIDC" -H "Content-Type: application/json" -d '{"subject":{"type":"app"}}' | jq -r '.token // empty'); curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" <endpoint de lectura del proveedor>
+```
+
+**Rotación.**
+1. Generar la llave nueva en el proveedor, sin borrar la vieja.
+2. En Vercel, Connect → conector → Settings → API Keys → New API Key, y guardar.
+3. **Esperar al menos 15 minutos** y recién entonces borrar la llave vieja en el proveedor.
+
+No cambia el UID ni el binding. Connect entrega la llave nueva en el próximo pedido, pero las instancias en ejecución siguen usando la vieja hasta que vence su token cacheado (§5.2). Si la llave vieja está comprometida y hay que borrarla ya, se acepta ese rato de errores.
+
+El brain no usa conector: se da de alta como en spec brain §11.
+
 ### 9.2 Conectores de plataforma (una vez)
 
-- HubSpot: primero `vercel connect create mcp.hubspot.com`; si Connect no registra el cliente solo, app en el developer portal de HubSpot y `--data @archivo`.
-- Google: `vercel connect create google --connection-method oauth --data @archivo` con el client que ya existe, Gmail API habilitada.
+- HubSpot (hecho, UID `mcp.hubspot.com/hubspot`): con el usuario admin de la cuenta, en HubSpot → Development → MCP Auth Apps → Create MCP auth app, con Redirect URL `https://connect.vercel.com/callback`. Después, `vercel connect create https://mcp.hubspot.com` (sin `--connection-method`), nombre `hubspot`, y en el formulario OAuth pegar Client ID y Client Secret de esa app. Cada usuario autoriza su cuenta la primera vez que se pide un token.
+- Google (hecho, UID `google/google`, 2026-09-13):
+  - Se usó el cliente OAuth que ya existe (`GOOGLE_OAUTH_CLIENT_ID`).
+  - En Google Cloud: Gmail API habilitada, `https://connect.vercel.com/callback` agregado a los URIs de redirección del cliente web (sin tocar los del login de Supabase) y `gmail.send` declarado en Google Auth Platform → Acceso a los datos.
+  - Las credenciales entraron por stdin desde las env vars del proyecto: `jq -n --arg id "$CID" --arg s "$CSEC" '{clientId:$id, clientSecret:$s}' | vercel connect create google --connection-method oauth --name google --data @-`.
+  - Al crearse con `--data` no se ata solo al proyecto: va `vercel connect attach google/google`.
+  - Verificado: `vercel connect token google/google --scopes https://www.googleapis.com/auth/gmail.send` tras el consentimiento, y `tokeninfo` → `scope` `gmail.send`, `expires_in` 3550, `azp` del cliente correcto.
 - Los dos: `vercel connect attach`. Sus UIDs quedan en el catálogo.
 - Bindings OAuth de `innovas`: `npm run connections:bind -- --tenant innovas --capability crm --provider hubspot` y lo mismo para `mail`/`gmail`.
 
@@ -276,7 +298,7 @@ npm run connections:bind -- --tenant innovas --capability brain --provider innov
 
 1. Conectores de plataforma (§9.2).
 2. **Pasar la app de Google a producción** en Google Cloud. Con la app en "testing" los refresh tokens vencen a los 7 días, también dentro de Connect. `gmail.send` es scope sensible: sin verificación funciona hasta 100 usuarios con pantalla de advertencia. La verificación completa no bloquea la etapa.
-3. Conectores `api-key` de brain, ColdIQ y Places para `innovas` (§9.1).
+3. Conectores `api-key` de ColdIQ (ya creado) y Places para `innovas` (§9.1). El brain va por binding, sin conector (spec brain §11).
 4. `npx supabase db push`.
 
 ### 9.4 Desarrollo local
@@ -293,16 +315,41 @@ Nada del §6 se construye hasta cerrar el spike. Cada punto decide algo concreto
 | S2 | Nombres reales de las tools del MCP de HubSpot (`tools/list`) | `tools.allow` de §6.1 y el nombre del criterio de cierre 1 |
 | S3 | ¿El token del MCP de HubSpot sirve contra `/crm/v3/properties/contacts`? | Si hace falta el conector `hubspot-api` (§6.1) |
 | S4 | URL del MCP de ColdIQ, esquema de la llave y nombres de sus tools | §6.3 |
-| S5 | ¿Un conector `api-key` funciona para un servicio propio (brain en Railway) y `getToken` devuelve la llave tal cual? | Si el brain puede ir por Connect o necesita otro camino |
-| S6 | ¿Cómo se rota la llave de un conector `api-key` (editar en el dashboard o recrear)? | Procedimiento de rotación en §9.1 |
+| S5 | ¿Un conector `api-key` funciona para un servicio propio (brain en Railway) y `getToken` devuelve la llave tal cual? | Si el brain puede ir por Connect o necesita otro camino · Cerrada: probada con ColdIQ; el brain ya no usa llave (spec brain B1). |
+| S6 | ¿Cómo se rota la llave de un conector `api-key` (editar en el dashboard o recrear)? | Procedimiento de rotación en §9.1 · Cerrada: se edita la llave en el dashboard. |
 | S7 | Con `createSubject` por `tenant:usuario`, el mismo usuario en un segundo tenant ¿dispara consentimiento nuevo? | Confirma D5 en la práctica |
 
 S1, S3, S4 y S5 necesitan pasos del usuario (crear conectores, cargar llaves). El agente no crea conectores ni maneja llaves.
 
+## 10.1 Resultado del spike (2026-09-13)
+
+S1 a S6 se corrieron con el usuario en su terminal; el agente no vio llaves ni tokens. **S7 no se corrió:** exige `tenantScopedConnect`, que no existe todavía. Queda para la verificación de la Entrega 3 (criterio de cierre 4).
+
+**Conectores creados.** Son definitivos y están atados al proyecto `agents` en production, preview y development (`vercel connect attach` respondió "Nothing to do": `create` ya los ata con `autoinstall=true`).
+
+| UID | id | Tipo | Alcance |
+|---|---|---|---|
+| `mcp.hubspot.com/hubspot` | `scl_Q2pqnG5s8T8GnXWUNIvlxg` | OAuth Customer Owned contra `https://mcp.hubspot.com` | Plataforma; grants por usuario |
+| `innovas-coldiq` | `scl_Vy4XBaAvB7QwpRrGeqw` | `api-key`, Shared API Keys, contra `https://api.coldiq.com` | Tenant `innovas` |
+| `google/google` | (no registrado) | OAuth con credenciales propias (cliente del login) | Plataforma; grants por usuario. Creado después del spike (§9.2) |
+
+| # | Respuesta | Evidencia (sin secretos) | Qué cambia |
+|---|---|---|---|
+| S1 | **Sí, con app propia.** Connect descubre los endpoints de authorize y token, pero no registra el cliente: pide Client ID y Client Secret. HubSpot exige una **MCP auth app** (no una app OAuth común). Los scopes no se declaran: los fija el MCP según sus tools y lo que acepta quien autoriza. El admin de la cuenta de HubSpot autoriza primero. Connect resuelve el PKCE que exige HubSpot | `vercel connect create https://mcp.hubspot.com --connection-method oauth` → `doesn't publish connection methods`. Sin el flag abre el formulario OAuth con `/oauth/authorize/user` y `/oauth/v3/token` precargados → `connector created: scl_Q2pqnG5s8T8GnXWUNIvlxg (UID mcp.hubspot.com/hubspot)`. Primer `vercel connect token` → `User authorization required` y consentimiento en el navegador; después, `initialize` → `HTTP/2 200` y `notifications/initialized` → `202` | §9.2 reescrito |
+| S2 | **28 tools: 17 de lectura y 11 de escritura** (según `annotations.readOnlyHint`). No hay `search_contacts`: la búsqueda de contactos es `search_crm_objects` con `objectType` de contacto. En eve queda `crm__search_crm_objects` | `tools/list` filtrado con `jq`. Lectura: `discover_hubspot_schema`, `get_aeo_metrics`, `get_campaign_attribution_reports`, `get_content_analytics_report`, `get_conversation_channel_metadata`, `get_crm_objects`, `get_marketing_email_analytics`, `get_organization_details`, `get_properties`, `get_user_details`, `query_crm_data`, `read_campaign_data`, `search_conversations`, `search_crm_objects`, `search_owners`, `search_properties`, `tool_guidance`. Escritura: `manage_aeo_prompts`, `manage_aeo_recommendations`, `manage_campaign_objects`, `manage_crm_objects`, `manage_custom_pipelines`, `manage_custom_properties`, `manage_landing_page`, `manage_marketing_email`, `manage_onboarding`, `manage_segment`, `submit_feedback` | §1 criterio 1, §6.1 `tools.allow`, §14 |
+| S3 | **Sí.** El token del conector del MCP sirve contra la API REST. **Desvío:** no hace falta el conector `hubspot-api`. Solo se probó lectura; la creación de propiedades (POST) se verifica en la Entrega 3 | `GET https://api.hubapi.com/crm/v3/properties/contacts` con el token de `mcp.hubspot.com/hubspot` → `http_status: 200` | §6.1 |
+| S4 | **ColdIQ no tiene MCP remoto.** Publica un paquete MCP local por stdio (`@coldiq/mcp`) y una API REST en `https://api.coldiq.com` con auth **Bearer** (`securitySchemes.bearerAuth`, `http`/`bearer`). El OpenAPI (`/openapi.json`) tiene 773 operaciones y **ninguna tiene `operationId`**. Las operaciones de alto nivel están bajo el tag "GTM Verbs". **Desvío:** conexión OpenAPI con documento inline, no MCP | Dashboard de ColdIQ: solo API key, nada de MCP. `/openapi.json` → `200`. Con el conector `innovas-coldiq`, `GET /v1/me/credits` → `200` | §6.3 reescrito |
+| S5 | **Sí, en la mecánica.** Un conector `api-key` acepta cualquier URL y `getToken` con `subject: { type: "app" }` devuelve la **llave cruda**, sin prefijo: el header (`x-api-key` o `Bearer`) lo arma nuestro código. **Cerrada sin probar contra el brain:** el rediseño lo pasó a tools propias sobre Supabase, sin conector ni llave (spec brain B1) | `POST https://api.vercel.com/v1/connect/token/innovas-coldiq` con el OIDC del proyecto y `subject app` → `{"tokenId":"stk_…","connector":{"uid":"innovas-coldiq","type":"api-key"}}`, largo 41, `sin prefijo`, y como Bearer contra ColdIQ → `200`. `vercel connect token innovas-coldiq --subject app` desde la CLI → `Token subject is not accessible to this requester`: el subject `app` solo lo pide el proyecto con su OIDC, no un usuario | §6.2 reemplazada por spec brain, §9.1 |
+| S6 | **Se edita en el lugar.** Connect → conector → Settings → API Keys → New API Key ("Leave blank to keep the current key"); también hay Add Key para convivir con dos llaves. La CLI no rota (`vercel connect update` solo cambia la marca). El cambio rige al instante en Connect; el token vive ~15 minutos y el SDK lo cachea en proceso hasta entonces | Llave nueva cargada y la vieja borrada en ColdIQ → nuevo pedido con otro `expiresAt` y `credits status: 200` | §9.1 rotación, §5.2, §13 |
+
+**Hallazgos laterales:**
+- El team de Vercel estaba en plan **Hobby** (500 token requests cada 30 días, con pausa al llegar). Ya pasó a **Pro** el 2026-09-13.
+- Probar un conector `api-key` desde la terminal requiere el OIDC del proyecto (`vercel env pull`), no `vercel connect token` (§9.1).
+
 ## 11. Entregas
 
 1. **Spike** (§10) y resultado escrito en la spec.
-2. **Datos y camino API key:** migración de `tenant_connections` y `executors`, pgTAP, catálogo, `lib/connectors/auth.ts`, resolver, `brain`, `leads-coldiq`, `leads-google-places`, `scripts/connections-bind.ts`.
+2. **Datos y camino API key:** migración de `tenant_connections` y `executors`, pgTAP, catálogo, `lib/connectors/auth.ts`, resolver, `leads-coldiq`, `leads-google-places`, `scripts/connections-bind.ts`. El brain va por su propio plan (`docs/superpowers/plans/2026-09-13-brain.md`), después de esta entrega.
 3. **Camino OAuth:** `tenantScopedConnect`, `crm` HubSpot, `crm_setup_outreach_properties`, `send_email` por Connect, hook de `executors`, autorización en el chat, baja de `google_tokens` y limpieza del callback.
 4. **Verificación contra el deploy** del criterio de cierre, a mano donde requiere login real y consentimiento OAuth.
 
@@ -319,9 +366,10 @@ S1, S3, S4 y S5 necesitan pasos del usuario (crear conectores, cargar llaves). E
 
 ## 13. Riesgos
 
+- **Plan del team (§10.1):** resuelto. El team pasó de Hobby (500 token requests cada 30 días, con pausa) a **Pro** el 2026-09-13, con uso medido.
 - **Costo por token request:** $3 cada 1.000 en Pro. El SDK cachea en proceso; se revisa el tablero de Observability de Connect al cerrar la etapa.
 - **Rate limit:** 200 `getToken` por minuto por team, compartido entre todos los conectores. Sin problema a este volumen; hay que mirarlo cuando lleguen los schedules.
-- **ColdIQ y Places cuestan por llamada** y no hay cupo hasta la Etapa 3: bulk con aprobación y field mask fijo.
+- **ColdIQ y Places cuestan por llamada** y no hay cupo hasta la Etapa 3: ColdIQ sin operaciones bulk (§6.3) y Places con field mask fijo.
 - **CLI de Connect en beta** y adapter de eve con API reciente (`principalToSubject` ya deprecado). `@vercel/connect` queda fijado en versión exacta.
 - **Schedules sin usuario** (Etapa 5) no pueden usar HubSpot ni Gmail por D4. Tendrán que despachar por un canal autenticado como usuario.
 - **Sin autoservicio:** cargar o rotar una llave requiere acceso al team de Vercel de Innovas. Si aparece autoservicio real, se suma un segundo backend de secretos detrás de `ConnectorAuth` sin tocar tools ni resolver.
@@ -329,7 +377,7 @@ S1, S3, S4 y S5 necesitan pasos del usuario (crear conectores, cargar llaves). E
 ## 14. Enmiendas al roadmap
 
 - Modelo de runtime para probar la etapa: `anthropic/claude-sonnet-5` (Haiku sigue bloqueado por el free tier del AI Gateway).
-- `crm__search_contacts` en el criterio de cierre se reemplaza por el nombre real que fije S2.
+- `crm__search_contacts` en el criterio de cierre se reemplaza por `crm__search_crm_objects` (S2).
 - La tarea "`tenant_connections` como fuente de URLs y `secret_ref`" pasa a `connector_uid` y `config.url`.
 - La enmienda D2/D3 del roadmap ("llaves en Supabase Vault") queda reemplazada por D2 de esta spec.
 - La deuda "absorber `google_tokens` en `executors` y mover el refresh token a Vault" queda superada por Connect.
