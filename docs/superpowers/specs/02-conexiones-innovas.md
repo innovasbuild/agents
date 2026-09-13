@@ -82,7 +82,7 @@ Quién ejecuta outreach dentro de un tenant.
 
 ### 3.5 Eventos
 
-`events.type` suma `connection.bound` y `connection.unbound`, con `payload` `{ capability, provider, connector_uid }` y `actor_user_id` nulo cuando lo escribe el script (§9). `events` sigue siendo append-only.
+`events.type` suma `connection.bound`, con `payload` `{ capability, provider, connector_uid, binding_id, actor }` y `actor_user_id` nulo cuando lo escribe el script (§9). No hay baja de bindings en esta etapa, así que tampoco hay `connection.unbound`: entra junto con la pantalla de conexiones de la Etapa 4. `events` sigue siendo append-only.
 
 ## 4. Catálogo
 
