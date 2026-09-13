@@ -70,14 +70,15 @@ select is(
   'el platform_admin ve los tres tenants'
 );
 
--- Sin sesión no se ve nada.
+-- Sin sesión no se ve nada. Desde 20260913120000 anon no tiene ni el grant de
+-- tabla: ya no recibe cero filas por RLS, el SELECT se rechaza antes.
 reset role;
 set local role anon;
 set local "request.jwt.claims" to '';
 
-select is(
-  (select count(*)::int from public.tenants),
-  0,
+select throws_ok(
+  $$select count(*) from public.tenants$$,
+  '42501', null,
   'anon no ve tenants'
 );
 
