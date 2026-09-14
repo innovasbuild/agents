@@ -108,7 +108,7 @@ Tareas:
 
 ---
 
-## Etapa 2 · Conexiones del tenant `innovas` — `[ ]`
+## Etapa 2 · Conexiones del tenant `innovas` — `[x]`
 
 **Modelo Claude Code:** Sonnet 5, effort `high` (Opus solo si el OAuth de HubSpot vía Vercel Connect necesita diseño).
 **Modelo runtime:** `anthropic/claude-haiku-4.5` para probar conexiones desde el chat.
@@ -116,20 +116,35 @@ Tareas:
 
 Tareas:
 
-- [ ] `connections/crm.ts` dinámica: HubSpot MCP (`mcp.hubspot.com`) para `innovas`, `null` para tenants sin CRM.
-- [ ] Brain `wiki` (plan 2026-09-13-brain).
-- [ ] `connections/coldiq.ts`.
-- [ ] `connections/places.ts` (Google Places, OpenAPI).
-- [ ] `connections/gmail.ts` con `connect("<uid vercel connect>")`, `principalType: user`.
-- [ ] Crear propiedades custom de outreach en HubSpot (`contact_key`, `outreach_segmento`, `outreach_canal`, `outreach_hook`, `outreach_status`, `outreach_owner`, `outreach_fecha_msg1`, `outreach_fecha_respuesta`).
-- [ ] `tenant_connections` como fuente de URLs y `secret_ref` de cada conexión.
-- [ ] **Enmienda 2026-09-12 (D2, D3):** catálogo de conectores por capacidad (`lib/connectors/catalog.ts`: `crm`, `leads`, `enrichment`, `brain`, `mail`) con binding por tenant en `tenant_connections`; llaves de API por tenant en **Supabase Vault** (`secret_ref` = id en Vault), cargadas write-only desde el dashboard por Innovas al inicio; OAuth por Vercel Connect donde exista el proveedor, `defineInteractiveAuthorization` donde no. En env vars de Vercel solo secretos de plataforma. Decidir brain como conexión MCP, memory slot o ambos.
-- [ ] **Deuda de Etapa 0:** absorber `google_tokens` en `executors` y mover el refresh token a Supabase Vault.
-- [ ] **Deuda de Etapa 0:** verificar la app de Google (en modo testing los refresh tokens caducan a los 7 días) o migrar Gmail a Vercel Connect.
-- [ ] Nota: `connect()` exige un principal de tipo user en la sesión, ya estampado desde Etapa 0.
-- [ ] `/ship` + `/context-save`.
+- [x] `connections/crm.ts` dinámica: HubSpot MCP (`mcp.hubspot.com`) para `innovas`, `null` para tenants sin CRM. (`lib/connectors/catalog.ts`, Task 8)
+- [x] Brain `wiki` (plan 2026-09-13-brain, ejecutado por otra sesión — verificado funcionando desde el chat de `innovas` en la verificación manual de esta etapa).
+- [x] `connections/coldiq.ts` (Task 5).
+- [x] `connections/places.ts` (Google Places, OpenAPI) (Task 5).
+- [x] `connections/gmail.ts` con `connect("<uid vercel connect>")`, `principalType: user` (Task 10, reemplaza el `google_tokens` de Etapa 0).
+- [x] Crear propiedades custom de outreach en HubSpot (`contact_key`, `outreach_segmento`, `outreach_canal`, `outreach_hook`, `outreach_status`, `outreach_owner`, `outreach_fecha_msg1`, `outreach_fecha_respuesta`) — tool `crm_setup_outreach_properties`, `approval: always()` (Task 9).
+- [x] `tenant_connections` como fuente de URLs y `connector_uid` de cada conexión (Task 2; el diseño final usa `connector_uid` de Vercel Connect en vez de `secret_ref`/Vault, ver Enmienda de abajo).
+- [x] **Enmienda 2026-09-12 (D2, D3):** catálogo de conectores por capacidad (`lib/connectors/providers.ts`, `lib/connectors/catalog.ts`: `crm`, `leads`, `enrichment`, `brain`, `mail`) con binding por tenant en `tenant_connections`. **Desvío del diseño original:** las llaves no pasan por Supabase Vault — todo secreto (API key u OAuth) vive en Vercel Connect, y `tenant_connections.connector_uid` guarda solo el identificador no-secreto del conector (spec 02 §5.2). El código nunca ve ni loguea una credencial. Brain quedó como tools propias sobre Supabase (spec brain B1), sin conector.
+- [x] **Deuda de Etapa 0:** absorbido — `google_tokens` se dio de baja (Task 13) y Gmail pasa por Vercel Connect (Task 10), no por `executors`/Vault.
+- [x] **Deuda de Etapa 0:** resuelta migrando Gmail a Vercel Connect (Task 10) en vez de verificar la app de Google original.
+- [x] Nota: `connect()` exige un principal de tipo user en la sesión, ya estampado desde Etapa 0.
+- [x] PR mergeado (`#3`, `worktree-crm-oauth-entrega3` → `main`) + este cierre.
 
-**Terminado cuando:** desde el chat, `crm__search_contacts` y `brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
+**Terminado cuando:** desde el chat, `crm__search_crm_objects` y `brain_search` responden para `innovas`, y un tenant de prueba sin CRM no expone la tool.
+
+✅ **Cumplido el 2026-09-14** contra el deploy de producción (`https://agents-six-iota.vercel.app`), verificación manual guiada de los 5 criterios de cierre del plan (Task 14):
+
+1. **CRM + brain + ColdIQ (`innovas`):** pedido de autorización de HubSpot en el primer uso, `crm__search_crm_objects` devolvió un contacto real tras autorizar; `brain_search` respondió con el ICP; `leads-coldiq__findEmail` devolvió un resultado real.
+2. **Aislamiento por tenant sin bindings:** tenant de prueba (`prueba-conexiones`) sin ninguna conexión no expuso ninguna tool de CRM/leads/mail — confirmado pidiéndole al agente una búsqueda directa en el CRM, que respondió que no tenía esa capacidad.
+3. **Envío de mail real:** `send_email` con `approval: always()`, autorización de Gmail vía Connect, mail recibido; `executors.gmail_authorized_at` estampado en la base.
+4. **Aislamiento de grants OAuth entre tenants (S7):** ver hallazgo de seguridad abajo — falló en el primer intento, se corrigió, se re-verificó en producción y ahora pasa.
+5. **Propiedades de outreach en HubSpot:** idempotente — la segunda corrida no creó nada nuevo.
+
+🔒 **Hallazgo de seguridad de la verificación de cierre (S7 / Criterio 4), encontrado y cerrado el 2026-09-14.** El mismo usuario, ya autorizado en HubSpot para `innovas`, no volvió a pedir autorización en un segundo tenant de prueba con su propio binding `crm`/`hubspot` — el agente devolvió datos reales de HubSpot del otro tenant sin pedir nada. `tenantScopedConnect` (`lib/connectors/auth.ts`) ata el subject por `tenantId:userId` correctamente y se descartó como causa mediante una réplica directa del request a Vercel Connect (`401 user_authorization_required` para el subject nuevo). Causa raíz real: `ConnectionRegistryImpl.getClient()` de **eve** (`node_modules/eve/dist/src/runtime/connections/registry.js`) cachea el cliente MCP conectado indexado solo por `connectionName`, y `connectionName("hubspot")` devolvía el string fijo `"crm"` para cualquier tenant; con Fluid Compute reutilizando la misma instancia de función tibia entre sesiones, un cliente ya autenticado de un tenant podía servirse a otro. Fix (commit `34a9954`, PR `#6`): `connectionName` ahora incluye `binding.id` para todo proveedor `authKind: "connect_oauth"`, así el nombre de conexión nunca colisiona entre tenants. Verificado con tests (`npm test`, incluye regresión de no-colisión), y **re-verificado en producción** repitiendo el mismo escenario: el segundo tenant volvió a pedir "Autorizar HubSpot" y, tras autorizar, trajo sus propios datos. Detalle completo en `docs/superpowers/specs/02-conexiones-innovas.md` §10.1, fila S7.
+
+⚠️ **Deuda anotada al cerrar la etapa:**
+- **Task 14 §3 (usuario, fuera de este cierre):** confirmar plan Pro de Vercel (ya estaba desde el 2026-09-13), crear conectores `api-key` faltantes y correr los bindings de `innovas` contra producción — hecho durante esta misma sesión de cierre (`innovas-coldiq`, `innovas-places`, `crm`/`hubspot`, `mail`/`gmail`).
+- **App de Google en producción:** confirmado ya publicada ("In production") en Google Cloud, sin verificación completa del scope sensible `gmail.send` — no bloquea la etapa (funciona hasta 100 usuarios con pantalla de advertencia).
+- **Bug de UX, no de seguridad, ya encontrado y corregido en la misma sesión:** el primer mensaje de un hilo nuevo podía fallar con 401 y necesitar reenviarlo — causa raíz: carrera entre `bind-session.ts` y la apertura del stream. Fix en commit `8c1850e`, PR `#4`.
 
 ---
 
