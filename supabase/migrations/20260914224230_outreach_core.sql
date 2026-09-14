@@ -75,6 +75,7 @@ create table public.contacts (
     on delete set null (account_id),
   -- MATCH SIMPLE: con owner_user_id nulo (claim libre) no se chequea.
   foreign key (tenant_id, owner_user_id) references public.executors (tenant_id, user_id)
+    on delete set null (owner_user_id)
 );
 
 create index contacts_owner_next_step_idx on public.contacts (tenant_id, owner_user_id, next_step_at);
@@ -155,6 +156,7 @@ create table public.queue_items (
   check (kind <> 'msg1' or ancla is not null),
   foreign key (contact_id, tenant_id) references public.contacts (id, tenant_id) on delete cascade,
   foreign key (tenant_id, executor_user_id) references public.executors (tenant_id, user_id)
+    on delete cascade
 );
 
 create unique index queue_items_live_per_contact_idx on public.queue_items (tenant_id, contact_id)
@@ -162,16 +164,28 @@ create unique index queue_items_live_per_contact_idx on public.queue_items (tena
 create index queue_items_executor_status_idx on public.queue_items (tenant_id, executor_user_id, status);
 create index queue_items_contact_id_idx on public.queue_items (contact_id);
 
--- events: dedup de 2 horas (kickoff §5) y respuestas únicas por mensaje.
+-- events: dedup de 2 horas (kickoff §5, spec 03 §4.7) solo para los tipos
+-- idempotentes (efecto de sistema repetible dentro de la ventana); el resto
+-- (cambio_etapa, nota, pieza_editada, rechazado, envio_fallido, freno, etc.)
+-- nunca se descarta. Respuestas únicas por mensaje además, vía índice aparte.
 create index events_dedup_idx on public.events (tenant_id, contact_key, type, created_at desc)
-  where contact_key is not null;
+  where contact_key is not null
+    and type in (
+      'contacto_importado', 'investigado', 'encolado', 'gate_fallido', 'aprobado',
+      'envio', 'rebote', 'respuesta', 'claim_ajeno', 'deal_creado',
+      'oportunidad_frenada', 'crm_sync_pendiente', 'crm_sync_ok'
+    );
 create unique index events_inbound_message_idx on public.events (tenant_id, (payload ->> 'gmail_message_id'))
   where type in ('respuesta', 'rebote');
 
 create or replace function public.events_dedup()
 returns trigger language plpgsql set search_path = '' as $$
 begin
-  if new.contact_key is null then
+  if new.contact_key is null or new.type not in (
+    'contacto_importado', 'investigado', 'encolado', 'gate_fallido', 'aprobado',
+    'envio', 'rebote', 'respuesta', 'claim_ajeno', 'deal_creado',
+    'oportunidad_frenada', 'crm_sync_pendiente', 'crm_sync_ok'
+  ) then
     return new;
   end if;
   if exists (

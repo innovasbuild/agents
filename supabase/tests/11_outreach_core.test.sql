@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(18);
+select plan(25);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -57,15 +57,27 @@ select is(
 );
 
 select is(
+  (select count(*)::int from public.queue_items where tenant_id = 'b1b1b1b1-0000-0000-0000-00000000000a'),
+  1,
+  'un miembro ve la pieza de cola de su propio tenant'
+);
+
+select is(
   (select count(*)::int from public.queue_items where tenant_id = 'b1b1b1b1-0000-0000-0000-00000000000b'),
   0,
   'un miembro no ve la cola de otro tenant'
 );
 
 select is(
-  (select count(*)::int from public.config_values) + (select count(*)::int from public.accounts),
-  2,
-  'config_values y accounts se leen solo dentro del tenant'
+  (select count(*)::int from public.config_values),
+  1,
+  'config_values se lee solo dentro del tenant'
+);
+
+select is(
+  (select count(*)::int from public.accounts),
+  1,
+  'accounts se lee solo dentro del tenant'
 );
 
 select throws_ok(
@@ -112,6 +124,21 @@ select throws_ok(
   'sin_atribucion solo se asigna al crear'
 );
 
+-- sin_atribucion nace así (chat sin csv) y solo sale hacia el rango 2+.
+insert into public.contacts (id, tenant_id, contact_key, source, stage)
+values ('c1c1c1c1-0000-0000-0000-000000000004', 'b1b1b1b1-0000-0000-0000-00000000000a', 'em:cuatro@acme-a.test', 'chat', 'sin_atribucion');
+
+select throws_ok(
+  $$update public.contacts set stage = 'msg1_enviado' where id = 'c1c1c1c1-0000-0000-0000-000000000004'$$,
+  '23514', null,
+  'un contacto sin atribución no vuelve al primer toque'
+);
+
+select lives_ok(
+  $$update public.contacts set stage = 'en_conversacion' where id = 'c1c1c1c1-0000-0000-0000-000000000004'$$,
+  'un contacto sin atribución sí puede avanzar al rango 2+'
+);
+
 -- Cola.
 select throws_ok(
   $$insert into public.queue_items (tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, draft_original, gate_result)
@@ -134,6 +161,12 @@ select throws_ok(
 );
 
 select throws_ok(
+  $$update public.contacts set owner_user_id = 'a1a1a1a1-0000-0000-0000-000000000002' where id = 'c1c1c1c1-0000-0000-0000-000000000003'$$,
+  '23503', null,
+  'un ejecutor de otro tenant no puede quedarse un contacto ajeno'
+);
+
+select throws_ok(
   $$insert into public.queue_items (tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, draft_original, gate_result)
      values ('b1b1b1b1-0000-0000-0000-00000000000a', 'c1c1c1c1-0000-0000-0000-000000000002', 'em:dos@acme-b.test', 'a1a1a1a1-0000-0000-0000-000000000001', 'followup_2', 'dos@acme-b.test', 'A', 'B', 'h', 'v', 'es_ar', '{}', '{}')$$,
   '23503', null,
@@ -151,6 +184,18 @@ select is(
   (select count(*)::int from public.events where contact_key = 'em:uno@acme-a.test' and type = 'encolado'),
   2,
   'el dedup descarta el mismo evento dentro de 2 horas y conserva los distintos'
+);
+
+-- cambio_etapa no es idempotente: dos eventos iguales quedan los dos.
+insert into public.events (tenant_id, contact_key, type, payload)
+values
+  ('b1b1b1b1-0000-0000-0000-00000000000a', 'em:uno@acme-a.test', 'cambio_etapa', '{"a":"msg1_enviado","b":"sin_respuesta"}'),
+  ('b1b1b1b1-0000-0000-0000-00000000000a', 'em:uno@acme-a.test', 'cambio_etapa', '{"a":"msg1_enviado","b":"sin_respuesta"}');
+
+select is(
+  (select count(*)::int from public.events where contact_key = 'em:uno@acme-a.test' and type = 'cambio_etapa'),
+  2,
+  'cambio_etapa no es idempotente: dos eventos iguales dentro de 2 horas quedan los dos'
 );
 
 insert into public.events (tenant_id, contact_key, type, payload, created_at)
@@ -190,6 +235,28 @@ select throws_ok(
      where user_id = 'a1a1a1a1-0000-0000-0000-000000000003'$$,
   '23505', null,
   'dos ejecutores del mismo tenant no comparten slug'
+);
+
+-- Borrar un ejecutor libera sus contactos (no los deja huérfanos).
+insert into auth.users (id, aud, role, email, email_confirmed_at)
+values ('a1a1a1a1-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'delia@outreach-a.test', now());
+
+insert into public.memberships (tenant_id, user_id, role)
+values ('b1b1b1b1-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-000000000004', 'tenant_member');
+
+insert into public.executors (tenant_id, user_id)
+values ('b1b1b1b1-0000-0000-0000-00000000000a', 'a1a1a1a1-0000-0000-0000-000000000004');
+
+insert into public.contacts (id, tenant_id, contact_key, owner_user_id, source)
+values ('c1c1c1c1-0000-0000-0000-000000000005', 'b1b1b1b1-0000-0000-0000-00000000000a', 'em:cinco@acme-a.test', 'a1a1a1a1-0000-0000-0000-000000000004', 'csv');
+
+delete from public.executors
+ where tenant_id = 'b1b1b1b1-0000-0000-0000-00000000000a' and user_id = 'a1a1a1a1-0000-0000-0000-000000000004';
+
+select is(
+  (select owner_user_id from public.contacts where id = 'c1c1c1c1-0000-0000-0000-000000000005'),
+  null::uuid,
+  'borrar al ejecutor libera el contacto en vez de dejarlo huérfano'
 );
 
 select * from finish();
