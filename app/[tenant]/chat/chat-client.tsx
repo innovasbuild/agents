@@ -138,6 +138,17 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 		}),
 	);
 
+	// Mientras haya una autorización pendiente, el turno está parqueado: se
+	// muestra el botón y se bloquea el input (guides/client/streaming.mdx).
+	const pendingAuthorizations = agent.data.messages.flatMap((message) =>
+		message.parts.flatMap((part) =>
+			part.type === "authorization" && part.state === "required"
+				? [{ key: `${part.turnId}-${part.stepIndex}-${part.name}`, part }]
+				: [],
+		),
+	);
+	const isAuthorizing = pendingAuthorizations.length > 0;
+
 	return (
 		<section className="space-y-4">
 			<p className="text-muted-foreground text-sm">
@@ -160,6 +171,34 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					</article>
 				))}
 			</div>
+
+			{pendingAuthorizations.map(({ key, part }) => (
+				<fieldset className="rounded border p-3" key={key}>
+					<legend className="px-1 text-sm">
+						Autorización pendiente: {part.displayName}
+					</legend>
+					<p className="text-sm">
+						{part.authorization?.instructions ??
+							`Para seguir, el agente necesita acceso a ${part.displayName} con tu cuenta.`}
+					</p>
+					{part.authorization?.userCode ? (
+						<p className="text-sm">
+							Código: <code>{part.authorization.userCode}</code>
+						</p>
+					) : null}
+					{part.authorization?.url ? (
+						<Button asChild className="mt-2">
+							<a
+								href={part.authorization.url}
+								rel="noopener noreferrer"
+								target="_blank"
+							>
+								Autorizar {part.displayName}
+							</a>
+						</Button>
+					) : null}
+				</fieldset>
+			))}
 
 			{pendingApprovals.map(({ requestId, input }) => (
 				<fieldset className="rounded border p-3" key={requestId}>
@@ -204,7 +243,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
-					if (message.length === 0 || isResuming) return;
+					if (message.length === 0 || isResuming || isAuthorizing) return;
 
 					void agent.send(
 						message,
@@ -216,12 +255,12 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			>
 				<input
 					className="flex-1 rounded border px-3 py-2"
-					disabled={isResuming}
+					disabled={isResuming || isAuthorizing}
 					onChange={(event) => setText(event.target.value)}
 					placeholder="Escribí un mensaje para el agente"
 					value={text}
 				/>
-				<Button disabled={isResuming} type="submit">
+				<Button disabled={isResuming || isAuthorizing} type="submit">
 					Enviar
 				</Button>
 			</form>
