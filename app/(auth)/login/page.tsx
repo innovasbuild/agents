@@ -4,13 +4,7 @@
 import { useState } from "react";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
-const SCOPES = [
-	"openid",
-	"email",
-	"profile",
-	"https://www.googleapis.com/auth/gmail.send",
-	"https://www.googleapis.com/auth/gmail.readonly",
-].join(" ");
+const SCOPES = "openid email profile";
 
 export default function LoginPage() {
 	const supabase = createBrowserSupabase();
@@ -22,7 +16,6 @@ export default function LoginPage() {
 			provider: "google",
 			options: {
 				scopes: SCOPES,
-				queryParams: { access_type: "offline", prompt: "consent" },
 				redirectTo: `${window.location.origin}/auth/callback`,
 			},
 		});

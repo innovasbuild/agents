@@ -133,10 +133,25 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			const request = part.toolMetadata?.eve?.inputRequest;
 			if (!request) return [];
 			return [
-				{ requestId: request.requestId, input: part.input as SendEmailInput },
+				{
+					requestId: request.requestId,
+					toolName: part.toolName,
+					input: part.input as Record<string, unknown>,
+				},
 			];
 		}),
 	);
+
+	// Mientras haya una autorización pendiente, el turno está parqueado: se
+	// muestra el botón y se bloquea el input (guides/client/streaming.mdx).
+	const pendingAuthorizations = agent.data.messages.flatMap((message) =>
+		message.parts.flatMap((part) =>
+			part.type === "authorization" && part.state === "required"
+				? [{ key: `${part.turnId}-${part.stepIndex}-${part.name}`, part }]
+				: [],
+		),
+	);
+	const isAuthorizing = pendingAuthorizations.length > 0;
 
 	return (
 		<section className="space-y-4">
@@ -161,22 +176,72 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				))}
 			</div>
 
-			{pendingApprovals.map(({ requestId, input }) => (
-				<fieldset className="rounded border p-3" key={requestId}>
+			{pendingAuthorizations.map(({ key, part }) => (
+				<fieldset className="rounded border p-3" key={key}>
 					<legend className="px-1 text-sm">
-						Aprobación pendiente: enviar email
+						Autorización pendiente: {part.displayName}
 					</legend>
-					<p>
-						<strong>Para:</strong> {input.to ?? "(sin destinatario)"}
+					<p className="text-sm">
+						{part.authorization?.instructions ??
+							`Para seguir, el agente necesita acceso a ${part.displayName} con tu cuenta.`}
 					</p>
-					<p>
-						<strong>Asunto:</strong> {input.subject ?? "(sin asunto)"}
-					</p>
-					<p className="whitespace-pre-wrap">
-						<strong>Cuerpo:</strong>
-						{"\n"}
-						{input.body ?? "(sin cuerpo)"}
-					</p>
+					{part.authorization?.userCode ? (
+						<p className="text-sm">
+							Código: <code>{part.authorization.userCode}</code>
+						</p>
+					) : null}
+					{part.authorization?.url ? (
+						<Button asChild className="mt-2">
+							<a
+								href={part.authorization.url}
+								rel="noopener noreferrer"
+								target="_blank"
+							>
+								Autorizar {part.displayName}
+							</a>
+						</Button>
+					) : null}
+				</fieldset>
+			))}
+
+			{pendingApprovals.map(({ requestId, toolName, input }) => (
+				<fieldset className="rounded border p-3" key={requestId}>
+					{toolName === "send_email" ? (
+						<>
+							<legend className="px-1 text-sm">
+								Aprobación pendiente: enviar email
+							</legend>
+							{(() => {
+								const emailInput = input as SendEmailInput;
+								return (
+									<>
+										<p>
+											<strong>Para:</strong>{" "}
+											{emailInput.to ?? "(sin destinatario)"}
+										</p>
+										<p>
+											<strong>Asunto:</strong>{" "}
+											{emailInput.subject ?? "(sin asunto)"}
+										</p>
+										<p className="whitespace-pre-wrap">
+											<strong>Cuerpo:</strong>
+											{"\n"}
+											{emailInput.body ?? "(sin cuerpo)"}
+										</p>
+									</>
+								);
+							})()}
+						</>
+					) : (
+						<>
+							<legend className="px-1 text-sm">
+								Aprobación pendiente: {toolName}
+							</legend>
+							<pre className="whitespace-pre-wrap text-sm">
+								{JSON.stringify(input, null, 2)}
+							</pre>
+						</>
+					)}
 					<div className="mt-2 flex gap-2">
 						<Button
 							onClick={() =>
@@ -204,7 +269,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
-					if (message.length === 0 || isResuming) return;
+					if (message.length === 0 || isResuming || isAuthorizing) return;
 
 					void agent.send(
 						message,
@@ -216,12 +281,12 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			>
 				<input
 					className="flex-1 rounded border px-3 py-2"
-					disabled={isResuming}
+					disabled={isResuming || isAuthorizing}
 					onChange={(event) => setText(event.target.value)}
 					placeholder="Escribí un mensaje para el agente"
 					value={text}
 				/>
-				<Button disabled={isResuming} type="submit">
+				<Button disabled={isResuming || isAuthorizing} type="submit">
 					Enviar
 				</Button>
 			</form>
