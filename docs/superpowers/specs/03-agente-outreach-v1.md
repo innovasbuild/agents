@@ -228,7 +228,7 @@ max_chars: email=900
 formal: false
 ```
 
-- `veto:` frase buscada sobre el texto normalizado (minúsculas, sin acentos) con límites de palabra. **No es regex:** el contenido viene de datos editables. Sintaxis acotada que se compila a una expresión sin cuantificadores anidados (evita ReDoS): `(a|b|c)` para alternativas y ` ... ` para "hasta 40 caracteres sin punto". Una frase mal formada es una violación del gate, igual que en `gate.py`.
+- `veto:` frase buscada sobre el texto normalizado (minúsculas, sin acentos) con límites de palabra. **No es regex:** el contenido viene de datos editables. Sintaxis acotada que se compila a una expresión sin cuantificadores anidados (evita ReDoS): `(a|b|c)` para alternativas y ` ... ` para "hasta 40 caracteres sin punto", **como mucho un ` ... ` por frase** (varios huecos acotados encadenados vuelven a producir backtracking catastrófico). Una frase mal formada es una violación del gate, igual que en `gate.py`.
 - `veto_literal:` substring sobre el texto normalizado, sin límites de palabra ni sintaxis.
 - `max_chars:` `<n>` para todo canal o `<canal>=<n>`. Si hay varios, gana el menor.
 - `formal:` `true` habilita `¿` y `¡`.
