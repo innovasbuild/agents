@@ -2,8 +2,8 @@
 // devuelve la definición de eve, o null si el binding no alcanza para armarla.
 import {
 	type DynamicConnectionDefinition,
-	defineOpenAPIConnection,
 	defineMcpClientConnection,
+	defineOpenAPIConnection,
 } from "eve/connections";
 import { apiKeyBearer, apiKeyHeaders, tenantScopedConnect } from "./auth";
 import { COLDIQ_OPERATIONS, coldiqOpenApi } from "./leads/coldiq.openapi";

@@ -133,7 +133,11 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			const request = part.toolMetadata?.eve?.inputRequest;
 			if (!request) return [];
 			return [
-				{ requestId: request.requestId, input: part.input as SendEmailInput },
+				{
+					requestId: request.requestId,
+					toolName: part.toolName,
+					input: part.input as Record<string, unknown>,
+				},
 			];
 		}),
 	);
@@ -200,22 +204,44 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</fieldset>
 			))}
 
-			{pendingApprovals.map(({ requestId, input }) => (
+			{pendingApprovals.map(({ requestId, toolName, input }) => (
 				<fieldset className="rounded border p-3" key={requestId}>
-					<legend className="px-1 text-sm">
-						Aprobación pendiente: enviar email
-					</legend>
-					<p>
-						<strong>Para:</strong> {input.to ?? "(sin destinatario)"}
-					</p>
-					<p>
-						<strong>Asunto:</strong> {input.subject ?? "(sin asunto)"}
-					</p>
-					<p className="whitespace-pre-wrap">
-						<strong>Cuerpo:</strong>
-						{"\n"}
-						{input.body ?? "(sin cuerpo)"}
-					</p>
+					{toolName === "send_email" ? (
+						<>
+							<legend className="px-1 text-sm">
+								Aprobación pendiente: enviar email
+							</legend>
+							{(() => {
+								const emailInput = input as SendEmailInput;
+								return (
+									<>
+										<p>
+											<strong>Para:</strong>{" "}
+											{emailInput.to ?? "(sin destinatario)"}
+										</p>
+										<p>
+											<strong>Asunto:</strong>{" "}
+											{emailInput.subject ?? "(sin asunto)"}
+										</p>
+										<p className="whitespace-pre-wrap">
+											<strong>Cuerpo:</strong>
+											{"\n"}
+											{emailInput.body ?? "(sin cuerpo)"}
+										</p>
+									</>
+								);
+							})()}
+						</>
+					) : (
+						<>
+							<legend className="px-1 text-sm">
+								Aprobación pendiente: {toolName}
+							</legend>
+							<pre className="whitespace-pre-wrap text-sm">
+								{JSON.stringify(input, null, 2)}
+							</pre>
+						</>
+					)}
 					<div className="mt-2 flex gap-2">
 						<Button
 							onClick={() =>

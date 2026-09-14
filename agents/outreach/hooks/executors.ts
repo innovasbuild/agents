@@ -8,7 +8,7 @@ function attribute(value: unknown): string {
 // Mismo criterio que hooks/runs.ts: observabilidad, siempre en try/catch.
 // "gmail" es el authKey que usa tools/send_email.ts. Verificado contra
 // dist/src/protocol/message.d.ts y dist/src/runtime/connections/
-// scoped-authorization.js de eve (ver task-11-report.md §Step 1): el
+// scoped-authorization.js de eve: el
 // authKey pasado a ctx.getToken se usa tal cual como `scope`, y ese scope
 // es el `name` que trae authorization.completed.
 export default defineHook({
