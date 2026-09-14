@@ -61,7 +61,9 @@ describe("outreachFileSchema", () => {
 				vector: [{ value: "v1", label: "V", default_hook: "h_nada" }],
 			},
 		};
-		expect(() => outreachFileSchema.parse(bad)).toThrow(
+		const result = outreachFileSchema.safeParse(bad);
+		expect(result.success).toBe(false);
+		expect(result.error?.issues.map((issue) => issue.message)).toContain(
 			'el hook "h_nada" no está en values.hook',
 		);
 	});
@@ -76,14 +78,34 @@ describe("outreachFileSchema", () => {
 				],
 			},
 		};
-		expect(() => outreachFileSchema.parse(repeated)).toThrow(
+		const result = outreachFileSchema.safeParse(repeated);
+		expect(result.success).toBe(false);
+		expect(result.error?.issues.map((issue) => issue.message)).toContain(
 			'valor repetido en values.hook: "h_uno"',
 		);
 		const english = {
 			...file,
 			values: { ...file.values, idioma: [{ value: "en", label: "Inglés" }] },
 		};
-		expect(() => outreachFileSchema.parse(english)).toThrow();
+		expect(outreachFileSchema.safeParse(english).success).toBe(false);
+	});
+	it("acumula todos los issues en un solo safeParse sin tirar excepción", () => {
+		const bad = {
+			...file,
+			values: {
+				...file.values,
+				hook: [
+					{ value: "h_uno", label: "A" },
+					{ value: "h_uno", label: "B" },
+				],
+				vector: [{ value: "v1", label: "V", default_hook: "h_nada" }],
+			},
+		};
+		const result = outreachFileSchema.safeParse(bad);
+		expect(result.success).toBe(false);
+		const messages = result.error?.issues.map((issue) => issue.message);
+		expect(messages).toContain('valor repetido en values.hook: "h_uno"');
+		expect(messages).toContain('el hook "h_nada" no está en values.hook');
 	});
 });
 

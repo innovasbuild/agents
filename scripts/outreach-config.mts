@@ -13,9 +13,15 @@ import { parseOutreachConfigArgs } from "./outreach-config-args.ts";
 
 async function main(): Promise<void> {
 	const args = parseOutreachConfigArgs(process.argv.slice(2));
-	const file = outreachFileSchema.parse(
+	const result = outreachFileSchema.safeParse(
 		JSON.parse(await readFile(`tenants/${args.tenant}/outreach.json`, "utf8")),
 	);
+	if (!result.success) {
+		throw new Error(
+			`tenants/${args.tenant}/outreach.json inválido:\n${result.error.issues.map((i) => `- ${i.path.join(".")}: ${i.message}`).join("\n")}`,
+		);
+	}
+	const file = result.data;
 
 	const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 	const key = process.env.SUPABASE_SERVICE_ROLE_KEY;

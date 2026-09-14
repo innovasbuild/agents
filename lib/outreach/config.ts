@@ -86,17 +86,16 @@ export const outreachFileSchema = z
 				.min(1),
 		}),
 	})
-	.superRefine((file) => {
-		// zod v4 arma ZodError.message con el JSON de los issues (no el texto
-		// plano de ctx.addIssue como en v3), así que un mensaje "custom" queda
-		// escapado dentro del JSON y no matchea un toThrow(string) literal.
-		// Tiramos un Error común: al no ser un ZodIssue, zod lo deja pasar tal
-		// cual y el mensaje llega legible.
+	.superRefine((file, ctx) => {
 		for (const [kind, list] of Object.entries(file.values)) {
 			const seen = new Set<string>();
 			for (const item of list) {
 				if (seen.has(item.value)) {
-					throw new Error(`valor repetido en values.${kind}: "${item.value}"`);
+					ctx.addIssue({
+						code: "custom",
+						path: ["values", kind],
+						message: `valor repetido en values.${kind}: "${item.value}"`,
+					});
 				}
 				seen.add(item.value);
 			}
@@ -104,9 +103,11 @@ export const outreachFileSchema = z
 		const hooks = new Set(file.values.hook.map((hook) => hook.value));
 		for (const vector of file.values.vector) {
 			if (vector.default_hook && !hooks.has(vector.default_hook)) {
-				throw new Error(
-					`el hook "${vector.default_hook}" no está en values.hook`,
-				);
+				ctx.addIssue({
+					code: "custom",
+					path: ["values", "vector"],
+					message: `el hook "${vector.default_hook}" no está en values.hook`,
+				});
 			}
 		}
 	});
