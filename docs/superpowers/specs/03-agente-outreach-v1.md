@@ -221,16 +221,18 @@ Sin I/O: las tools y schedules traen los datos y le pasan el resultado. Todo con
 **Vetos como datos:** bloques de código con lenguaje `gate` dentro de páginas del brain, parseados por `parseGateBlocks(markdown)`:
 
 ```gate
-veto: ejecutamos para el bm
-veto_literal: BID
+veto: ejecutamos para (el banco mundial|bid|fao)
+veto: clientes ... (banco mundial|bid|fao)
+veto_literal: llave en mano
 max_chars: email=900
 formal: false
 ```
 
-- `veto:` frase buscada sobre el texto normalizado con límites de palabra. **No es regex:** el contenido viene de datos editables y no se ejecuta como expresión (evita ReDoS).
-- `veto_literal:` substring exacto, sensible a mayúsculas.
-- `max_chars:` `<canal>=<n>`.
+- `veto:` frase buscada sobre el texto normalizado (minúsculas, sin acentos) con límites de palabra. **No es regex:** el contenido viene de datos editables. Sintaxis acotada que se compila a una expresión sin cuantificadores anidados (evita ReDoS): `(a|b|c)` para alternativas y ` ... ` para "hasta 40 caracteres sin punto". Una frase mal formada es una violación del gate, igual que en `gate.py`.
+- `veto_literal:` substring sobre el texto normalizado, sin límites de palabra ni sintaxis.
+- `max_chars:` `<n>` para todo canal o `<canal>=<n>`. Si hay varios, gana el menor.
 - `formal:` `true` habilita `¿` y `¡`.
+- Una línea que empieza con `#` es comentario, y ` # …` al final de una línea también (el formato de alta con fecha de las bibliotecas de voz). Las fórmulas de BM, BID y FAO de `gate.py` salen de la base y pasan a la página `canon:gate` de `innovas` con esta sintaxis.
 
 Se combinan la página del tenant (`canon:gate`) y la voz del ejecutor (`canon:voz` + `executor:<slug>`). Si la lectura del brain falla, el gate devuelve `indeterminate`. Un tenant sin brain corre solo la base.
 
@@ -509,8 +511,8 @@ Pendiente (Entrega 1).
 ## 14. Entregas
 
 1. **Spikes** S1 a S7 y §13.1 escrito; ajustes a la spec si algún plan B se activa.
-2. **Datos y núcleo:** migraciones de §4 con pgTAP, `lib/outreach` con TDD (§5), `lib/connectors/crm/adapter.ts` + HubSpot, `OUTREACH_PROPERTIES` con 10, `tenants/innovas/outreach.json` + `outreach:config`, `executors:set`.
-3. **Agente de primer toque:** instrucciones, skills, `researcher`, tools de §6.4, `send_email` de §7, evals de §11.2.
+2. **Datos y núcleo:** migraciones de §4 con pgTAP, `lib/outreach` con TDD (§5), `OUTREACH_PROPERTIES` con 10, `tenants/innovas/outreach.json` + `outreach:config`, `executors:set`. No depende de los spikes: puede correr en paralelo con la Entrega 1.
+3. **Agente de primer toque:** `CrmAdapter` + HubSpot (§9, después de S6), instrucciones, skills, `researcher`, tools de §6.4, `send_email` de §7, evals de §11.2.
 4. **Escucha y follow-ups:** scopes de Gmail y hook, `connectForSubject`, `listen.ts`, `read_replies`, los dos schedules, F6.5, resumen de sesión.
 5. **Piloto contra producción** (§12.1) y verificación del criterio de cierre, guiada, como la Task 14 de la Etapa 2.
 
