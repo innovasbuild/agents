@@ -53,7 +53,7 @@ export function crmMatch(
 ): CrmCandidate | null {
 	const byKey = candidates.find((c) => c.contactKey === query.contactKey);
 	if (byKey) return byKey;
-	const email = query.email;
+	const email = query.email?.toLowerCase() ?? null;
 	const byEmail = email
 		? candidates.find((c) => c.email?.toLowerCase() === email)
 		: undefined;

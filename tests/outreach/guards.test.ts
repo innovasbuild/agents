@@ -100,6 +100,25 @@ describe("crmMatch", () => {
 			}),
 		).toBeNull();
 	});
+	it("el email matchea sin importar mayúsculas de ningún lado", () => {
+		expect(
+			crmMatch(
+				[
+					{
+						id: "9",
+						contactKey: null,
+						email: "Laura@Acme.test",
+						linkedinSlugs: [],
+					},
+				],
+				{
+					contactKey: "em:x",
+					email: "LAURA@acme.TEST",
+					linkedinSlug: null,
+				},
+			)?.id,
+		).toBe("9");
+	});
 });
 
 describe("canTouch", () => {
