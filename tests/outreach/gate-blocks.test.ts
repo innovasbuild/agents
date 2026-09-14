@@ -57,6 +57,17 @@ describe("parseGateBlocks", () => {
 			'voz/ana: directiva del gate no reconocida: "max_chars: mucho"',
 		]);
 	});
+
+	it("un canal que no empieza con letra es una directiva mal escrita", () => {
+		const rules = parseGateBlocks(
+			"```gate\nmax_chars: __proto__=5\n```",
+			"voz/ana",
+		);
+		expect(rules.maxChars).toEqual({ all: null, byChannel: {} });
+		expect(rules.errors).toEqual([
+			'voz/ana: directiva del gate no reconocida: "max_chars: __proto__=5"',
+		]);
+	});
 });
 
 describe("mergeGateRules", () => {
@@ -109,5 +120,13 @@ describe("compileVeto", () => {
 		expect(compileVeto(veto("bid|fao"))).toBeNull();
 		expect(compileVeto(veto("()"))).toBeNull();
 		expect(compileVeto(veto("   "))).toBeNull();
+	});
+
+	it("admite como mucho un hueco: dos o más es una frase mal formada (evita backtracking)", () => {
+		expect(compileVeto(veto("clientes ... como ... bid"))).toBeNull();
+		const re = compileVeto(veto("clientes ... bid")) as RegExp;
+		const started = Date.now();
+		expect(`${"clientes ".repeat(2000)}x`.match(re)).toBeNull();
+		expect(Date.now() - started).toBeLessThan(500);
 	});
 });
