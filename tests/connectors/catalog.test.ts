@@ -144,22 +144,6 @@ describe("buildTenantConnections", () => {
 		);
 	});
 
-	it("avisa 'sin builder todavía' para un proveedor sin builder registrado", () => {
-		// hubspot es "connection" (no "tool") pero todavía no tiene builder acá.
-		expect(
-			buildTenantConnections([
-				binding({
-					capability: "crm",
-					provider: "hubspot",
-					connectorUid: "tenant-a-hubspot",
-				}),
-			]),
-		).toEqual({});
-		expect(warn).toHaveBeenCalledWith(
-			expect.stringContaining("sin builder todavía"),
-		);
-	});
-
 	it("distingue 'binding incompleto' de 'sin builder todavía'", () => {
 		buildTenantConnections([
 			binding({
