@@ -202,6 +202,10 @@ const MARKER_THRESHOLD = 4;
 const SUBJECT_MAX = 50;
 const HTML_TAG = /<\/?[a-z][a-z0-9]*(\s[^>]*)?>/gi;
 const TRACKING = /[?&](utm_[a-z]+|mc_eid|mc_cid|fbclid|gclid)=/gi;
+// Redirecciones conocidas de plataformas de mailing/acortadores (spec 03 §5.2:
+// "URLs con parámetros de tracking (utm_, mc_eid, redirecciones conocidas)").
+const TRACKING_HOSTS =
+	/\bhttps?:\/\/(?:[a-z0-9-]+\.)*(?:hubspotlinks\.com|hs-analytics\.net|list-manage\.com|mailchi\.mp|sendgrid\.net|mandrillapp\.com|bit\.ly|lnkd\.in|t\.co|tinyurl\.com|ow\.ly)\b/i;
 
 function count(text: string, pattern: RegExp): number {
 	return (text.match(pattern) ?? []).length;
@@ -246,6 +250,14 @@ function checkPiece(
 			piece,
 			what: "link con parámetros de tracking",
 			fix: "sacar los parámetros o el link",
+		});
+	}
+	if (text.match(TRACKING_HOSTS)) {
+		out.push({
+			kind: "formato",
+			piece,
+			what: "link con redirección de tracking",
+			fix: "link directo o ninguno",
 		});
 	}
 	for (const veto of vetos) {
@@ -385,8 +397,11 @@ export function runGate(input: GateInput): GateResult {
 		});
 	}
 
-	violations.push(...checkPiece(subject, "asunto", input.rules, vetos));
-	violations.push(...checkPiece(body, "cuerpo", input.rules, vetos));
+	// Símbolos/fórmulas/formato/vetos corren sobre el texto sin recortar: trim()
+	// saca U+00A0 (espacio duro), y ese es justamente uno de los símbolos que el
+	// gate tiene que poder marcar en el borde de la pieza (paridad con gate.py).
+	violations.push(...checkPiece(input.subject, "asunto", input.rules, vetos));
+	violations.push(...checkPiece(input.body, "cuerpo", input.rules, vetos));
 	violations.push(...checkLength(subject, body, input.channel, input.rules));
 
 	const warnings: GateWarning[] = [];

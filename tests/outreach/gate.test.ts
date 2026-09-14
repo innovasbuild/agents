@@ -131,6 +131,50 @@ describe("runGate", () => {
 		expect(kinds({ subject: "  " })).toEqual(["formato"]);
 	});
 
+	it("formato: redirecciones de tracking conocidas", () => {
+		expect(
+			kinds({
+				body: `${BODY}\nhttps://d2v8tf04.na1.hubspotlinks.com/Ctc/abc`,
+			}),
+		).toEqual(["formato"]);
+		expect(kinds({ body: `${BODY}\nhttps://bit.ly/x` })).toEqual(["formato"]);
+		expect(gate({ body: `${BODY}\nhttps://acme.test/contacto` }).status).toBe(
+			"ok",
+		);
+	});
+
+	it("símbolos: se detectan en el borde del texto sin recortar (trim no debe achicar el espacio duro)", () => {
+		// String.prototype.trim() saca U+00A0; el gate tiene que ver el símbolo
+		// igual, sin depender de que quede en el medio del texto (paridad gate.py).
+		expect(kinds({ body: `${BODY} ` })).toEqual(["simbolo"]);
+	});
+
+	// Cada símbolo de la lista, uno por uno. Escritos con \u para que no se
+	// puedan aplanar en silencio al guardar el archivo (ver incidente del
+	// espacio duro en el reporte de la Task 10).
+	const SYMBOL_SAMPLES: string[] = [
+		"—", // guion largo (em dash)
+		"–", // guion medio (en dash)
+		"≈", // signo de aproximación
+		"~5", // tilde de aproximación
+		"•", // bullet
+		"“", // comilla tipográfica doble de apertura
+		"”", // comilla tipográfica doble de cierre
+		"‘", // comilla tipográfica simple de apertura
+		"’", // comilla tipográfica simple de cierre
+		"…", // puntos suspensivos de un solo carácter
+		" ", // espacio duro
+		"¿", // signo de apertura de pregunta
+		"¡", // signo de apertura de exclamación
+		"️", // variation selector (parte de la clase de emoji)
+		"→", // flecha (parte de la clase de emoji)
+		"\u{1f642}", // emoji
+	];
+
+	it.each(SYMBOL_SAMPLES)("veta el símbolo %j solo", (sample) => {
+		expect(kinds({ body: `${BODY}\n${sample}` })).toEqual(["simbolo"]);
+	});
+
 	it("vetos del tenant y del ejecutor", () => {
 		const rules = parseGateBlocks(
 			"```gate\nveto: clientes ... (banco mundial|bid|fao)\n```",
