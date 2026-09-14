@@ -1,0 +1,12 @@
+{
+	"categories": [
+		"company",
+		"producto",
+		"comercial",
+		"proyectos",
+		"marketing",
+		"operacion"
+	],
+	"requiredFrontmatter": ["title", "category", "status", "updated"],
+	"search": "fts"
+}

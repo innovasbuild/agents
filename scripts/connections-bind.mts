@@ -2,16 +2,21 @@
 // secretos: la llave ya está en Vercel Connect. Uso:
 //   npm run connections:bind -- --tenant innovas --capability leads \
 //     --provider coldiq --connector innovas-coldiq
+//   npm run connections:bind -- --tenant innovas --capability brain --provider wiki --config tenants/innovas/brain.json
 import { userInfo } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { parseBindArgs } from "./connections-bind-args.ts";
+import { loadProviderConfig } from "./connections-bind-config.ts";
 
 async function main(): Promise<void> {
 	const args = parseBindArgs(process.argv.slice(2));
 
 	const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 	const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-	if (!url || !key) throw new Error("faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local");
+	if (!url || !key)
+		throw new Error(
+			"faltan NEXT_PUBLIC_SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en .env.local",
+		);
 
 	const admin = createClient(url, key, { auth: { persistSession: false } });
 
@@ -20,7 +25,8 @@ async function main(): Promise<void> {
 		.select("id")
 		.eq("slug", args.tenant)
 		.maybeSingle();
-	if (tenantError) throw new Error(`no pude leer el tenant: ${tenantError.message}`);
+	if (tenantError)
+		throw new Error(`no pude leer el tenant: ${tenantError.message}`);
 	if (!tenant) throw new Error(`no existe el tenant "${args.tenant}"`);
 
 	const { data: binding, error: bindError } = await admin
@@ -31,7 +37,9 @@ async function main(): Promise<void> {
 				capability: args.capability,
 				provider: args.provider,
 				connector_uid: args.connector,
-				config: args.url ? { url: args.url } : {},
+				config: args.configPath
+					? await loadProviderConfig(args.provider, args.configPath)
+					: {},
 				enabled: true,
 				updated_at: new Date().toISOString(),
 			},
@@ -39,7 +47,8 @@ async function main(): Promise<void> {
 		)
 		.select("id")
 		.single();
-	if (bindError) throw new Error(`no pude guardar el binding: ${bindError.message}`);
+	if (bindError)
+		throw new Error(`no pude guardar el binding: ${bindError.message}`);
 
 	const { error: eventError } = await admin.from("events").insert({
 		tenant_id: tenant.id,
@@ -53,9 +62,14 @@ async function main(): Promise<void> {
 			actor: `script:${userInfo().username}`,
 		},
 	});
-	if (eventError) throw new Error(`el binding quedó guardado pero no el evento: ${eventError.message}`);
+	if (eventError)
+		throw new Error(
+			`el binding quedó guardado pero no el evento: ${eventError.message}`,
+		);
 
-	console.log(`listo: ${args.tenant} ${args.capability}/${args.provider} (binding ${binding.id})`);
+	console.log(
+		`listo: ${args.tenant} ${args.capability}/${args.provider} (binding ${binding.id})`,
+	);
 }
 
 main().catch((error: unknown) => {

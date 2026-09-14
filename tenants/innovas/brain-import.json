@@ -1,0 +1,36 @@
+{
+	"include": [
+		"company/**/*.md",
+		"producto/**/*.md",
+		"proyectos/**/*.md",
+		"marketing/**/*.md",
+		"comercial/**/*.md"
+	],
+	"exclude": [
+		"comercial/outreach/runs/**",
+		"comercial/outreach/colas/**",
+		"comercial/outreach/scripts/**",
+		"**/README.md",
+		"**/_*.md"
+	],
+	"tags": [
+		{
+			"match": "comercial/criterios-calificacion-en-paralelo.md",
+			"tags": ["canon:icp"]
+		},
+		{ "match": "producto/linea-proyectos.md", "tags": ["canon:icp"] },
+		{ "match": "marketing/mensajes-*.md", "tags": ["canon:mensajes"] },
+		{ "match": "marketing/reglas-de-escritura.md", "tags": ["canon:voz"] },
+		{
+			"match": "marketing/linkedin-perfiles-personales.md",
+			"tags": ["canon:voz"]
+		},
+		{ "match": "comercial/outreach/voz/**", "tags": ["canon:voz"] },
+		{ "match": "comercial/outreach/22-redaccion.md", "tags": ["canon:hooks"] },
+		{ "match": "comercial/outreach/23-vectores.md", "tags": ["canon:hooks"] },
+		{
+			"match": "comercial/sistema-de-ventas-en-paralelo.md",
+			"tags": ["canon:objeciones"]
+		}
+	]
+}

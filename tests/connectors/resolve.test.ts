@@ -31,13 +31,13 @@ describe("resolveTenantConnections", () => {
 			{
 				id: "1",
 				tenantId: "tenant-a",
-				capability: "brain",
-				provider: "innovas-brains",
+				capability: "leads",
+				provider: "coldiq",
 				connectorUid: "x",
 				config: {},
 			},
 		]);
-		expect(result).toEqual({ "innovas-brains": { built: true } });
+		expect(result).toEqual({ coldiq: { built: true } });
 	});
 
 	it("si falla la consulta, propaga para que la sesión no arranque", async () => {

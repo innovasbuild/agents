@@ -11,7 +11,7 @@ export interface BindArgs {
 	capability: Capability;
 	provider: ProviderKey;
 	connector: string | null;
-	url: string | null;
+	configPath: string | null;
 }
 
 function flag(argv: string[], name: string): string | null {
@@ -27,28 +27,52 @@ export function parseBindArgs(argv: string[]): BindArgs {
 
 	const provider = flag(argv, "provider") ?? "";
 	if (!isProviderKey(provider)) {
-		throw new Error(`proveedor desconocido: "${provider}". Válidos: ${Object.keys(PROVIDERS).join(", ")}`);
+		throw new Error(
+			`proveedor desconocido: "${provider}". Válidos: ${Object.keys(PROVIDERS).join(", ")}`,
+		);
 	}
 	const info = PROVIDERS[provider];
 
 	const capability = flag(argv, "capability");
 	if (capability !== info.capability) {
-		throw new Error(`la capacidad de ${provider} es ${info.capability}, no "${capability ?? ""}"`);
+		throw new Error(
+			`la capacidad de ${provider} es ${info.capability}, no "${capability ?? ""}"`,
+		);
 	}
 
 	const connector = flag(argv, "connector");
 	if (info.authKind === "connect_api_key" && !connector) {
-		throw new Error(`${provider} usa API key: falta --connector <uid del conector de Connect>`);
+		throw new Error(
+			`${provider} usa API key: falta --connector <uid del conector de Connect>`,
+		);
 	}
 	if (info.authKind === "connect_oauth" && connector) {
-		throw new Error(`${provider} usa el conector OAuth de plataforma: no se pasa --connector`);
+		throw new Error(
+			`${provider} usa el conector OAuth de plataforma: no se pasa --connector`,
+		);
+	}
+	if (info.authKind === "none" && connector) {
+		throw new Error(
+			`${provider} es un proveedor sin llave: no se pasa --connector`,
+		);
 	}
 
-	const url = flag(argv, "url");
-	if (provider === "innovas-brains") {
-		if (!url) throw new Error("innovas-brains necesita --url <url del MCP>");
-		if (!url.startsWith("https://")) throw new Error("la URL del MCP tiene que ser https");
+	const rawConfig = flag(argv, "config");
+	const configPath = rawConfig ? rawConfig.replace(/^@/, "") : null;
+	if (provider === "wiki" && !configPath) {
+		throw new Error(
+			"wiki necesita --config <ruta a tenants/<slug>/brain.json>",
+		);
+	}
+	if (provider !== "wiki" && configPath) {
+		throw new Error(`${provider} no acepta --config`);
 	}
 
-	return { tenant, capability: info.capability, provider, connector, url };
+	return {
+		tenant,
+		capability: info.capability,
+		provider,
+		connector,
+		configPath,
+	};
 }

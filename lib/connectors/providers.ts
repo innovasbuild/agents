@@ -10,7 +10,7 @@ export interface ProviderInfo {
 	multiple: boolean;
 	/** "tool": no produce conexión de eve (Gmail la usa una tool propia). */
 	kind: "connection" | "tool";
-	authKind: "connect_api_key" | "connect_oauth";
+	authKind: "connect_api_key" | "connect_oauth" | "none";
 }
 
 export const PROVIDERS = {
@@ -20,11 +20,11 @@ export const PROVIDERS = {
 		kind: "connection",
 		authKind: "connect_oauth",
 	},
-	"innovas-brains": {
+	wiki: {
 		capability: "brain",
 		multiple: false,
-		kind: "connection",
-		authKind: "connect_api_key",
+		kind: "tool",
+		authKind: "none",
 	},
 	coldiq: {
 		capability: "leads",

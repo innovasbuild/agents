@@ -37,9 +37,9 @@ describe("loadTenantBindings", () => {
 			{
 				id: "b1",
 				tenant_id: "tenant-a",
-				capability: "brain",
-				provider: "innovas-brains",
-				connector_uid: "tenant-a-brain",
+				capability: "leads",
+				provider: "coldiq",
+				connector_uid: "tenant-a-coldiq",
 				config: { url: "https://x" },
 			},
 		];
@@ -52,9 +52,9 @@ describe("loadTenantBindings", () => {
 			{
 				id: "b1",
 				tenantId: "tenant-a",
-				capability: "brain",
-				provider: "innovas-brains",
-				connectorUid: "tenant-a-brain",
+				capability: "leads",
+				provider: "coldiq",
+				connectorUid: "tenant-a-coldiq",
 				config: { url: "https://x" },
 			},
 		]);
