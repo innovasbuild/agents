@@ -200,7 +200,7 @@ Sin I/O: las tools y schedules traen los datos y le pasan el resultado. Todo con
 `contactKey({ email, linkedinUrl, name, company })`:
 
 1. Email válido → `em:` + email en minúsculas y sin espacios.
-2. Si no, URL o slug de LinkedIn → `li:` + slug normalizado (porta la normalización de `pertenencia.py`: sin protocolo, sin `www.`, sin query, sin barra final, decodificado).
+2. Si no, URL o slug de LinkedIn → `li:` + slug normalizado (porta `normalizar_id` de `pertenencia.py`: minúsculas, lo que sigue a `linkedin.com/in/` hasta `/`, `?` o `#`, sin barra final). **Sin decodificar `%XX`**, igual que el script: las claves `li:` que ya existen en HubSpot se armaron así, y decodificar generaría una clave distinta para la misma persona.
 3. Si no, nombre y empresa → `h:` + sha1 hex de `normalizar(nombre) + "|" + normalizar(empresa)` (minúsculas, sin acentos, espacios colapsados).
 4. Si no hay nada de eso → error tipado `ContactKeyError`.
 
