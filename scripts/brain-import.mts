@@ -5,6 +5,8 @@
 // Contra producción lo corre el usuario con un env file de producción:
 //   node --env-file=<archivo> scripts/brain-import.mts --tenant innovas --from "<carpeta>" --apply
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { parseWikiConfig } from "../lib/brain/config.ts";
 import { readVaultFiles } from "../lib/brain/import/files.ts";
@@ -17,6 +19,10 @@ import {
 import { createWikiProvider } from "../lib/brain/wiki.ts";
 import { createSupabaseWikiStore } from "../lib/brain/wiki-store.ts";
 import { parseImportArgs } from "./brain-import-args.ts";
+
+// Raíz del repo relativa a este script (no a process.cwd()): así el import
+// funciona invocado desde cualquier directorio, no solo desde la raíz.
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 async function readJson(path: string): Promise<unknown> {
 	try {
@@ -66,7 +72,9 @@ async function main(): Promise<void> {
 	const config = parseWikiConfig(binding.config);
 
 	const manifest = parseManifest(
-		await readJson(`tenants/${args.tenant}/brain-import.json`),
+		await readJson(
+			join(REPO_ROOT, "tenants", args.tenant, "brain-import.json"),
+		),
 	);
 	const files = await readVaultFiles(args.from);
 
