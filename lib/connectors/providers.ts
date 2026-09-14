@@ -61,7 +61,25 @@ export function isProviderKey(value: string): value is ProviderKey {
 	return Object.hasOwn(PROVIDERS, value);
 }
 
-export function connectionName(provider: ProviderKey): string {
-	const info = PROVIDERS[provider];
-	return info.multiple ? `${info.capability}-${provider}` : info.capability;
+// El nombre de conexión de eve indexa el cliente conectado (MCP/OpenAPI) por
+// este string solamente, sin tenant ni instanceKey (eve registry.js
+// ConnectionRegistryImpl#getClient). Para authKind "connect_oauth" el nombre
+// debe ser único por binding: sin el id, dos tenants con el mismo proveedor
+// OAuth comparten el mismo nombre de conexión y, si eve reutiliza una
+// instancia de función tibia entre sus sesiones (Fluid Compute), el cliente
+// ya autenticado de un tenant se sirve al otro (spike S7, fuga confirmada en
+// producción con HubSpot).
+export function connectionName(
+	binding: Pick<Binding, "provider" | "id">,
+): string {
+	if (!isProviderKey(binding.provider)) {
+		throw new Error(
+			`connectionName: proveedor desconocido "${binding.provider}"`,
+		);
+	}
+	const info = PROVIDERS[binding.provider];
+	const base = info.multiple
+		? `${info.capability}-${binding.provider}`
+		: info.capability;
+	return info.authKind === "connect_oauth" ? `${base}-${binding.id}` : base;
 }
