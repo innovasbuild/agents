@@ -243,4 +243,56 @@ describe("resolveChannelContext", () => {
 
 		expect(context).toBeNull();
 	});
+
+	it("reintenta el lookup por eve_session_id si bind-session todavía no escribió (carrera con el hook async)", async () => {
+		// bind-session.ts ata eve_session_id de forma asíncrona DESPUÉS de que
+		// eve ya le devolvió el sessionId al cliente; el stream que abre el
+		// cliente casi al toque puede llegar antes de que esa escritura
+		// termine. Sin retry esto 401ea el primer mensaje de un hilo nuevo.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+				),
+				CONVERSATION.user_id,
+			);
+
+			// Todavía no llegó la escritura de bind-session: el primer intento
+			// falla y el código tiene que esperar antes de reintentar, no
+			// devolver null de una.
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("devuelve null si eve_session_id nunca se ata (agota los reintentos)", async () => {
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+				),
+				CONVERSATION.user_id,
+			);
+
+			await vi.advanceTimersByTimeAsync(10000);
+
+			expect(await pending).toBeNull();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

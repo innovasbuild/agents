@@ -13,6 +13,20 @@ export interface ChannelContext {
 // /eve/v1/session/:id como en /eve/agents/<agente>/eve/v1/session/:id.
 const SESSION_PATH = /\/eve\/v1\/session\/([^/?]+)/;
 
+// El hook `session.started` (bind-session.ts) recién ata `eve_session_id` a
+// la conversación DESPUÉS de que eve ya le devolvió el sessionId al cliente
+// (POST /session responde en cuanto el workflow acepta el run, antes de que
+// corran los hooks). El cliente abre el stream de esa sesión casi al toque
+// de recibir la respuesta, así que esta lectura puede llegar antes de que el
+// hook haya escrito. Reintentamos brevemente en vez de 401ear una carrera
+// que se resuelve sola en milisegundos — no hay forma de evitarla desde el
+// lado del cliente porque eve no expone un modo síncrono para esto.
+const BIND_RETRY_DELAYS_MS = [100, 200, 400, 800, 1600];
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface ConversationRow {
 	id: string;
 	tenant_id: string;
@@ -41,12 +55,17 @@ export async function resolveChannelContext(
 	let conversation: ConversationRow | null = null;
 
 	if (sessionId) {
-		const { data } = await admin
-			.from("conversations")
-			.select("id, tenant_id, user_id, agent, tenants (slug)")
-			.eq("eve_session_id", sessionId)
-			.maybeSingle();
-		conversation = data as ConversationRow | null;
+		for (let attempt = 0; ; attempt++) {
+			const { data } = await admin
+				.from("conversations")
+				.select("id, tenant_id, user_id, agent, tenants (slug)")
+				.eq("eve_session_id", sessionId)
+				.maybeSingle();
+			conversation = data as ConversationRow | null;
+
+			if (conversation || attempt >= BIND_RETRY_DELAYS_MS.length) break;
+			await sleep(BIND_RETRY_DELAYS_MS[attempt]);
+		}
 	} else {
 		const conversationId = request.headers.get("x-innovas-conversation");
 		if (!conversationId) return null;
