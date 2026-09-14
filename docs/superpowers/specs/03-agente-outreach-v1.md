@@ -166,7 +166,7 @@ Carga: `tenants/<slug>/outreach.json` (listas + `config` de §4.8), aplicado con
 
 `events` sigue append-only. Se suman:
 
-- **Dedup** (`before insert`, descarta en silencio): mismo `tenant_id`, `contact_key`, `type` y `coalesce(payload->>'queue_item_id', payload->>'gmail_message_id', '')` dentro de 2 horas. Solo aplica con `contact_key` no nulo.
+- **Dedup** (`before insert`, descarta en silencio): mismo `tenant_id`, `contact_key`, `type` y `coalesce(payload->>'queue_item_id', payload->>'gmail_message_id', '')` dentro de 2 horas. Solo aplica con `contact_key` no nulo y **solo a los tipos idempotentes**, donde una repetición es un reintento: `contacto_importado`, `investigado`, `encolado`, `gate_fallido`, `aprobado`, `envio`, `rebote`, `respuesta`, `claim_ajeno`, `deal_creado`, `oportunidad_frenada`, `crm_sync_pendiente`, `crm_sync_ok`. Los tipos que registran hechos distintos aunque se repitan (`cambio_etapa`, `nota`, `pieza_editada`, `rechazado`, `envio_fallido`, `freno`) nunca se descartan. Quien inserta trata un insert descartado (0 filas) igual que un `23505` del índice de respuestas: ya estaba registrado.
 - **Único parcial** `(tenant_id, (payload->>'gmail_message_id')) where type in ('respuesta', 'rebote')`: una respuesta se registra una sola vez aunque el sweep corra dos veces.
 - **Tipos** (lista cerrada en `lib/outreach/events.ts`, genérica): `contacto_importado`, `investigado`, `encolado`, `gate_fallido`, `pieza_editada`, `rechazado`, `aprobado`, `envio`, `envio_fallido`, `rebote`, `respuesta`, `cambio_etapa`, `claim_ajeno`, `deal_creado`, `oportunidad_frenada`, `crm_sync_pendiente`, `crm_sync_ok`, `freno`, `nota`.
 - `actor_user_id` es el ejecutor, también en los eventos de los schedules.
