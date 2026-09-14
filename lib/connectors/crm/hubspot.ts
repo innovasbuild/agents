@@ -34,6 +34,18 @@ export const OUTREACH_PROPERTIES = [
 		fieldType: "text",
 	},
 	{
+		name: "outreach_vector",
+		label: "Outreach · vector",
+		type: "string",
+		fieldType: "text",
+	},
+	{
+		name: "outreach_idioma",
+		label: "Outreach · idioma",
+		type: "string",
+		fieldType: "text",
+	},
+	{
 		name: "outreach_status",
 		label: "Outreach · estado",
 		type: "string",

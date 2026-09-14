@@ -38,13 +38,13 @@ function fakeHubSpot(options: {
 }
 
 describe("ensureOutreachProperties", () => {
-	it("crea el grupo y las 8 propiedades en un HubSpot vacío", async () => {
+	it("crea el grupo y las 10 propiedades en un HubSpot vacío", async () => {
 		const { calls, fetchImpl } = fakeHubSpot({
 			existing: [],
 			groupExists: false,
 		});
 		const result = await ensureOutreachProperties("tok", fetchImpl);
-		expect(result.created).toHaveLength(8);
+		expect(result.created).toHaveLength(10);
 		expect(
 			calls.some(
 				(c) =>
@@ -73,7 +73,7 @@ describe("ensureOutreachProperties", () => {
 		});
 		const result = await ensureOutreachProperties("tok", fetchImpl);
 		expect(result.created).not.toContain("contact_key");
-		expect(result.created).toHaveLength(7);
+		expect(result.created).toHaveLength(9);
 		const posts = calls.filter((c) => c.method === "POST");
 		expect(
 			posts.every(
@@ -102,5 +102,11 @@ describe("ensureOutreachProperties", () => {
 		await expect(ensureOutreachProperties("tok", fetchImpl)).rejects.toThrow(
 			/500/,
 		);
+	});
+
+	it("incluye vector e idioma, las dos propiedades que suma la Etapa 3", () => {
+		const names = OUTREACH_PROPERTIES.map((p) => p.name);
+		expect(names).toContain("outreach_vector");
+		expect(names).toContain("outreach_idioma");
 	});
 });
