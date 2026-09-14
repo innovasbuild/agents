@@ -193,22 +193,26 @@ describe("crm HubSpot", () => {
 		connectorUid: null,
 		config: {},
 	});
+	const crmName = "crm-binding-crm";
 
-	it("se llama crm y usa el MCP y el allow del spike", () => {
-		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+	it("el nombre de conexión incluye el id del binding (evita colisión cross-tenant) y usa el MCP y el allow del spike", () => {
+		const result = buildTenantConnections([hubspot]) as unknown as Record<
 			string,
 			AnyConnection
 		>;
+		expect(result).toHaveProperty(crmName);
+		const crm = result[crmName];
 		expect(crm.url).toBe(platform.HUBSPOT_MCP_URL);
 		expect(crm.tools).toEqual({ allow: [...platform.HUBSPOT_READ_TOOLS] });
 		expect(crm.instanceKey).toBe("binding-crm");
 	});
 
 	it("autoriza con el conector de plataforma atado al tenant del binding", async () => {
-		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+		const result = buildTenantConnections([hubspot]) as unknown as Record<
 			string,
 			AnyConnection
 		>;
+		const crm = result[crmName];
 		// eve normaliza auth a { getToken, principalType }, preservando la función.
 		// El token encoda el conector y tenant para probar que tenantScopedConnect
 		// recibió los argumentos correctos (previene cross-tenant credential leakage).
@@ -221,22 +225,51 @@ describe("crm HubSpot", () => {
 	});
 
 	it("es solo lectura: sin política de aprobación", () => {
-		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+		const result = buildTenantConnections([hubspot]) as unknown as Record<
 			string,
 			AnyConnection
 		>;
-		expect(crm.approval).toBeUndefined();
+		expect(result[crmName].approval).toBeUndefined();
 	});
 
 	it("un tenant sin binding de crm no expone crm", () => {
-		expect(buildTenantConnections([binding({})])).not.toHaveProperty("crm");
+		expect(buildTenantConnections([binding({})])).not.toHaveProperty(crmName);
 	});
 
 	it("gmail nunca produce conexión", () => {
 		expect(
 			buildTenantConnections([
-				binding({ capability: "mail", provider: "gmail", connectorUid: null, config: {} }),
+				binding({
+					capability: "mail",
+					provider: "gmail",
+					connectorUid: null,
+					config: {},
+				}),
 			]),
 		).toEqual({});
+	});
+
+	it("dos tenants con su propio binding de hubspot nunca comparten el nombre de conexión (spike S7: fuga de credenciales OAuth cross-tenant)", () => {
+		const tenantA = binding({
+			id: "binding-crm-tenant-a",
+			tenantId: "tenant-a",
+			capability: "crm",
+			provider: "hubspot",
+			connectorUid: null,
+		});
+		const tenantB = binding({
+			id: "binding-crm-tenant-b",
+			tenantId: "tenant-b",
+			capability: "crm",
+			provider: "hubspot",
+			connectorUid: null,
+		});
+
+		const namesA = Object.keys(buildTenantConnections([tenantA]));
+		const namesB = Object.keys(buildTenantConnections([tenantB]));
+
+		expect(namesA).toHaveLength(1);
+		expect(namesB).toHaveLength(1);
+		expect(namesA[0]).not.toBe(namesB[0]);
 	});
 });

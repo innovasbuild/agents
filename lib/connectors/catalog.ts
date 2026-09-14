@@ -115,7 +115,7 @@ export function buildTenantConnections(
 			continue;
 		}
 
-		const name = connectionName(binding.provider);
+		const name = connectionName(binding);
 		if (Object.hasOwn(connections, name)) {
 			console.warn(`conector omitido: nombre de conexión duplicado (${where})`);
 			continue;
