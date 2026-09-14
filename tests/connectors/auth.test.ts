@@ -23,7 +23,7 @@ vi.mock("@vercel/connect/eve", () => ({
 	},
 }));
 
-const { apiKeyBearer, apiKeyHeaders, tenantScopedConnect, tenantSubjectId } =
+const { apiKeyBearer, apiKeyHeaders, tenantScopedConnect, tenantSubjectId, tokenForSubject } =
 	await import("@/lib/connectors/auth");
 
 type CreateSubject = (principal: {
@@ -108,5 +108,54 @@ describe("tenantScopedConnect", () => {
 
 	it("arma el id del subject con separador fijo", () => {
 		expect(tenantSubjectId("t", "u")).toBe("t:u");
+	});
+});
+
+describe("tokenForSubject", () => {
+	it("pide el token del subject tenant:usuario con los scopes, sin sesión", async () => {
+		const response = await tokenForSubject(
+			"google/google",
+			{ tenantId: "tenant-1", userId: "user-1" },
+			["https://www.googleapis.com/auth/gmail.readonly"],
+		);
+		expect(response).toEqual({
+			token: "llave-simulada",
+			expiresAt: 1_789_325_386_769,
+		});
+		expect(calls.getToken[0]).toEqual([
+			"google/google",
+			{
+				subject: { type: "user", id: "tenant-1:user-1" },
+				scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+			},
+		]);
+	});
+
+	it("incluye el issuer cuando el grant se guardó con uno", async () => {
+		await tokenForSubject("mcp.hubspot.com/hubspot", {
+			tenantId: "tenant-1",
+			userId: "user-1",
+			issuer: "https://issuer.test",
+		});
+		expect(calls.getToken[0]).toEqual([
+			"mcp.hubspot.com/hubspot",
+			{
+				subject: {
+					type: "user",
+					id: "tenant-1:user-1",
+					issuer: "https://issuer.test",
+				},
+			},
+		]);
+	});
+
+	it("rechaza sin tenant o sin usuario: nunca pide un grant sin aislar", async () => {
+		await expect(
+			tokenForSubject("google/google", { tenantId: "", userId: "user-1" }),
+		).rejects.toThrow("tokenForSubject requiere tenant y usuario");
+		await expect(
+			tokenForSubject("google/google", { tenantId: "tenant-1", userId: "" }),
+		).rejects.toThrow("tokenForSubject requiere tenant y usuario");
+		expect(calls.getToken).toHaveLength(0);
 	});
 });

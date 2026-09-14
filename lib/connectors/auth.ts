@@ -75,3 +75,27 @@ export function tenantScopedConnect(
 		},
 	});
 }
+
+/**
+ * Token OAuth de un usuario pedido por el proyecto, sin sesión de eve (los
+ * schedules de la spec 03 §8.1). Mismo subject que tenantScopedConnect: el
+ * grant de un tenant nunca se usa en otro.
+ */
+export async function tokenForSubject(
+	connector: string,
+	who: { tenantId: string; userId: string; issuer?: string },
+	scopes?: string[],
+): Promise<{ token: string; expiresAt: number }> {
+	if (!who.tenantId || !who.userId) {
+		throw new Error("tokenForSubject requiere tenant y usuario");
+	}
+	const { token, expiresAt } = await getTokenResponse(connector, {
+		subject: {
+			type: "user",
+			id: tenantSubjectId(who.tenantId, who.userId),
+			...(who.issuer ? { issuer: who.issuer } : {}),
+		},
+		...(scopes ? { scopes } : {}),
+	});
+	return { token, expiresAt };
+}
