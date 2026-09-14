@@ -3,11 +3,17 @@
 import {
 	type DynamicConnectionDefinition,
 	defineOpenAPIConnection,
+	defineMcpClientConnection,
 } from "eve/connections";
-import { apiKeyBearer, apiKeyHeaders } from "./auth";
+import { apiKeyBearer, apiKeyHeaders, tenantScopedConnect } from "./auth";
 import { COLDIQ_OPERATIONS, coldiqOpenApi } from "./leads/coldiq.openapi";
 import { googlePlacesOpenApi } from "./leads/google-places.openapi";
-import { COLDIQ_BASE_URL } from "./platform";
+import {
+	COLDIQ_BASE_URL,
+	HUBSPOT_CONNECTOR_UID,
+	HUBSPOT_MCP_URL,
+	HUBSPOT_READ_TOOLS,
+} from "./platform";
 import {
 	type Binding,
 	connectionName,
@@ -64,6 +70,16 @@ const BUILDERS: Partial<Record<ProviderKey, Builder>> = {
 			operations: { allow: ["searchText"] },
 		});
 	},
+
+	hubspot: (binding) =>
+		defineMcpClientConnection({
+			url: HUBSPOT_MCP_URL,
+			description:
+				"CRM HubSpot con la cuenta del usuario: buscar y leer contactos, empresas, negocios y actividad. Solo lectura.",
+			instanceKey: binding.id,
+			auth: tenantScopedConnect(HUBSPOT_CONNECTOR_UID, binding.tenantId),
+			tools: { allow: [...HUBSPOT_READ_TOOLS] },
+		}),
 };
 
 export function buildTenantConnections(

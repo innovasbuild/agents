@@ -10,6 +10,8 @@ vi.mock("@/lib/connectors/auth", () => ({
 	tenantScopedConnect: (connector: string, tenantId: string) => ({
 		connector,
 		tenantId,
+		getToken: async () => ({ token: `${connector}:${tenantId}` }),
+		principalType: "user",
 	}),
 }));
 
@@ -177,5 +179,61 @@ describe("buildTenantConnections", () => {
 		expect(warn).toHaveBeenCalledWith(
 			expect.stringContaining("nombre de conexión duplicado"),
 		);
+	});
+});
+
+describe("crm HubSpot", () => {
+	const hubspot = binding({
+		id: "binding-crm",
+		capability: "crm",
+		provider: "hubspot",
+		connectorUid: null,
+		config: {},
+	});
+
+	it("se llama crm y usa el MCP y el allow del spike", () => {
+		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+			string,
+			AnyConnection
+		>;
+		expect(crm.url).toBe(platform.HUBSPOT_MCP_URL);
+		expect(crm.tools).toEqual({ allow: [...platform.HUBSPOT_READ_TOOLS] });
+		expect(crm.instanceKey).toBe("binding-crm");
+	});
+
+	it("autoriza con el conector de plataforma atado al tenant del binding", async () => {
+		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+			string,
+			AnyConnection
+		>;
+		// eve normaliza auth a { getToken, principalType }, preservando la función.
+		// El token encoda el conector y tenant para probar que tenantScopedConnect
+		// recibió los argumentos correctos (previene cross-tenant credential leakage).
+		const auth = crm.auth as {
+			getToken: () => Promise<{ token: string }>;
+		};
+		expect((await auth.getToken()).token).toBe(
+			`${platform.HUBSPOT_CONNECTOR_UID}:tenant-a`,
+		);
+	});
+
+	it("es solo lectura: sin política de aprobación", () => {
+		const { crm } = buildTenantConnections([hubspot]) as unknown as Record<
+			string,
+			AnyConnection
+		>;
+		expect(crm.approval).toBeUndefined();
+	});
+
+	it("un tenant sin binding de crm no expone crm", () => {
+		expect(buildTenantConnections([binding({})])).not.toHaveProperty("crm");
+	});
+
+	it("gmail nunca produce conexión", () => {
+		expect(
+			buildTenantConnections([
+				binding({ capability: "mail", provider: "gmail", connectorUid: null, config: {} }),
+			]),
+		).toEqual({});
 	});
 });
