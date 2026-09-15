@@ -21,6 +21,8 @@ export interface ProbeInput {
 export type ProbeStep = { step: string; ok: boolean; detail: string };
 
 const HUBSPOT_BASE = "https://api.hubapi.com";
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_DETAIL_LENGTH = 500;
 const MODELS = [
 	"anthropic/claude-opus-5",
 	"anthropic/claude-sonnet-5",
@@ -29,20 +31,22 @@ const MODELS = [
 
 // Corre un paso aislado: si `fn` tira, el paso queda ok:false con el nombre y
 // mensaje del error (nunca un token, porque `fn` nunca lo devuelve como
-// mensaje de error propio). Un paso que falla nunca frena a los demás.
+// mensaje de error propio). Un paso que falla nunca frena a los demás. El
+// detail se corta a MAX_DETAIL_LENGTH: HubSpot/Gmail pueden devolver bodies
+// de error largos y el reporte tiene que quedar corto igual.
 async function runStep(
 	step: string,
 	fn: () => Promise<string>,
 ): Promise<ProbeStep> {
 	try {
 		const detail = await fn();
-		return { step, ok: true, detail };
+		return { step, ok: true, detail: detail.slice(0, MAX_DETAIL_LENGTH) };
 	} catch (error) {
 		const detail =
 			error instanceof Error
 				? `${error.name}: ${error.message}`
 				: String(error);
-		return { step, ok: false, detail };
+		return { step, ok: false, detail: detail.slice(0, MAX_DETAIL_LENGTH) };
 	}
 }
 
@@ -75,6 +79,7 @@ async function postJson(
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(payload),
+		signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 	});
 	if (!response.ok) {
 		throw new Error(await errorDetail(response));
@@ -99,7 +104,10 @@ export async function runEtapa3Probes(
 			);
 			const response = await deps.fetch(
 				"https://gmail.googleapis.com/gmail/v1/users/me/profile",
-				{ headers: { Authorization: `Bearer ${token}` } },
+				{
+					headers: { Authorization: `Bearer ${token}` },
+					signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+				},
 			);
 			return `token ok, vence ${vence(expiresAt)}, gmail profile ${response.status}`;
 		}),
@@ -128,7 +136,10 @@ export async function runEtapa3Probes(
 			hubspotToken = token;
 			const response = await deps.fetch(
 				`${HUBSPOT_BASE}/crm/v3/properties/contacts?archived=false`,
-				{ headers: { Authorization: `Bearer ${token}` } },
+				{
+					headers: { Authorization: `Bearer ${token}` },
+					signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+				},
 			);
 			return `token ok, vence ${vence(expiresAt)}, contacts ${response.status}`;
 		}),
@@ -240,6 +251,7 @@ export async function runEtapa3Probes(
 						{
 							method: "DELETE",
 							headers: { Authorization: `Bearer ${token}` },
+							signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 						},
 					);
 					if (!response.ok) {

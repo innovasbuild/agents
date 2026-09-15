@@ -56,6 +56,16 @@ describe("runEtapa3Probes", () => {
 			expect(step.ok).toBe(true);
 		}
 		expect(JSON.stringify(steps)).not.toContain(TOKEN);
+
+		const calls = fetch.mock.calls as [string, RequestInit | undefined][];
+		const gmailCall = calls.find(([callUrl]) =>
+			callUrl.includes("gmail.googleapis.com"),
+		);
+		const hubspotCall = calls.find(([callUrl]) =>
+			callUrl.includes("api.hubapi.com"),
+		);
+		expect(gmailCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
+		expect(hubspotCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
 	});
 
 	it("un tokenForSubject que tira UserAuthorizationRequiredError deja ok:false con el nombre del error, y los pasos siguientes igual corren", async () => {

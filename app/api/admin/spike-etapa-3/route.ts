@@ -10,10 +10,24 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const GENERATE_TIMEOUT_MS = 15_000;
+
+// Todas las respuestas (incluidas las de error) llevan no-store: es una ruta
+// de diagnóstico con datos de sesión/tenant, no algo cacheable ni por el
+// browser ni por un proxy intermedio.
+function json(body: Record<string, unknown>, status: number) {
+	return NextResponse.json(body, {
+		status,
+		headers: { "Cache-Control": "no-store" },
+	});
+}
+
 async function generate(model: string) {
 	const result = await generateText({
 		model,
 		maxOutputTokens: 200,
+		maxRetries: 0,
+		abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
 		output: Output.object({
 			schema: z.object({
 				categoria: z.enum(["no_interesado", "en_conversacion"]),
@@ -28,24 +42,34 @@ async function generate(model: string) {
 
 export async function GET(request: Request) {
 	if (process.env.SPIKE_ETAPA3 !== "1") {
-		return NextResponse.json({ error: "no encontrado" }, { status: 404 });
+		return json({ error: "no encontrado" }, 404);
 	}
 
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) {
-		return NextResponse.json({ error: "no autenticado" }, { status: 401 });
+		return json({ error: "no autenticado" }, 401);
 	}
 
 	const url = new URL(request.url);
 	const slug = url.searchParams.get("tenant");
 	if (!slug) {
-		return NextResponse.json(
-			{ error: "falta el parámetro tenant" },
-			{ status: 400 },
-		);
+		return json({ error: "falta el parámetro tenant" }, 400);
 	}
-	const hubspotWrite = url.searchParams.get("hubspot_write") === "1";
+	const hubspotWriteRequested = url.searchParams.get("hubspot_write") === "1";
+
+	// GET con efecto (hubspot_write) desde un request cross-site es un CSRF:
+	// las cookies de Supabase son sameSite=lax, así que una navegación
+	// cross-site (ej. un <img>/<a> en otro sitio) igual manda la sesión.
+	// Sec-Fetch-Site solo vale "none" (URL tipeada a mano / bookmark) o
+	// "same-origin" (fetch/link desde esta misma app); cualquier otro valor
+	// (o su ausencia, en un browser viejo) corre la ruta sin escribir.
+	const secFetchSite = request.headers.get("sec-fetch-site");
+	const crossSite =
+		hubspotWriteRequested &&
+		secFetchSite !== "none" &&
+		secFetchSite !== "same-origin";
+	const hubspotWrite = hubspotWriteRequested && !crossSite;
 
 	const admin = createAdminClient();
 	const { data: tenant } = await admin
@@ -55,7 +79,9 @@ export async function GET(request: Request) {
 		.maybeSingle();
 
 	if (!tenant) {
-		return NextResponse.json({ error: "tenant inexistente" }, { status: 404 });
+		// 403 y no 404: el slug de un tenant no es un oráculo de existencia
+		// para quien no tiene permiso ahí.
+		return json({ error: "sin permiso" }, 403);
 	}
 
 	// La RLS ya limita lo que este usuario ve: si no es admin del tenant, no
@@ -72,7 +98,7 @@ export async function GET(request: Request) {
 	const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
 
 	if (!membership && !isPlatformAdmin) {
-		return NextResponse.json({ error: "sin permiso" }, { status: 403 });
+		return json({ error: "sin permiso" }, 403);
 	}
 
 	const issuer = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -92,8 +118,13 @@ export async function GET(request: Request) {
 		},
 	);
 
-	return NextResponse.json(
-		{ tenant: slug, user_id: auth.user.id, issuer, steps },
-		{ status: 200, headers: { "Cache-Control": "no-store" } },
-	);
+	if (crossSite) {
+		steps.push({
+			step: "s6.omitido",
+			ok: false,
+			detail: `hubspot_write ignorado: abrí la URL escribiéndola en la barra (Sec-Fetch-Site: ${secFetchSite ?? "ausente"})`,
+		});
+	}
+
+	return json({ tenant: slug, user_id: auth.user.id, issuer, steps }, 200);
 }
