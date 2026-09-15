@@ -107,6 +107,19 @@ export async function loadCanon(
 	}
 }
 
+/** El canon, o null si el brain no responde: cada servicio arma su negativa. */
+export async function loadCanonOrNull(
+	load: (executorSlug: string) => Promise<Canon>,
+	executorSlug: string,
+): Promise<Canon | null> {
+	try {
+		return await load(executorSlug);
+	} catch (error) {
+		if (error instanceof CanonUnavailableError) return null;
+		throw error;
+	}
+}
+
 export async function brainForTenant(
 	tenantId: string,
 ): Promise<BrainProvider | null> {

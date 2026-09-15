@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { BrainPage, BrainProvider } from "@/lib/brain/types";
+import type { Canon } from "@/lib/outreach/canon";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
-const { CanonUnavailableError, loadCanon } = await import(
+const { CanonUnavailableError, loadCanon, loadCanonOrNull } = await import(
 	"@/lib/outreach/canon"
 );
 
@@ -107,5 +108,32 @@ describe("loadCanon", () => {
 		await expect(loadCanon(broken, "ana")).rejects.toBeInstanceOf(
 			CanonUnavailableError,
 		);
+	});
+});
+
+describe("loadCanonOrNull", () => {
+	it("devuelve el canon, null si el brain no responde y deja pasar cualquier otro error", async () => {
+		const canon: Canon = {
+			available: true,
+			pages: [],
+			voice: [],
+			rules: {
+				vetos: [],
+				maxChars: { all: null, byChannel: {} },
+				formal: false,
+				errors: [],
+			},
+		};
+		expect(await loadCanonOrNull(async () => canon, "ana")).toBe(canon);
+		expect(
+			await loadCanonOrNull(async () => {
+				throw new CanonUnavailableError(new Error("timeout"));
+			}, "ana"),
+		).toBeNull();
+		await expect(
+			loadCanonOrNull(async () => {
+				throw new Error("otro");
+			}, "ana"),
+		).rejects.toThrow("otro");
 	});
 });

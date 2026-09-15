@@ -1,0 +1,153 @@
+// draft_message (spec 03 §6.4): redacta con el modelo del tenant, corre el gate
+// y reintenta con las violaciones. No escribe en la base.
+import { type Canon, loadCanonOrNull } from "../canon";
+import { domainFromEmail } from "../domain";
+import { isFichaVigente } from "../ficha";
+import { type GateResult, type GateViolation, runGate } from "../gate";
+import { buildDraftPrompt, draftOutputSchema } from "../prompt";
+import { isRefusal, type Refusal, refuse } from "../result";
+import type { Caller } from "../session";
+import type { OutreachStore, QueueItemKind } from "../store";
+import { attributionError, resolveExecutor } from "./executor";
+
+export const MAX_DRAFT_ATTEMPTS = 3;
+
+export interface DraftDeps {
+	store: OutreachStore;
+	loadCanon: (executorSlug: string) => Promise<Canon>;
+	generate: (
+		model: string,
+		prompt: string,
+	) => Promise<{ output: unknown; usage: unknown }>;
+	now: () => Date;
+}
+
+export type DraftResult =
+	| (Refusal & { violations?: GateViolation[] })
+	| {
+			ok: true;
+			subject: string;
+			body: string;
+			hook: string;
+			vector: string;
+			idioma: string;
+			ancla: { hecho: string; fuente: string };
+			gate: GateResult;
+			attempts: number;
+	  };
+
+export async function draftMessage(
+	input: { caller: Caller; contactKey: string; kind: QueueItemKind },
+	deps: DraftDeps,
+): Promise<DraftResult> {
+	if (input.kind !== "msg1") {
+		return refuse(
+			"followup_no_disponible",
+			"los follow-ups llegan con la escucha de Gmail (Entrega 4): por ahora solo primer mensaje",
+		);
+	}
+	const resolved = await resolveExecutor(deps.store, input.caller, null);
+	if (isRefusal(resolved)) return resolved;
+	const { executor, tenant } = resolved;
+
+	const [contact] = await deps.store.findContactsByKeys(input.caller.tenantId, [
+		input.contactKey,
+	]);
+	if (!contact)
+		return refuse(
+			"contacto_inexistente",
+			`no hay un contacto cargado con la clave ${input.contactKey}`,
+		);
+	if (!contact.email) return refuse("sin_email", "el contacto no tiene email");
+
+	const domain = domainFromEmail(contact.email);
+	const account = domain
+		? await deps.store.findAccount(input.caller.tenantId, domain)
+		: null;
+	if (!account || !isFichaVigente(new Date(account.expiresAt), deps.now())) {
+		return refuse(
+			"falta_research",
+			`no hay ficha vigente de ${domain ?? "la empresa de este contacto"}: corré research_account antes de redactar`,
+		);
+	}
+
+	const canon = await loadCanonOrNull(deps.loadCanon, executor.slug as string);
+	if (!canon)
+		return refuse(
+			"canon_no_disponible",
+			"no pude leer el canon del cliente en el brain: no redacto sin sus reglas",
+		);
+
+	let violations: GateViolation[] = [];
+	for (let attempt = 1; attempt <= MAX_DRAFT_ATTEMPTS; attempt++) {
+		const prompt = buildDraftPrompt({
+			contact,
+			ficha: account.ficha,
+			canon: canon.pages,
+			voice: canon.voice,
+			allowed: {
+				hooks: tenant.values.hook,
+				vectors: tenant.values.vector,
+				idiomas: tenant.values.idioma,
+			},
+			defaultHook: contact.vector
+				? (tenant.defaultHooks[contact.vector] ?? null)
+				: null,
+			previousViolations: violations,
+		});
+		const { output } = await deps.generate(
+			tenant.config.models.draft_msg1,
+			prompt,
+		);
+		const parsed = draftOutputSchema.safeParse(output);
+		if (!parsed.success) {
+			violations = [
+				{
+					kind: "formato",
+					piece: "cuerpo",
+					what: "la salida no respetó el formato pedido",
+					fix: "devolver subject, body, hook, vector, idioma y ancla",
+				},
+			];
+			continue;
+		}
+		const draft = parsed.data;
+		const attribution = attributionError(tenant, draft);
+		if (attribution) {
+			violations = [
+				{
+					kind: "formato",
+					piece: "cuerpo",
+					what: attribution,
+					fix: "usar solo valores de las listas",
+				},
+			];
+			continue;
+		}
+		const gate = runGate({
+			subject: draft.subject,
+			body: draft.body,
+			channel: "email",
+			idioma: draft.idioma,
+			rules: canon.rules,
+		});
+		if (gate.status === "ok")
+			return { ok: true, ...draft, gate, attempts: attempt };
+		violations = [
+			...gate.violations,
+			...gate.notes.map((note) => ({
+				kind: "idioma" as const,
+				piece: "cuerpo" as const,
+				what: note,
+				fix: "escribir más texto en el idioma del destinatario",
+			})),
+		];
+	}
+	return {
+		...refuse(
+			"gate",
+			`después de ${MAX_DRAFT_ATTEMPTS} intentos la pieza no pasa el gate: ${violations.map((v) => v.what).join("; ")}`,
+		),
+		violations,
+	};
+}

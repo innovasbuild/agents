@@ -30,3 +30,19 @@ export async function resolveExecutor(
 	}
 	return { executor, tenant };
 }
+
+/** Mensaje citable si hook, vector o idioma no están en las listas del tenant; null si están. */
+export function attributionError(
+	tenant: TenantOutreach,
+	attribution: { hook: string; vector: string; idioma: string },
+): string | null {
+	const { hook, vector, idioma } = attribution;
+	if (
+		tenant.values.hook.includes(hook) &&
+		tenant.values.vector.includes(vector) &&
+		tenant.values.idioma.includes(idioma)
+	) {
+		return null;
+	}
+	return `hook, vector o idioma fuera de las listas del cliente (${hook}, ${vector}, ${idioma})`;
+}
