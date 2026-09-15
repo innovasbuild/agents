@@ -140,6 +140,12 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	);
 	const isAuthorizing = pendingAuthorizations.length > 0;
 
+	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
+	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
+	// así que escribir "1" aprobaría un send_email sin pasar por la tarjeta.
+	const isInputBlocked =
+		isResuming || isAuthorizing || pendingRequests.length > 0;
+
 	return (
 		<section className="space-y-4">
 			<p className="text-muted-foreground text-sm">
@@ -273,12 +279,19 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</fieldset>
 			))}
 
+			{agent.status === "error" && agent.error ? (
+				<p className="text-destructive text-sm" role="alert">
+					No se pudo completar el último pedido ({agent.error.message}). Recargá
+					la página para ver el estado real del hilo.
+				</p>
+			) : null}
+
 			<form
 				className="flex gap-2"
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
-					if (message.length === 0 || isResuming || isAuthorizing) return;
+					if (message.length === 0 || isInputBlocked) return;
 
 					void agent.send(
 						message,
@@ -290,12 +303,16 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			>
 				<input
 					className="flex-1 rounded border px-3 py-2"
-					disabled={isResuming || isAuthorizing}
+					disabled={isInputBlocked}
 					onChange={(event) => setText(event.target.value)}
-					placeholder="Escribí un mensaje para el agente"
+					placeholder={
+						pendingRequests.length > 0
+							? "Respondé la tarjeta pendiente para seguir"
+							: "Escribí un mensaje para el agente"
+					}
 					value={text}
 				/>
-				<Button disabled={isResuming || isAuthorizing} type="submit">
+				<Button disabled={isInputBlocked} type="submit">
 					Enviar
 				</Button>
 			</form>
