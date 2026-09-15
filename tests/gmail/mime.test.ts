@@ -67,4 +67,31 @@ describe("buildRawMessage", () => {
 		});
 		expect(raw).not.toMatch(/[+/=]/);
 	});
+
+	it("agrega Bcc y Message-ID cuando vienen", () => {
+		const mime = decodeMime(
+			buildRawMessage({
+				to: "a@b.test",
+				subject: "Hola",
+				body: "x",
+				bcc: "123@bcc.hubspot.com",
+				messageId: "<qi-1@innov.as>",
+			}),
+		);
+		expect(mime).toContain("Bcc: 123@bcc.hubspot.com\r\n");
+		expect(mime).toContain("Message-ID: <qi-1@innov.as>\r\n");
+	});
+
+	it("rechaza saltos de línea en los headers", () => {
+		expect(() =>
+			buildRawMessage({
+				to: "a@b.test\r\nBcc: x@y.test",
+				subject: "Hola",
+				body: "x",
+			}),
+		).toThrow("header inválido");
+		expect(() =>
+			buildRawMessage({ to: "a@b.test", subject: "Hola\nX", body: "x" }),
+		).toThrow("header inválido");
+	});
 });

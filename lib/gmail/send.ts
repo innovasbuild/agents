@@ -4,7 +4,13 @@ import { buildRawMessage } from "./mime";
 
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 
-type MailInput = { to: string; subject: string; body: string };
+type MailInput = {
+	to: string;
+	subject: string;
+	body: string;
+	bcc?: string | null;
+	messageId?: string | null;
+};
 
 export class GmailUnauthorizedError extends Error {
 	constructor() {

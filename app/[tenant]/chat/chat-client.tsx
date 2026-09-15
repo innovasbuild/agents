@@ -18,6 +18,7 @@ interface Thread {
 }
 
 interface SendEmailInput {
+	queueItemId?: string;
 	to?: string;
 	subject?: string;
 	body?: string;
