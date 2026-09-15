@@ -7,10 +7,29 @@ import { type GateResult, type GateViolation, runGate } from "../gate";
 import { buildDraftPrompt, draftOutputSchema } from "../prompt";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
-import type { OutreachStore, QueueItemKind } from "../store";
+import type { AccountRow, OutreachStore, QueueItemKind } from "../store";
 import { attributionError, resolveExecutor } from "./executor";
 
 export const MAX_DRAFT_ATTEMPTS = 3;
+
+/** Cuenta y vigencia de su ficha para un email (spec 03 §6.3): la comparten
+ * draftMessage y queueTouch para no duplicar la búsqueda por dominio. */
+export async function findFichaVigente(
+	store: OutreachStore,
+	tenantId: string,
+	email: string,
+	now: Date,
+): Promise<{ domain: string | null; account: AccountRow | null }> {
+	const domain = domainFromEmail(email);
+	const account = domain ? await store.findAccount(tenantId, domain) : null;
+	return {
+		domain,
+		account:
+			account && isFichaVigente(new Date(account.expiresAt), now)
+				? account
+				: null,
+	};
+}
 
 export interface DraftDeps {
 	store: OutreachStore;
@@ -61,11 +80,13 @@ export async function draftMessage(
 		);
 	if (!contact.email) return refuse("sin_email", "el contacto no tiene email");
 
-	const domain = domainFromEmail(contact.email);
-	const account = domain
-		? await deps.store.findAccount(input.caller.tenantId, domain)
-		: null;
-	if (!account || !isFichaVigente(new Date(account.expiresAt), deps.now())) {
+	const { domain, account } = await findFichaVigente(
+		deps.store,
+		input.caller.tenantId,
+		contact.email,
+		deps.now(),
+	);
+	if (!account) {
 		return refuse(
 			"falta_research",
 			`no hay ficha vigente de ${domain ?? "la empresa de este contacto"}: corré research_account antes de redactar`,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type GateInput, runGate } from "@/lib/outreach/gate";
+import { type GateInput, gateSummary, runGate } from "@/lib/outreach/gate";
 import { emptyGateRules, parseGateBlocks } from "@/lib/outreach/gate-blocks";
 
 const SUBJECT = "Crecer sin sumar gente al back office";
@@ -211,5 +211,39 @@ describe("runGate", () => {
 		expect(kinds({ rules: malformed })).toEqual(["veto"]);
 		const unknown = parseGateBlocks("```gate\nprohibir: x\n```", "voz/ana");
 		expect(kinds({ rules: unknown })).toEqual(["veto"]);
+	});
+});
+
+describe("gateSummary", () => {
+	it("junta las violaciones y, si no hay, las notas", () => {
+		expect(
+			gateSummary({
+				status: "fail",
+				violations: [
+					{
+						kind: "formula",
+						piece: "cuerpo",
+						what: 'fórmula vetada: "quedo a disposicion"',
+						fix: "un ask con fecha",
+					},
+					{
+						kind: "simbolo",
+						piece: "asunto",
+						what: "raya en el asunto",
+						fix: "usar coma",
+					},
+				],
+				warnings: [],
+				notes: ["no se usa"],
+			}),
+		).toBe('fórmula vetada: "quedo a disposicion"; raya en el asunto');
+		expect(
+			gateSummary({
+				status: "indeterminate",
+				violations: [],
+				warnings: [],
+				notes: ["poco texto", "idioma dudoso"],
+			}),
+		).toBe("poco texto; idioma dudoso");
 	});
 });
