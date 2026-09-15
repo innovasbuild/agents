@@ -39,12 +39,15 @@ export default async function HomePage() {
 	if (tenants.length === 1) redirect(`/${tenants[0].slug}/chat`);
 
 	return (
-		<main className="p-6">
-			<h1 className="mb-4 font-semibold text-xl">Elegí un cliente</h1>
+		<main className="mx-auto w-full max-w-lg px-4 py-16">
+			<h1 className="mb-6 text-3xl leading-tight">Elegí un cliente</h1>
 			<ul className="space-y-2">
 				{tenants.map((tenant) => (
 					<li key={tenant.slug}>
-						<Link className="underline" href={`/${tenant.slug}/chat`}>
+						<Link
+							className="block rounded-lg border bg-card px-4 py-3 transition-colors hover:border-input hover:bg-muted"
+							href={`/${tenant.slug}/chat`}
+						>
 							{tenant.display_name}
 						</Link>
 					</li>

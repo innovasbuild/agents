@@ -2,6 +2,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 const SCOPES = "openid email profile";
@@ -40,23 +42,50 @@ export default function LoginPage() {
 	}
 
 	return (
-		<main>
-			<h1>INNOV.AS Agents</h1>
-			<button type="button" onClick={entrar}>
-				Entrar con Google
-			</button>
-			<form onSubmit={entrarConMagicLink}>
-				<input
-					onChange={(event) => setEmail(event.target.value)}
-					placeholder="tu@empresa.com"
-					type="email"
-					value={email}
-				/>
-				<button type="submit">Mandarme un link</button>
-			</form>
-			{sent ? (
-				<p>Si ese mail tiene acceso, te llega un link para entrar.</p>
-			) : null}
+		<main className="flex min-h-screen items-center justify-center px-4 py-16">
+			<div className="w-full max-w-sm space-y-8">
+				<div className="space-y-2 text-center">
+					<h1 className="text-3xl leading-tight">INNOV.AS Agents</h1>
+					<p className="text-muted-foreground">
+						Entrá con la cuenta con la que te invitaron.
+					</p>
+				</div>
+
+				<div className="space-y-6 rounded-lg border bg-card p-6">
+					<Button className="w-full" onClick={entrar} size="lg" type="button">
+						Entrar con Google
+					</Button>
+
+					<div className="flex items-center gap-3 text-muted-foreground text-xs">
+						<span className="h-px flex-1 bg-border" />o
+						<span className="h-px flex-1 bg-border" />
+					</div>
+
+					<form className="space-y-3" onSubmit={entrarConMagicLink}>
+						<label className="block text-sm" htmlFor="email">
+							Mail
+						</label>
+						<Input
+							autoComplete="email"
+							id="email"
+							onChange={(event) => setEmail(event.target.value)}
+							placeholder="tu@empresa.com"
+							required
+							type="email"
+							value={email}
+						/>
+						<Button className="w-full" type="submit" variant="outline">
+							Mandarme un link
+						</Button>
+					</form>
+
+					{sent ? (
+						<p className="text-muted-foreground text-sm" role="status">
+							Si ese mail tiene acceso, te llega un link para entrar.
+						</p>
+					) : null}
+				</div>
+			</div>
 		</main>
 	);
 }

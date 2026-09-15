@@ -31,8 +31,15 @@ export function brandStyle(brand: TenantBrand): CSSProperties {
 	const style: Record<string, string> = {};
 
 	if (brand.primary) {
+		const foreground = foregroundFor(brand.primary);
 		style["--primary"] = brand.primary;
-		style["--primary-foreground"] = foregroundFor(brand.primary);
+		style["--primary-foreground"] = foreground;
+		// --ring se resuelve donde se declara: si en :root vale var(--primary),
+		// hereda el carbón de la base y no el color del tenant. Hay que pisarlo acá.
+		style["--ring"] = brand.primary;
+		style["--sidebar-primary"] = brand.primary;
+		style["--sidebar-primary-foreground"] = foreground;
+		style["--sidebar-ring"] = brand.primary;
 	}
 	if (brand.secondary) {
 		style["--secondary"] = brand.secondary;

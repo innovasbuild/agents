@@ -20,10 +20,18 @@ describe("brandStyle", () => {
 		expect(brandStyle({})).toEqual({});
 	});
 
-	it("define primary y su foreground derivado", () => {
+	it("define primary, su foreground derivado y el anillo de foco", () => {
 		expect(brandStyle({ primary: "#1D4ED8" })).toEqual({
 			"--primary": "#1D4ED8",
 			"--primary-foreground": "#FFFFFF",
+			"--ring": "#1D4ED8",
+			"--sidebar-primary": "#1D4ED8",
+			"--sidebar-primary-foreground": "#FFFFFF",
+			"--sidebar-ring": "#1D4ED8",
 		});
+	});
+
+	it("deriva texto claro sobre el accent de innovas", () => {
+		expect(foregroundFor("#0f6b60")).toBe("#FFFFFF");
 	});
 });

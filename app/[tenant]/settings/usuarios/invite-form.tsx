@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function InviteForm({ tenantId }: { tenantId: string }) {
 	const router = useRouter();
@@ -39,8 +40,8 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 	}
 
 	return (
-		<section className="space-y-2">
-			<h2 className="font-semibold">Invitar</h2>
+		<section className="space-y-3">
+			<h2 className="text-lg">Invitar</h2>
 			<form
 				className="flex gap-2"
 				onSubmit={(event) => {
@@ -48,8 +49,9 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 					void invite(false);
 				}}
 			>
-				<input
-					className="rounded border px-3 py-2"
+				<Input
+					aria-label="Mail a invitar"
+					className="max-w-xs"
 					onChange={(event) => setEmail(event.target.value)}
 					placeholder="mail@cliente.com"
 					type="email"
