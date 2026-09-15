@@ -195,6 +195,35 @@ describe("queueTouch", () => {
 });
 
 describe("listQueue, updateQueueItem, rejectQueueItem", () => {
+	it("una pieza approved (trabada entre el claim y el envío) sale junto a las pending", async () => {
+		const { store, deps } = setup();
+		await queueTouch(touch, deps);
+		store.queue[0].status = "approved";
+		store.queue[0].approvedAt = "2026-09-15T12:00:00Z";
+		store.contacts.push(
+			contactRow({
+				contactKey: "em:otra@acme.test",
+				email: "otra@acme.test",
+				name: "Otra Persona",
+			}),
+		);
+		await queueTouch({ ...touch, contactKey: "em:otra@acme.test" }, deps);
+		// La segunda pieza queda pending: solo la primera se marcó approved arriba.
+		const listed = await listQueue({ caller }, deps);
+		expect(listed.items).toHaveLength(2);
+		const trabada = listed.items.find(
+			(item) => item.contactKey === touch.contactKey,
+		);
+		const pendiente = listed.items.find(
+			(item) => item.contactKey !== touch.contactKey,
+		);
+		expect(trabada).toMatchObject({
+			trabada: true,
+			approvedAt: "2026-09-15T12:00:00Z",
+		});
+		expect(pendiente).toMatchObject({ trabada: false, approvedAt: null });
+	});
+
 	it("lista con letras, edita solo el dueño y re-corre el gate, rechaza y libera el claim", async () => {
 		const { store, deps } = setup();
 		await queueTouch(touch, deps);
@@ -203,6 +232,7 @@ describe("listQueue, updateQueueItem, rejectQueueItem", () => {
 			letter: "A",
 			to: "laura@acme.test",
 			subject: touch.subject,
+			trabada: false,
 		});
 		const id = listed.items[0].queueItemId;
 

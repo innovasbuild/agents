@@ -246,10 +246,14 @@ export async function listQueue(
 	input: { caller: Caller },
 	deps: Pick<QueueDeps, "store">,
 ) {
+	// "approved" son piezas trabadas entre el claim de send_email y el envío
+	// (turno cancelado, timeout, deploy): no hay tool para destrabarlas —
+	// reencolar arriesgaría un segundo mail si el de Gmail sí salió — así que
+	// se muestran junto a las pending para que el ejecutor las revise a mano.
 	const items = await deps.store.listQueue(
 		input.caller.tenantId,
 		input.caller.userId,
-		"pending",
+		["pending", "approved"],
 	);
 	const lettered = assignLetters(
 		items.map((item) => ({ ...item, created_at: item.createdAt })),
@@ -268,6 +272,8 @@ export async function listQueue(
 			vector: item.vector,
 			expiresAt: item.expiresAt,
 			gate: item.gateResult.status,
+			trabada: item.status === "approved",
+			approvedAt: item.approvedAt,
 		})),
 	};
 }

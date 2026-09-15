@@ -181,6 +181,24 @@ describe("sendQueuedEmail", () => {
 		expect(sendMail).not.toHaveBeenCalled();
 	});
 
+	it("lo aprobado es lo enviado: si el destinatario no coincide, no envía", async () => {
+		const { deps, input, sendMail } = await setup();
+		expect(
+			await sendQueuedEmail({ ...input, to: "otra@acme.test" }, deps),
+		).toMatchObject({ ok: false, reason: "pieza_cambiada" });
+		expect(sendMail).not.toHaveBeenCalled();
+	});
+
+	it("el destinatario se compara sin distinguir mayúsculas: envía al guardado en minúsculas", async () => {
+		const { deps, input, sendMail } = await setup();
+		expect(
+			await sendQueuedEmail({ ...input, to: "Laura@Acme.test" }, deps),
+		).toMatchObject({ ok: true });
+		expect(sendMail).toHaveBeenCalledWith(
+			expect.objectContaining({ to: "laura@acme.test" }),
+		);
+	});
+
 	it("solo el dueño de la pieza la envía", async () => {
 		const { store, deps, input } = await setup();
 		store.executors.push({

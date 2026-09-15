@@ -204,7 +204,7 @@ export interface OutreachStore {
 	listQueue(
 		tenantId: string,
 		executorUserId: string,
-		status: QueueItemStatus,
+		statuses: readonly QueueItemStatus[],
 	): Promise<QueueItemRow[]>;
 	/** Update condicional: solo si la fila sigue en `from`. null si no. */
 	transitionQueueItem(
@@ -520,13 +520,13 @@ export function createSupabaseOutreachStore(
 			return data ? toQueueItem(data) : null;
 		},
 
-		async listQueue(tenantId, executorUserId, status) {
+		async listQueue(tenantId, executorUserId, statuses) {
 			const { data, error } = await client
 				.from("queue_items")
 				.select(QUEUE_COLUMNS)
 				.eq("tenant_id", tenantId)
 				.eq("executor_user_id", executorUserId)
-				.eq("status", status)
+				.in("status", [...statuses])
 				.order("created_at", { ascending: true });
 			if (error) fail("leer la cola", error);
 			return (data ?? []).map(toQueueItem);

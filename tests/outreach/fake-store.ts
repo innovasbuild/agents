@@ -203,12 +203,12 @@ export function createFakeStore(): FakeStore {
 				store.queue.find((q) => q.tenantId === tenantId && q.id === id) ?? null
 			);
 		},
-		async listQueue(tenantId, executorUserId, status) {
+		async listQueue(tenantId, executorUserId, statuses) {
 			return store.queue.filter(
 				(q) =>
 					q.tenantId === tenantId &&
 					q.executorUserId === executorUserId &&
-					q.status === status,
+					statuses.includes(q.status),
 			);
 		},
 		async transitionQueueItem(tenantId, id, from, patch) {
