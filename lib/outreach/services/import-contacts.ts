@@ -3,7 +3,7 @@
 import type { CrmAdapter } from "../../connectors/crm/adapter";
 import { contactKey, linkedinSlug } from "../contact-key";
 import { parseContactsCsv } from "../csv";
-import { type OutreachEventInsert, outreachEvent } from "../events";
+import { outreachEvent } from "../events";
 import { claimStatus, crmMatch } from "../guards";
 import { isRefusal, type Refusal } from "../result";
 import type { Caller } from "../session";
@@ -59,7 +59,6 @@ export async function importContacts(
 	);
 
 	const rows: ImportRowResult[] = [];
-	const events: OutreachEventInsert[] = [];
 	const seen = new Set<string>();
 	const now = deps.now();
 
@@ -120,7 +119,7 @@ export async function importContacts(
 					verdict: "claim_ajeno",
 					message: "esta persona ya la trabaja otro ejecutor",
 				});
-				events.push(
+				await deps.store.insertEvents([
 					outreachEvent({
 						tenant_id: caller.tenantId,
 						actor_user_id: caller.userId,
@@ -129,7 +128,7 @@ export async function importContacts(
 						summary: "carga de CSV",
 						payload: { origen: "import_contacts" },
 					}),
-				);
+				]);
 			} else {
 				rows.push({
 					...base,
@@ -172,7 +171,7 @@ export async function importContacts(
 						message:
 							"en el CRM la última conversación con esta persona es de otro owner, hace menos de 90 días",
 					});
-					events.push(
+					await deps.store.insertEvents([
 						outreachEvent({
 							tenant_id: caller.tenantId,
 							actor_user_id: caller.userId,
@@ -181,7 +180,7 @@ export async function importContacts(
 							summary: "autoría en el CRM",
 							payload: { origen: "import_contacts", crm_id: match.id },
 						}),
-					);
+					]);
 					continue;
 				}
 				crmId = match.id;
@@ -201,13 +200,7 @@ export async function importContacts(
 			vector: row.vector,
 			source: "csv",
 		});
-		rows.push({
-			...base,
-			contactKey: key,
-			verdict: "nuevo",
-			message: "cargado",
-		});
-		events.push(
+		await deps.store.insertEvents([
 			outreachEvent({
 				tenant_id: caller.tenantId,
 				actor_user_id: caller.userId,
@@ -216,9 +209,14 @@ export async function importContacts(
 				summary: row.company ?? row.email,
 				payload: { linea: row.line, crm_id: crmId },
 			}),
-		);
+		]);
+		rows.push({
+			...base,
+			contactKey: key,
+			verdict: "nuevo",
+			message: "cargado",
+		});
 	}
 
-	await deps.store.insertEvents(events);
 	return { ok: true, rows, errors: parsed.errors };
 }

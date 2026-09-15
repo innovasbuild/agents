@@ -144,6 +144,38 @@ describe("importContacts", () => {
 		expect(store.contacts[0].crmId).toBe("crm-9");
 	});
 
+	it("si el CRM falla en la segunda fila, la primera queda con su contacto y su evento", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		let calls = 0;
+		const crm = fakeCrm({
+			findContacts: async () => {
+				calls++;
+				if (calls === 2) throw new Error("HubSpot no responde");
+				return [];
+			},
+		});
+		await expect(
+			importContacts(
+				{
+					csv: "name,email\nLaura,laura@acme.test\nBeto,beto@fabrica.test",
+					caller,
+				},
+				{ store, crm, now },
+			),
+		).rejects.toThrow("HubSpot no responde");
+		expect(store.contacts.map((c) => c.contactKey)).toEqual([
+			"em:laura@acme.test",
+		]);
+		expect(store.events).toEqual([
+			expect.objectContaining({
+				type: "contacto_importado",
+				tenant_id: TENANT,
+				contact_key: "em:laura@acme.test",
+			}),
+		]);
+	});
+
 	it("un CSV que no parsea devuelve sus errores sin cargar nada", async () => {
 		const store = createFakeStore();
 		const result = await importContacts(
