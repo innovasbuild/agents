@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(27);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -198,6 +198,19 @@ select is(
   'cambio_etapa no es idempotente: dos eventos iguales dentro de 2 horas quedan los dos'
 );
 
+-- Dos claim_ajeno idénticos salvo el actor: cada ejecutor reclama la suya,
+-- así que no es el mismo evento (dedup exige mismo actor_user_id además).
+insert into public.events (tenant_id, contact_key, type, payload, actor_user_id)
+values
+  ('b1b1b1b1-0000-0000-0000-00000000000a', 'em:uno@acme-a.test', 'claim_ajeno', '{"crm_owner":"x"}', 'a1a1a1a1-0000-0000-0000-000000000001'),
+  ('b1b1b1b1-0000-0000-0000-00000000000a', 'em:uno@acme-a.test', 'claim_ajeno', '{"crm_owner":"x"}', 'a1a1a1a1-0000-0000-0000-000000000002');
+
+select is(
+  (select count(*)::int from public.events where contact_key = 'em:uno@acme-a.test' and type = 'claim_ajeno'),
+  2,
+  'claim_ajeno con distinto actor_user_id no dedupea: los dos quedan'
+);
+
 insert into public.events (tenant_id, contact_key, type, payload, created_at)
 values ('b1b1b1b1-0000-0000-0000-00000000000a', 'em:uno@acme-a.test', 'respuesta', '{"gmail_message_id":"m1"}', now() - interval '3 hours');
 
@@ -257,6 +270,20 @@ select is(
   (select owner_user_id from public.contacts where id = 'c1c1c1c1-0000-0000-0000-000000000005'),
   null::uuid,
   'borrar al ejecutor libera el contacto en vez de dejarlo huérfano'
+);
+
+-- Barrido de grants: ningún rol de cliente escribe estas tablas (solo el
+-- server con service role, fuera de RLS/grants).
+select is(
+  (
+    select count(*)::int
+    from (values ('config_values'), ('accounts'), ('contacts'), ('queue_items')) as t(table_name)
+    cross join (values ('authenticated'), ('anon')) as r(role_name)
+    cross join (values ('INSERT'), ('UPDATE'), ('DELETE')) as p(priv)
+    where has_table_privilege(r.role_name, ('public.' || t.table_name)::regclass, p.priv)
+  ),
+  0,
+  'ni authenticated ni anon tienen INSERT/UPDATE/DELETE sobre config_values, accounts, contacts o queue_items'
 );
 
 select * from finish();

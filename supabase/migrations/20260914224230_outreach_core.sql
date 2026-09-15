@@ -193,8 +193,10 @@ begin
     where e.tenant_id = new.tenant_id
       and e.contact_key = new.contact_key
       and e.type = new.type
+      and e.actor_user_id is not distinct from new.actor_user_id
       and coalesce(e.payload ->> 'queue_item_id', e.payload ->> 'gmail_message_id', '')
         = coalesce(new.payload ->> 'queue_item_id', new.payload ->> 'gmail_message_id', '')
+      and coalesce(e.payload ->> 'deal_id', '') = coalesce(new.payload ->> 'deal_id', '')
       and e.created_at > now() - interval '2 hours'
   ) then
     return null;
