@@ -540,6 +540,8 @@ Pendiente (Entrega 1).
 - **Reputación de las casillas:** envíos reales en frío. Mitigación: aprobación siempre, un toque por persona por día, cupo diario, guard de buzón y gate.
 - **Datos personales de prospectos** en `contacts`, `queue_items` y `events` (emails, textos de respuestas): RLS por tenant, sin escritura desde el cliente, fixtures anonimizados.
 - **Vetos editables en el brain:** se interpretan como frases, nunca como regex.
+- **Reanudar después de autorizar Gmail (visto en producción el 2026-09-15, `wrun_41M2HCHMGH0GX4XRKG0MVPXZZS`):** `send_email` aprobado, el grant muerto devolvió 401 y el modelo cerró el turno con texto ("Necesito que autorices…"). Al volver del callback, eve 0.54.2 corrió un turno sin mensaje de usuario con el historial terminado en ese mensaje del asistente; `anthropic/claude-sonnet-5` lo rechaza ("does not support assistant message prefill"), el turno queda `failed` y los envíos siguientes del cliente reciben 409. Es la causa del `session_not_active` de la Etapa 2. La Entrega 3 tiene que cubrirlo con un test o eval de "aprobar → autorizar → se envía" antes de dar por cerrado el envío sobre la cola, y reportarlo a eve si se reproduce sin código nuestro.
+- **Doble confirmación:** con la regla "nunca mandes sin aprobación" el modelo pedía confirmación con `ask_question` antes de `send_email`, que ya tiene `approval: always()`. La constitución de §6.1 tiene que conservar la aclaración de que la tarjeta de la tool es la aprobación.
 
 ## 17. Enmiendas
 
