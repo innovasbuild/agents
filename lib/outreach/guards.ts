@@ -1,5 +1,7 @@
 // Invariantes del canon que se revalidan en el borde de cada tool
 // (spec 03 §5.3). Puro: quien llama trae los datos de la base, el CRM y Gmail.
+import { MAX_TOUCHES } from "./stage";
+
 const DAY_MS = 86_400_000;
 export const CLAIM_WINDOW_DAYS = 90;
 export const MAILBOX_GUARD_DAYS = 10;
@@ -105,7 +107,7 @@ export function canTouch(input: TouchInput): TouchVerdict {
 		return { ok: false, reason: "un_toque_por_dia", transient: true };
 	if (input.sentTodayByExecutor >= input.dailyQuota)
 		return { ok: false, reason: "cupo_diario", transient: true };
-	if (input.touches >= 3)
+	if (input.touches >= MAX_TOUCHES)
 		return { ok: false, reason: "max_toques", transient: false };
 	const last = input.lastSentToRecipientOutsideThreadAt;
 	if (
