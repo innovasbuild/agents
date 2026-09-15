@@ -291,8 +291,8 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 
 			{agent.status === "error" ? (
 				<p className="text-destructive text-sm" role="alert">
-					No se pudo completar el último pedido. Recargá la página para ver el
-					estado real del hilo.
+					No se pudo completar el último pedido. Recargá la página; si el aviso
+					sigue, el hilo quedó trabado: abrí un hilo nuevo para seguir.
 				</p>
 			) : null}
 
