@@ -4,6 +4,7 @@ import { useEveAgent } from "eve/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { pendingInputRequests } from "@/lib/agents/input-requests";
 import { createConversation, renameConversation } from "./actions";
 
 interface Thread {
@@ -124,23 +125,9 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
 
-	// El input pendiente de la tool vive en part.input del dynamic-tool con
-	// state "approval-requested"; el requestId, en toolMetadata.eve.inputRequest.
-	const pendingApprovals = agent.data.messages.flatMap((message) =>
-		message.parts.flatMap((part) => {
-			if (part.type !== "dynamic-tool" || part.state !== "approval-requested")
-				return [];
-			const request = part.toolMetadata?.eve?.inputRequest;
-			if (!request) return [];
-			return [
-				{
-					requestId: request.requestId,
-					toolName: part.toolName,
-					input: part.input as Record<string, unknown>,
-				},
-			];
-		}),
-	);
+	// Aprobaciones de tools y preguntas del agente (ask_question) llegan igual;
+	// cada una se responde con el id de sus propias opciones.
+	const pendingRequests = pendingInputRequests(agent.data.messages);
 
 	// Mientras haya una autorización pendiente, el turno está parqueado: se
 	// muestra el botón y se bloquea el input (guides/client/streaming.mdx).
@@ -204,15 +191,20 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</fieldset>
 			))}
 
-			{pendingApprovals.map(({ requestId, toolName, input }) => (
-				<fieldset className="rounded border p-3" key={requestId}>
-					{toolName === "send_email" ? (
+			{pendingRequests.map((request) => (
+				<fieldset className="rounded border p-3" key={request.requestId}>
+					{request.kind !== "tool-approval" ? (
+						<>
+							<legend className="px-1 text-sm">Pregunta del agente</legend>
+							<p className="whitespace-pre-wrap">{request.prompt}</p>
+						</>
+					) : request.toolName === "send_email" ? (
 						<>
 							<legend className="px-1 text-sm">
 								Aprobación pendiente: enviar email
 							</legend>
 							{(() => {
-								const emailInput = input as SendEmailInput;
+								const emailInput = request.input as SendEmailInput;
 								return (
 									<>
 										<p>
@@ -235,32 +227,38 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					) : (
 						<>
 							<legend className="px-1 text-sm">
-								Aprobación pendiente: {toolName}
+								Aprobación pendiente: {request.toolName}
 							</legend>
 							<pre className="whitespace-pre-wrap text-sm">
-								{JSON.stringify(input, null, 2)}
+								{JSON.stringify(request.input, null, 2)}
 							</pre>
 						</>
 					)}
-					<div className="mt-2 flex gap-2">
-						<Button
-							onClick={() =>
-								void agent.respond([{ requestId, optionId: "approve" }])
-							}
-							type="button"
-						>
-							Aprobar
-						</Button>
-						<Button
-							onClick={() =>
-								void agent.respond([{ requestId, optionId: "cancel" }])
-							}
-							type="button"
-							variant="outline"
-						>
-							Rechazar
-						</Button>
+					<div className="mt-2 flex flex-wrap gap-2">
+						{request.options.map((option, index) => (
+							<Button
+								key={option.id}
+								onClick={() =>
+									void agent.respond([
+										{ requestId: request.requestId, optionId: option.id },
+									])
+								}
+								type="button"
+								variant={index === 0 ? "default" : "outline"}
+							>
+								{option.label}
+							</Button>
+						))}
 					</div>
+					{request.allowFreeform ? (
+						<FreeformAnswer
+							onAnswer={(answer) =>
+								void agent.respond([
+									{ requestId: request.requestId, text: answer },
+								])
+							}
+						/>
+					) : null}
 				</fieldset>
 			))}
 
@@ -291,5 +289,32 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</Button>
 			</form>
 		</section>
+	);
+}
+
+function FreeformAnswer({ onAnswer }: { onAnswer: (answer: string) => void }) {
+	const [answer, setAnswer] = useState("");
+
+	return (
+		<form
+			className="mt-2 flex gap-2"
+			onSubmit={(event) => {
+				event.preventDefault();
+				const value = answer.trim();
+				if (value.length === 0) return;
+				onAnswer(value);
+				setAnswer("");
+			}}
+		>
+			<input
+				className="flex-1 rounded border px-3 py-2"
+				onChange={(event) => setAnswer(event.target.value)}
+				placeholder="O escribí tu respuesta"
+				value={answer}
+			/>
+			<Button type="submit" variant="outline">
+				Responder
+			</Button>
+		</form>
 	);
 }
