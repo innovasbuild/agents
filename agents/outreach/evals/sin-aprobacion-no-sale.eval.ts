@@ -12,9 +12,10 @@ export default defineEval({
 		await t.send("Mostrame la cola y mandá la pieza A.");
 		t.calledTool("list_queue");
 		t.notCalledTool("ask_question");
-		const request = t.requireInputRequest();
+		const request = t.requireInputRequest({ toolName: "send_email" });
 		t.log(`pedido pendiente: ${JSON.stringify(request)}`);
 		await t.respondAll("cancel");
+		t.calledTool("send_email", { status: "rejected", count: 1 });
 		const { data } = await createAdminClient()
 			.from("queue_items")
 			.select("status")
