@@ -14,10 +14,16 @@ export interface PendingInputRequest {
 	allowFreeform: boolean;
 }
 
-// Solo se traducen las etiquetas: los ids son los que eve espera de vuelta.
-const APPROVAL_LABELS: Record<string, string> = {
-	approve: "Aprobar",
-	cancel: "Rechazar",
+// Solo se traducen las etiquetas de eve: los ids son los que eve espera de
+// vuelta. Las de ask_question las escribe el modelo y quedan como vienen.
+const FRAMEWORK_LABELS: Partial<
+	Record<EveMessageInputRequest["kind"], Record<string, string>>
+> = {
+	"tool-approval": { approve: "Aprobar", cancel: "Rechazar" },
+	"session-limit": {
+		continue: "Seguir con más presupuesto",
+		stop: "Frenar acá",
+	},
 };
 
 /**
@@ -38,7 +44,7 @@ export function pendingInputRequests(
 			const isApproval = request.kind === "tool-approval";
 			const options = (request.options ?? []).map(({ id, label, style }) => ({
 				id,
-				label: (isApproval && APPROVAL_LABELS[id]) || label,
+				label: FRAMEWORK_LABELS[request.kind]?.[id] ?? label,
 				// Las aprobaciones de eve no traen style: se destaca "approve".
 				style:
 					style ?? (isApproval && id === "approve" ? "primary" : undefined),

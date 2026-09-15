@@ -241,7 +241,7 @@ describe("pendingInputRequests", () => {
 		expect(request.allowFreeform).toBe(false);
 	});
 
-	it("conserva el style que manda eve en las opciones", () => {
+	it("traduce las opciones del límite de sesión y conserva su style", () => {
 		const [request] = pendingInputRequests(
 			messages(
 				toolPart(
@@ -260,9 +260,9 @@ describe("pendingInputRequests", () => {
 			),
 		);
 
-		expect(request.options.map(({ style }) => style)).toEqual([
-			"primary",
-			"danger",
+		expect(request.options).toEqual([
+			{ id: "continue", label: "Seguir con más presupuesto", style: "primary" },
+			{ id: "stop", label: "Frenar acá", style: "danger" },
 		]);
 	});
 });

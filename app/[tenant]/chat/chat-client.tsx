@@ -143,8 +143,16 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
 	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
 	// así que escribir "1" aprobaría un send_email sin pasar por la tarjeta.
+	// Tras un error también: eve oculta la tarjeta antes de que su respuesta
+	// llegue al servidor y no la restaura si falla, así que el pedido puede
+	// seguir abierto sin tarjeta (client/eve-agent-store.js).
 	const isInputBlocked =
-		isResuming || isAuthorizing || pendingRequests.length > 0;
+		isResuming ||
+		isAuthorizing ||
+		pendingRequests.length > 0 ||
+		agent.status === "error";
+	// eve rechaza respond() con un turno en vuelo o mientras reanuda.
+	const canAnswer = !isBusy && !isResuming;
 
 	return (
 		<section className="space-y-4">
@@ -247,6 +255,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					<div className="mt-2 flex flex-wrap gap-2">
 						{request.options.map((option) => (
 							<Button
+								disabled={!canAnswer}
 								key={option.id}
 								onClick={() =>
 									void agent.respond([
@@ -268,6 +277,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					</div>
 					{request.allowFreeform ? (
 						<FreeformAnswer
+							disabled={!canAnswer}
 							hasOptions={request.options.length > 0}
 							onAnswer={(answer) =>
 								void agent.respond([
@@ -279,10 +289,10 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</fieldset>
 			))}
 
-			{agent.status === "error" && agent.error ? (
+			{agent.status === "error" ? (
 				<p className="text-destructive text-sm" role="alert">
-					No se pudo completar el último pedido ({agent.error.message}). Recargá
-					la página para ver el estado real del hilo.
+					No se pudo completar el último pedido. Recargá la página para ver el
+					estado real del hilo.
 				</p>
 			) : null}
 
@@ -321,9 +331,11 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 }
 
 function FreeformAnswer({
+	disabled,
 	hasOptions,
 	onAnswer,
 }: {
+	disabled: boolean;
 	hasOptions: boolean;
 	onAnswer: (answer: string) => void;
 }) {
@@ -335,7 +347,7 @@ function FreeformAnswer({
 			onSubmit={(event) => {
 				event.preventDefault();
 				const value = answer.trim();
-				if (value.length === 0) return;
+				if (value.length === 0 || disabled) return;
 				onAnswer(value);
 				setAnswer("");
 			}}
@@ -343,13 +355,14 @@ function FreeformAnswer({
 			<input
 				aria-label="Tu respuesta"
 				className="flex-1 rounded border px-3 py-2"
+				disabled={disabled}
 				onChange={(event) => setAnswer(event.target.value)}
 				placeholder={
 					hasOptions ? "O escribí tu respuesta" : "Escribí tu respuesta"
 				}
 				value={answer}
 			/>
-			<Button type="submit" variant="outline">
+			<Button disabled={disabled} type="submit" variant="outline">
 				Responder
 			</Button>
 		</form>
