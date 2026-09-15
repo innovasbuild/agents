@@ -59,6 +59,8 @@ const clean = (value: string | undefined): string | null => {
 	return trimmed ? trimmed : null;
 };
 
+const MAX_EMAIL_LENGTH = 320;
+
 export function parseContactsCsv(text: string): {
 	rows: CsvContactRow[];
 	errors: Array<{ line: number; reason: string }>;
@@ -71,12 +73,20 @@ export function parseContactsCsv(text: string): {
 		COLUMNS.map((column) => [column, header.indexOf(column)]),
 	) as Record<(typeof COLUMNS)[number], number>;
 	if (COLUMNS.every((column) => index[column] === -1)) {
+		const semicolonHeader = (lines[0] ?? "")
+			.split(";")
+			.map((h) => h.trim().toLowerCase());
+		const usesSemicolon = COLUMNS.some((column) =>
+			semicolonHeader.includes(column),
+		);
 		return {
 			rows: [],
 			errors: [
 				{
 					line: 1,
-					reason: `el encabezado no tiene ninguna columna conocida (${COLUMNS.join(", ")})`,
+					reason: usesSemicolon
+						? "el CSV usa ';' como separador: exportalo con comas"
+						: `el encabezado no tiene ninguna columna conocida (${COLUMNS.join(", ")})`,
 				},
 			],
 		};
@@ -108,9 +118,14 @@ export function parseContactsCsv(text: string): {
 		const get = (column: (typeof COLUMNS)[number]) =>
 			index[column] === -1 ? null : clean(cells[index[column]]);
 		const rawEmail = get("email");
-		const email = normalizeEmail(rawEmail);
-		if (rawEmail && !email)
-			errors.push({ line, reason: `email inválido: "${rawEmail}"` });
+		const emailTooLong = (rawEmail?.length ?? 0) > MAX_EMAIL_LENGTH;
+		// Una celda de más de 320 caracteres nunca es un email válido: se
+		// descarta sin correr la regex y se reporta recortada.
+		const email = rawEmail && !emailTooLong ? normalizeEmail(rawEmail) : null;
+		if (rawEmail && !email) {
+			const shown = emailTooLong ? `${rawEmail.slice(0, 40)}…` : rawEmail;
+			errors.push({ line, reason: `email inválido: "${shown}"` });
+		}
 		rows.push({
 			line,
 			name: get("name"),

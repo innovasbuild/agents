@@ -82,4 +82,28 @@ describe("parseContactsCsv", () => {
 			{ line: 1, reason: "el CSV tiene 51 filas; el máximo por carga es 50" },
 		]);
 	});
+
+	it("si el encabezado no matchea por coma pero sí por punto y coma, avisa que exporten con comas", () => {
+		const csv = ["name;email;company", "Laura;laura@acme.test;Acme"].join("\n");
+		expect(parseContactsCsv(csv).errors).toEqual([
+			{
+				line: 1,
+				reason: "el CSV usa ';' como separador: exportalo con comas",
+			},
+		]);
+	});
+
+	it("un email de más de 320 caracteres es inválido sin correr la regex, y se reporta truncado", () => {
+		const longEmail = `${"a".repeat(315)}@acme.test`;
+		expect(longEmail.length).toBeGreaterThan(320);
+		const csv = ["name,email", `Laura,${longEmail}`].join("\n");
+		const result = parseContactsCsv(csv);
+		expect(result.rows[0].email).toBeNull();
+		expect(result.errors).toEqual([
+			{
+				line: 2,
+				reason: `email inválido: "${longEmail.slice(0, 40)}…"`,
+			},
+		]);
+	});
 });
