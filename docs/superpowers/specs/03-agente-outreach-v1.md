@@ -206,7 +206,7 @@ Sin I/O: las tools y schedules traen los datos y le pasan el resultado. Todo con
 
 ### 5.2 `gate.ts`
 
-`runGate({ subject, body, channel, idioma, vetos })` → `{ status: "ok" | "fail" | "indeterminate", violations: Violation[], warnings: Warning[] }`. `fail` e `indeterminate` bloquean (equivalen al 1 y al 2 de `gate.py`).
+`runGate({ subject, body, channel, idioma, rules })` → `{ status: "ok" | "fail" | "indeterminate", violations, warnings, notes }` (`rules` sale de `parseGateBlocks` + `mergeGateRules`). `fail` e `indeterminate` bloquean (equivalen al 1 y al 2 de `gate.py`).
 
 **Base genérica** (portada de `gate.py` v1.2.0 más las muletillas del skill `-message`):
 
@@ -238,9 +238,9 @@ Se combinan la página del tenant (`canon:gate`) y la voz del ejecutor (`canon:v
 
 ### 5.3 `guards.ts`
 
-- `claimStatus({ contact, executorUserId, crmAuthorship, crmOwnerIdOfExecutor, now })` → `"libre" | "propio" | "ajeno"`. `ajeno` si `contact.owner_user_id` es otro ejecutor, o si la última nota o email del CRM es de otro owner con menos de 90 días. Si hay autoría en el CRM, gana sobre `owner_user_id` y sobre `outreach_owner`.
+- `claimStatus({ ownerUserId, executorUserId, executorCrmOwnerId, crmAuthorship, now })` → `"libre" | "propio" | "ajeno"`. `ajeno` si `contact.owner_user_id` es otro ejecutor, o si la última nota o email del CRM es de otro owner con menos de 90 días. Si hay autoría en el CRM, gana sobre `owner_user_id` y sobre `outreach_owner`.
 - `crmMatch(candidates, { contactKey, email, linkedinSlug })` → el contacto existente o `null` (G1: OR por las tres claves). Nunca se crea un segundo contacto si hay match.
-- `canTouch({ contact, queueItem, sentTodayByExecutor, dailyQuota, sentToRecipientToday, lastSentToRecipientAt, now })` → `{ ok: true } | { ok: false, reason, transient }`. Orden del canon:
+- `canTouch({ now, expiresAt, touches, sentTodayToRecipient, sentTodayByExecutor, dailyQuota, lastSentToRecipientOutsideThreadAt })` → `{ ok: true } | { ok: false, reason, transient }`. Orden del canon:
   1. Pieza vencida (`expires_at`).
   2. Un toque por persona por día.
   3. Cupo diario del ejecutor (`executors.daily_quota`).
@@ -263,7 +263,7 @@ Se combinan la página del tenant (`canon:gate`) y la voz del ejecutor (`canon:v
 - `events.ts`: tipos de evento y constructores de payload.
 - `queue-letters.ts`: asigna letras A, B, C… a las piezas pendientes ordenadas por `created_at`.
 
-**Fixtures** en `tests/fixtures/outreach/`: casos del gate derivados de `gate.py`, y los 5 pares borrador/enviado de `voz/mati.md` **anonimizados** (nombres, empresas y datos de prospectos reemplazados). Ningún texto real de un prospecto entra al repo.
+**Fixtures:** los casos del gate derivados de `gate.py` viven como tests sintéticos en `tests/outreach/gate.test.ts` (Entrega 2). Los 5 pares borrador/enviado de `voz/mati.md` **anonimizados** (nombres, empresas y datos de prospectos reemplazados) van a `tests/fixtures/outreach/` con las evals de la Entrega 3. Ningún texto real de un prospecto entra al repo.
 
 ## 6. Agente de primer toque (F1 a F4)
 
@@ -376,7 +376,7 @@ Forma `defineSchedule({ cron, run })` en código (la forma markdown no puede fre
 
 Cada uno recorre los tenants activos con fila `tenant_agents` (`agent = 'outreach'`, `enabled = true`). Por tenant: toma el lock (`runs.schedule_key`, §4.7); si ya existe, sigue con el siguiente tenant. Por ejecutor con `gmail_read_authorized_at`: bloque aislado en try/catch, un ejecutor que falla no frena a los demás y deja `runs.error`.
 
-Tokens sin usuario en la sesión: `lib/connectors/auth.ts` suma `connectForSubject(connector, { tenantId, userId })`, que pide el token de Connect con el subject `tenantId:userId` usando el OIDC del proyecto. Es el spike S1 y levanta la consecuencia de la decisión D4 de la spec 02 ("un schedule sin usuario no puede tocar el CRM"). Si S1 da que no: §13, plan B.
+Tokens sin usuario en la sesión: `lib/connectors/auth.ts` suma `tokenForSubject(connector, { tenantId, userId, issuer? }, scopes?)`, que pide el token de Connect con el subject `tenantId:userId` usando el OIDC del proyecto. Es el spike S1 y levanta la consecuencia de la decisión D4 de la spec 02 ("un schedule sin usuario no puede tocar el CRM"). Si S1 da que no: §13, plan B.
 
 ### 8.2 Respuestas (lógica compartida con `read_replies`)
 
@@ -421,7 +421,7 @@ Dentro del sweep, después de las respuestas:
 
 ## 9. `CrmAdapter`
 
-`lib/connectors/crm/adapter.ts` define la interfaz de la capacidad `crm` (arquitectura D2: tools contra la capacidad, no contra el proveedor). `lib/connectors/crm/hubspot.ts` la implementa por REST con el token de `tenantScopedConnect("mcp.hubspot.com/hubspot", …)` en sesión o `connectForSubject` en schedules.
+`lib/connectors/crm/adapter.ts` define la interfaz de la capacidad `crm` (arquitectura D2: tools contra la capacidad, no contra el proveedor). `lib/connectors/crm/hubspot.ts` la implementa por REST con el token de `tenantScopedConnect("mcp.hubspot.com/hubspot", …)` en sesión o `tokenForSubject` en schedules.
 
 ```ts
 interface CrmAdapter {
@@ -513,7 +513,7 @@ Pendiente (Entrega 1).
 1. **Spikes** S1 a S7 y §13.1 escrito; ajustes a la spec si algún plan B se activa.
 2. **Datos y núcleo:** migraciones de §4 con pgTAP, `lib/outreach` con TDD (§5), `OUTREACH_PROPERTIES` con 10, `tenants/innovas/outreach.json` + `outreach:config`, `executors:set`. No depende de los spikes: puede correr en paralelo con la Entrega 1.
 3. **Agente de primer toque:** `CrmAdapter` + HubSpot (§9, después de S6), instrucciones, skills, `researcher`, tools de §6.4, `send_email` de §7, evals de §11.2.
-4. **Escucha y follow-ups:** scopes de Gmail y hook, `connectForSubject`, `listen.ts`, `read_replies`, los dos schedules, F6.5, resumen de sesión.
+4. **Escucha y follow-ups:** scopes de Gmail y hook, `tokenForSubject`, `listen.ts`, `read_replies`, los dos schedules, F6.5, resumen de sesión.
 5. **Piloto contra producción** (§12.1) y verificación del criterio de cierre, guiada, como la Task 14 de la Etapa 2.
 
 ## 15. Fuera de alcance
@@ -547,5 +547,5 @@ Pendiente (Entrega 1).
 - **Roadmap, Etapa 5:** queda con ColdIQ y Places como flujo de carga desde el chat; `morning-sweep`, `followups` y `read_replies` salen de ahí.
 - **Kickoff §3b:** la fila "Gate de estilo" pasa a "código determinístico; sin chequeo semántico" (D3).
 - **Kickoff §5:** orden de `contact_key` del canon (D4) y 10 propiedades de atribución (D5); `executors` suma `slug`, `crm_owner_id`, `gmail_read_authorized_at`; `queue_items` suma los campos de §4.6.
-- **Spec 02, D4 y §13 "Schedules sin usuario":** reemplazados por `connectForSubject` si S1 da que sí.
+- **Spec 02, D4 y §13 "Schedules sin usuario":** reemplazados por `tokenForSubject` si S1 da que sí.
 - **Spec brain §7:** confirma el reparto; suma los tags `canon:gate` y `executor:<slug>`.
