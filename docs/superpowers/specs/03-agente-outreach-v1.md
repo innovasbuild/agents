@@ -421,13 +421,13 @@ Dentro del sweep, después de las respuestas:
 
 ## 9. `CrmAdapter`
 
-`lib/connectors/crm/adapter.ts` define la interfaz de la capacidad `crm` (arquitectura D2: tools contra la capacidad, no contra el proveedor). `lib/connectors/crm/hubspot.ts` la implementa por REST con el token de `tenantScopedConnect("mcp.hubspot.com/hubspot", …)` en sesión o `tokenForSubject` en schedules.
+`lib/connectors/crm/adapter.ts` define la interfaz de la capacidad `crm` (arquitectura D2: tools contra la capacidad, no contra el proveedor). `lib/connectors/crm/hubspot-adapter.ts` la implementa por REST con el token de `tenantScopedConnect("mcp.hubspot.com/hubspot", …)` en sesión o `tokenForSubject` en schedules.
 
 ```ts
 interface CrmAdapter {
-  findContact(q: { contactKey: string; email: string | null; linkedinSlug: string | null }): Promise<CrmContact | null>;
+  findContacts(q: { contactKey: string; email: string | null; linkedinSlug: string | null }): Promise<CrmContactMatch[]>;
   lastAuthorship(crmId: string): Promise<{ ownerId: string; at: Date } | null>;
-  upsertContact(input: { crmId: string | null; email: string | null; name: string; company: string | null; properties: Record<string, string> }): Promise<string>;
+  upsertContact(input: { crmId: string | null; email: string | null; name: string | null; company: string | null; properties: Record<string, string> }): Promise<string>;
   addNote(crmId: string, note: { body: string; at: Date; ownerId: string | null }): Promise<void>;
   completeOpenTasks(crmId: string): Promise<void>;
   createTask(crmId: string, task: { title: string; dueAt: Date; ownerId: string | null }): Promise<void>;
@@ -439,6 +439,8 @@ interface CrmAdapter {
 `resolveCrmAdapter(binding, tokenSource)` devuelve `null` si el tenant no tiene `crm`: las tools siguen funcionando solo con la base (claim por DB, sin atribución externa). `OUTREACH_PROPERTIES` suma `outreach_vector` y `outreach_idioma`; `crm_setup_outreach_properties` las crea en la próxima corrida (es idempotente).
 
 Que el token del MCP de HubSpot alcance para escribir contactos, notas, tasks y deals por REST no está probado (spec 02 §10.1 S3 solo probó lectura y propiedades): spike S6.
+
+**Enmienda (task 18):** `findContact` pasó a `findContacts`: devuelve `CrmContactMatch[]` (`{ id, contactKey, email, linkedinSlugs, ownerId }`) con todos los candidatos; cuál es el match lo decide `crmMatch` (fuera de esta task), no el adapter. La implementación HubSpot por REST vive en `lib/connectors/crm/hubspot-adapter.ts` (no en `hubspot.ts`, que sigue con el setup de propiedades). `upsertContact` acepta `name: string | null` (antes `string`): sin nombre no se manda `firstname`/`lastname`. `listOpenDeals` y `createDeal` quedan sin implementar, para la Entrega 4. `crmForSession` (`lib/outreach/crm-session.ts`) arma el adapter del tenant con el token del usuario de la sesión: `adapter` pide reautorización ante un `HubSpotUnauthorizedError` (usar antes de un efecto externo, vía `withReauth`), `raw` lo deja pasar (usar después de enviar un mail, donde ya no se puede pausar el turno).
 
 ## 10. Errores
 
