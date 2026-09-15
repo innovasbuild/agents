@@ -4,6 +4,7 @@ import { useEveAgent } from "eve/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { pendingInputRequests } from "@/lib/agents/input-requests";
 import { createConversation, renameConversation } from "./actions";
 
 interface Thread {
@@ -124,23 +125,9 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
 
-	// El input pendiente de la tool vive en part.input del dynamic-tool con
-	// state "approval-requested"; el requestId, en toolMetadata.eve.inputRequest.
-	const pendingApprovals = agent.data.messages.flatMap((message) =>
-		message.parts.flatMap((part) => {
-			if (part.type !== "dynamic-tool" || part.state !== "approval-requested")
-				return [];
-			const request = part.toolMetadata?.eve?.inputRequest;
-			if (!request) return [];
-			return [
-				{
-					requestId: request.requestId,
-					toolName: part.toolName,
-					input: part.input as Record<string, unknown>,
-				},
-			];
-		}),
-	);
+	// Aprobaciones de tools y preguntas del agente (ask_question) llegan igual;
+	// cada una se responde con el id de sus propias opciones.
+	const pendingRequests = pendingInputRequests(agent.data.messages);
 
 	// Mientras haya una autorización pendiente, el turno está parqueado: se
 	// muestra el botón y se bloquea el input (guides/client/streaming.mdx).
@@ -152,6 +139,20 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 		),
 	);
 	const isAuthorizing = pendingAuthorizations.length > 0;
+
+	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
+	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
+	// así que escribir "1" aprobaría un send_email sin pasar por la tarjeta.
+	// Tras un error también: eve oculta la tarjeta antes de que su respuesta
+	// llegue al servidor y no la restaura si falla, así que el pedido puede
+	// seguir abierto sin tarjeta (client/eve-agent-store.js).
+	const isInputBlocked =
+		isResuming ||
+		isAuthorizing ||
+		pendingRequests.length > 0 ||
+		agent.status === "error";
+	// eve rechaza respond() con un turno en vuelo o mientras reanuda.
+	const canAnswer = !isBusy && !isResuming;
 
 	return (
 		<section className="space-y-4">
@@ -204,15 +205,24 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</fieldset>
 			))}
 
-			{pendingApprovals.map(({ requestId, toolName, input }) => (
-				<fieldset className="rounded border p-3" key={requestId}>
-					{toolName === "send_email" ? (
+			{pendingRequests.map((request) => (
+				<fieldset className="rounded border p-3" key={request.requestId}>
+					{request.kind !== "tool-approval" ? (
+						<>
+							<legend className="px-1 text-sm">
+								{request.kind === "session-limit"
+									? "Límite de la sesión"
+									: "Pregunta del agente"}
+							</legend>
+							<p className="whitespace-pre-wrap">{request.prompt}</p>
+						</>
+					) : request.toolName === "send_email" ? (
 						<>
 							<legend className="px-1 text-sm">
 								Aprobación pendiente: enviar email
 							</legend>
 							{(() => {
-								const emailInput = input as SendEmailInput;
+								const emailInput = request.input as SendEmailInput;
 								return (
 									<>
 										<p>
@@ -235,41 +245,63 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					) : (
 						<>
 							<legend className="px-1 text-sm">
-								Aprobación pendiente: {toolName}
+								Aprobación pendiente: {request.toolName}
 							</legend>
 							<pre className="whitespace-pre-wrap text-sm">
-								{JSON.stringify(input, null, 2)}
+								{JSON.stringify(request.input, null, 2)}
 							</pre>
 						</>
 					)}
-					<div className="mt-2 flex gap-2">
-						<Button
-							onClick={() =>
-								void agent.respond([{ requestId, optionId: "approve" }])
-							}
-							type="button"
-						>
-							Aprobar
-						</Button>
-						<Button
-							onClick={() =>
-								void agent.respond([{ requestId, optionId: "cancel" }])
-							}
-							type="button"
-							variant="outline"
-						>
-							Rechazar
-						</Button>
+					<div className="mt-2 flex flex-wrap gap-2">
+						{request.options.map((option) => (
+							<Button
+								disabled={!canAnswer}
+								key={option.id}
+								onClick={() =>
+									void agent.respond([
+										{ requestId: request.requestId, optionId: option.id },
+									])
+								}
+								type="button"
+								variant={
+									option.style === "primary"
+										? "default"
+										: option.style === "danger"
+											? "destructive"
+											: "outline"
+								}
+							>
+								{option.label}
+							</Button>
+						))}
 					</div>
+					{request.allowFreeform ? (
+						<FreeformAnswer
+							disabled={!canAnswer}
+							hasOptions={request.options.length > 0}
+							onAnswer={(answer) =>
+								void agent.respond([
+									{ requestId: request.requestId, text: answer },
+								])
+							}
+						/>
+					) : null}
 				</fieldset>
 			))}
+
+			{agent.status === "error" ? (
+				<p className="text-destructive text-sm" role="alert">
+					No se pudo completar el último pedido. Recargá la página; si el aviso
+					sigue, el hilo quedó trabado: abrí un hilo nuevo para seguir.
+				</p>
+			) : null}
 
 			<form
 				className="flex gap-2"
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
-					if (message.length === 0 || isResuming || isAuthorizing) return;
+					if (message.length === 0 || isInputBlocked) return;
 
 					void agent.send(
 						message,
@@ -281,15 +313,58 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			>
 				<input
 					className="flex-1 rounded border px-3 py-2"
-					disabled={isResuming || isAuthorizing}
+					disabled={isInputBlocked}
 					onChange={(event) => setText(event.target.value)}
-					placeholder="Escribí un mensaje para el agente"
+					placeholder={
+						pendingRequests.length > 0
+							? "Respondé la tarjeta pendiente para seguir"
+							: "Escribí un mensaje para el agente"
+					}
 					value={text}
 				/>
-				<Button disabled={isResuming || isAuthorizing} type="submit">
+				<Button disabled={isInputBlocked} type="submit">
 					Enviar
 				</Button>
 			</form>
 		</section>
+	);
+}
+
+function FreeformAnswer({
+	disabled,
+	hasOptions,
+	onAnswer,
+}: {
+	disabled: boolean;
+	hasOptions: boolean;
+	onAnswer: (answer: string) => void;
+}) {
+	const [answer, setAnswer] = useState("");
+
+	return (
+		<form
+			className="mt-2 flex gap-2"
+			onSubmit={(event) => {
+				event.preventDefault();
+				const value = answer.trim();
+				if (value.length === 0 || disabled) return;
+				onAnswer(value);
+				setAnswer("");
+			}}
+		>
+			<input
+				aria-label="Tu respuesta"
+				className="flex-1 rounded border px-3 py-2"
+				disabled={disabled}
+				onChange={(event) => setAnswer(event.target.value)}
+				placeholder={
+					hasOptions ? "O escribí tu respuesta" : "Escribí tu respuesta"
+				}
+				value={answer}
+			/>
+			<Button disabled={disabled} type="submit" variant="outline">
+				Responder
+			</Button>
+		</form>
 	);
 }
