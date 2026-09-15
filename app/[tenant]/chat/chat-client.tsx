@@ -1,9 +1,11 @@
 "use client";
 
+import type { EveMessage } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
 import { createConversation, renameConversation } from "./actions";
 
@@ -40,8 +42,8 @@ export function ChatClient({
 	const [model, setModel] = useState(defaultModel);
 
 	return (
-		<div className="grid gap-6 md:grid-cols-[240px_1fr]">
-			<aside className="space-y-3">
+		<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
+			<aside className="space-y-4">
 				<div className="space-y-2">
 					<label
 						className="block text-muted-foreground text-sm"
@@ -50,7 +52,7 @@ export function ChatClient({
 						Modelo del hilo nuevo
 					</label>
 					<select
-						className="w-full rounded border px-2 py-1"
+						className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 						id="modelo"
 						onChange={(event) => setModel(event.target.value)}
 						value={model}
@@ -73,12 +75,14 @@ export function ChatClient({
 					</Button>
 				</div>
 
-				<ul className="space-y-1">
+				<ul className="space-y-0.5">
 					{threads.map((thread) => (
 						<li key={thread.id}>
 							<a
-								className={`block truncate rounded px-2 py-1 text-sm ${
-									thread.id === active?.id ? "bg-muted font-medium" : ""
+								className={`block truncate rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted ${
+									thread.id === active?.id
+										? "bg-muted font-medium"
+										: "text-muted-foreground"
 								}`}
 								href={`/${slug}/chat?hilo=${thread.id}`}
 							>
@@ -92,9 +96,11 @@ export function ChatClient({
 			{active ? (
 				<Thread key={active.id} slug={slug} thread={active} />
 			) : (
-				<p className="text-muted-foreground">
-					Elegí un hilo o abrí uno nuevo para hablar con el agente.
-				</p>
+				<div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center">
+					<p className="text-muted-foreground">
+						Elegí un hilo o abrí uno nuevo para hablar con el agente.
+					</p>
+				</div>
 			)}
 		</div>
 	);
@@ -155,31 +161,38 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const canAnswer = !isBusy && !isResuming;
 
 	return (
-		<section className="space-y-4">
+		<section className="min-w-0 space-y-6">
 			<p className="text-muted-foreground text-sm">
 				Modelo del hilo: <code>{thread.model ?? "el default del cliente"}</code>
 				. eve fija el modelo al abrir la sesión: para usar otro, abrí un hilo
 				nuevo.
 			</p>
 
-			<div className="space-y-2">
-				{agent.data.messages.map((message) => (
-					<article key={message.id}>
-						<strong>{message.role}:</strong>{" "}
-						{message.parts
-							.filter((part) => part.type === "text")
-							.map((part) => (
-								<span key={`${message.id}-text-${part.stepIndex}`}>
-									{part.text}
-								</span>
-							))}
-					</article>
-				))}
+			<div className="space-y-4">
+				{agent.data.messages.map((message) =>
+					message.role === "user" ? (
+						<article
+							className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-lg bg-muted px-4 py-2.5"
+							key={message.id}
+						>
+							<span className="sr-only">Vos: </span>
+							<MessageText message={message} />
+						</article>
+					) : (
+						<article
+							className="max-w-[85%] whitespace-pre-wrap leading-relaxed"
+							key={message.id}
+						>
+							<span className="sr-only">Agente: </span>
+							<MessageText message={message} />
+						</article>
+					),
+				)}
 			</div>
 
 			{pendingAuthorizations.map(({ key, part }) => (
-				<fieldset className="rounded border p-3" key={key}>
-					<legend className="px-1 text-sm">
+				<fieldset className="rounded-lg border bg-card p-4" key={key}>
+					<legend className="px-1 font-medium text-sm">
 						Autorización pendiente: {part.displayName}
 					</legend>
 					<p className="text-sm">
@@ -206,10 +219,13 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			))}
 
 			{pendingRequests.map((request) => (
-				<fieldset className="rounded border p-3" key={request.requestId}>
+				<fieldset
+					className="space-y-2 rounded-lg border bg-card p-4"
+					key={request.requestId}
+				>
 					{request.kind !== "tool-approval" ? (
 						<>
-							<legend className="px-1 text-sm">
+							<legend className="px-1 font-medium text-sm">
 								{request.kind === "session-limit"
 									? "Límite de la sesión"
 									: "Pregunta del agente"}
@@ -218,24 +234,21 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 						</>
 					) : request.toolName === "send_email" ? (
 						<>
-							<legend className="px-1 text-sm">
+							<legend className="px-1 font-medium text-sm">
 								Aprobación pendiente: enviar email
 							</legend>
 							{(() => {
 								const emailInput = request.input as SendEmailInput;
 								return (
 									<>
-										<p>
-											<strong>Para:</strong>{" "}
-											{emailInput.to ?? "(sin destinatario)"}
-										</p>
-										<p>
-											<strong>Asunto:</strong>{" "}
-											{emailInput.subject ?? "(sin asunto)"}
-										</p>
-										<p className="whitespace-pre-wrap">
-											<strong>Cuerpo:</strong>
-											{"\n"}
+										<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+											<dt className="text-muted-foreground">Para</dt>
+											<dd>{emailInput.to ?? "(sin destinatario)"}</dd>
+											<dt className="text-muted-foreground">Asunto</dt>
+											<dd>{emailInput.subject ?? "(sin asunto)"}</dd>
+										</dl>
+										<p className="whitespace-pre-wrap rounded-md border bg-background p-3">
+											<span className="sr-only">Cuerpo: </span>
 											{emailInput.body ?? "(sin cuerpo)"}
 										</p>
 									</>
@@ -244,15 +257,15 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 						</>
 					) : (
 						<>
-							<legend className="px-1 text-sm">
+							<legend className="px-1 font-medium text-sm">
 								Aprobación pendiente: {request.toolName}
 							</legend>
-							<pre className="whitespace-pre-wrap text-sm">
+							<pre className="overflow-x-auto whitespace-pre-wrap rounded-md border bg-background p-3 font-mono text-xs">
 								{JSON.stringify(request.input, null, 2)}
 							</pre>
 						</>
 					)}
-					<div className="mt-2 flex flex-wrap gap-2">
+					<div className="flex flex-wrap gap-2 pt-1">
 						{request.options.map((option) => (
 							<Button
 								disabled={!canAnswer}
@@ -297,7 +310,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			) : null}
 
 			<form
-				className="flex gap-2"
+				className="sticky bottom-0 flex gap-2 border-t bg-background py-4"
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
@@ -311,8 +324,8 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					setText("");
 				}}
 			>
-				<input
-					className="flex-1 rounded border px-3 py-2"
+				<Input
+					aria-label="Mensaje para el agente"
 					disabled={isInputBlocked}
 					onChange={(event) => setText(event.target.value)}
 					placeholder={
@@ -352,9 +365,8 @@ function FreeformAnswer({
 				setAnswer("");
 			}}
 		>
-			<input
+			<Input
 				aria-label="Tu respuesta"
-				className="flex-1 rounded border px-3 py-2"
 				disabled={disabled}
 				onChange={(event) => setAnswer(event.target.value)}
 				placeholder={
@@ -366,5 +378,13 @@ function FreeformAnswer({
 				Responder
 			</Button>
 		</form>
+	);
+}
+
+function MessageText({ message }: { message: EveMessage }) {
+	return message.parts.map((part) =>
+		part.type === "text" ? (
+			<span key={`${message.id}-text-${part.stepIndex}`}>{part.text}</span>
+		) : null,
 	);
 }
