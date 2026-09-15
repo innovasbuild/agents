@@ -195,7 +195,11 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				<fieldset className="rounded border p-3" key={request.requestId}>
 					{request.kind !== "tool-approval" ? (
 						<>
-							<legend className="px-1 text-sm">Pregunta del agente</legend>
+							<legend className="px-1 text-sm">
+								{request.kind === "session-limit"
+									? "Límite de la sesión"
+									: "Pregunta del agente"}
+							</legend>
 							<p className="whitespace-pre-wrap">{request.prompt}</p>
 						</>
 					) : request.toolName === "send_email" ? (
@@ -235,7 +239,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 						</>
 					)}
 					<div className="mt-2 flex flex-wrap gap-2">
-						{request.options.map((option, index) => (
+						{request.options.map((option) => (
 							<Button
 								key={option.id}
 								onClick={() =>
@@ -244,7 +248,13 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 									])
 								}
 								type="button"
-								variant={index === 0 ? "default" : "outline"}
+								variant={
+									option.style === "primary"
+										? "default"
+										: option.style === "danger"
+											? "destructive"
+											: "outline"
+								}
 							>
 								{option.label}
 							</Button>
@@ -252,6 +262,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					</div>
 					{request.allowFreeform ? (
 						<FreeformAnswer
+							hasOptions={request.options.length > 0}
 							onAnswer={(answer) =>
 								void agent.respond([
 									{ requestId: request.requestId, text: answer },
@@ -292,7 +303,13 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	);
 }
 
-function FreeformAnswer({ onAnswer }: { onAnswer: (answer: string) => void }) {
+function FreeformAnswer({
+	hasOptions,
+	onAnswer,
+}: {
+	hasOptions: boolean;
+	onAnswer: (answer: string) => void;
+}) {
 	const [answer, setAnswer] = useState("");
 
 	return (
@@ -307,9 +324,12 @@ function FreeformAnswer({ onAnswer }: { onAnswer: (answer: string) => void }) {
 			}}
 		>
 			<input
+				aria-label="Tu respuesta"
 				className="flex-1 rounded border px-3 py-2"
 				onChange={(event) => setAnswer(event.target.value)}
-				placeholder="O escribí tu respuesta"
+				placeholder={
+					hasOptions ? "O escribí tu respuesta" : "Escribí tu respuesta"
+				}
 				value={answer}
 			/>
 			<Button type="submit" variant="outline">

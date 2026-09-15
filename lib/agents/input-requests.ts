@@ -6,7 +6,11 @@ export interface PendingInputRequest {
 	toolName: string;
 	input: Record<string, unknown>;
 	prompt: string;
-	options: { id: string; label: string }[];
+	options: {
+		id: string;
+		label: string;
+		style?: "primary" | "danger" | "default";
+	}[];
 	allowFreeform: boolean;
 }
 
@@ -32,9 +36,12 @@ export function pendingInputRequests(
 			const request = part.toolMetadata?.eve?.inputRequest;
 			if (!request) return [];
 			const isApproval = request.kind === "tool-approval";
-			const options = (request.options ?? []).map(({ id, label }) => ({
+			const options = (request.options ?? []).map(({ id, label, style }) => ({
 				id,
 				label: (isApproval && APPROVAL_LABELS[id]) || label,
+				// Las aprobaciones de eve no traen style: se destaca "approve".
+				style:
+					style ?? (isApproval && id === "approve" ? "primary" : undefined),
 			}));
 			return [
 				{
@@ -44,8 +51,12 @@ export function pendingInputRequests(
 					input: part.input as Record<string, unknown>,
 					prompt: request.prompt,
 					options,
-					// Sin opciones, el texto es la única forma de responder.
-					allowFreeform: request.allowFreeform === true || options.length === 0,
+					// Una pregunta sin opciones solo se responde con texto (eve la trata
+					// igual en channel/resolve-text.js). Una aprobación nunca: eve toma
+					// cualquier respuesta que no sea "approve" como inválida.
+					allowFreeform:
+						!isApproval &&
+						(request.allowFreeform === true || options.length === 0),
 				},
 			];
 		}),
