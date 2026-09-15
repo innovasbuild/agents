@@ -36,10 +36,12 @@ function isHttpUrl(value: string): boolean {
 	}
 }
 
-export function sanitizeFicha(ficha: Ficha): Ficha {
+export function sanitizeFicha(ficha: Ficha): Ficha | null {
+	const domain = normalizeDomain(ficha.domain);
+	if (!domain) return null;
 	return {
 		...ficha,
-		domain: normalizeDomain(ficha.domain) ?? ficha.domain,
+		domain,
 		hechos: ficha.hechos.filter((hecho) => isHttpUrl(hecho.url)),
 	};
 }

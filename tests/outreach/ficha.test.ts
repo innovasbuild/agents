@@ -34,10 +34,13 @@ describe("ficha", () => {
 	});
 	it("sanitizeFicha descarta hechos sin URL http(s) y normaliza el dominio", () => {
 		const clean = sanitizeFicha(ficha);
-		expect(clean.domain).toBe("acme.test");
-		expect(clean.hechos.map((h) => h.hecho)).toEqual([
+		expect(clean?.domain).toBe("acme.test");
+		expect(clean?.hechos.map((h) => h.hecho)).toEqual([
 			"Abrió planta en Rafaela",
 		]);
+	});
+	it("sanitizeFicha devuelve null si el dominio no normaliza: nunca pasa un dominio crudo", () => {
+		expect(sanitizeFicha({ ...ficha, domain: "no es un dominio" })).toBeNull();
 	});
 	it("vence a los 90 días", () => {
 		const researched = new Date("2026-09-01T00:00:00Z");
