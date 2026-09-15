@@ -3257,7 +3257,7 @@ Spikes aplicados (spec §13.1): S1 y S6 confirman HubSpot por REST con el token 
 | `lib/outreach/crm-session.ts` | `crmForSession`: adapter del tenant con el token de la sesión | 18 |
 | `lib/outreach/canon.ts` | Canon, vetos y voz desde el brain | 19 |
 | `lib/outreach/services/executor.ts`, `lib/outreach/services/import-contacts.ts`, `agents/outreach/tools/import_contacts.ts` | Chequeos de ejecutor y F1 con CSV | 20 |
-| `lib/outreach/agent-schema.ts`, `lib/outreach/services/research.ts`, `agents/outreach/tools/research_account.ts`, `agents/outreach/subagents/researcher/*` | Research con subagente (S4) | 21 |
+| `lib/outreach/agent-schema.ts`, `lib/outreach/services/research.ts`, `agents/outreach/tools/research_account.ts`, `agents/outreach/subagents/researcher/*`, `agents/outreach/evals/research.eval.ts` | Research con subagente (S4) | 21 |
 | `lib/outreach/prompt.ts`, `lib/outreach/services/draft.ts`, `agents/outreach/tools/draft_message.ts` | Redacción con gate y reintentos | 22 |
 | `lib/outreach/services/queue.ts`, `agents/outreach/tools/{queue_touch,list_queue,update_queue_item,reject_queue_item}.ts` | Cola | 23 |
 | `lib/gmail/mime.ts`, `lib/gmail/send.ts`, `lib/outreach/services/send.ts`, `agents/outreach/tools/send_email.ts`, `app/[tenant]/chat/chat-client.tsx` | Envío sobre la cola y registro | 24 |
@@ -3300,7 +3300,7 @@ describe("isLocalSupabaseUrl", () => {
 	it("acepta solo la Supabase local", () => {
 		expect(isLocalSupabaseUrl("http://127.0.0.1:54321")).toBe(true);
 		expect(isLocalSupabaseUrl("http://localhost:54321/")).toBe(true);
-		expect(isLocalSupabaseUrl("https://gxsebhduezvhnqkyxjdh.supabase.co")).toBe(false);
+		expect(isLocalSupabaseUrl("https://x.supabase.co")).toBe(false);
 		expect(isLocalSupabaseUrl("http://127.0.0.1.evil.test")).toBe(false);
 		expect(isLocalSupabaseUrl(undefined)).toBe(false);
 	});
@@ -3586,7 +3586,6 @@ export async function resetEvalTenant(): Promise<void> {
 	const admin = createAdminClient();
 	const steps = [
 		admin.from("queue_items").delete().eq("tenant_id", EVAL_TENANT_ID),
-		admin.from("events").delete().eq("tenant_id", EVAL_TENANT_ID),
 		admin
 			.from("contacts")
 			.delete()
@@ -3605,7 +3604,7 @@ export async function resetEvalTenant(): Promise<void> {
 }
 ```
 
-(`events` es append-only para `authenticated`; el cliente admin sí puede borrar, y solo lo hace sobre el tenant de eval en la base local.)
+(`events` es append-only: el reset no lo toca, ni siquiera en la base local. Ninguna eval afirma sobre `events` y el dedup de `encolado`/`envio` va por `queue_item_id`, que cambia en cada pieza. Si una eval futura necesita eventos, que filtre por `created_at >= <momento del reset>`.)
 
 **Ojo con el trigger de escalera:** volver `stage` a `a_contactar` después de un envío lo rechaza el trigger. Si el update de Laura falla por eso, cambiar el reset a: borrar Laura (`delete` por `contact_key`) y reinsertarla con los mismos valores del seed.
 
@@ -3633,7 +3632,8 @@ Expected: `smoke` en verde. Si falla con `Free tier users…`, el team no tiene 
 
 - [ ] **Step 11: Tests, typecheck y commit**
 
-Run: `npm test && npm run typecheck && npx biome check lib/agents agents/outreach/channels agents/outreach/evals scripts/run-evals.mts`
+Run: `npm test && npm run typecheck && npm run lint:fix && npx biome check lib/agents tests/agents agents/outreach/channels agents/outreach/evals scripts/run-evals.mts`
+Expected: todo en verde; `biome check` sin errores después de `lint:fix`. Antes del `git add`, `git status --short` no muestra archivos modificados fuera de los de esta task (si `lint:fix` tocó otros, revertirlos con `git checkout -- <archivo>`).
 
 ```bash
 git add lib/agents/eval-auth.ts tests/agents/eval-auth.test.ts agents/outreach/channels/eve.ts supabase/seed-evals.sql supabase/config.toml scripts/run-evals.mts .env.eval.example .gitignore package.json agents/outreach/evals
@@ -3817,7 +3817,10 @@ export function dayStart(timeZone: string, now: Date): Date {
 Run: `npm test -- tests/outreach/session.test.ts tests/outreach/time.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/outreach/result.ts lib/outreach/session.ts lib/outreach/time.ts tests/outreach/session.test.ts tests/outreach/time.test.ts
@@ -3832,8 +3835,8 @@ git commit -m "feat: negativas citables, caller de sesión y día del tenant" -m
 - Test: `tests/outreach/fake-store.test.ts`
 
 **Interfaces:**
-- Consumes: `parseOutreachConfig`, `ConfigValueKind` (config.ts), `OutreachEventInsert` (events.ts), `Ficha` (ficha.ts), `GateResult` (gate.ts), `OutreachStage` (stage.ts).
-- Produces (usados por todas las Tasks 20 a 26): tipos `QueueItemStatus`, `QueueItemKind`, `Ancla`, `ExecutorRow`, `TenantOutreach`, `ContactRow`, `NewContact`, `ContactPatch`, `AccountRow`, `QueueItemRow`, `NewQueueItem`, `QueueItemPatch`, `SentFilter`; `interface OutreachStore` (métodos abajo); `createSupabaseOutreachStore(client: SupabaseClient): OutreachStore`; `createFakeStore(seed?: Partial<FakeSeed>): FakeStore` en `tests/outreach/fake-store.ts` (implementa `OutreachStore` y expone `contacts`, `accounts`, `queue`, `events`, `executors`, `tenants` como arrays/maps mutables).
+- Consumes: `parseOutreachConfig`, `ConfigValueKind` (config.ts), `OutreachEventInsert` (events.ts), `Ficha` (ficha.ts), `GateResult`, `runGate` (gate.ts; `runGate` solo en el test del fake), `emptyGateRules` (gate-blocks.ts, solo en el test del fake), `OutreachStage` (stage.ts).
+- Produces (usados por todas las Tasks 20 a 26): tipos `QueueItemStatus`, `QueueItemKind`, `Ancla`, `ExecutorRow`, `TenantOutreach`, `ContactRow`, `NewContact`, `ContactPatch`, `AccountRow`, `QueueItemRow`, `NewQueueItem`, `QueueItemPatch`, `SentFilter`; `interface OutreachStore` (métodos abajo); `createSupabaseOutreachStore(client: SupabaseClient): OutreachStore`; `createFakeStore(): FakeStore` en `tests/outreach/fake-store.ts` (implementa `OutreachStore` y expone `contacts`, `accounts`, `queue`, `events`, `executors`, `tenants` como arrays/maps mutables); `PASSING_BODY: string` en `tests/outreach/fake-store.ts` (cuerpo de mail que pasa `runGate`; lo importan los tests de las Tasks 22, 23 y 24).
 
 - [ ] **Step 1: `lib/outreach/store.ts`**
 
@@ -4047,6 +4050,16 @@ const toQueueItem = (r: Row): QueueItemRow => ({
 	createdAt: r.created_at as string,
 });
 
+const toAccount = (r: Row): AccountRow => ({
+	id: r.id as string,
+	tenantId: r.tenant_id as string,
+	domain: r.domain as string,
+	name: r.name as string,
+	ficha: r.ficha as Ficha,
+	researchedAt: r.researched_at as string,
+	expiresAt: r.expires_at as string,
+});
+
 const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	accountId: "account_id",
 	crmId: "crm_id",
@@ -4189,8 +4202,7 @@ export function createSupabaseOutreachStore(client: SupabaseClient): OutreachSto
 				.eq("domain", domain)
 				.maybeSingle();
 			if (error) fail("leer la cuenta", error);
-			if (!data) return null;
-			return { id: data.id, tenantId: data.tenant_id, domain: data.domain, name: data.name, ficha: data.ficha as Ficha, researchedAt: data.researched_at, expiresAt: data.expires_at };
+			return data ? toAccount(data) : null;
 		},
 
 		async upsertAccount(row) {
@@ -4203,7 +4215,7 @@ export function createSupabaseOutreachStore(client: SupabaseClient): OutreachSto
 				.select("id, tenant_id, domain, name, ficha, researched_at, expires_at")
 				.single();
 			if (error || !data) fail("guardar la cuenta", error);
-			return { id: data.id, tenantId: data.tenant_id, domain: data.domain, name: data.name, ficha: data.ficha as Ficha, researchedAt: data.researched_at, expiresAt: data.expires_at };
+			return toAccount(data);
 		},
 
 		async insertQueueItem(row) {
@@ -4307,6 +4319,19 @@ import type {
 	TenantOutreach,
 } from "@/lib/outreach/store";
 import { parseOutreachConfig } from "@/lib/outreach/config";
+
+// Cuerpo de mail que pasa runGate con reglas vacías. Lo comparten los tests de
+// draft, queue y send; agents/outreach/evals/support.ts tiene su propia copia
+// (no puede importar de tests/).
+export const PASSING_BODY = [
+	"Hola Laura,",
+	"",
+	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
+	"",
+	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
+	"",
+	"Si te sirve, te cuento en 30 minutos cómo lo aplicamos en una empresa del rubro. Tenés un rato el jueves?",
+].join("\n");
 
 export interface FakeStore extends OutreachStore {
 	executors: ExecutorRow[];
@@ -4455,9 +4480,16 @@ export function createFakeStore(): FakeStore {
 
 ```ts
 import { describe, expect, it } from "vitest";
-import { contactRow, createFakeStore, TENANT, USER } from "./fake-store";
+import { runGate } from "@/lib/outreach/gate";
+import { emptyGateRules } from "@/lib/outreach/gate-blocks";
+import { contactRow, createFakeStore, PASSING_BODY, TENANT, USER } from "./fake-store";
 
 describe("fake store", () => {
+	it("PASSING_BODY pasa el gate sin reglas del tenant", () => {
+		const gate = runGate({ subject: "Crecer sin sumar gente al back office", body: PASSING_BODY, channel: "email", idioma: "es_ar", rules: emptyGateRules() });
+		expect(gate).toMatchObject({ status: "ok", violations: [] });
+	});
+
 	it("una sola pieza viva por persona y transiciones condicionales", async () => {
 		const store = createFakeStore();
 		const contact = contactRow();
@@ -4485,18 +4517,26 @@ describe("fake store", () => {
 ```ts
 // Solo con OUTREACH_IT=1 y .env.eval cargado (npm run test:it). Usa el tenant
 // sembrado por supabase/seed-evals.sql y deja la cola vacía al terminar.
-import { afterAll, describe, expect, it } from "vitest";
-import { createAdminClient } from "@/lib/supabase/admin";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isLocalSupabaseUrl } from "@/lib/agents/eval-auth";
-import { createSupabaseOutreachStore } from "@/lib/outreach/store";
+import { createSupabaseOutreachStore, type OutreachStore } from "@/lib/outreach/store";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const TENANT = "e7a1e7a1-0000-0000-0000-0000000000aa";
 const USER = "e7a1e7a1-0000-0000-0000-000000000001";
 const enabled = process.env.OUTREACH_IT === "1" && isLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
 describe.skipIf(!enabled)("store de outreach contra Supabase local", () => {
-	const admin = createAdminClient();
-	const store = createSupabaseOutreachStore(admin);
+	// vitest ejecuta el cuerpo de un describe salteado: el cliente se crea en
+	// beforeAll para que `npm test` sin variables de Supabase no tire.
+	let admin: SupabaseClient;
+	let store: OutreachStore;
+
+	beforeAll(() => {
+		admin = createAdminClient();
+		store = createSupabaseOutreachStore(admin);
+	});
 
 	afterAll(async () => {
 		await admin.from("queue_items").delete().eq("tenant_id", TENANT);
@@ -4535,6 +4575,14 @@ describe.skipIf(!enabled)("store de outreach contra Supabase local", () => {
 			{ tenant_id: TENANT, actor_user_id: USER, contact_key: contact.contactKey, channel: "email", type: "encolado", summary: "it", payload: { queue_item_id: id }, run_id: null },
 			{ tenant_id: TENANT, actor_user_id: USER, contact_key: contact.contactKey, channel: "email", type: "encolado", summary: "it", payload: { queue_item_id: id }, run_id: null },
 		]);
+		const { count, error } = await admin
+			.from("events")
+			.select("id", { count: "exact", head: true })
+			.eq("tenant_id", TENANT)
+			.eq("type", "encolado")
+			.eq("payload->>queue_item_id", id);
+		expect(error).toBeNull();
+		expect(count).toBe(1);
 	});
 });
 ```
@@ -4543,13 +4591,16 @@ En `package.json`: `"test:it": "OUTREACH_IT=1 node --env-file=.env.eval ./node_m
 
 - [ ] **Step 4: Correr**
 
-Run: `npm test -- tests/outreach/fake-store.test.ts && npm run typecheck`
-Expected: PASS (el `.it` se saltea en `npm test`).
+Run: `npm test -- tests/outreach/fake-store.test.ts && npm test && npm run typecheck`
+Expected: PASS. `npm test` completo sin `OUTREACH_IT` saltea `store.it.test.ts` sin tirar (el cliente admin se crea en `beforeAll`).
 
 Run: `npm run test:it` (con la base local levantada y `.env.eval` de la Task 15).
 Expected: PASS. Si falla un mapeo de columnas, corregir el store, no el test.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/outreach/store.ts tests/outreach/fake-store.ts tests/outreach/fake-store.test.ts tests/outreach/store.it.test.ts package.json
@@ -4561,6 +4612,7 @@ git commit -m "feat: store de outreach sobre Supabase y fake para tests" -m "Co-
 
 **Files:**
 - Create: `lib/connectors/crm/adapter.ts`, `lib/connectors/crm/hubspot-adapter.ts`, `lib/outreach/crm-session.ts`
+- Modify: `docs/superpowers/specs/03-agente-outreach-v1.md` (§9)
 - Test: `tests/connectors/hubspot-adapter.test.ts`, `tests/outreach/crm-session.test.ts`
 
 **Interfaces:**
@@ -4899,10 +4951,15 @@ export async function crmForSession(ctx: CrmAuthContext, tenantId: string): Prom
 Run: `npm test -- tests/connectors/hubspot-adapter.test.ts tests/outreach/crm-session.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Spec, lint y commit**
+
+En `docs/superpowers/specs/03-agente-outreach-v1.md` §9, anotar los cambios de la interfaz: `findContact` → `findContacts` (devuelve `CrmContactMatch[]` y el match lo decide `crmMatch`), la implementación vive en `lib/connectors/crm/hubspot-adapter.ts` (no en `hubspot.ts`), `upsertContact` acepta `name: string | null`, y `listOpenDeals`/`createDeal` quedan para la Entrega 4.
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task y la spec (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
-git add lib/connectors/crm/adapter.ts lib/connectors/crm/hubspot-adapter.ts lib/outreach/crm-session.ts tests/connectors/hubspot-adapter.test.ts tests/outreach/crm-session.test.ts
+git add lib/connectors/crm/adapter.ts lib/connectors/crm/hubspot-adapter.ts lib/outreach/crm-session.ts tests/connectors/hubspot-adapter.test.ts tests/outreach/crm-session.test.ts docs/superpowers/specs/03-agente-outreach-v1.md
 git commit -m "feat: adapter de CRM con HubSpot por REST" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -5059,7 +5116,10 @@ export async function brainForTenant(tenantId: string): Promise<BrainProvider | 
 Run: `npm test -- tests/outreach/canon.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/outreach/canon.ts tests/outreach/canon.test.ts
@@ -5070,29 +5130,25 @@ git commit -m "feat: canon, voz y vetos del tenant leídos del brain" -m "Co-Aut
 ### Task 20: `import_contacts` (F1 con CSV)
 
 **Files:**
-- Create: `lib/outreach/services/import-contacts.ts`, `agents/outreach/tools/import_contacts.ts`
+- Create: `lib/outreach/services/executor.ts`, `lib/outreach/services/import-contacts.ts`, `agents/outreach/tools/import_contacts.ts`
+- Modify: `tests/outreach/fake-store.ts` (suma `fakeCrm`), `docs/superpowers/specs/03-agente-outreach-v1.md` (§6.4)
 - Test: `tests/outreach/services/import-contacts.test.ts`
 
 **Interfaces:**
-- Consumes: `OutreachStore` (Task 17), `CrmAdapter` (Task 18), `Caller`, `refuse`, `Refusal` (Task 16), `parseContactsCsv`, `contactKey`, `linkedinSlug`, `crmMatch`, `claimStatus`, `outreachEvent`.
-- Produces: `type ImportVerdict = "nuevo" | "ya_existia" | "claim_ajeno" | "sin_email" | "invalida"`, `interface ImportRowResult { line: number; name: string | null; email: string | null; contactKey: string | null; verdict: ImportVerdict; message: string }`, `importContacts(input: { csv: string; caller: Caller }, deps: ImportDeps): Promise<Refusal | { ok: true; rows: ImportRowResult[]; errors: Array<{ line: number; reason: string }> }>`, `interface ImportDeps { store: OutreachStore; crm: CrmAdapter | null; now: () => Date }`. Negativas comunes a todas las tools de outreach con ejecutor (reusadas en Tasks 22 a 25): `resolveExecutor(store, caller, crm): Promise<Refusal | { executor: ExecutorRow; tenant: TenantOutreach }>` exportada desde `lib/outreach/services/executor.ts` (se crea en esta task).
+- Consumes: `OutreachStore`, `createFakeStore`, `contactRow`, `TENANT`/`USER`/`OTHER_USER` (Task 17), `CrmAdapter` (Task 18), `Caller`, `refuse`, `Refusal` (Task 16), `parseContactsCsv`, `contactKey`, `linkedinSlug`, `crmMatch`, `claimStatus`, `outreachEvent`.
+- Produces: `type ImportVerdict = "nuevo" | "ya_existia" | "claim_ajeno" | "sin_email" | "invalida"`, `interface ImportRowResult { line: number; name: string | null; email: string | null; contactKey: string | null; verdict: ImportVerdict; message: string }`, `importContacts(input: { csv: string; caller: Caller }, deps: ImportDeps): Promise<Refusal | { ok: true; rows: ImportRowResult[]; errors: Array<{ line: number; reason: string }> }>`, `interface ImportDeps { store: OutreachStore; crm: CrmAdapter | null; now: () => Date }`. Negativas comunes a todas las tools de outreach con ejecutor (reusadas en Tasks 22 a 25): `resolveExecutor(store, caller, crm): Promise<Refusal | { executor: ExecutorRow; tenant: TenantOutreach }>` exportada desde `lib/outreach/services/executor.ts` (se crea en esta task). `fakeCrm(overrides?: Partial<CrmAdapter>): CrmAdapter` en `tests/outreach/fake-store.ts` (CRM falso sin matches ni autoría; lo importan los tests de las Tasks 23, 24 y 25).
 
 Nota de alcance: la spec llama `ya_propio` al veredicto de "ya estaba cargado"; como también aplica a contactos libres, el valor es `ya_existia`. Anotar el cambio en la spec §6.4 en el mismo commit.
 
 - [ ] **Step 1: Test que falla**
 
-`tests/outreach/services/import-contacts.test.ts`:
+Agregar a `tests/outreach/fake-store.ts` (el import de tipo va con los otros imports de arriba):
 
 ```ts
-import { describe, expect, it } from "vitest";
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
-import { importContacts } from "@/lib/outreach/services/import-contacts";
-import { contactRow, createFakeStore, OTHER_USER, TENANT, USER } from "../fake-store";
 
-const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
-const now = () => new Date("2026-09-15T12:00:00Z");
-
-function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
+// CRM falso: sin matches ni autoría. Cada test pisa solo lo que necesita.
+export function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
 	return {
 		findContacts: async () => [],
 		lastAuthorship: async () => null,
@@ -5103,6 +5159,17 @@ function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
 		...overrides,
 	};
 }
+```
+
+`tests/outreach/services/import-contacts.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { importContacts } from "@/lib/outreach/services/import-contacts";
+import { contactRow, createFakeStore, fakeCrm, OTHER_USER, TENANT, USER } from "../fake-store";
+
+const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
+const now = () => new Date("2026-09-15T12:00:00Z");
 
 const CSV = [
 	"name,email,company,segment,vector",
@@ -5372,12 +5439,15 @@ export default defineTool({
 Run: `npm test -- tests/outreach/services/import-contacts.test.ts && npm run typecheck`
 Expected: PASS. Si `ctx` no es asignable a `CrmAuthContext`, no castear a `any`: revisar la firma de `getToken` en `node_modules/eve/dist/src/tools/definition.d.ts` y ajustar `CrmAuthContext` (Task 18) a esa forma, con test.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Spec, lint y commit**
 
 En `docs/superpowers/specs/03-agente-outreach-v1.md` §6.4, fila `import_contacts`: `ya_propio` → `ya_existia`.
 
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task y la spec (si tocó otros, `git checkout -- <archivo>` sobre esos).
+
 ```bash
-git add lib/outreach/services/executor.ts lib/outreach/services/import-contacts.ts agents/outreach/tools/import_contacts.ts tests/outreach/services/import-contacts.test.ts docs/superpowers/specs/03-agente-outreach-v1.md
+git add lib/outreach/services/executor.ts lib/outreach/services/import-contacts.ts agents/outreach/tools/import_contacts.ts tests/outreach/fake-store.ts tests/outreach/services/import-contacts.test.ts docs/superpowers/specs/03-agente-outreach-v1.md
 git commit -m "feat: carga de contactos por CSV con claim y cruce con el CRM" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -5701,7 +5771,10 @@ export default defineEval({
 Run: `npm run evals -- research`
 Expected: verde. **Si `ctx.agent` no devuelve la ficha** (el `saveStep` da `ficha_invalida` o el turno falla dentro del workflow): no improvisar. Reportar BLOCKED con la salida; el controlador decide aplicar el plan B de la spec §13.1 (tool común con `generateText` + `Output.object` y `web_fetch`).
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/outreach/agent-schema.ts lib/outreach/services/research.ts agents/outreach/tools/research_account.ts agents/outreach/subagents agents/outreach/evals/research.eval.ts tests/outreach/agent-schema.test.ts tests/outreach/services/research.test.ts
@@ -5713,14 +5786,46 @@ git commit -m "feat: research de cuentas con el subagente researcher" -m "Co-Aut
 
 **Files:**
 - Create: `lib/outreach/prompt.ts`, `lib/outreach/services/draft.ts`, `agents/outreach/tools/draft_message.ts`
-- Test: `tests/outreach/prompt.test.ts`, `tests/outreach/services/draft.test.ts`
+- Modify: `lib/outreach/canon.ts` (suma `loadCanonOrNull`), `lib/outreach/services/executor.ts` (suma `attributionError`), `tests/outreach/canon.test.ts`
+- Test: `tests/outreach/prompt.test.ts`, `tests/outreach/services/draft.test.ts`, `tests/outreach/services/executor.test.ts`
 
 **Interfaces:**
-- Consumes: `OutreachStore`, `resolveExecutor` (Task 20), `Canon`, `CanonUnavailableError` (Task 19), `runGate`, `GateResult`, `GateViolation` (Task 10), `SUPPORTED_IDIOMAS` (config.ts), `domainFromEmail`, `isFichaVigente`, `refuse`.
-- Produces: `draftOutputSchema` (zod: `{ subject, body, hook, vector, idioma, ancla: { hecho, fuente } }`), `type DraftOutput`, `buildDraftPrompt(input: DraftPromptInput): string`, `MAX_DRAFT_ATTEMPTS = 3`, `draftMessage(input: { caller: Caller; contactKey: string; kind: QueueItemKind }, deps: DraftDeps): Promise<DraftResult>`, `interface DraftDeps { store: OutreachStore; loadCanon: (executorSlug: string) => Promise<Canon>; generate: (model: string, prompt: string) => Promise<{ output: unknown; usage: unknown }>; now: () => Date }`, `type DraftResult = (Refusal & { violations?: GateViolation[] }) | { ok: true; subject: string; body: string; hook: string; vector: string; idioma: string; ancla: { hecho: string; fuente: string }; gate: GateResult; attempts: number }`.
+- Consumes: `OutreachStore`, `TenantOutreach`, `PASSING_BODY`, `defaultTenant` (Task 17), `resolveExecutor` (Task 20), `Canon`, `CanonUnavailableError` (Task 19), `runGate`, `GateResult`, `GateViolation` (Task 10), `SUPPORTED_IDIOMAS` (config.ts), `domainFromEmail`, `isFichaVigente`, `refuse`.
+- Produces: `draftOutputSchema` (zod: `{ subject, body, hook, vector, idioma, ancla: { hecho, fuente } }`), `type DraftOutput`, `buildDraftPrompt(input: DraftPromptInput): string`, `MAX_DRAFT_ATTEMPTS = 3`, `draftMessage(input: { caller: Caller; contactKey: string; kind: QueueItemKind }, deps: DraftDeps): Promise<DraftResult>`, `interface DraftDeps { store: OutreachStore; loadCanon: (executorSlug: string) => Promise<Canon>; generate: (model: string, prompt: string) => Promise<{ output: unknown; usage: unknown }>; now: () => Date }`, `type DraftResult = (Refusal & { violations?: GateViolation[] }) | { ok: true; subject: string; body: string; hook: string; vector: string; idioma: string; ancla: { hecho: string; fuente: string }; gate: GateResult; attempts: number }`. Helpers compartidos que nacen acá (los reusan las Tasks 23 y 24): `loadCanonOrNull(load: (executorSlug: string) => Promise<Canon>, executorSlug: string): Promise<Canon | null>` en `lib/outreach/canon.ts` (null solo ante `CanonUnavailableError`; otros errores suben) y `attributionError(tenant: TenantOutreach, attribution: { hook: string; vector: string; idioma: string }): string | null` en `lib/outreach/services/executor.ts`.
 - `draft_message` no escribe en la base (spec §6.4). En esta entrega solo `kind: "msg1"`; los follow-ups llegan en la Entrega 4 con el hilo de Gmail.
 
 - [ ] **Step 1: Tests que fallan**
+
+Agregar a `tests/outreach/canon.test.ts` (sumar `loadCanonOrNull` al `await import("@/lib/outreach/canon")` de arriba y `import type { Canon } from "@/lib/outreach/canon";` a los imports):
+
+```ts
+describe("loadCanonOrNull", () => {
+	it("devuelve el canon, null si el brain no responde y deja pasar cualquier otro error", async () => {
+		const canon: Canon = { available: true, pages: [], voice: [], rules: { vetos: [], maxChars: { all: null, byChannel: {} }, formal: false, errors: [] } };
+		expect(await loadCanonOrNull(async () => canon, "ana")).toBe(canon);
+		expect(await loadCanonOrNull(async () => { throw new CanonUnavailableError(new Error("timeout")); }, "ana")).toBeNull();
+		await expect(loadCanonOrNull(async () => { throw new Error("otro"); }, "ana")).rejects.toThrow("otro");
+	});
+});
+```
+
+`tests/outreach/services/executor.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { attributionError } from "@/lib/outreach/services/executor";
+import { defaultTenant } from "../fake-store";
+
+describe("attributionError", () => {
+	it("null si hook, vector e idioma están en las listas del tenant; mensaje citable si alguno no", () => {
+		const tenant = defaultTenant();
+		expect(attributionError(tenant, { hook: "h1", vector: "v1", idioma: "es_ar" })).toBeNull();
+		expect(attributionError(tenant, { hook: "h_x", vector: "v1", idioma: "es_ar" })).toBe("hook, vector o idioma fuera de las listas del cliente (h_x, v1, es_ar)");
+		expect(attributionError(tenant, { hook: "h1", vector: "v9", idioma: "es_ar" })).not.toBeNull();
+		expect(attributionError(tenant, { hook: "h1", vector: "v1", idioma: "pt_br" })).not.toBeNull();
+	});
+});
+```
 
 `tests/outreach/prompt.test.ts`:
 
@@ -5761,23 +5866,14 @@ import type { Canon } from "@/lib/outreach/canon";
 import { CanonUnavailableError } from "@/lib/outreach/canon";
 import { emptyGateRules, parseGateBlocks } from "@/lib/outreach/gate-blocks";
 import { draftMessage } from "@/lib/outreach/services/draft";
-import { contactRow, createFakeStore, TENANT, USER } from "../fake-store";
+import { contactRow, createFakeStore, PASSING_BODY, TENANT, USER } from "../fake-store";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
 const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = { available: true, pages: [], voice: [], rules: emptyGateRules() };
-const GOOD_BODY = [
-	"Hola Laura,",
-	"",
-	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
-	"",
-	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
-	"",
-	"Si te sirve, te cuento en 30 minutos cómo lo aplicamos en una empresa del rubro. Tenés un rato el jueves?",
-].join("\n");
-const good = { subject: "Crecer sin sumar gente al back office", body: GOOD_BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta en Rafaela", fuente: "https://acme.test/n" } };
+const good = { subject: "Crecer sin sumar gente al back office", body: PASSING_BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta en Rafaela", fuente: "https://acme.test/n" } };
 
 function seeded() {
 	const store = createFakeStore();
@@ -5798,7 +5894,7 @@ describe("draftMessage", () => {
 
 	it("reintenta pasándole las violaciones y corta a los 3 intentos", async () => {
 		const store = seeded();
-		const bad = { ...good, body: `${GOOD_BODY}\nQuedo a disposición.` };
+		const bad = { ...good, body: `${PASSING_BODY}\nQuedo a disposición.` };
 		const prompts: string[] = [];
 		const generate = vi.fn(async (_model: string, prompt: string) => {
 			prompts.push(prompt);
@@ -5837,10 +5933,43 @@ describe("draftMessage", () => {
 
 - [ ] **Step 2: Correr y verificar que fallan**
 
-Run: `npm test -- tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts`
-Expected: FAIL.
+Run: `npm test -- tests/outreach/canon.test.ts tests/outreach/services/executor.test.ts tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts`
+Expected: FAIL (`loadCanonOrNull`, `attributionError` y los módulos nuevos no existen).
 
 - [ ] **Step 3: Implementación**
+
+Agregar al final de `lib/outreach/canon.ts`:
+
+```ts
+/** El canon, o null si el brain no responde: cada servicio arma su negativa. */
+export async function loadCanonOrNull(
+	load: (executorSlug: string) => Promise<Canon>,
+	executorSlug: string,
+): Promise<Canon | null> {
+	try {
+		return await load(executorSlug);
+	} catch (error) {
+		if (error instanceof CanonUnavailableError) return null;
+		throw error;
+	}
+}
+```
+
+Agregar al final de `lib/outreach/services/executor.ts`:
+
+```ts
+/** Mensaje citable si hook, vector o idioma no están en las listas del tenant; null si están. */
+export function attributionError(
+	tenant: TenantOutreach,
+	attribution: { hook: string; vector: string; idioma: string },
+): string | null {
+	const { hook, vector, idioma } = attribution;
+	if (tenant.values.hook.includes(hook) && tenant.values.vector.includes(vector) && tenant.values.idioma.includes(idioma)) {
+		return null;
+	}
+	return `hook, vector o idioma fuera de las listas del cliente (${hook}, ${vector}, ${idioma})`;
+}
+```
 
 `lib/outreach/prompt.ts`:
 
@@ -5925,7 +6054,7 @@ ${violations}`;
 ```ts
 // draft_message (spec 03 §6.4): redacta con el modelo del tenant, corre el gate
 // y reintenta con las violaciones. No escribe en la base.
-import { type Canon, CanonUnavailableError } from "../canon";
+import { type Canon, loadCanonOrNull } from "../canon";
 import { domainFromEmail } from "../domain";
 import { isFichaVigente } from "../ficha";
 import { type GateResult, type GateViolation, runGate } from "../gate";
@@ -5933,7 +6062,7 @@ import { buildDraftPrompt, draftOutputSchema } from "../prompt";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
 import type { OutreachStore, QueueItemKind } from "../store";
-import { resolveExecutor } from "./executor";
+import { attributionError, resolveExecutor } from "./executor";
 
 export const MAX_DRAFT_ATTEMPTS = 3;
 
@@ -5969,13 +6098,8 @@ export async function draftMessage(
 		return refuse("falta_research", `no hay ficha vigente de ${domain ?? "la empresa de este contacto"}: corré research_account antes de redactar`);
 	}
 
-	let canon: Canon;
-	try {
-		canon = await deps.loadCanon(executor.slug as string);
-	} catch (error) {
-		if (error instanceof CanonUnavailableError) return refuse("canon_no_disponible", "no pude leer el canon del cliente en el brain: no redacto sin sus reglas");
-		throw error;
-	}
+	const canon = await loadCanonOrNull(deps.loadCanon, executor.slug as string);
+	if (!canon) return refuse("canon_no_disponible", "no pude leer el canon del cliente en el brain: no redacto sin sus reglas");
 
 	let violations: GateViolation[] = [];
 	for (let attempt = 1; attempt <= MAX_DRAFT_ATTEMPTS; attempt++) {
@@ -5995,8 +6119,9 @@ export async function draftMessage(
 			continue;
 		}
 		const draft = parsed.data;
-		if (!tenant.values.hook.includes(draft.hook) || !tenant.values.vector.includes(draft.vector) || !tenant.values.idioma.includes(draft.idioma)) {
-			violations = [{ kind: "formato", piece: "cuerpo", what: `hook, vector o idioma fuera de las listas del cliente (${draft.hook}, ${draft.vector}, ${draft.idioma})`, fix: "usar solo valores de las listas" }];
+		const attribution = attributionError(tenant, draft);
+		if (attribution) {
+			violations = [{ kind: "formato", piece: "cuerpo", what: attribution, fix: "usar solo valores de las listas" }];
 			continue;
 		}
 		const gate = runGate({ subject: draft.subject, body: draft.body, channel: "email", idioma: draft.idioma, rules: canon.rules });
@@ -6057,13 +6182,16 @@ export default defineTool({
 
 - [ ] **Step 4: Correr tests y typecheck**
 
-Run: `npm test -- tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts && npm run typecheck`
-Expected: PASS. Si el texto `GOOD_BODY` no pasa el gate por conteo de marcadores, ajustar el texto del test, no las listas del gate.
+Run: `npm test -- tests/outreach/canon.test.ts tests/outreach/services/executor.test.ts tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts && npm run typecheck`
+Expected: PASS. `PASSING_BODY` ya pasa el gate (lo verifica `fake-store.test.ts` de la Task 17); si igual falla acá, ajustar `PASSING_BODY` en `tests/outreach/fake-store.ts`, no las listas del gate.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
-git add lib/outreach/prompt.ts lib/outreach/services/draft.ts agents/outreach/tools/draft_message.ts tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts
+git add lib/outreach/canon.ts lib/outreach/services/executor.ts lib/outreach/prompt.ts lib/outreach/services/draft.ts agents/outreach/tools/draft_message.ts tests/outreach/canon.test.ts tests/outreach/services/executor.test.ts tests/outreach/prompt.test.ts tests/outreach/services/draft.test.ts
 git commit -m "feat: redacción del primer mensaje con gate y reintentos" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -6071,13 +6199,35 @@ git commit -m "feat: redacción del primer mensaje con gate y reintentos" -m "Co
 
 **Files:**
 - Create: `lib/outreach/services/queue.ts`, `agents/outreach/tools/queue_touch.ts`, `agents/outreach/tools/list_queue.ts`, `agents/outreach/tools/update_queue_item.ts`, `agents/outreach/tools/reject_queue_item.ts`
+- Modify: `lib/outreach/gate.ts` (suma `gateSummary`), `tests/outreach/gate.test.ts`
 - Test: `tests/outreach/services/queue.test.ts`
 
 **Interfaces:**
-- Consumes: `OutreachStore`, `CrmAdapter`, `resolveExecutor`, `Canon`, `CanonUnavailableError`, `runGate`, `claimStatus`, `crmMatch`, `assignLetters`, `outreachEvent`, `refuse`.
-- Produces: `interface QueueDeps { store: OutreachStore; crm: CrmAdapter | null; loadCanon: (executorSlug: string) => Promise<Canon>; now: () => Date }`; `queueTouch(input: QueueTouchInput, deps: QueueDeps)`, `listQueue(input: { caller: Caller }, deps: Pick<QueueDeps, "store">)`, `updateQueueItem(input: { caller: Caller; queueItemId: string; subject: string; body: string }, deps: QueueDeps)`, `rejectQueueItem(input: { caller: Caller; queueItemId: string; reason: string }, deps: Pick<QueueDeps, "store" | "now">)`; `interface QueueTouchInput { caller: Caller; contactKey: string; kind: "msg1"; subject: string; body: string; hook: string; vector: string; idioma: string; ancla: { hecho: string; fuente: string } }`; `claimForContact(deps, caller, executorCrmOwnerId, contact): Promise<{ status: ClaimStatus; crmId: string | null }>` (exportada: la reusa `send_email` en la Task 24).
+- Consumes: `OutreachStore`, `PASSING_BODY` (Task 17), `fakeCrm` (Task 20), `CrmAdapter`, `resolveExecutor`, `attributionError` (Task 22), `Canon`, `loadCanonOrNull` (Task 22), `runGate`, `GateResult`, `claimStatus`, `crmMatch`, `assignLetters`, `outreachEvent`, `refuse`.
+- Produces: `gateSummary(gate: GateResult): string` en `lib/outreach/gate.ts` (las violaciones separadas por "; " o, si no hay, las notas; la reusa `send_email` en la Task 24); `interface QueueDeps { store: OutreachStore; crm: CrmAdapter | null; loadCanon: (executorSlug: string) => Promise<Canon>; now: () => Date }`; `queueTouch(input: QueueTouchInput, deps: QueueDeps)`, `listQueue(input: { caller: Caller }, deps: Pick<QueueDeps, "store">)`, `updateQueueItem(input: { caller: Caller; queueItemId: string; subject: string; body: string }, deps: QueueDeps)`, `rejectQueueItem(input: { caller: Caller; queueItemId: string; reason: string }, deps: Pick<QueueDeps, "store" | "now">)`; `interface QueueTouchInput { caller: Caller; contactKey: string; kind: "msg1"; subject: string; body: string; hook: string; vector: string; idioma: string; ancla: { hecho: string; fuente: string } }`; `claimForContact(deps, caller, executorCrmOwnerId, contact): Promise<{ status: ClaimStatus; crmId: string | null }>` (exportada: la reusa `send_email` en la Task 24).
 
 - [ ] **Step 1: Test que falla**
+
+Agregar a `tests/outreach/gate.test.ts` (sumar `gateSummary` al import de `@/lib/outreach/gate`):
+
+```ts
+describe("gateSummary", () => {
+	it("junta las violaciones y, si no hay, las notas", () => {
+		expect(
+			gateSummary({
+				status: "fail",
+				violations: [
+					{ kind: "formula", piece: "cuerpo", what: 'fórmula vetada: "quedo a disposicion"', fix: "un ask con fecha" },
+					{ kind: "simbolo", piece: "asunto", what: "raya en el asunto", fix: "usar coma" },
+				],
+				warnings: [],
+				notes: ["no se usa"],
+			}),
+		).toBe('fórmula vetada: "quedo a disposicion"; raya en el asunto');
+		expect(gateSummary({ status: "indeterminate", violations: [], warnings: [], notes: ["poco texto", "idioma dudoso"] })).toBe("poco texto; idioma dudoso");
+	});
+});
+```
 
 `tests/outreach/services/queue.test.ts`:
 
@@ -6087,23 +6237,14 @@ import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import type { Canon } from "@/lib/outreach/canon";
 import { emptyGateRules } from "@/lib/outreach/gate-blocks";
 import { listQueue, queueTouch, rejectQueueItem, updateQueueItem } from "@/lib/outreach/services/queue";
-import { contactRow, createFakeStore, OTHER_USER, TENANT, USER } from "../fake-store";
+import { contactRow, createFakeStore, fakeCrm, OTHER_USER, PASSING_BODY, TENANT, USER } from "../fake-store";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
 const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = { available: true, pages: [], voice: [], rules: emptyGateRules() };
-const BODY = [
-	"Hola Laura,",
-	"",
-	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
-	"",
-	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
-	"",
-	"Si te sirve, te cuento en 30 minutos cómo lo aplicamos en una empresa del rubro. Tenés un rato el jueves?",
-].join("\n");
-const touch = { caller, contactKey: "em:laura@acme.test", kind: "msg1" as const, subject: "Crecer sin sumar gente", body: BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta", fuente: "https://acme.test/n" } };
+const touch = { caller, contactKey: "em:laura@acme.test", kind: "msg1" as const, subject: "Crecer sin sumar gente", body: PASSING_BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta", fuente: "https://acme.test/n" } };
 
 function setup() {
 	const store = createFakeStore();
@@ -6116,14 +6257,14 @@ describe("queueTouch", () => {
 		const { store, deps } = setup();
 		const result = await queueTouch(touch, deps);
 		expect(result).toMatchObject({ ok: true });
-		expect(store.queue[0]).toMatchObject({ status: "pending", executorUserId: USER, toEmail: "laura@acme.test", draftOriginal: { subject: touch.subject, body: BODY }, gateResult: { status: "ok" } });
+		expect(store.queue[0]).toMatchObject({ status: "pending", executorUserId: USER, toEmail: "laura@acme.test", draftOriginal: { subject: touch.subject, body: PASSING_BODY }, gateResult: { status: "ok" } });
 		expect(store.contacts[0]).toMatchObject({ ownerUserId: USER, hook: "h1", vector: "v1", idioma: "es_ar" });
 		expect(store.events.map((e) => e.type)).toEqual(["encolado"]);
 	});
 
 	it("vuelve a correr el gate: un borrador que no pasa no se encola", async () => {
 		const { store, deps } = setup();
-		expect(await queueTouch({ ...touch, body: `${BODY}\nQuedo a disposición.` }, deps)).toMatchObject({ ok: false, reason: "gate" });
+		expect(await queueTouch({ ...touch, body: `${PASSING_BODY}\nQuedo a disposición.` }, deps)).toMatchObject({ ok: false, reason: "gate" });
 		expect(store.queue).toHaveLength(0);
 		expect(store.events.map((e) => e.type)).toEqual(["gate_fallido"]);
 	});
@@ -6134,11 +6275,10 @@ describe("queueTouch", () => {
 		expect(await queueTouch(touch, deps)).toMatchObject({ ok: false, reason: "claim_ajeno" });
 		store.contacts[0].ownerUserId = null;
 		store.executors[0].crmOwnerId = "owner-ana";
-		const crm: CrmAdapter = {
+		const crm = fakeCrm({
 			findContacts: async () => [{ id: "crm-1", contactKey: "em:laura@acme.test", email: "laura@acme.test", linkedinSlugs: [], ownerId: null }],
 			lastAuthorship: async () => ({ ownerId: "owner-beto", at: new Date("2026-09-10T00:00:00Z") }),
-			upsertContact: async () => "crm-1", addNote: async () => {}, completeOpenTasks: async () => {}, createTask: async () => {},
-		};
+		});
 		expect(await queueTouch(touch, { ...deps, crm })).toMatchObject({ ok: false, reason: "claim_ajeno" });
 		expect(store.queue).toHaveLength(0);
 	});
@@ -6159,13 +6299,12 @@ describe("listQueue, updateQueueItem, rejectQueueItem", () => {
 		const { store, deps } = setup();
 		await queueTouch(touch, deps);
 		const listed = await listQueue({ caller }, deps);
-		if (!listed.ok) throw new Error(listed.message);
 		expect(listed.items[0]).toMatchObject({ letter: "A", to: "laura@acme.test", subject: touch.subject });
 		const id = listed.items[0].queueItemId;
 
-		expect(await updateQueueItem({ caller: { ...caller, userId: OTHER_USER }, queueItemId: id, subject: "Otro", body: BODY }, deps)).toMatchObject({ ok: false, reason: "no_es_tu_pieza" });
-		expect(await updateQueueItem({ caller, queueItemId: id, subject: "Otro — asunto", body: BODY }, deps)).toMatchObject({ ok: false, reason: "gate" });
-		expect(await updateQueueItem({ caller, queueItemId: id, subject: "Otra idea para Acme", body: BODY }, deps)).toMatchObject({ ok: true });
+		expect(await updateQueueItem({ caller: { ...caller, userId: OTHER_USER }, queueItemId: id, subject: "Otro", body: PASSING_BODY }, deps)).toMatchObject({ ok: false, reason: "no_es_tu_pieza" });
+		expect(await updateQueueItem({ caller, queueItemId: id, subject: "Otro — asunto", body: PASSING_BODY }, deps)).toMatchObject({ ok: false, reason: "gate" });
+		expect(await updateQueueItem({ caller, queueItemId: id, subject: "Otra idea para Acme", body: PASSING_BODY }, deps)).toMatchObject({ ok: true });
 		expect(store.queue[0]).toMatchObject({ subject: "Otra idea para Acme", draftOriginal: { subject: touch.subject } });
 
 		expect(await rejectQueueItem({ caller, queueItemId: id, reason: "no es ICP" }, deps)).toMatchObject({ ok: true });
@@ -6178,10 +6317,19 @@ describe("listQueue, updateQueueItem, rejectQueueItem", () => {
 
 - [ ] **Step 2: Correr y verificar que falla**
 
-Run: `npm test -- tests/outreach/services/queue.test.ts`
-Expected: FAIL.
+Run: `npm test -- tests/outreach/gate.test.ts tests/outreach/services/queue.test.ts`
+Expected: FAIL (`gateSummary` y `services/queue` no existen).
 
 - [ ] **Step 3: Implementación**
+
+Agregar al final de `lib/outreach/gate.ts`:
+
+```ts
+/** Resumen citable de un gate que no pasó: las violaciones o, si no hay, las notas. */
+export function gateSummary(gate: GateResult): string {
+	return gate.violations.map((v) => v.what).join("; ") || gate.notes.join("; ");
+}
+```
 
 `lib/outreach/services/queue.ts`:
 
@@ -6190,15 +6338,15 @@ Expected: FAIL.
 // vuelve a correr sobre el texto que llega, y el claim se chequea contra la
 // base y la autoría del CRM.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
-import { type Canon, CanonUnavailableError } from "../canon";
+import { type Canon, loadCanonOrNull } from "../canon";
 import { outreachEvent } from "../events";
-import { runGate } from "../gate";
+import { gateSummary, runGate } from "../gate";
 import { type ClaimStatus, claimStatus, crmMatch } from "../guards";
 import { assignLetters } from "../queue-letters";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
 import type { ContactRow, OutreachStore } from "../store";
-import { resolveExecutor } from "./executor";
+import { attributionError, resolveExecutor } from "./executor";
 
 export interface QueueDeps {
 	store: OutreachStore;
@@ -6237,13 +6385,8 @@ export async function claimForContact(
 }
 
 async function gateFor(deps: QueueDeps, executorSlug: string, subject: string, body: string, idioma: string) {
-	try {
-		const canon = await deps.loadCanon(executorSlug);
-		return runGate({ subject, body, channel: "email", idioma, rules: canon.rules });
-	} catch (error) {
-		if (error instanceof CanonUnavailableError) return null;
-		throw error;
-	}
+	const canon = await loadCanonOrNull(deps.loadCanon, executorSlug);
+	return canon ? runGate({ subject, body, channel: "email", idioma, rules: canon.rules }) : null;
 }
 
 const CANON_DOWN = () => refuse("canon_no_disponible", "no pude leer el canon del cliente en el brain: sin sus vetos no encolo");
@@ -6260,9 +6403,8 @@ export async function queueTouch(input: QueueTouchInput, deps: QueueDeps): Promi
 	if (contact.stage !== "a_contactar" || contact.touches > 0) {
 		return refuse("etapa_incompatible", `el contacto está en ${contact.stage}: el primer mensaje es solo para a_contactar`);
 	}
-	if (!tenant.values.hook.includes(input.hook) || !tenant.values.vector.includes(input.vector) || !tenant.values.idioma.includes(input.idioma)) {
-		return refuse("atribucion_invalida", `hook, vector o idioma fuera de las listas del cliente (${input.hook}, ${input.vector}, ${input.idioma})`);
-	}
+	const attribution = attributionError(tenant, input);
+	if (attribution) return refuse("atribucion_invalida", attribution);
 
 	const claim = await claimForContact(deps, caller, executor.crmOwnerId, contact);
 	if (claim.status === "ajeno") {
@@ -6273,8 +6415,11 @@ export async function queueTouch(input: QueueTouchInput, deps: QueueDeps): Promi
 	const gate = await gateFor(deps, executor.slug as string, input.subject, input.body, input.idioma);
 	if (!gate) return CANON_DOWN();
 	if (gate.status !== "ok") {
-		await deps.store.insertEvents([outreachEvent({ tenant_id: caller.tenantId, actor_user_id: caller.userId, contact_key: contact.contactKey, type: "gate_fallido", summary: gate.violations.map((v) => v.what).join("; ").slice(0, 400) || gate.notes.join("; "), payload: { gate } })]);
-		return { ...refuse("gate", `la pieza no pasa el gate: ${gate.violations.map((v) => v.what).join("; ") || gate.notes.join("; ")}`), violations: gate.violations } as Refusal;
+		// gate_fallido tiene dedup de 2 h por contacto y ejecutor, y su payload no
+		// trae queue_item_id: un segundo fallo del mismo contacto en ese lapso no
+		// queda en events. Aceptado en la Entrega 3; sacarlo del dedup pide migración.
+		await deps.store.insertEvents([outreachEvent({ tenant_id: caller.tenantId, actor_user_id: caller.userId, contact_key: contact.contactKey, type: "gate_fallido", summary: gateSummary(gate).slice(0, 400), payload: { gate } })]);
+		return { ...refuse("gate", `la pieza no pasa el gate: ${gateSummary(gate)}`), violations: gate.violations } as Refusal;
 	}
 
 	const item = await deps.store.insertQueueItem({
@@ -6344,7 +6489,7 @@ export async function updateQueueItem(
 	const gate = await gateFor(deps, executor.slug, input.subject, input.body, item.idioma);
 	if (!gate) return CANON_DOWN();
 	if (gate.status !== "ok") {
-		return { ...refuse("gate", `la edición no pasa el gate: ${gate.violations.map((v) => v.what).join("; ") || gate.notes.join("; ")}`), violations: gate.violations } as Refusal;
+		return { ...refuse("gate", `la edición no pasa el gate: ${gateSummary(gate)}`), violations: gate.violations } as Refusal;
 	}
 	const updated = await deps.store.transitionQueueItem(caller.tenantId, item.id, "pending", { subject: input.subject, body: input.body, gateResult: gate });
 	if (!updated) return refuse("ya_no_pendiente", "la pieza cambió de estado mientras la editabas");
@@ -6476,13 +6621,16 @@ export default defineTool({
 
 - [ ] **Step 4: Correr tests y typecheck**
 
-Run: `npm test -- tests/outreach/services/queue.test.ts && npm run typecheck`
+Run: `npm test -- tests/outreach/gate.test.ts tests/outreach/services/queue.test.ts && npm run typecheck`
 Expected: PASS. En el fake store los ids no son UUID: el `z.uuid()` de las tools no se ejerce en estos tests, solo en las evals.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
-git add lib/outreach/services/queue.ts agents/outreach/tools/queue_touch.ts agents/outreach/tools/list_queue.ts agents/outreach/tools/update_queue_item.ts agents/outreach/tools/reject_queue_item.ts tests/outreach/services/queue.test.ts
+git add lib/outreach/gate.ts tests/outreach/gate.test.ts lib/outreach/services/queue.ts agents/outreach/tools/queue_touch.ts agents/outreach/tools/list_queue.ts agents/outreach/tools/update_queue_item.ts agents/outreach/tools/reject_queue_item.ts tests/outreach/services/queue.test.ts
 git commit -m "feat: cola de piezas con gate, claim y edición del dueño" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -6495,7 +6643,7 @@ git commit -m "feat: cola de piezas con gate, claim y edición del dueño" -m "C
 - Test: `tests/outreach/services/send.test.ts`
 
 **Interfaces:**
-- Consumes: `resolveExecutor`, `claimForContact` (Task 23), `Canon`, `CanonUnavailableError`, `runGate`, `canTouch`, `TOUCH_REASON_TEXT`, `canAdvance`, `nextFollowup`, `dayStart`, `localDate`, `outreachEvent`, `refuse`, `CrmAdapter`.
+- Consumes: `PASSING_BODY` (Task 17), `fakeCrm` (Task 20), `resolveExecutor`, `claimForContact`, `gateSummary` (Task 23), `Canon`, `loadCanonOrNull` (Task 22), `runGate`, `canTouch`, `TOUCH_REASON_TEXT`, `canAdvance`, `nextFollowup`, `dayStart`, `localDate`, `outreachEvent`, `refuse`, `CrmAdapter`.
 - Produces: `buildRawMessage({ to, subject, body, bcc?, messageId? })` (rechaza CR/LF en headers), `sendMail(token, input: MailInput)` con `bcc?` y `messageId?`; `sendQueuedEmail(input: SendInput, deps: SendDeps): Promise<SendResult>`; `interface SendDeps { store: OutreachStore; crm: CrmAdapter | null; crmAfterSend: CrmAdapter | null; loadCanon: (executorSlug: string) => Promise<Canon>; sendMail: (mail: { to: string; subject: string; body: string; bcc: string | null; messageId: string }) => Promise<{ id: string; threadId: string }>; isMailUnauthorized: (error: unknown) => boolean; now: () => Date }`; `interface SendInput { caller: Caller; sessionId: string; callId: string; queueItemId: string; to: string; subject: string; body: string }`; `type SendResult = Refusal | { ok: true; queueItemId: string; gmailMessageId: string; threadId: string; crm: "ok" | "pendiente" | "sin_crm" }`.
 - Reglas fijas (spec §7 y hallazgos de producción del 2026-09-15): lo aprobado es lo enviado (`pieza_cambiada` si difiere); la transición `pending → approved` es condicional (idempotencia); cualquier error antes de enviar devuelve la pieza a `pending`; un 401 de Gmail devuelve la pieza a `pending` y se relanza para que la tool pida autorización; después de enviar, nada pausa el turno ni reenvía (errores del CRM quedan en `crm_sync_pendiente`).
 
@@ -6527,7 +6675,7 @@ import type { Canon } from "@/lib/outreach/canon";
 import { emptyGateRules } from "@/lib/outreach/gate-blocks";
 import { queueTouch } from "@/lib/outreach/services/queue";
 import { sendQueuedEmail } from "@/lib/outreach/services/send";
-import { contactRow, createFakeStore, OTHER_USER, TENANT, USER } from "../fake-store";
+import { contactRow, createFakeStore, fakeCrm, OTHER_USER, PASSING_BODY, TENANT, USER } from "../fake-store";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
@@ -6536,28 +6684,17 @@ class FakeUnauthorized extends Error {}
 const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = { available: true, pages: [], voice: [], rules: emptyGateRules() };
-const BODY = [
-	"Hola Laura,",
-	"",
-	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
-	"",
-	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
-	"",
-	"Si te sirve, te cuento en 30 minutos cómo lo aplicamos en una empresa del rubro. Tenés un rato el jueves?",
-].join("\n");
 const SUBJECT = "Crecer sin sumar gente";
 
 function crmSpy(overrides: Partial<CrmAdapter> = {}) {
 	const calls: string[] = [];
-	const adapter: CrmAdapter = {
-		findContacts: async () => [],
-		lastAuthorship: async () => null,
+	const adapter = fakeCrm({
 		upsertContact: async (input) => { calls.push(`upsert:${JSON.stringify(input.properties)}`); return "crm-1"; },
 		addNote: async (_id, note) => { calls.push(`note:${note.body.split("\n")[0]}`); },
 		completeOpenTasks: async () => { calls.push("complete"); },
 		createTask: async (_id, task) => { calls.push(`task:${task.dueAt.toISOString()}`); },
 		...overrides,
-	};
+	});
 	return { adapter, calls };
 }
 
@@ -6568,13 +6705,13 @@ async function setup(options: { crm?: CrmAdapter | null; crmOwner?: string | nul
 	store.contacts.push(contactRow());
 	const crm = options.crm ?? null;
 	const queued = await queueTouch(
-		{ caller, contactKey: "em:laura@acme.test", kind: "msg1", subject: SUBJECT, body: BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta", fuente: "https://acme.test/n" } },
+		{ caller, contactKey: "em:laura@acme.test", kind: "msg1", subject: SUBJECT, body: PASSING_BODY, hook: "h1", vector: "v1", idioma: "es_ar", ancla: { hecho: "Abrió planta", fuente: "https://acme.test/n" } },
 		{ store, crm, loadCanon: async () => canon, now },
 	);
 	if (!queued.ok) throw new Error(queued.message);
 	const sendMail = vi.fn(async () => ({ id: "gm-1", threadId: "th-1" }));
 	const deps = { store, crm, crmAfterSend: crm, loadCanon: async () => canon, sendMail, isMailUnauthorized: (e: unknown) => e instanceof FakeUnauthorized, now };
-	const input = { caller, sessionId: "wrun_1", callId: "call-1", queueItemId: queued.queueItemId, to: "laura@acme.test", subject: SUBJECT, body: BODY };
+	const input = { caller, sessionId: "wrun_1", callId: "call-1", queueItemId: queued.queueItemId, to: "laura@acme.test", subject: SUBJECT, body: PASSING_BODY };
 	return { store, deps, input, sendMail };
 }
 
@@ -6582,7 +6719,7 @@ describe("sendQueuedEmail", () => {
 	it("envía la pieza aprobada con BCC y Message-ID propio, y registra base y eventos", async () => {
 		const { store, deps, input, sendMail } = await setup();
 		expect(await sendQueuedEmail(input, deps)).toEqual({ ok: true, queueItemId: input.queueItemId, gmailMessageId: "gm-1", threadId: "th-1", crm: "sin_crm" });
-		expect(sendMail).toHaveBeenCalledWith({ to: "laura@acme.test", subject: SUBJECT, body: BODY, bcc: "123@bcc.hubspot.com", messageId: `<qi-${input.queueItemId}@innov.test>` });
+		expect(sendMail).toHaveBeenCalledWith({ to: "laura@acme.test", subject: SUBJECT, body: PASSING_BODY, bcc: "123@bcc.hubspot.com", messageId: `<qi-${input.queueItemId}@innov.test>` });
 		expect(store.queue[0]).toMatchObject({ status: "sent", gmailMessageId: "gm-1", gmailThreadId: "th-1", eveSessionId: "wrun_1", approvalCallId: "call-1" });
 		expect(store.contacts[0]).toMatchObject({ stage: "msg1_enviado", touches: 1, gmailThreadId: "th-1", firstTouchAt: "2026-09-15T12:00:00.000Z", nextStepAt: "2026-09-19T12:00:00.000Z" });
 		expect(store.events.map((e) => e.type)).toEqual(["encolado", "envio"]);
@@ -6633,7 +6770,7 @@ describe("sendQueuedEmail", () => {
 		expect(store.events.map((e) => e.type)).toContain("envio_fallido");
 	});
 
-	it("con CRM: 10 propiedades en la misma llamada, nota [out], cierre de tasks y task al siguiente toque", async () => {
+	it("con CRM: 9 propiedades (sin outreach_fecha_respuesta) en la misma llamada, nota [out], cierre de tasks y task al siguiente toque", async () => {
 		const { adapter, calls } = crmSpy();
 		const { deps, input } = await setup({ crm: adapter, crmOwner: "owner-ana" });
 		expect(await sendQueuedEmail(input, deps)).toMatchObject({ ok: true, crm: "ok" });
@@ -6679,6 +6816,7 @@ vi.mock("../../lib/connectors/auth", () => ({ tenantScopedConnect: (connector: s
 vi.mock("../../lib/outreach/crm-session", () => ({ crmForSession: async () => null }));
 vi.mock("../../lib/outreach/canon", () => ({ brainForTenant: async () => null, loadCanon: async () => ({}) }));
 vi.mock("../../lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("eve/tools/approval", () => ({ always: () => "always", once: () => "once", never: () => "never" }));
 vi.mock("../../lib/outreach/services/send", () => ({
 	sendQueuedEmail: async (input: unknown) => {
 		state.serviceInput = input;
@@ -6711,9 +6849,9 @@ beforeEach(() => {
 });
 
 describe("send_email", () => {
-	it("pide aprobación siempre", () => {
+	it("pide aprobación siempre (always, no once ni never)", () => {
 		// biome-ignore lint/suspicious/noExplicitAny: inspección de la definición.
-		expect(typeof (tool as any).approval).toBe("function");
+		expect((tool as any).approval).toBe("always");
 	});
 
 	it("pasa al servicio la pieza, la sesión y el callId", async () => {
@@ -6788,17 +6926,17 @@ export function buildRawMessage({ to, subject, body, bcc, messageId }: MailInput
 // transición pending → approved es la idempotencia; después de enviar nada
 // pausa ni reenvía.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
-import { type Canon, CanonUnavailableError } from "../canon";
+import { type Canon, loadCanonOrNull } from "../canon";
 import { outreachEvent } from "../events";
-import { runGate } from "../gate";
+import { gateSummary, runGate } from "../gate";
 import { canTouch, MAILBOX_GUARD_DAYS, TOUCH_REASON_TEXT } from "../guards";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
 import { canAdvance, nextFollowup, type OutreachStage } from "../stage";
 import type { ContactRow, OutreachStore, QueueItemRow } from "../store";
 import { dayStart, localDate } from "../time";
-import { claimForContact } from "./queue";
 import { resolveExecutor } from "./executor";
+import { claimForContact } from "./queue";
 
 export interface SendDeps {
 	store: OutreachStore;
@@ -6867,15 +7005,10 @@ export async function sendQueuedEmail(input: SendInput, deps: SendDeps): Promise
 		if (claim.status === "ajeno") return await finish("failed", "claim_ajeno", "esta persona pasó a trabajarla otro ejecutor");
 		crmId = claim.crmId;
 
-		let canon: Canon;
-		try {
-			canon = await deps.loadCanon(executor.slug as string);
-		} catch (error) {
-			if (error instanceof CanonUnavailableError) return await finish("pending", "canon_no_disponible", "no pude leer el canon del cliente: la pieza sigue pendiente, probá de nuevo en un rato");
-			throw error;
-		}
+		const canon = await loadCanonOrNull(deps.loadCanon, executor.slug as string);
+		if (!canon) return await finish("pending", "canon_no_disponible", "no pude leer el canon del cliente: la pieza sigue pendiente, probá de nuevo en un rato");
 		const gate = runGate({ subject: item.subject, body: item.body, channel: "email", idioma: item.idioma, rules: canon.rules });
-		if (gate.status !== "ok") return await finish("failed", "gate", `la pieza ya no pasa el gate: ${gate.violations.map((v) => v.what).join("; ") || gate.notes.join("; ")}`);
+		if (gate.status !== "ok") return await finish("failed", "gate", `la pieza ya no pasa el gate: ${gateSummary(gate)}`);
 
 		const today = dayStart(tenant.config.timezone, now);
 		const [byExecutor, toRecipientToday, mailbox] = await Promise.all([
@@ -7043,9 +7176,12 @@ En `app/[tenant]/chat/chat-client.tsx`, en `interface SendEmailInput`, sumar `qu
 - [ ] **Step 6: Correr tests y typecheck**
 
 Run: `npm test -- tests/gmail tests/outreach/services/send.test.ts tests/tools/send-email.test.ts && npm test && npm run typecheck`
-Expected: PASS. Si `approval: always()` no es una función inspeccionable en el test del tool, cambiar esa aserción por `expect((tool as any).approval).toBeDefined()`.
+Expected: PASS. El test del tool mockea `eve/tools/approval` (`always()` devuelve `"always"`): `defineTool` guarda `approval` tal cual, así que la aserción distingue `always()` de `once()` y `never()`. No aflojar esa aserción.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 7: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/gmail/mime.ts lib/gmail/send.ts lib/outreach/services/send.ts agents/outreach/tools/send_email.ts app/\[tenant\]/chat/chat-client.tsx tests/gmail/mime.test.ts tests/outreach/services/send.test.ts tests/tools/send-email.test.ts
@@ -7057,10 +7193,11 @@ git commit -m "feat: send_email sobre la cola con revalidación, registro y CRM"
 
 **Files:**
 - Create: `lib/outreach/services/crm-record.ts`, `agents/outreach/tools/crm_upsert_contact.ts`, `agents/outreach/tools/log_event.ts`
+- Modify: `docs/superpowers/specs/03-agente-outreach-v1.md` (§6.4)
 - Test: `tests/outreach/services/crm-record.test.ts`
 
 **Interfaces:**
-- Consumes: `resolveExecutor`, `CrmAdapter`, `canAdvance`, `OUTREACH_STAGES`, `MODEL_LOGGABLE_EVENT_TYPES`, `outreachEvent`, `localDate`, `refuse`.
+- Consumes: `fakeCrm` (Task 20), `resolveExecutor`, `CrmAdapter`, `canAdvance`, `OUTREACH_STAGES`, `MODEL_LOGGABLE_EVENT_TYPES`, `outreachEvent`, `localDate`, `refuse`.
 - Produces: `recordCrmUpdate(input: { caller: Caller; contactKey: string; stage: OutreachStage | null; note: string | null }, deps: { store: OutreachStore; crm: CrmAdapter | null; now: () => Date }): Promise<Refusal | { ok: true; crmId: string; stage: OutreachStage }>`; `logModelEvent(input: { caller: Caller; type: "freno" | "nota"; contactKey: string | null; summary: string }, deps: { store: OutreachStore }): Promise<{ ok: true }>`.
 
 - [ ] **Step 1: Test que falla**
@@ -7069,23 +7206,18 @@ git commit -m "feat: send_email sobre la cola con revalidación, registro y CRM"
 
 ```ts
 import { describe, expect, it } from "vitest";
-import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { logModelEvent, recordCrmUpdate } from "@/lib/outreach/services/crm-record";
-import { contactRow, createFakeStore, TENANT, USER } from "../fake-store";
+import { contactRow, createFakeStore, fakeCrm, TENANT, USER } from "../fake-store";
 
 const caller = { tenantId: TENANT, userId: USER, role: "tenant_member", email: "ana@innov.test" };
 const now = () => new Date("2026-09-15T12:00:00Z");
 
 function crmSpy() {
 	const calls: unknown[][] = [];
-	const adapter: CrmAdapter = {
-		findContacts: async () => [],
-		lastAuthorship: async () => null,
+	const adapter = fakeCrm({
 		upsertContact: async (input) => { calls.push(["upsert", input.crmId, input.properties]); return "crm-7"; },
 		addNote: async (id, note) => { calls.push(["note", id, note.body]); },
-		completeOpenTasks: async () => {},
-		createTask: async () => {},
-	};
+	});
 	return { adapter, calls };
 }
 
@@ -7253,10 +7385,15 @@ export default defineTool({
 Run: `npm test -- tests/outreach/services/crm-record.test.ts && npm run typecheck`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Spec, lint y commit**
+
+En `docs/superpowers/specs/03-agente-outreach-v1.md` §6.4, fila `crm_upsert_contact`: la firma queda `crm_upsert_contact(contact_key, stage, note)` (sin `properties`: las propiedades que escribe son `contact_key`, `outreach_status` y `outreach_owner`, fijas en el servicio) y `stage` y `note` son nullable en vez de opcionales.
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task y la spec (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
-git add lib/outreach/services/crm-record.ts agents/outreach/tools/crm_upsert_contact.ts agents/outreach/tools/log_event.ts tests/outreach/services/crm-record.test.ts
+git add lib/outreach/services/crm-record.ts agents/outreach/tools/crm_upsert_contact.ts agents/outreach/tools/log_event.ts tests/outreach/services/crm-record.test.ts docs/superpowers/specs/03-agente-outreach-v1.md
 git commit -m "feat: registro manual en el CRM y eventos del modelo" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -7435,6 +7572,7 @@ Una persona la trabaja un solo ejecutor, por todos los canales. Si una herramien
 # Cómo usar las herramientas
 
 - Si una herramienta devuelve `ok: false`, citá su `message` y no busques otra vía para lograr lo mismo.
+- Para investigar una cuenta usá siempre `research_account`, nunca el subagente `researcher` directo.
 - Para una corrida seguí la skill `outreach-corrida`; para redactar, `outreach-redaccion`; para registrar en el CRM, `outreach-crm`.
 
 # Estilo
@@ -7495,7 +7633,7 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 1. Leé el canon: `brain_search` con tag `canon:icp`, `canon:hooks` y `canon:mensajes`, y `brain_read` de lo que haga falta. La voz del ejecutor la aplica `draft_message`.
 2. Elegí el marco: segmento y vector del contacto; hook por defecto del vector salvo que la ficha pida otro (decí por qué). Un hook por mensaje.
 3. `draft_message` redacta con cuatro partes: por qué a esta persona (un hecho de la ficha con su fuente), el dolor en sus palabras, qué hacemos en una frase, y un pedido concreto.
-4. Si `draft_message` devuelve `reason: "gate"`, no reescribas vos por fuera: contale al ejecutor qué violación quedó y proponé el cambio con `update_queue_item` solo si la pieza ya está en la cola.
+4. Si `draft_message` devuelve `reason: "gate"`, no reescribas vos por fuera: contale al ejecutor qué violación quedó y pedile el cambio; con el texto nuevo, `queue_touch` vuelve a correr el gate.
 5. Para editar a pedido del ejecutor, cambiá solo lo que pidió y usá `update_queue_item`; el gate vuelve a correr.
 
 Nunca: IA en la primera línea, promesas que la ficha no respalda, clientes o cifras que no estén en una fuente.
@@ -7521,7 +7659,10 @@ description: Usar cuando el ejecutor cuenta un avance con un contacto que no pas
 Run: `npm test -- tests/outreach/summary.test.ts && npm test && npm run typecheck && npm run evals -- smoke`
 Expected: PASS y humo en verde.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (si tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
 git add lib/outreach/summary.ts tests/outreach/summary.test.ts agents/outreach/instructions.md agents/outreach/instructions/tenant.ts agents/outreach/skills
@@ -7531,14 +7672,14 @@ git commit -m "feat: constitución de outreach, resumen de sesión y skills" -m 
 ### Task 27: Evals de comportamiento (§11.2)
 
 **Files:**
-- Create: `agents/outreach/evals/draft-msg1.eval.ts`, `agents/outreach/evals/claim-ajeno.eval.ts`, `agents/outreach/evals/sin-aprobacion-no-sale.eval.ts`, `agents/outreach/evals/frenos.eval.ts`, `agents/outreach/evals/cola-por-letras.eval.ts`
-- Modify: `agents/outreach/evals/support.ts` (helpers para sembrar piezas)
+- Create: `agents/outreach/evals/draft-msg1.eval.ts`, `agents/outreach/evals/claim-ajeno.eval.ts`, `agents/outreach/evals/sin-aprobacion-no-sale.eval.ts`, `agents/outreach/evals/frenos.eval.ts`, `agents/outreach/evals/cola-por-letras.eval.ts`, y `agents/outreach/evals/aprobar-sin-gmail.eval.ts` solo si el Step 3 confirma que el runner observa el pedido de autorización
+- Modify: `agents/outreach/evals/support.ts` (helpers para sembrar piezas y el binding de Gmail); `docs/superpowers/specs/03-agente-outreach-v1.md` (§14, entrega 3) solo si el Step 3 no puede crear la eval
 
 **Interfaces:**
-- Consumes: `resetEvalTenant`, `EVAL_TENANT_ID`, `EVAL_USER_ID`, `OTHER_USER_ID` (Task 15); tools de las Tasks 20 a 25; `runGate`.
-- Produces: `seedPendingPiece(contactKey: string, overrides?: { subject?: string; body?: string }): Promise<string>` y `ensureContact(contactKey: string, email: string, name: string): Promise<string>` en `support.ts`.
+- Consumes: `resetEvalTenant`, `EVAL_TENANT_ID`, `EVAL_USER_ID` (Task 15); tools de las Tasks 20 a 25 (`send_email` chequea el binding `mail`/`gmail` antes de pedir el token, Task 24); constitución de la Task 26.
+- Produces: `seedPendingPiece(contactKey: string, overrides?: { subject?: string; body?: string }): Promise<string>`, `ensureContact(contactKey: string, email: string, name: string): Promise<string>`, `enableEvalGmailBinding(): Promise<void>` y `disableEvalGmailBinding(): Promise<void>` en `support.ts`.
 
-El tenant de eval no tiene bindings de `mail` ni `crm`: `send_email` devuelve `sin_gmail` si llega a ejecutarse. Las evals que prueban aprobaciones responden `cancel`, así que la ejecución nunca llega a Gmail.
+El seed de la Task 15 no le da al tenant de eval bindings de `mail` ni `crm`: `send_email` devuelve `sin_gmail` antes de pedir el token si llega a ejecutarse. Las evals que prueban aprobaciones con `cancel` nunca llegan a esa línea. La única que necesita pasar el chequeo es `aprobar-sin-gmail` (Step 3): habilita el binding de Gmail con `enableEvalGmailBinding()` al empezar y lo saca con `disableEvalGmailBinding()` en un `finally`, así el resto de las evals sigue viendo el tenant sin Gmail.
 
 - [ ] **Step 1: Helpers**
 
@@ -7589,6 +7730,29 @@ export async function seedPendingPiece(contactKey: string, overrides: { subject?
 	await admin.from("contacts").update({ owner_user_id: EVAL_USER_ID }).eq("id", contact.id);
 	return data.id;
 }
+
+// Binding mail/gmail del tenant de eval, para que send_email pase el chequeo de
+// sin_gmail y llegue al pedido de token. Sin grant de Connect para el usuario
+// de eval, ahí eve pide autorización.
+export async function enableEvalGmailBinding(): Promise<void> {
+	const { error } = await createAdminClient()
+		.from("tenant_connections")
+		.upsert(
+			{ tenant_id: EVAL_TENANT_ID, capability: "mail", provider: "gmail", config: {}, enabled: true },
+			{ onConflict: "tenant_id,capability,provider" },
+		);
+	if (error) throw new Error(`no pude habilitar Gmail en el tenant de eval: ${error.message}`);
+}
+
+export async function disableEvalGmailBinding(): Promise<void> {
+	const { error } = await createAdminClient()
+		.from("tenant_connections")
+		.delete()
+		.eq("tenant_id", EVAL_TENANT_ID)
+		.eq("capability", "mail")
+		.eq("provider", "gmail");
+	if (error) throw new Error(`no pude sacar Gmail del tenant de eval: ${error.message}`);
+}
 ```
 
 - [ ] **Step 2: Evals**
@@ -7606,7 +7770,7 @@ export default defineEval({
 		await resetEvalTenant();
 		await t.send("Redactá el primer mensaje para em:laura@acme-eval.test y mostrámelo. No lo encoles todavía.");
 		t.succeeded();
-		t.calledTool("draft_message");
+		t.calledTool("draft_message", { output: { ok: true, gate: { status: "ok" } } });
 		t.notCalledTool("queue_touch");
 		t.notCalledTool("send_email");
 		t.judge.autoevals.closedQA(
@@ -7676,8 +7840,11 @@ export default defineEval({
 		await ensureContact("em:sofia@acme-eval.test", "sofia@acme-eval.test", "Sofía Paz");
 		await t.send("Armá una corrida con em:laura@acme-eval.test y em:sofia@acme-eval.test: redactá y encolá el primer mensaje de cada una.");
 		t.succeeded();
-		await t.send("FRENA");
+		const stop = await t.send("FRENA");
 		t.succeeded();
+		stop.calledTool("log_event", { input: { type: "freno" } });
+		stop.notCalledTool("draft_message");
+		stop.notCalledTool("queue_touch");
 		t.judge.autoevals.closedQA("En su última respuesta el agente confirma que frena la corrida y no anuncia que va a seguir redactando, encolando ni enviando.");
 	},
 });
@@ -7707,8 +7874,9 @@ export default defineEval({
 		await t.send("A y C mandalas, B cambiale el asunto a 'Otra idea para Acme', D descartala porque no es ICP.");
 		t.calledTool("update_queue_item");
 		t.calledTool("reject_queue_item");
-		t.calledTool("send_email");
 		await t.respondAll("cancel");
+		// calledTool matchea status "completed" por default; cancelada, la llamada queda "rejected".
+		t.calledTool("send_email", { status: "rejected", count: 2 });
 
 		const { data } = await createAdminClient().from("queue_items").select("id, status, subject").eq("tenant_id", EVAL_TENANT_ID).in("id", ids);
 		const byId = new Map((data ?? []).map((row) => [row.id, row]));
@@ -7721,15 +7889,61 @@ export default defineEval({
 
 (El orden de letras sale de `created_at`: se siembran en el orden A, B, C, D.)
 
-- [ ] **Step 3: Correr**
+- [ ] **Step 3: Aprobar sin grant de Gmail (spec §16, "Reanudar después de autorizar Gmail")**
+
+Primero verificar si una eval puede observar un pedido de autorización sin completar OAuth. Leer `node_modules/eve/docs/evals/assertions.mdx` y `cases.mdx`, y en `node_modules/eve/dist/src/evals/types.d.ts` y `match.d.ts` buscar una aserción sobre eventos del stream (`event(type, options?)` en `EveEvalAssertions`, tipado con `MessageStreamEvent["type"]`) o sobre partes de autorización; en `node_modules/eve/dist/src/protocol/message.d.ts`, confirmar que `MessageStreamEvent` incluye `AuthorizationRequiredStreamEvent` (`type: "authorization.required"`). Confirmar también que `EveEvalTurn` expone `status` (`"completed" | "failed" | "waiting"`) y `expectOk()`. Anotar en el reporte de la task qué se encontró y en qué archivo.
+
+**Si existe** (la aserción `event("authorization.required")`, o un equivalente que afirme que el turno pidió autorización): crear `agents/outreach/evals/aprobar-sin-gmail.eval.ts`. Sin binding de Gmail, `send_email` (Task 24) devuelve `sin_gmail` antes de `ctx.getToken` y nunca pediría autorización; por eso la eval habilita el binding en la base local antes de pedir el envío. El usuario de eval no tiene grant de Google en Connect, así que `ctx.getToken` pide autorización y el turno queda estacionado sin tocar la pieza (sigue `pending`).
+
+```ts
+import { defineEval } from "eve/evals";
+import { createAdminClient } from "../../../lib/supabase/admin";
+import { disableEvalGmailBinding, EVAL_TENANT_ID, enableEvalGmailBinding, resetEvalTenant, seedPendingPiece } from "./support";
+
+export default defineEval({
+	description: "Aprobar send_email sin grant de Gmail pide autorización, el turno no queda failed y la pieza sigue pendiente (spec §16).",
+	timeoutMs: 240_000,
+	async test(t) {
+		await resetEvalTenant();
+		await enableEvalGmailBinding();
+		try {
+			const pieceId = await seedPendingPiece("em:laura@acme-eval.test");
+			await t.send("Mostrame la cola y mandá la pieza A.");
+			t.calledTool("list_queue");
+			t.notCalledTool("ask_question");
+			t.requireInputRequest({ toolName: "send_email" });
+			const approved = await t.respondAll("approve");
+			t.log(`turno después de aprobar: ${approved.status}`);
+			approved.expectOk();
+			approved.event("authorization.required");
+			const { data } = await createAdminClient().from("queue_items").select("status").eq("tenant_id", EVAL_TENANT_ID).eq("id", pieceId).single();
+			if (data?.status !== "pending") throw new Error(`la pieza quedó en ${data?.status} esperando la autorización de Gmail`);
+		} finally {
+			await disableEvalGmailBinding();
+		}
+	},
+});
+```
+
+Run: `npm run evals -- aprobar-sin-gmail`
+Expected: verde. Si la aserción tiene otro nombre o forma en eve 0.54.2, ajustarla a lo encontrado sin dejar de afirmar las tres cosas: hubo pedido de autorización, el turno no quedó `failed` y la pieza sigue `pending`. Si el turno queda `failed` por un error de Connect (y no por el pedido de autorización), no aflojar la eval: reportar BLOCKED con la salida.
+
+**Si no existe** (ninguna aserción ni dato del turno deja ver el pedido de autorización sin completar OAuth): no crear la eval ni los helpers de binding de Gmail (sacar `enableEvalGmailBinding` y `disableEvalGmailBinding` del Step 1). En `docs/superpowers/specs/03-agente-outreach-v1.md` §14, al final del ítem 3 (Agente de primer toque), agregar: "El runner de `eve eval` no deja observar el pedido de autorización sin completar OAuth: el caso aprobar → autorizar → se envía se verifica en el piloto (Entrega 5)." Reportarlo en el resumen de la task.
+
+La doble confirmación (pregunta y aprobación en el mismo paso, spec §16) no suma eval propia: la resuelve la constitución de la Task 26 ("No pidas otra confirmación antes"), y `sin-aprobacion-no-sale` y `aprobar-sin-gmail` afirman `notCalledTool("ask_question")`.
+
+- [ ] **Step 4: Correr**
 
 Run: `npm run evals`
-Expected: las siete evals en verde (`smoke`, `research`, `draft-msg1`, `claim-ajeno`, `sin-aprobacion-no-sale`, `frenos`, `cola-por-letras`). Si una API de `t` no existe con ese nombre en eve 0.54.2 (`requireInputRequest`, `respondAll`, `calledSubagent`, `judge.autoevals.closedQA`), confirmar en `node_modules/eve/dist/src/evals/types.d.ts` y ajustar la eval, sin bajar lo que verifica. Una eval roja por comportamiento del agente se arregla en instrucciones, skills o descripciones de tools, no relajando la eval.
+Expected: las ocho evals en verde (`smoke`, `research`, `draft-msg1`, `claim-ajeno`, `sin-aprobacion-no-sale`, `frenos`, `cola-por-letras`, `aprobar-sin-gmail`), o las siete primeras si el Step 3 no creó `aprobar-sin-gmail`. Si una API de `t` no existe con ese nombre en eve 0.54.2 (`requireInputRequest`, `respondAll`, `calledSubagent`, `judge.autoevals.closedQA`), confirmar en `node_modules/eve/dist/src/evals/types.d.ts` y ajustar la eval, sin bajar lo que verifica. Una eval roja por comportamiento del agente se arregla en instrucciones, skills o descripciones de tools, no relajando la eval.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Lint y commit**
+
+Run: `npm run lint:fix && git status --short`
+Expected: `lint:fix` sin errores; `git status` solo muestra archivos de esta task (y la spec si el Step 3 la editó; si `lint:fix` tocó otros, `git checkout -- <archivo>` sobre esos).
 
 ```bash
-git add agents/outreach/evals
+git add agents/outreach/evals docs/superpowers/specs/03-agente-outreach-v1.md
 git commit -m "test: evals de redacción, claim, aprobación, frenos y cola por letras" -m "Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
 
@@ -7737,6 +7951,7 @@ git commit -m "test: evals de redacción, claim, aprobación, frenos y cola por 
 
 - [ ] `npm test`, `npm run typecheck`, `npm run db:test` (con la base libre) y `npm run evals` en verde.
 - [ ] Spec §17: anotar que la Entrega 3 usa el guard de buzón sobre `queue_items` (sin `gmail.readonly`) y que `outreach-escucha` entra en la Entrega 4.
+- [ ] Spec §16, riesgo "Pregunta y aprobación en el mismo paso": anotar que la Entrega 3 no agrupa tarjetas ni deshabilita `ask_question`; lo cubre la constitución de la Task 26 ("No pidas otra confirmación antes") y las evals que afirman `notCalledTool("ask_question")`.
 - [ ] PR de la Entrega 3 con `/ship`.
 
 ---
