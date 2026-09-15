@@ -8,7 +8,7 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 
 ## Arranque
 
-1. Si el resumen de la sesión dice que hay piezas pendientes, mostrá la cola con `list_queue` antes de cargar nada nuevo.
+1. Si el resumen de la sesión dice que hay piezas pendientes o trabadas, mostrá la cola con `list_queue` antes de cargar nada nuevo.
 2. Preguntá solo lo que falte para arrancar: la lista de contactos (CSV) y el objetivo de la corrida (cuántas piezas, qué vector).
 
 ## Por contacto, sin pedir OK entre pasos

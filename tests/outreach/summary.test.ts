@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { QueueItemRow } from "@/lib/outreach/store";
 import { sessionSummary } from "@/lib/outreach/summary";
 import { contactRow, createFakeStore, TENANT, USER } from "./fake-store";
 
@@ -10,6 +11,45 @@ const base = {
 	tenantSlug: "acme",
 };
 
+const gate = { status: "ok" as const, violations: [], warnings: [], notes: [] };
+
+let queueCounter = 0;
+function pieceRow(
+	contactId: string,
+	contactKey: string,
+	overrides: Partial<QueueItemRow> = {},
+): QueueItemRow {
+	return {
+		id: `queue-${++queueCounter}`,
+		tenantId: TENANT,
+		contactId,
+		contactKey,
+		executorUserId: USER,
+		kind: "msg1",
+		toEmail: "laura@acme.test",
+		subject: "A",
+		body: "B",
+		hook: "h1",
+		vector: "v1",
+		idioma: "es_ar",
+		ancla: null,
+		draftOriginal: { subject: "A", body: "B" },
+		gateResult: gate,
+		status: "pending",
+		expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+		replyToMessageId: null,
+		gmailThreadId: null,
+		gmailMessageId: null,
+		approvedAt: null,
+		sentAt: null,
+		error: null,
+		eveSessionId: null,
+		approvalCallId: null,
+		createdAt: new Date().toISOString(),
+		...overrides,
+	};
+}
+
 describe("sessionSummary", () => {
 	it("para un ejecutor: slug, cupo restante hoy, piezas pendientes y estado de Gmail", async () => {
 		const store = createFakeStore();
@@ -17,31 +57,7 @@ describe("sessionSummary", () => {
 		store.executors[0].gmailAuthorizedAt = "2026-09-14T10:00:00Z";
 		const contact = contactRow();
 		store.contacts.push(contact);
-		const gate = {
-			status: "ok" as const,
-			violations: [],
-			warnings: [],
-			notes: [],
-		};
-		const piece = {
-			tenantId: TENANT,
-			contactId: contact.id,
-			contactKey: contact.contactKey,
-			executorUserId: USER,
-			kind: "msg1" as const,
-			toEmail: "laura@acme.test",
-			subject: "A",
-			body: "B",
-			hook: "h1",
-			vector: "v1",
-			idioma: "es_ar",
-			ancla: null,
-			draftOriginal: { subject: "A", body: "B" },
-			gateResult: gate,
-			replyToMessageId: null,
-			gmailThreadId: null,
-		};
-		await store.insertQueueItem(piece);
+		store.queue.push(pieceRow(contact.id, contact.contactKey));
 		store.queue.push({
 			...store.queue[0],
 			id: "sent-1",
@@ -62,6 +78,57 @@ describe("sessionSummary", () => {
 		store.executors = [];
 		expect(await sessionSummary(base, { store, now })).toContain(
 			"no es ejecutor de outreach",
+		);
+	});
+
+	it("con pendientes y trabadas cuenta cada una y avisa revisar Gmail", async () => {
+		const store = createFakeStore();
+		const c1 = contactRow();
+		const c2 = contactRow({ id: "contact-2", contactKey: "em:b@acme.test" });
+		const c3 = contactRow({ id: "contact-3", contactKey: "em:c@acme.test" });
+		store.contacts.push(c1, c2, c3);
+		store.queue.push(
+			pieceRow(c1.id, c1.contactKey, { status: "pending" }),
+			pieceRow(c2.id, c2.contactKey, { status: "pending" }),
+			pieceRow(c3.id, c3.contactKey, {
+				status: "approved",
+				approvedAt: "2026-09-15T12:00:00Z",
+			}),
+		);
+		const text = await sessionSummary(base, { store, now });
+		expect(text).toContain("2 piezas pendientes y 1 trabada en la cola");
+		expect(text).toContain("revisá en Gmail");
+		expect(text).toContain(
+			"Al arrancar, mostrá la cola por letras con list_queue.",
+		);
+	});
+
+	it("con 0 pendientes y 1 trabada, la muestra igual y empuja a revisar la cola", async () => {
+		const store = createFakeStore();
+		const contact = contactRow();
+		store.contacts.push(contact);
+		store.queue.push(
+			pieceRow(contact.id, contact.contactKey, {
+				status: "approved",
+				approvedAt: "2026-09-15T12:00:00Z",
+			}),
+		);
+		const text = await sessionSummary(base, { store, now });
+		expect(text).toContain("0 piezas pendientes y 1 trabada en la cola");
+		expect(text).toContain("revisá en Gmail");
+		expect(text).toContain(
+			"Al arrancar, mostrá la cola por letras con list_queue.",
+		);
+	});
+
+	it("con la cola vacía no empuja a mostrarla", async () => {
+		const store = createFakeStore();
+		const text = await sessionSummary(base, { store, now });
+		expect(text).toContain("0 piezas pendientes en la cola");
+		expect(text).not.toContain("trabada");
+		expect(text).not.toContain("revisá en Gmail");
+		expect(text).not.toContain(
+			"Al arrancar, mostrá la cola por letras con list_queue.",
 		);
 	});
 });
