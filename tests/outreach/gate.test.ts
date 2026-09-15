@@ -131,6 +131,18 @@ describe("runGate", () => {
 		expect(kinds({ subject: "  " })).toEqual(["formato"]);
 	});
 
+	it("formato: salto de línea en el asunto", () => {
+		expect(kinds({ subject: `${SUBJECT}\nx` })).toEqual(["formato"]);
+		expect(kinds({ subject: `${SUBJECT}\rx` })).toEqual(["formato"]);
+		const result = gate({ subject: `${SUBJECT}\nx` });
+		expect(result.violations[0]).toMatchObject({
+			kind: "formato",
+			piece: "asunto",
+			what: "salto de línea en el asunto",
+			fix: "asunto en una sola línea",
+		});
+	});
+
 	it("formato: redirecciones de tracking conocidas", () => {
 		expect(
 			kinds({

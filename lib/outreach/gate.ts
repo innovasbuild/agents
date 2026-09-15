@@ -373,6 +373,13 @@ export function runGate(input: GateInput): GateResult {
 			what: "cuerpo vacío",
 			fix: "redactar la pieza",
 		});
+	if (/[\r\n]/.test(input.subject))
+		violations.push({
+			kind: "formato",
+			piece: "asunto",
+			what: "salto de línea en el asunto",
+			fix: "asunto en una sola línea",
+		});
 
 	const vetos: Array<{ source: string; pattern: RegExp }> = [];
 	for (const veto of input.rules.vetos) {
