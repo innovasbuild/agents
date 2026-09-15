@@ -378,4 +378,18 @@ describe("htmlToText", () => {
 		expect(htmlToText("<p>x</p>").title).toBeNull();
 		expect(htmlToText("<title></title><p>x</p>").title).toBeNull();
 	});
+
+	it("toma el title aunque tenga atributos", () => {
+		expect(
+			htmlToText("<title data-x='1' lang=\"es\">Acme</title><p>x</p>").title,
+		).toBe("Acme");
+	});
+
+	it("muchos <title sin cerrar no disparan backtracking cuadrático", () => {
+		// 120 KB: con la regex vieja (`[^>]*` cruzando `<`) tardaba ~2 s.
+		const html = "<title".repeat(20_000);
+		const start = performance.now();
+		htmlToText(html);
+		expect(performance.now() - start).toBeLessThan(200);
+	});
 });

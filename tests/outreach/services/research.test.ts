@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Ficha } from "@/lib/outreach/ficha";
 import {
 	prepareResearch,
+	researchMessage,
 	saveResearch,
 } from "@/lib/outreach/services/research";
 import { createFakeStore, TENANT, USER } from "../fake-store";
@@ -121,5 +122,14 @@ describe("saveResearch", () => {
 			{ store: createFakeStore(), now },
 		);
 		expect(result).toMatchObject({ ok: false, reason: "ficha_invalida" });
+	});
+});
+
+describe("researchMessage", () => {
+	it("manda a leer la web con leer_pagina desde el dominio, sin fuentes pagas ni LinkedIn", () => {
+		const message = researchMessage("acme.test", null);
+		expect(message).not.toMatch(/linkedin|enriquecimiento|pagas/i);
+		expect(message).toContain("https://acme.test");
+		expect(message).toContain("leer_pagina");
 	});
 });

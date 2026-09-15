@@ -292,7 +292,7 @@ export function htmlToText(html: string): {
 	title: string | null;
 	text: string;
 } {
-	const titleMatch = /<title\b[^>]*>([^<]*)/i.exec(html);
+	const titleMatch = /<title\b[^<>]*>([^<]*)/i.exec(html);
 	const title = titleMatch
 		? collapseWhitespace(decodeEntities(titleMatch[1])).replace(/\s+/g, " ")
 		: "";

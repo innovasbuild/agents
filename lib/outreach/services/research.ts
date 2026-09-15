@@ -10,6 +10,7 @@ import {
 } from "../ficha";
 import { type Refusal, refuse } from "../result";
 import type { OutreachStore } from "../store";
+import { RESEARCH_MAX_PAGES } from "./research-run";
 
 export type ResearchResult =
 	| Refusal
@@ -32,7 +33,7 @@ export function researchMessage(domain: string, name: string | null): string {
 		`Investigá la empresa del dominio ${domain}${name ? ` (${name})` : ""}.`,
 		"Completá la ficha: qué produce y vende, cómo gana plata, qué compra, qué se le rompe si crece, qué dice de sí misma (gap declarado) y qué podés probar con fuentes (gap demostrable).",
 		"Cada hecho lleva la URL exacta de donde sale. Sin URL, no es un hecho: dejalo afuera.",
-		"Usá primero la web y el LinkedIn de la empresa; las herramientas de enriquecimiento pagas solo si falta lo básico, y contá cada llamada en creditos_usados.",
+		`Leé la web con leer_pagina empezando por https://${domain}, y no pases de ${RESEARCH_MAX_PAGES} páginas.`,
 	].join("\n");
 }
 
