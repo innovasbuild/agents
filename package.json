@@ -11,6 +11,7 @@
 		"start": "next start",
 		"typecheck": "next typegen && tsc --noEmit",
 		"test": "vitest run",
+		"test:it": "OUTREACH_IT=1 node --env-file=.env.eval ./node_modules/vitest/vitest.mjs run tests/outreach/store.it.test.ts",
 		"lint:fix": "biome check --write .",
 		"db:start": "npx supabase start",
 		"db:stop": "npx supabase stop",
