@@ -1,3 +1,4 @@
+import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { parseOutreachConfig } from "@/lib/outreach/config";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
 import type {
@@ -52,6 +53,19 @@ export function defaultTenant(
 			idioma: ["es_ar", "es_es"],
 		},
 		defaultHooks: { v1: "h1" },
+		...overrides,
+	};
+}
+
+// CRM falso: sin matches ni autoría. Cada test pisa solo lo que necesita.
+export function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
+	return {
+		findContacts: async () => [],
+		lastAuthorship: async () => null,
+		upsertContact: async () => "crm-1",
+		addNote: async () => {},
+		completeOpenTasks: async () => {},
+		createTask: async () => {},
 		...overrides,
 	};
 }
