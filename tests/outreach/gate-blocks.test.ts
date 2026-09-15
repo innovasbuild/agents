@@ -129,4 +129,23 @@ describe("compileVeto", () => {
 		expect(`${"clientes ".repeat(2000)}x`.match(re)).toBeNull();
 		expect(Date.now() - started).toBeLessThan(500);
 	});
+
+	it("un veto escrito como regex (con metacaracteres no soportados) es una frase mal formada, no un veto que nunca matchea", () => {
+		expect(compileVeto(veto("te escribo porque.*"))).toBeNull();
+		expect(compileVeto(veto("\\bsinergia\\b"))).toBeNull();
+		expect(compileVeto(veto("[bid]"))).toBeNull();
+	});
+
+	it("? y . siguen permitidos en un veto", () => {
+		expect(compileVeto(veto("por qué no?"))).not.toBeNull();
+	});
+});
+
+describe("max_chars con nombre de canal que colisiona con el prototipo de Object", () => {
+	it("constructor=5 se guarda como límite propio, no lee Object.prototype.constructor", () => {
+		expect(
+			parseGateBlocks("```gate\nmax_chars: constructor=5\n```", "t").maxChars
+				.byChannel.constructor,
+		).toBe(5);
+	});
 });

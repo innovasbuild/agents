@@ -33,13 +33,21 @@ function minOrNull(current: number | null | undefined, next: number): number {
 		: Math.min(current, next);
 }
 
+/** Lee un límite propio sin caer en Object.prototype (p.ej. canal "constructor"). */
+function channelLimit(
+	byChannel: Record<string, number>,
+	channel: string,
+): number | undefined {
+	return Object.hasOwn(byChannel, channel) ? byChannel[channel] : undefined;
+}
+
 function applyMaxChars(rules: GateRules, value: string): boolean {
 	const match = value.match(/^(?:([a-z][a-z_]*)=)?(\d{1,5})$/);
 	if (!match) return false;
 	const limit = Number(match[2]);
 	if (match[1]) {
 		rules.maxChars.byChannel[match[1]] = minOrNull(
-			rules.maxChars.byChannel[match[1]],
+			channelLimit(rules.maxChars.byChannel, match[1]),
 			limit,
 		);
 	} else {
@@ -90,7 +98,7 @@ export function mergeGateRules(...all: GateRules[]): GateRules {
 		}
 		for (const [channel, limit] of Object.entries(rules.maxChars.byChannel)) {
 			merged.maxChars.byChannel[channel] = minOrNull(
-				merged.maxChars.byChannel[channel],
+				channelLimit(merged.maxChars.byChannel, channel),
 				limit,
 			);
 		}
@@ -104,9 +112,16 @@ function escapeRegExp(text: string): string {
 	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// Metacaracteres de regex que un veto de datos no debería traer: si aparecen,
+// es que alguien escribió el veto pensando en regex (p.ej. "porque.*") y,
+// como se escapan literal, el veto nunca matchea nada. Mejor rechazarlo como
+// mal formado que dejarlo pasar en silencio. "?" y "." quedan permitidos.
+const UNSUPPORTED_REGEX_CHARS = /[\\*+[\]{}^$]/;
+
 function compileSegment(segment: string): string | null {
 	const text = segment.trim();
 	if (!text) return null;
+	if (UNSUPPORTED_REGEX_CHARS.test(text)) return null;
 	let pattern = "";
 	let cursor = 0;
 	for (const group of text.matchAll(/\(([^()]*)\)/g)) {
