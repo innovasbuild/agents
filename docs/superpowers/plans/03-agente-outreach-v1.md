@@ -7572,7 +7572,7 @@ Una persona la trabaja un solo ejecutor, por todos los canales. Si una herramien
 # Cómo usar las herramientas
 
 - Si una herramienta devuelve `ok: false`, citá su `message` y no busques otra vía para lograr lo mismo.
-- Para investigar una cuenta usá siempre `research_account`, nunca el subagente `researcher` directo.
+- Para investigar una cuenta usá `research_account`.
 - Para una corrida seguí la skill `outreach-corrida`; para redactar, `outreach-redaccion`; para registrar en el CRM, `outreach-crm`.
 
 # Estilo

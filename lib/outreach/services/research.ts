@@ -81,7 +81,7 @@ export async function saveResearch(
 	if (!parsed.success)
 		return refuse(
 			"ficha_invalida",
-			"el researcher devolvió una ficha que no cumple el formato",
+			"la investigación devolvió una ficha que no cumple el formato",
 		);
 	const ficha = sanitizeFicha(parsed.data);
 	if (!ficha)
