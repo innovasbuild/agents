@@ -181,19 +181,28 @@ describe("runEtapa3Probes", () => {
 		for (const step of s6Steps) {
 			expect(step.ok).toBe(true);
 		}
+
+		const contactCall = calls.find(
+			([url, init]) => init?.method === "POST" && url.includes("/contacts"),
+		);
+		const contactBody = JSON.parse((contactCall?.[1]?.body as string) ?? "{}");
+		expect(contactBody.properties.email).toMatch(/@example\.com$/);
+		expect(contactBody.properties.email).not.toMatch(/@example\.invalid$/);
 	});
 
-	it("s3: un modelo que tira error queda ok:false y los otros ok:true", async () => {
+	it("s3: corre api_key y oidc para cada modelo, y un error en una variante no frena a las demas", async () => {
 		const tokenForSubject = vi
 			.fn()
 			.mockResolvedValue({ token: TOKEN, expiresAt: EXPIRES_AT });
 		const fetch = vi.fn().mockResolvedValue(fakeResponse(200));
-		const generate = vi.fn().mockImplementation(async (model: string) => {
-			if (model === "anthropic/claude-sonnet-5") {
-				throw new Error("gateway caído");
-			}
-			return { output: { ok: true }, usage: { totalTokens: 5 } };
-		});
+		const generate = vi
+			.fn()
+			.mockImplementation(async (model: string, auth: "api_key" | "oidc") => {
+				if (model === "anthropic/claude-sonnet-5" && auth === "oidc") {
+					throw new Error("gateway caido");
+				}
+				return { output: { ok: true }, usage: { totalTokens: 5 } };
+			});
 		const deps: ProbeDeps = {
 			tokenForSubject,
 			fetch,
@@ -204,11 +213,34 @@ describe("runEtapa3Probes", () => {
 		const steps = await runEtapa3Probes(baseInput(), deps);
 
 		const s3Steps = steps.filter((step) => step.step.startsWith("s3."));
-		expect(s3Steps).toHaveLength(3);
-		const failed = s3Steps.find((step) =>
-			step.step.includes("claude-sonnet-5"),
+		expect(s3Steps).toHaveLength(6);
+
+		const models = [
+			"anthropic/claude-opus-5",
+			"anthropic/claude-sonnet-5",
+			"anthropic/claude-haiku-4.5",
+		];
+		for (const model of models) {
+			expect(s3Steps.some((step) => step.step === `s3.api_key.${model}`)).toBe(
+				true,
+			);
+			expect(s3Steps.some((step) => step.step === `s3.oidc.${model}`)).toBe(
+				true,
+			);
+		}
+
+		expect(generate).toHaveBeenCalledTimes(6);
+		for (const model of models) {
+			expect(generate).toHaveBeenCalledWith(model, "api_key");
+			expect(generate).toHaveBeenCalledWith(model, "oidc");
+		}
+
+		const failed = s3Steps.find(
+			(step) => step.step === "s3.oidc.anthropic/claude-sonnet-5",
 		);
 		expect(failed?.ok).toBe(false);
+		expect(failed?.detail).toContain("gateway caido");
+
 		const others = s3Steps.filter((step) => step !== failed);
 		for (const step of others) {
 			expect(step.ok).toBe(true);

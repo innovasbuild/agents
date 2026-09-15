@@ -7,7 +7,10 @@ export interface ProbeDeps {
 		scopes?: string[],
 	) => Promise<{ token: string; expiresAt: number }>;
 	fetch: typeof fetch;
-	generate: (model: string) => Promise<{ output: unknown; usage: unknown }>;
+	generate: (
+		model: string,
+		auth: "api_key" | "oidc",
+	) => Promise<{ output: unknown; usage: unknown }>;
 	now: () => number;
 }
 
@@ -167,7 +170,7 @@ export async function runEtapa3Probes(
 					token,
 					{
 						properties: {
-							email: `spike-etapa3-${deps.now()}@example.invalid`,
+							email: `spike-etapa3-${deps.now()}@example.com`,
 							firstname: "Spike",
 							lastname: "Etapa3",
 						},
@@ -264,14 +267,16 @@ export async function runEtapa3Probes(
 	}
 
 	for (const model of MODELS) {
-		steps.push(
-			await runStep(`s3.${model}`, async () => {
-				const start = deps.now();
-				const { output, usage } = await deps.generate(model);
-				const ms = deps.now() - start;
-				return `${ms} ms, output ${JSON.stringify(output)}, usage ${JSON.stringify(usage)}`;
-			}),
-		);
+		for (const auth of ["api_key", "oidc"] as const) {
+			steps.push(
+				await runStep(`s3.${auth}.${model}`, async () => {
+					const start = deps.now();
+					const { output, usage } = await deps.generate(model, auth);
+					const ms = deps.now() - start;
+					return `${ms} ms, output ${JSON.stringify(output)}, usage ${JSON.stringify(usage)}`;
+				}),
+			);
+		}
 	}
 
 	return steps;
