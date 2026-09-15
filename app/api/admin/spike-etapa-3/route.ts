@@ -1,16 +1,40 @@
 // TEMPORAL (spec 03 §13): se borra después de correr los spikes en producción.
+import { createGateway } from "@ai-sdk/gateway";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { tokenForSubject } from "@/lib/connectors/auth";
-import { runEtapa3Probes } from "@/lib/spikes/etapa-3";
+import { type ProbeStep, runEtapa3Probes } from "@/lib/spikes/etapa-3";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// Hasta 6 llamadas al modelo (3 modelos x api_key/oidc) de 15s cada una, más
+// los pasos s1/s6.
+export const maxDuration = 120;
 
 const GENERATE_TIMEOUT_MS = 15_000;
+
+const CLASSIFICATION_SCHEMA = z.object({
+	categoria: z.enum(["no_interesado", "en_conversacion"]),
+	resumen: z.string(),
+});
+
+const CLASSIFICATION_PROMPT =
+	'Clasificá esta respuesta a un mail comercial: "Gracias, por ahora no nos interesa."';
+
+// Paso "env": solo booleanos de presencia y el valor de VERCEL_ENV, nunca
+// valores de las variables sensibles.
+function envStep(): ProbeStep {
+	const aiGatewayApiKey = process.env.AI_GATEWAY_API_KEY ? "set" : "unset";
+	const vercelOidcToken = process.env.VERCEL_OIDC_TOKEN ? "set" : "unset";
+	const vercelEnv = process.env.VERCEL_ENV ?? "unset";
+	return {
+		step: "env",
+		ok: true,
+		detail: `AI_GATEWAY_API_KEY=${aiGatewayApiKey} VERCEL_OIDC_TOKEN=${vercelOidcToken} VERCEL_ENV=${vercelEnv}`,
+	};
+}
 
 // Todas las respuestas (incluidas las de error) llevan no-store: es una ruta
 // de diagnóstico con datos de sesión/tenant, no algo cacheable ni por el
@@ -22,22 +46,41 @@ function json(body: Record<string, unknown>, status: number) {
 	});
 }
 
-async function generate(model: string) {
-	const result = await generateText({
-		model,
-		maxOutputTokens: 200,
-		maxRetries: 0,
-		abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
-		output: Output.object({
-			schema: z.object({
-				categoria: z.enum(["no_interesado", "en_conversacion"]),
-				resumen: z.string(),
-			}),
-		}),
-		prompt:
-			'Clasificá esta respuesta a un mail comercial: "Gracias, por ahora no nos interesa."',
-	});
-	return { output: result.output, usage: result.usage };
+async function generate(model: string, auth: "api_key" | "oidc") {
+	if (auth === "api_key") {
+		// Provider default del gateway: usa AI_GATEWAY_API_KEY si está seteada.
+		const result = await generateText({
+			model,
+			maxOutputTokens: 200,
+			maxRetries: 0,
+			abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+			output: Output.object({ schema: CLASSIFICATION_SCHEMA }),
+			prompt: CLASSIFICATION_PROMPT,
+		});
+		return { output: result.output, usage: result.usage };
+	}
+
+	// Variante oidc: forzamos autenticación por OIDC sacando la key del
+	// entorno solo durante esta llamada, y usamos un provider fresco
+	// (createGateway) para no reusar auth cacheada del provider default.
+	const saved = process.env.AI_GATEWAY_API_KEY;
+	delete process.env.AI_GATEWAY_API_KEY;
+	try {
+		const gateway = createGateway();
+		const result = await generateText({
+			model: gateway(model),
+			maxOutputTokens: 200,
+			maxRetries: 0,
+			abortSignal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+			output: Output.object({ schema: CLASSIFICATION_SCHEMA }),
+			prompt: CLASSIFICATION_PROMPT,
+		});
+		return { output: result.output, usage: result.usage };
+	} finally {
+		if (saved !== undefined) {
+			process.env.AI_GATEWAY_API_KEY = saved;
+		}
+	}
 }
 
 export async function GET(request: Request) {
@@ -103,19 +146,22 @@ export async function GET(request: Request) {
 
 	const issuer = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
-	const steps = await runEtapa3Probes(
-		{
-			tenantId: tenant.id,
-			userId: auth.user.id,
-			issuer,
-			hubspotWrite,
-		},
-		{
-			tokenForSubject,
-			fetch,
-			generate,
-			now: () => Date.now(),
-		},
+	const steps: ProbeStep[] = [envStep()];
+	steps.push(
+		...(await runEtapa3Probes(
+			{
+				tenantId: tenant.id,
+				userId: auth.user.id,
+				issuer,
+				hubspotWrite,
+			},
+			{
+				tokenForSubject,
+				fetch,
+				generate,
+				now: () => Date.now(),
+			},
+		)),
 	);
 
 	if (crossSite) {
