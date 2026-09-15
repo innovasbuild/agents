@@ -32,6 +32,10 @@ export function pendingInputRequests(
 			const request = part.toolMetadata?.eve?.inputRequest;
 			if (!request) return [];
 			const isApproval = request.kind === "tool-approval";
+			const options = (request.options ?? []).map(({ id, label }) => ({
+				id,
+				label: (isApproval && APPROVAL_LABELS[id]) || label,
+			}));
 			return [
 				{
 					requestId: request.requestId,
@@ -39,11 +43,9 @@ export function pendingInputRequests(
 					toolName: part.toolName,
 					input: part.input as Record<string, unknown>,
 					prompt: request.prompt,
-					options: (request.options ?? []).map(({ id, label }) => ({
-						id,
-						label: (isApproval && APPROVAL_LABELS[id]) || label,
-					})),
-					allowFreeform: request.allowFreeform === true,
+					options,
+					// Sin opciones, el texto es la única forma de responder.
+					allowFreeform: request.allowFreeform === true || options.length === 0,
 				},
 			];
 		}),

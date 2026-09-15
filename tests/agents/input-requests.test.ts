@@ -77,6 +77,27 @@ describe("pendingInputRequests", () => {
 		expect(request.options).toEqual([]);
 	});
 
+	it("habilita texto libre en una pregunta sin opciones aunque no lo pida", () => {
+		// ask_question acepta solo prompt: sin esto la tarjeta no tendría
+		// ninguna forma de responder.
+		const [request] = pendingInputRequests(
+			messages(
+				toolPart(
+					"ask_question",
+					{},
+					{
+						kind: "question",
+						requestId: "q5",
+						prompt: "¿Qué asunto le pongo?",
+					},
+				),
+			),
+		);
+
+		expect(request.options).toEqual([]);
+		expect(request.allowFreeform).toBe(true);
+	});
+
 	it("traduce las opciones de una aprobación de tool y conserva sus ids", () => {
 		const [request] = pendingInputRequests(
 			messages(
@@ -113,5 +134,91 @@ describe("pendingInputRequests", () => {
 			state: "output-available",
 		};
 		expect(pendingInputRequests(messages(done))).toEqual([]);
+	});
+
+	it("ignora partes que no son de tools", () => {
+		const text = { type: "text", text: "hola", state: "approval-requested" };
+		expect(pendingInputRequests(messages(text))).toEqual([]);
+	});
+
+	it("ignora tools esperando respuesta sin inputRequest de eve", () => {
+		const { toolMetadata: _, ...sinMetadata } = toolPart("send_email", {}, {});
+		expect(pendingInputRequests(messages(sinMetadata))).toEqual([]);
+	});
+
+	it("conserva la etiqueta original de una opción de aprobación desconocida", () => {
+		const [request] = pendingInputRequests(
+			messages(
+				toolPart(
+					"send_email",
+					{},
+					{
+						kind: "tool-approval",
+						requestId: "a3",
+						prompt: "Approve tool call: send_email",
+						options: [
+							{ id: "approve", label: "Approve" },
+							{ id: "approve-always", label: "Always approve" },
+						],
+					},
+				),
+			),
+		);
+
+		expect(request.options).toEqual([
+			{ id: "approve", label: "Aprobar" },
+			{ id: "approve-always", label: "Always approve" },
+		]);
+	});
+
+	it("no traduce las etiquetas de una pregunta aunque use ids approve/cancel", () => {
+		const [request] = pendingInputRequests(
+			messages(
+				toolPart(
+					"ask_question",
+					{},
+					{
+						kind: "question",
+						requestId: "q3",
+						prompt: "¿Seguimos?",
+						options: [
+							{ id: "approve", label: "Dale" },
+							{ id: "cancel", label: "Mejor no" },
+						],
+					},
+				),
+			),
+		);
+
+		expect(request.options).toEqual([
+			{ id: "approve", label: "Dale" },
+			{ id: "cancel", label: "Mejor no" },
+		]);
+	});
+
+	it("junta los pedidos de varios mensajes y partes en orden", () => {
+		const pregunta = toolPart(
+			"ask_question",
+			{},
+			{ kind: "question", requestId: "q4", prompt: "¿A quién?" },
+		);
+		const aprobacion = toolPart(
+			"send_email",
+			{},
+			{ kind: "tool-approval", requestId: "a4", prompt: "Approve" },
+		);
+		const conversation = [
+			{ id: "m1", role: "assistant", parts: [{ type: "text", text: "hola" }] },
+			{ id: "m2", role: "assistant", parts: [pregunta, aprobacion] },
+			{
+				id: "m3",
+				role: "assistant",
+				parts: [{ ...aprobacion, state: "output-available" }],
+			},
+		] as unknown as EveMessage[];
+
+		expect(
+			pendingInputRequests(conversation).map(({ requestId }) => requestId),
+		).toEqual(["q4", "a4"]);
 	});
 });
