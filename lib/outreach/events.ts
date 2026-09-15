@@ -23,6 +23,27 @@ export const OUTREACH_EVENT_TYPES = [
 
 export type OutreachEventType = (typeof OUTREACH_EVENT_TYPES)[number];
 
+/** Tipos idempotentes con dedup de 2 horas en events_dedup() (spec 03 §4.7).
+ * Un insert de uno de estos tipos puede devolver 0 filas cuando el trigger
+ * descarta el duplicado: quien inserta nunca debe usar `.single()` sobre este
+ * insert. Tiene que coincidir con la lista de events_dedup_idx y
+ * events_dedup() en supabase/migrations/20260914224230_outreach_core.sql. */
+export const DEDUPED_EVENT_TYPES = [
+	"contacto_importado",
+	"investigado",
+	"encolado",
+	"gate_fallido",
+	"aprobado",
+	"envio",
+	"rebote",
+	"respuesta",
+	"claim_ajeno",
+	"deal_creado",
+	"oportunidad_frenada",
+	"crm_sync_pendiente",
+	"crm_sync_ok",
+] as const satisfies readonly OutreachEventType[];
+
 /** Los únicos que el modelo puede registrar con log_event. */
 export const MODEL_LOGGABLE_EVENT_TYPES = [
 	"freno",

@@ -10,10 +10,13 @@ function letter(index: number): string {
 	return out;
 }
 
-export function assignLetters<T extends { created_at: string }>(
+export function assignLetters<T extends { id: string; created_at: string }>(
 	items: T[],
 ): Array<T & { letter: string }> {
 	return [...items]
-		.sort((a, b) => a.created_at.localeCompare(b.created_at))
+		.sort(
+			(a, b) =>
+				a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id),
+		)
 		.map((item, index) => ({ ...item, letter: letter(index) }));
 }

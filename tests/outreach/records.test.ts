@@ -1,10 +1,16 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	replyClassificationSchema,
 	stageForReply,
 	wantsDeal,
 } from "@/lib/outreach/classify";
-import { OUTREACH_EVENT_TYPES, outreachEvent } from "@/lib/outreach/events";
+import {
+	DEDUPED_EVENT_TYPES,
+	OUTREACH_EVENT_TYPES,
+	outreachEvent,
+} from "@/lib/outreach/events";
 import { assignLetters } from "@/lib/outreach/queue-letters";
 
 describe("classify", () => {
@@ -73,6 +79,33 @@ describe("events", () => {
 	});
 });
 
+describe("DEDUPED_EVENT_TYPES", () => {
+	it("son 13 tipos, todos dentro de OUTREACH_EVENT_TYPES", () => {
+		expect(DEDUPED_EVENT_TYPES).toHaveLength(13);
+		for (const type of DEDUPED_EVENT_TYPES) {
+			expect(OUTREACH_EVENT_TYPES).toContain(type);
+		}
+	});
+
+	it("coincide con la lista de events_dedup() en la migración de outreach_core", () => {
+		const migration = readFileSync(
+			join(
+				process.cwd(),
+				"supabase/migrations/20260914224230_outreach_core.sql",
+			),
+			"utf8",
+		);
+		const fnStart = migration.indexOf(
+			"create or replace function public.events_dedup()",
+		);
+		const fnEnd = migration.indexOf("$$;", fnStart);
+		const fnBody = migration.slice(fnStart, fnEnd);
+		for (const type of DEDUPED_EVENT_TYPES) {
+			expect(fnBody).toContain(`'${type}'`);
+		}
+	});
+});
+
 describe("assignLetters", () => {
 	it("ordena por creación y asigna A, B, …, Z, AA", () => {
 		const items = Array.from({ length: 27 }, (_, i) => ({
@@ -83,5 +116,17 @@ describe("assignLetters", () => {
 		expect(lettered[0]).toMatchObject({ id: "q26", letter: "A" });
 		expect(lettered[25].letter).toBe("Z");
 		expect(lettered[26]).toMatchObject({ id: "q0", letter: "AA" });
+	});
+
+	it("desempata por id ascendente cuando el created_at es igual", () => {
+		const createdAt = new Date(Date.UTC(2026, 8, 1)).toISOString();
+		const items = [
+			{ id: "b", created_at: createdAt },
+			{ id: "a", created_at: createdAt },
+			{ id: "c", created_at: createdAt },
+		];
+		const lettered = assignLetters(items);
+		expect(lettered.map((i) => i.id)).toEqual(["a", "b", "c"]);
+		expect(lettered.map((i) => i.letter)).toEqual(["A", "B", "C"]);
 	});
 });
