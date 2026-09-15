@@ -20,7 +20,8 @@
 		"connections:bind": "node --env-file=.env.local scripts/connections-bind.mts",
 		"brain:import": "node --env-file=.env.local scripts/brain-import.mts",
 		"outreach:config": "node --env-file=.env.local scripts/outreach-config.mts",
-		"executors:set": "node --env-file=.env.local scripts/executors-set.mts"
+		"executors:set": "node --env-file=.env.local scripts/executors-set.mts",
+		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.7",

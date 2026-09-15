@@ -1,6 +1,7 @@
 import { type AuthFn, localDev } from "eve/channels/auth";
 import { eveChannel } from "eve/channels/eve";
 import { resolveChannelContext } from "../../../lib/agents/channel-context";
+import { evalAuthFromEnv } from "../../../lib/agents/eval-auth";
 import { verifyCaller } from "../../../lib/auth/verify-caller";
 
 function supabaseAuth(): AuthFn<Request> {
@@ -30,10 +31,16 @@ function supabaseAuth(): AuthFn<Request> {
 	};
 }
 
+// Evals locales (spec 03 §13.1): principal fijo del tenant sembrado. La propia
+// función devuelve null en Vercel y contra cualquier base que no sea local.
+function evalAuth(): AuthFn<Request> {
+	return async () => evalAuthFromEnv();
+}
+
 // `localDev()` nunca puede quedar activo en un deploy: `VERCEL_ENV` existe en
 // todos los entornos de Vercel y no en local.
 export default eveChannel({
 	auth: process.env.VERCEL_ENV
 		? [supabaseAuth()]
-		: [supabaseAuth(), localDev()],
+		: [supabaseAuth(), evalAuth(), localDev()],
 });
