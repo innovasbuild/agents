@@ -39,6 +39,44 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts: {
+        Row: {
+          domain: string
+          expires_at: string
+          ficha: Json
+          id: string
+          name: string
+          researched_at: string
+          tenant_id: string
+        }
+        Insert: {
+          domain: string
+          expires_at: string
+          ficha: Json
+          id?: string
+          name: string
+          researched_at?: string
+          tenant_id: string
+        }
+        Update: {
+          domain?: string
+          expires_at?: string
+          ficha?: Json
+          id?: string
+          name?: string
+          researched_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brain_pages: {
         Row: {
           body: string
@@ -179,6 +217,153 @@ export type Database = {
           },
         ]
       }
+      config_values: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["config_value_kind"]
+          label: string
+          meta: Json
+          tenant_id: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          kind: Database["public"]["Enums"]["config_value_kind"]
+          label: string
+          meta?: Json
+          tenant_id: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["config_value_kind"]
+          label?: string
+          meta?: Json
+          tenant_id?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "config_values_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          account_id: string | null
+          company: string | null
+          contact_key: string
+          created_at: string
+          crm_id: string | null
+          email: string | null
+          first_touch_at: string | null
+          gmail_thread_id: string | null
+          hook: string | null
+          id: string
+          idioma: string | null
+          last_touch_at: string | null
+          linkedin_slug: string | null
+          name: string | null
+          next_step_at: string | null
+          owner_user_id: string | null
+          replied_at: string | null
+          segment: string | null
+          source: string
+          stage: Database["public"]["Enums"]["outreach_stage"]
+          tenant_id: string
+          touches: number
+          updated_at: string
+          vector: string | null
+        }
+        Insert: {
+          account_id?: string | null
+          company?: string | null
+          contact_key: string
+          created_at?: string
+          crm_id?: string | null
+          email?: string | null
+          first_touch_at?: string | null
+          gmail_thread_id?: string | null
+          hook?: string | null
+          id?: string
+          idioma?: string | null
+          last_touch_at?: string | null
+          linkedin_slug?: string | null
+          name?: string | null
+          next_step_at?: string | null
+          owner_user_id?: string | null
+          replied_at?: string | null
+          segment?: string | null
+          source: string
+          stage?: Database["public"]["Enums"]["outreach_stage"]
+          tenant_id: string
+          touches?: number
+          updated_at?: string
+          vector?: string | null
+        }
+        Update: {
+          account_id?: string | null
+          company?: string | null
+          contact_key?: string
+          created_at?: string
+          crm_id?: string | null
+          email?: string | null
+          first_touch_at?: string | null
+          gmail_thread_id?: string | null
+          hook?: string | null
+          id?: string
+          idioma?: string | null
+          last_touch_at?: string | null
+          linkedin_slug?: string | null
+          name?: string | null
+          next_step_at?: string | null
+          owner_user_id?: string | null
+          replied_at?: string | null
+          segment?: string | null
+          source?: string
+          stage?: Database["public"]["Enums"]["outreach_stage"]
+          tenant_id?: string
+          touches?: number
+          updated_at?: string
+          vector?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_tenant_id_fkey"
+            columns: ["account_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_tenant_id_owner_user_id_fkey"
+            columns: ["tenant_id", "owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "executors"
+            referencedColumns: ["tenant_id", "user_id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           agent: string
@@ -283,22 +468,31 @@ export type Database = {
       executors: {
         Row: {
           created_at: string
+          crm_owner_id: string | null
           daily_quota: number
           gmail_authorized_at: string | null
+          gmail_read_authorized_at: string | null
+          slug: string | null
           tenant_id: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          crm_owner_id?: string | null
           daily_quota?: number
           gmail_authorized_at?: string | null
+          gmail_read_authorized_at?: string | null
+          slug?: string | null
           tenant_id: string
           user_id: string
         }
         Update: {
           created_at?: string
+          crm_owner_id?: string | null
           daily_quota?: number
           gmail_authorized_at?: string | null
+          gmail_read_authorized_at?: string | null
+          slug?: string | null
           tenant_id?: string
           user_id?: string
         }
@@ -391,6 +585,121 @@ export type Database = {
           },
         ]
       }
+      queue_items: {
+        Row: {
+          ancla: Json | null
+          approval_call_id: string | null
+          approved_at: string | null
+          body: string
+          channel: string
+          contact_id: string
+          contact_key: string
+          created_at: string
+          draft_original: Json
+          error: string | null
+          eve_session_id: string | null
+          executor_user_id: string
+          expires_at: string
+          gate_result: Json
+          gmail_message_id: string | null
+          gmail_thread_id: string | null
+          hook: string
+          id: string
+          idioma: string
+          kind: Database["public"]["Enums"]["queue_item_kind"]
+          reply_to_message_id: string | null
+          sent_at: string | null
+          status: Database["public"]["Enums"]["queue_item_status"]
+          subject: string
+          tenant_id: string
+          to_email: string
+          updated_at: string
+          vector: string
+        }
+        Insert: {
+          ancla?: Json | null
+          approval_call_id?: string | null
+          approved_at?: string | null
+          body: string
+          channel?: string
+          contact_id: string
+          contact_key: string
+          created_at?: string
+          draft_original: Json
+          error?: string | null
+          eve_session_id?: string | null
+          executor_user_id: string
+          expires_at?: string
+          gate_result: Json
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          hook: string
+          id?: string
+          idioma: string
+          kind: Database["public"]["Enums"]["queue_item_kind"]
+          reply_to_message_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["queue_item_status"]
+          subject: string
+          tenant_id: string
+          to_email: string
+          updated_at?: string
+          vector: string
+        }
+        Update: {
+          ancla?: Json | null
+          approval_call_id?: string | null
+          approved_at?: string | null
+          body?: string
+          channel?: string
+          contact_id?: string
+          contact_key?: string
+          created_at?: string
+          draft_original?: Json
+          error?: string | null
+          eve_session_id?: string | null
+          executor_user_id?: string
+          expires_at?: string
+          gate_result?: Json
+          gmail_message_id?: string | null
+          gmail_thread_id?: string | null
+          hook?: string
+          id?: string
+          idioma?: string
+          kind?: Database["public"]["Enums"]["queue_item_kind"]
+          reply_to_message_id?: string | null
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["queue_item_status"]
+          subject?: string
+          tenant_id?: string
+          to_email?: string
+          updated_at?: string
+          vector?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_items_contact_id_tenant_id_fkey"
+            columns: ["contact_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "queue_items_tenant_id_executor_user_id_fkey"
+            columns: ["tenant_id", "executor_user_id"]
+            isOneToOne: false
+            referencedRelation: "executors"
+            referencedColumns: ["tenant_id", "user_id"]
+          },
+          {
+            foreignKeyName: "queue_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       runs: {
         Row: {
           agent: string
@@ -401,6 +710,7 @@ export type Database = {
           eve_turn_id: string | null
           finished_at: string | null
           id: string
+          schedule_key: string | null
           started_at: string
           status: Database["public"]["Enums"]["run_status"]
           tenant_id: string
@@ -415,6 +725,7 @@ export type Database = {
           eve_turn_id?: string | null
           finished_at?: string | null
           id?: string
+          schedule_key?: string | null
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           tenant_id: string
@@ -429,6 +740,7 @@ export type Database = {
           eve_turn_id?: string | null
           finished_at?: string | null
           id?: string
+          schedule_key?: string | null
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           tenant_id?: string
@@ -637,8 +949,28 @@ export type Database = {
     Enums: {
       brain_author_kind: "user" | "agent" | "import"
       brain_page_status: "activo" | "borrador" | "archivado"
+      config_value_kind: "segmento" | "vector" | "hook" | "idioma"
       connector_capability: "crm" | "leads" | "enrichment" | "brain" | "mail"
       invitation_status: "pending" | "accepted" | "revoked"
+      outreach_stage:
+        | "a_contactar"
+        | "msg1_enviado"
+        | "sin_respuesta"
+        | "respuesta_neutra"
+        | "no_interesado"
+        | "en_conversacion"
+        | "reunion_agendada"
+        | "deal_creado"
+        | "cliente"
+        | "sin_atribucion"
+      queue_item_kind: "msg1" | "followup_2" | "followup_3"
+      queue_item_status:
+        | "pending"
+        | "approved"
+        | "rejected"
+        | "sent"
+        | "failed"
+        | "expired"
       run_status: "running" | "ok" | "failed" | "cancelled"
       run_trigger: "chat" | "schedule" | "mcp" | "webhook"
       tenant_role: "platform_admin" | "tenant_admin" | "tenant_member"
@@ -774,11 +1106,34 @@ export const Constants = {
     Enums: {
       brain_author_kind: ["user", "agent", "import"],
       brain_page_status: ["activo", "borrador", "archivado"],
+      config_value_kind: ["segmento", "vector", "hook", "idioma"],
       connector_capability: ["crm", "leads", "enrichment", "brain", "mail"],
       invitation_status: ["pending", "accepted", "revoked"],
+      outreach_stage: [
+        "a_contactar",
+        "msg1_enviado",
+        "sin_respuesta",
+        "respuesta_neutra",
+        "no_interesado",
+        "en_conversacion",
+        "reunion_agendada",
+        "deal_creado",
+        "cliente",
+        "sin_atribucion",
+      ],
+      queue_item_kind: ["msg1", "followup_2", "followup_3"],
+      queue_item_status: [
+        "pending",
+        "approved",
+        "rejected",
+        "sent",
+        "failed",
+        "expired",
+      ],
       run_status: ["running", "ok", "failed", "cancelled"],
       run_trigger: ["chat", "schedule", "mcp", "webhook"],
       tenant_role: ["platform_admin", "tenant_admin", "tenant_member"],
     },
   },
 } as const
+

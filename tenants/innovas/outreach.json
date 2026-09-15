@@ -1,0 +1,73 @@
+{
+	"config": {
+		"timezone": "America/Argentina/Buenos_Aires",
+		"bcc": "51464889@bcc.hubspot.com",
+		"deal": { "pipeline": "default", "stage": "1404975950" }
+	},
+	"values": {
+		"segmento": [
+			{ "value": "mid_market_ar", "label": "Mid market Argentina" },
+			{ "value": "mid_market_es", "label": "Mid market España" },
+			{ "value": "organismos", "label": "Organismos" },
+			{ "value": "sin_atribucion", "label": "Sin atribución" }
+		],
+		"hook": [
+			{ "value": "h_crecer_sin_duplicar", "label": "Crecer sin duplicar" },
+			{ "value": "h_metodo_en_la_cabeza", "label": "El método en la cabeza" },
+			{
+				"value": "h_competidor_digitalizado",
+				"label": "Competidor digitalizado"
+			},
+			{ "value": "h_ola_no_powerpoint", "label": "Ola, no PowerPoint" },
+			{ "value": "h_sin_anticipos", "label": "Sin anticipos" },
+			{ "value": "h_radar_1500", "label": "Radar 1500" },
+			{ "value": "h_ejecucion_organismos", "label": "Ejecución en organismos" }
+		],
+		"vector": [
+			{
+				"value": "v0_red_tibia",
+				"label": "Red tibia: conexiones aceptadas con pertenencia",
+				"default_hook": "h_crecer_sin_duplicar"
+			},
+			{
+				"value": "v1_familiar_2gen_ar",
+				"label": "Empresa familiar de segunda o tercera generación, Argentina",
+				"default_hook": "h_metodo_en_la_cabeza"
+			},
+			{
+				"value": "v2_dolor_reciente_ar",
+				"label": "Dolor reciente: perdió una licitación o un cliente grande",
+				"default_hook": "h_competidor_digitalizado"
+			},
+			{
+				"value": "v3_evento_capital_ar",
+				"label": "Evento de capital: ronda, expansión o cambio de gerencia",
+				"default_hook": "h_crecer_sin_duplicar"
+			},
+			{
+				"value": "v4_pyme_es",
+				"label": "Pyme española del mismo perfil",
+				"default_hook": "h_metodo_en_la_cabeza"
+			},
+			{
+				"value": "v5_organismos",
+				"label": "TTL y task managers de BM, BID y FAO",
+				"default_hook": "h_ejecucion_organismos"
+			},
+			{
+				"value": "v6_relacion_directa",
+				"label": "Relación previa directa del ejecutor con el decisor",
+				"default_hook": null
+			},
+			{
+				"value": "v7_seller_meli_ar",
+				"label": "Tienda oficial en Mercado Libre Argentina con operación propia",
+				"default_hook": "h_crecer_sin_duplicar"
+			}
+		],
+		"idioma": [
+			{ "value": "es_ar", "label": "Español rioplatense" },
+			{ "value": "es_es", "label": "Español peninsular" }
+		]
+	}
+}

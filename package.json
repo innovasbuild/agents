@@ -18,7 +18,9 @@
 		"db:test": "npx supabase db reset --no-seed && npx supabase test db",
 		"db:types": "npx supabase gen types typescript --linked > lib/supabase/database.types.ts",
 		"connections:bind": "node --env-file=.env.local scripts/connections-bind.mts",
-		"brain:import": "node --env-file=.env.local scripts/brain-import.mts"
+		"brain:import": "node --env-file=.env.local scripts/brain-import.mts",
+		"outreach:config": "node --env-file=.env.local scripts/outreach-config.mts",
+		"executors:set": "node --env-file=.env.local scripts/executors-set.mts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.7",
