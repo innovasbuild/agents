@@ -17,6 +17,7 @@ export interface DraftDeps {
 	loadCanon: (executorSlug: string) => Promise<Canon>;
 	generate: (
 		model: string,
+		system: string,
 		prompt: string,
 	) => Promise<{ output: unknown; usage: unknown }>;
 	now: () => Date;
@@ -71,6 +72,18 @@ export async function draftMessage(
 		);
 	}
 
+	const anchorUrls = new Set(
+		account.ficha.hechos
+			.map((h) => h.url)
+			.filter((url) => url.trim().length > 0),
+	);
+	if (anchorUrls.size === 0) {
+		return refuse(
+			"sin_ancla",
+			`la ficha de ${domain ?? "la empresa de este contacto"} no tiene hechos con fuente: sin ancla no hay primer mensaje`,
+		);
+	}
+
 	const canon = await loadCanonOrNull(deps.loadCanon, executor.slug as string);
 	if (!canon)
 		return refuse(
@@ -80,7 +93,7 @@ export async function draftMessage(
 
 	let violations: GateViolation[] = [];
 	for (let attempt = 1; attempt <= MAX_DRAFT_ATTEMPTS; attempt++) {
-		const prompt = buildDraftPrompt({
+		const { system, prompt } = buildDraftPrompt({
 			contact,
 			ficha: account.ficha,
 			canon: canon.pages,
@@ -97,6 +110,7 @@ export async function draftMessage(
 		});
 		const { output } = await deps.generate(
 			tenant.config.models.draft_msg1,
+			system,
 			prompt,
 		);
 		const parsed = draftOutputSchema.safeParse(output);
@@ -120,6 +134,17 @@ export async function draftMessage(
 					piece: "cuerpo",
 					what: attribution,
 					fix: "usar solo valores de las listas",
+				},
+			];
+			continue;
+		}
+		if (!anchorUrls.has(draft.ancla.fuente)) {
+			violations = [
+				{
+					kind: "formato",
+					piece: "cuerpo",
+					what: "el ancla no sale de la ficha: la fuente tiene que ser una de las URLs de los hechos",
+					fix: "citar como ancla uno de los hechos con URL de la ficha",
 				},
 			];
 			continue;

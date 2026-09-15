@@ -87,6 +87,7 @@ describe("draftMessage", () => {
 		expect(generate).toHaveBeenCalledWith(
 			"anthropic/claude-opus-5",
 			expect.any(String),
+			expect.any(String),
 		);
 		expect(store.queue).toHaveLength(0);
 	});
@@ -95,10 +96,12 @@ describe("draftMessage", () => {
 		const store = seeded();
 		const bad = { ...good, body: `${PASSING_BODY}\nQuedo a disposición.` };
 		const prompts: string[] = [];
-		const generate = vi.fn(async (_model: string, prompt: string) => {
-			prompts.push(prompt);
-			return { output: bad, usage: {} };
-		});
+		const generate = vi.fn(
+			async (_model: string, _system: string, prompt: string) => {
+				prompts.push(prompt);
+				return { output: bad, usage: {} };
+			},
+		);
 		const result = await draftMessage(
 			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
 			{ store, loadCanon: async () => canon, generate, now },
@@ -181,5 +184,67 @@ describe("draftMessage", () => {
 				deps(),
 			),
 		).toMatchObject({ reason: "followup_no_disponible" });
+	});
+
+	it("sin hechos con fuente en la ficha, no hay ancla y no se llama al modelo", async () => {
+		const store = seeded();
+		store.accounts[0].ficha = { ...store.accounts[0].ficha, hechos: [] };
+		const generate = vi.fn(async () => ({ output: good, usage: {} }));
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
+			{ store, loadCanon: async () => canon, generate, now },
+		);
+		expect(result).toMatchObject({ ok: false, reason: "sin_ancla" });
+		expect(generate).not.toHaveBeenCalled();
+	});
+
+	it("un ancla que no sale de la ficha cuenta como intento fallido y se corrige en el reintento", async () => {
+		const store = seeded();
+		const invented = {
+			...good,
+			ancla: {
+				hecho: "Un hecho que no está en la ficha",
+				fuente: "https://acme.test/inventado",
+			},
+		};
+		const prompts: string[] = [];
+		const generate = vi
+			.fn()
+			.mockImplementationOnce(
+				async (_model: string, _system: string, prompt: string) => {
+					prompts.push(prompt);
+					return { output: invented, usage: {} };
+				},
+			)
+			.mockImplementationOnce(
+				async (_model: string, _system: string, prompt: string) => {
+					prompts.push(prompt);
+					return { output: good, usage: {} };
+				},
+			);
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
+			{ store, loadCanon: async () => canon, generate, now },
+		);
+		expect(result).toMatchObject({ ok: true, attempts: 2 });
+		expect(prompts[1]).toContain("el ancla no sale de la ficha");
+	});
+
+	it("tres intentos con un ancla inventada agotan los intentos", async () => {
+		const store = seeded();
+		const invented = {
+			...good,
+			ancla: {
+				hecho: "Un hecho que no está en la ficha",
+				fuente: "https://acme.test/inventado",
+			},
+		};
+		const generate = vi.fn(async () => ({ output: invented, usage: {} }));
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
+			{ store, loadCanon: async () => canon, generate, now },
+		);
+		expect(result).toMatchObject({ ok: false, reason: "gate" });
+		expect(generate).toHaveBeenCalledTimes(3);
 	});
 });
