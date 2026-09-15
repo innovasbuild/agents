@@ -367,7 +367,7 @@ Todas verifican al inicio: principal de tipo user, `tenantId` en el auth, `outre
 
 ### 8.1 Schedules
 
-Forma `defineSchedule({ cron, run })` en código (la forma markdown no puede frenar). Root-only, cron en UTC. Autenticación del cron según `schedules.mdx` y `CRON_SECRET`.
+Forma `defineSchedule({ cron, run })` en código (la forma markdown no puede frenar). Root-only, cron en UTC. Sin `CRON_SECRET`: Vercel invoca un path opaco que genera eve (§13.1 S5).
 
 | Schedule | Cron | Hace |
 |---|---|---|
@@ -376,7 +376,7 @@ Forma `defineSchedule({ cron, run })` en código (la forma markdown no puede fre
 
 Cada uno recorre los tenants activos con fila `tenant_agents` (`agent = 'outreach'`, `enabled = true`). Por tenant: toma el lock (`runs.schedule_key`, §4.7); si ya existe, sigue con el siguiente tenant. Por ejecutor con `gmail_read_authorized_at`: bloque aislado en try/catch, un ejecutor que falla no frena a los demás y deja `runs.error`.
 
-Tokens sin usuario en la sesión: `lib/connectors/auth.ts` suma `tokenForSubject(connector, { tenantId, userId, issuer? }, scopes?)`, que pide el token de Connect con el subject `tenantId:userId` usando el OIDC del proyecto. Es el spike S1 y levanta la consecuencia de la decisión D4 de la spec 02 ("un schedule sin usuario no puede tocar el CRM"). Si S1 da que no: §13, plan B.
+Tokens sin usuario en la sesión: `lib/connectors/auth.ts` suma `tokenForSubject(connector, { tenantId, userId, issuer? }, scopes?)`, que pide el token de Connect con el subject `tenantId:userId` usando el OIDC del proyecto. **Siempre con `issuer = NEXT_PUBLIC_SUPABASE_URL`**: sin issuer Connect no encuentra el grant (§13.1 S1). Levanta la consecuencia de la decisión D4 de la spec 02 ("un schedule sin usuario no puede tocar el CRM").
 
 ### 8.2 Respuestas (lógica compartida con `read_replies`)
 
@@ -464,7 +464,7 @@ Que el token del MCP de HubSpot alcance para escribir contactos, notas, tasks y 
 
 ### 11.2 Evals (`agents/outreach/evals/`)
 
-`evals.config.ts` con juez `anthropic/claude-sonnet-5`. Se corren a mano con `eve eval` contra local o preview con un tenant de eval sembrado (sin bindings de `mail` ni `crm` reales; cómo autenticar y sembrar: spike S7). Tienen que estar en verde para cerrar; no van a CI todavía (necesitan credenciales de modelo).
+`evals.config.ts` con juez `anthropic/claude-sonnet-5`. Se corren a mano con `npx eve eval --agent outreach` contra la Supabase local, con la auth de eval y el tenant sembrado de §13.1 (sin bindings de `mail` ni `crm` reales). Tienen que estar en verde para cerrar; no van a CI todavía (necesitan credenciales de modelo).
 
 | Eval | Verifica |
 |---|---|
@@ -506,14 +506,26 @@ Resultado de cada spike en §13.1 de esta spec (se completa en la Entrega 1), co
 
 ### 13.1 Resultado de los spikes
 
-Pendiente (Entrega 1).
+Corridos entre el 2026-09-14 y el 2026-09-15. S1, S3 y S6 no se pueden probar desde una máquina local: los grants de Connect solo se ven desde el entorno donde se dieron y la llave del AI Gateway es Secret (no se baja con `vercel env pull`). Se corrieron en producción con una ruta temporal de diagnóstico (`/api/admin/spike-etapa-3`, PR #9 y #10, gated por `SPIKE_ETAPA3=1` y rol admin, sin tokens en la salida), borrada en el PR #11. S4, S5 y S7 se corrieron en local en la rama descartable `spike/etapa-3`.
+
+| # | Respuesta | Evidencia (sin secretos) | Qué cambia |
+|---|---|---|---|
+| S1 | **Sí, con `issuer`.** Desde el runtime de producción, `tokenForSubject` devuelve el token de `tenantId:userId` para `mcp.hubspot.com/hubspot` y `google/google` **solo si el subject lleva `issuer = NEXT_PUBLIC_SUPABASE_URL`**, que es lo que estampa `agents/outreach/channels/eve.ts` y `tenantScopedConnect` propaga al grant. Sin `issuer`: `UserAuthorizationRequiredError`. Desde local (OIDC de development o de production bajado) Connect nunca ve los grants, aun con subject e issuer idénticos | HubSpot con issuer: `token ok` + `GET /crm/v3/properties/contacts` 200 (tres corridas). Google con issuer: `token ok` + `users/me/profile` 403 (esperado: getProfile no admite solo `gmail.send`). El grant de Google murió dos veces el mismo día (ver §16) | §8.1: todo `tokenForSubject` pasa `issuer`; los schedules pueden usar HubSpot y Gmail del ejecutor. Local no sirve para probar grants |
+| S2 | **Pendiente, pasa a la Entrega 4.** No se pudo correr: el consentimiento de `gmail.readonly` necesita el chat con login real y el grant de Gmail murió dos veces el 2026-09-15 | — | La Entrega 4 arranca verificando en producción, con la escucha detrás de una tool de chat, que el grant con `gmail.send` + `gmail.readonly` se concede, persiste de un día para otro y permite buscar por `rfc822msgid:`. Si no persiste, la escucha queda en el plan B de §13 |
+| S3 | **Sí, con créditos pagos del AI Gateway.** `generateText` + `Output.object({ schema })` de `ai` 7 funciona con los tres modelos, igual con `AI_GATEWAY_API_KEY` que con OIDC. Sin créditos pagos del team, los tres dan `Free tier users do not have access to this model` (Haiku, `rate-limited`), también en producción | Con créditos (2026-09-15): Opus 5 ~3,0 s (598 in / 142 out), Sonnet 5 ~1,9–2,7 s (313/61), Haiku 4.5 ~1,3–2,3 s (244/53). `usage`: `inputTokens`, `outputTokens`, `totalTokens`, `inputTokenDetails.{noCacheTokens,cacheReadTokens,cacheWriteTokens}` | Defaults de §4.8 se mantienen. Operación §12: el team necesita créditos del AI Gateway (el plan Pro no los incluye) |
+| S4 | **Parcial.** El subagente dinámico `researcher` y una workflow tool estática con `ctx.agent(...)` compilan y se registran (`GET /eve/agents/outreach/eve/v1/info`). `ctx.agent` pide `outputSchema` como **JSON Schema**, no zod. Los subagentes traen `web_fetch` y `web_search` por default. No se ejerció de punta a punta: `localDev()` no trae `conversationId` y `hooks/bind-session.ts` falla la sesión | Commit `caef336` en `spike/etapa-3`; `/info` lista `subagents.local[0].name = "researcher"` con 9 tools default | §6.3: helper `toAgentOutputSchema` (zod → JSON Schema) en `lib/outreach`. La verificación de la ficha tipada va en la Entrega 3 con la auth de eval (S7); si `ctx.agent` no devuelve la ficha, plan B de §13 (tool común con `generateText` + `web_fetch` propio) |
+| S5 | **Sí.** `defineSchedule({ cron, run })` recibe `{ appAuth, to, waitUntil }`; en dev se dispara con `POST /eve/agents/outreach/eve/v1/dev/schedules/<nombre>`; el build registra el cron con path opaco `/eve/agents/outreach/eve/v1/cron/<token>`. **No hace falta `CRON_SECRET`** | Commit `9e68e1c`; dispatch → `200 {"scheduleId":"spike-heartbeat","sessionIds":[]}` y log con 2 tenants; `.vercel/output/config.json` con el cron | §8.1: sin `CRON_SECRET`; los schedules se prueban localmente por la ruta de dispatch |
+| S6 | **Sí.** El token del conector del MCP de HubSpot, pedido sin sesión con `tokenForSubject` + `issuer`, crea por REST contacto, nota asociada (typeId 202), task asociada (204) y deal asociado (3), y archiva el contacto | Dos corridas en producción: `201` ×4 y `204`. HubSpot rechaza emails `@example.invalid` (`INVALID_EMAIL`) | §9: `CrmAdapter` de HubSpot por REST, sin plan B |
+| S7 | **No tal cual; plan B.** `npx eve eval <id> --agent outreach` descubre y corre el caso, pero cae en el mismo `bind-session.ts` sin `conversationId`. `eve eval` contra el server que arranca no manda auth (gana `localDev()`) | Commit `a8278eb`: `✗ succeeded … run failed (code: FatalError)` | §11.2: auth de eval (ver abajo) + Supabase **local** sembrada. Es la primera task de la Entrega 3 |
+
+**Auth de eval (plan B de S7, decidido):** una `AuthFn` más en `agents/outreach/channels/eve.ts`, activa **solo sin `VERCEL_ENV`** (igual que `localDev()`) y solo si existe `EVE_EVAL_TENANT_SLUG`: arma el principal con el tenant, el usuario y una conversación sembrados en la base local (`supabase/seed-evals.sql`), así `bind-session.ts` y los resolvers dinámicos corren como en producción. `.env.eval` apunta a la Supabase local (`npx supabase start`), nunca a producción.
 
 ## 14. Entregas
 
 1. **Spikes** S1 a S7 y §13.1 escrito; ajustes a la spec si algún plan B se activa.
 2. **Datos y núcleo:** migraciones de §4 con pgTAP, `lib/outreach` con TDD (§5), `OUTREACH_PROPERTIES` con 10, `tenants/innovas/outreach.json` + `outreach:config`, `executors:set`. No depende de los spikes: puede correr en paralelo con la Entrega 1.
-3. **Agente de primer toque:** `CrmAdapter` + HubSpot (§9, después de S6), instrucciones, skills, `researcher`, tools de §6.4, `send_email` de §7, evals de §11.2.
-4. **Escucha y follow-ups:** scopes de Gmail y hook, `tokenForSubject`, `listen.ts`, `read_replies`, los dos schedules, F6.5, resumen de sesión.
+3. **Agente de primer toque:** primero la auth de eval y la base local sembrada (§13.1 S7); después `CrmAdapter` + HubSpot (§9), instrucciones, skills, `researcher` (verificando S4), tools de §6.4, `send_email` de §7 (con el caso "aprobar → autorizar → se envía" de §16) y evals de §11.2.
+4. **Escucha y follow-ups:** primero S2 en producción (§13.1); después scopes de Gmail y hook, `listen.ts`, `read_replies`, los dos schedules, F6.5 y resumen de sesión.
 5. **Piloto contra producción** (§12.1) y verificación del criterio de cierre, guiada, como la Task 14 de la Etapa 2.
 
 ## 15. Fuera de alcance
@@ -532,7 +544,10 @@ Pendiente (Entrega 1).
 ## 16. Riesgos
 
 - **Canon sin probar de punta a punta:** el plugin 1.0.0 no está validado. Mitigación: evals, fixtures con casos reales anonimizados y reporte de inconsistencias en vez de copiar.
-- **Tokens de Connect desde schedules (S1):** si no, la escucha deja de ser automática (plan B).
+- **Tokens de Connect desde schedules (S1):** resuelto con `issuer` (§13.1). Queda el riesgo de que un cambio en cómo el canal estampa `issuer` desconecte todos los grants: test que fije que `tokenForSubject` y el canal usan la misma constante.
+- **Grant de Gmail que se muere (visto el 2026-09-15):** daba token a las 02:21 UTC y a las ~10:55 UTC pedía autorización otra vez, dos veces en el día; causa no confirmada. Si se repite con `gmail.readonly`, la escucha por cron no se sostiene. La Entrega 4 lo verifica antes de construir los schedules (§13.1 S2).
+- **Ejecutor sin `crm_owner_id` en un tenant con CRM:** `claimStatus` da `ajeno` ante autoría reciente del CRM si el ejecutor no tiene owner, y después del `msg1` la nota la escribe su propia cuenta: bloquearía sus propios follow-ups. `queue_touch` y `send_email` rechazan con `reason: "ejecutor_sin_crm_owner"` cuando el tenant tiene capacidad `crm` y el ejecutor no tiene `crm_owner_id`.
+- **Créditos del AI Gateway:** sin créditos pagos del team, los modelos no responden (§13.1 S3). Operación: vigilar el saldo; `runs.cost_usd` y el tablero del Gateway.
 - **`gmail.readonly` es scope restringido:** funciona sin verificación hasta 100 usuarios; con más clientes exige verificación y auditoría de seguridad de Google.
 - **eve 0.54 en preview:** workflow tools estáticas, subagentes dinámicos y evals son las partes menos probadas. Versión fijada; spikes S4, S5 y S7.
 - **Costo:** Opus por `msg1`, ColdIQ por research, Connect por token request y lecturas de Gmail por hilo en cada sweep. Topes de tokens, fichas cacheadas 90 días y hilos limitados a 60 días; revisar el tablero de Observability de Connect y `runs.cost_usd` al cerrar el piloto.
