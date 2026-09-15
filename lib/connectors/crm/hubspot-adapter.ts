@@ -136,7 +136,7 @@ export function createHubSpotAdapter(
 				const data = await searchAssociated(
 					object,
 					crmId,
-					[],
+					[{ propertyName: "hubspot_owner_id", operator: "HAS_PROPERTY" }],
 					["hubspot_owner_id", "hs_timestamp"],
 					1,
 				);

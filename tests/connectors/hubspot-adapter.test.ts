@@ -66,7 +66,7 @@ describe("createHubSpotAdapter", () => {
 	});
 
 	it("lastAuthorship toma la nota o el email más reciente con owner", async () => {
-		const { fetchImpl } = fakeHubSpot([
+		const { calls, fetchImpl } = fakeHubSpot([
 			{
 				json: {
 					results: [
@@ -102,6 +102,17 @@ describe("createHubSpotAdapter", () => {
 			ownerId: "7",
 			at: new Date("2026-09-10T10:00:00Z"),
 		});
+		// La búsqueda pide solo actividad con owner: si la más reciente no tiene
+		// owner (ej. un email logueado por una integración), no hay que verla.
+		for (const call of calls) {
+			expect(
+				(call.body as { filterGroups: Array<{ filters: unknown[] }> })
+					.filterGroups[0].filters,
+			).toContainEqual({
+				propertyName: "hubspot_owner_id",
+				operator: "HAS_PROPERTY",
+			});
+		}
 	});
 
 	it("upsertContact crea con nombre y empresa, o actualiza solo propiedades", async () => {
