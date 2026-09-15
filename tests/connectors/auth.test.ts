@@ -23,8 +23,13 @@ vi.mock("@vercel/connect/eve", () => ({
 	},
 }));
 
-const { apiKeyBearer, apiKeyHeaders, tenantScopedConnect, tenantSubjectId, tokenForSubject } =
-	await import("@/lib/connectors/auth");
+const {
+	apiKeyBearer,
+	apiKeyHeaders,
+	tenantScopedConnect,
+	tenantSubjectId,
+	tokenForSubject,
+} = await import("@/lib/connectors/auth");
 
 type CreateSubject = (principal: {
 	type: "user" | "app";
