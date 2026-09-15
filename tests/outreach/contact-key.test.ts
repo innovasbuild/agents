@@ -42,6 +42,12 @@ describe("linkedinSlug", () => {
 		expect(linkedinSlug("laura gomez")).toBeNull();
 		expect(linkedinSlug(undefined)).toBeNull();
 	});
+	it("un valor suelto (no de una URL de linkedin.com/in/) exige al menos 3 caracteres y una letra", () => {
+		expect(linkedinSlug("-")).toBeNull();
+		expect(linkedinSlug("x")).toBeNull();
+		expect(linkedinSlug("123")).toBeNull();
+		expect(linkedinSlug("ana")).toBe("ana");
+	});
 });
 
 describe("contactKey", () => {

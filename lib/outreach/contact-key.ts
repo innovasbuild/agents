@@ -33,6 +33,10 @@ export function linkedinSlug(raw: string | null | undefined): string | null {
 	const fromUrl = value.match(/linkedin\.com\/in\/([^/?#\s]+)/);
 	if (fromUrl) return fromUrl[1];
 	if (/[/@\s]/.test(value)) return null;
+	// Un valor suelto (no extraído de una URL de perfil) es más propenso a ser
+	// basura ("-", "x", un número) que un slug real: exigimos largo mínimo y
+	// al menos una letra.
+	if (value.length < 3 || !/[a-z]/.test(value)) return null;
 	return value;
 }
 
