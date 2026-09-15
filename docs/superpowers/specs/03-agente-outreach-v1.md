@@ -328,7 +328,7 @@ Todas verifican al inicio: principal de tipo user, `tenantId` en el auth, `outre
 | `update_queue_item(id, subject, body)` | tool | — | edita pieza `pending` | Solo el ejecutor dueño. Vuelve a correr el gate; si falla, no guarda. `draft_original` no cambia. Evento `pieza_editada` |
 | `reject_queue_item(id, reason)` | tool | — | `rejected` | Solo el dueño. Libera el claim si el contacto no tiene toques. Evento `rechazado` |
 | `send_email(queueItemId, to, subject, body)` | tool | `always()` | Gmail + base + CRM | §7 |
-| `crm_upsert_contact(contact_key, stage?, properties?, note?)` | tool | `once()` | CRM + `contacts` | Registros manuales (respuesta por teléfono, reunión). `canAdvance` para el stage. Evento `cambio_etapa` o `nota` |
+| `crm_upsert_contact(contact_key, stage, note)` | tool | `once()` | CRM + `contacts` | Registros manuales (respuesta por teléfono, reunión). `stage` y `note` son nullable. `canAdvance` para el stage. Evento `cambio_etapa` o `nota` |
 | `read_replies()` | tool | `once()` | base + CRM | Corre §8.2 para el ejecutor de la sesión, ahora |
 | `log_event(type, contact_key?, summary)` | tool | — | `events` | Solo `freno` y `nota` |
 
