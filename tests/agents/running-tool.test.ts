@@ -19,8 +19,8 @@ function toolPart(toolName: string, state: ToolState) {
 	return { type: "dynamic-tool", state, toolName, toolCallId: `c-${toolName}` };
 }
 
-function textPart(text: string) {
-	return { type: "text", state: "done", stepIndex: 0, text };
+function textPart(text: string, state: "done" | "streaming" = "done") {
+	return { type: "text", state, stepIndex: 0, text };
 }
 
 function messages(...byMessage: unknown[][]): EveMessage[] {
@@ -212,14 +212,30 @@ describe("thinkingLabel", () => {
 		).toBe("Pensando…");
 	});
 
-	it("se apaga cuando el texto ya está llegando: el texto es el indicador", () => {
+	it("se apaga mientras el texto se está escribiendo: el texto es el indicador", () => {
 		expect(
 			thinkingLabel({
 				...base,
 				status: "streaming",
-				messages: messages([textPart("Ya te armo la lista")]),
+				messages: messages([textPart("Ya te armo la lista", "streaming")]),
 			}),
 		).toBeNull();
+	});
+
+	it("vuelve a Pensando… en el tool que viene DESPUÉS de una frase terminada", () => {
+		// Todos los pasos de un turno viven en el mismo mensaje. Mirar si el
+		// texto existe apagaba el indicador en cada tool posterior a la primera
+		// frase, que es la forma normal de un turno de este agente.
+		expect(
+			thinkingLabel({
+				...base,
+				status: "streaming",
+				messages: messages([
+					textPart("Voy a mirar la cuenta.", "done"),
+					toolPart("research_account", "input-streaming"),
+				]),
+			}),
+		).toBe("Pensando…");
 	});
 
 	it("no muestra nada con el turno terminado", () => {

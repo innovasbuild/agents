@@ -354,9 +354,10 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			    role="status" que se monta junto con su texto no lo anuncia, y
 			    display:none lo saca del árbol de accesibilidad igual que no
 			    montarlo. Vacía no ocupa alto (flex sin hijos no arma línea);
-			    empty:mt-0 le saca el hueco que le daría el space-y del padre. */}
+			    empty:mb-0 le saca el hueco del space-y del padre, que en Tailwind
+			    v4 es margin-block-END sobre cada hijo menos el último. */}
 			<p
-				className="flex items-center gap-2 text-muted-foreground text-sm empty:mt-0"
+				className="flex items-center gap-2 text-muted-foreground text-sm empty:mb-0"
 				role="status"
 			>
 				{thinking === null ? null : (

@@ -97,21 +97,26 @@ export function thinkingLabel(params: {
 	const tool = runningToolName(params.messages);
 	if (tool !== null) return `${runningToolLabel(tool)}…`;
 
-	// `streaming` sin texto todavía en pantalla incluye el tramo en el que
-	// llegan los argumentos de un tool: ahí no hay NADA que mirar, y una
-	// pantalla vacía se lee como rota. Con texto llegando, el texto ya es el
-	// indicador y los puntitos abajo sobran.
+	// `streaming` sin texto EN CURSO incluye el tramo en el que llegan los
+	// argumentos de un tool: ahí no hay nada que mirar, y una pantalla quieta
+	// se lee como colgada. Solo el texto que todavía se está escribiendo apaga
+	// los puntitos: un texto ya terminado es estático, y como todos los pasos
+	// de un turno viven en el MISMO mensaje, mirar si el texto existe apagaba
+	// el indicador en todos los tools que vienen después de la primera frase.
 	if (params.status === "submitted") return "Pensando…";
-	if (params.status === "streaming" && !hasVisibleText(params.messages)) {
+	if (params.status === "streaming" && !isWritingText(params.messages)) {
 		return "Pensando…";
 	}
 	return null;
 }
 
-function hasVisibleText(messages: readonly EveMessage[]): boolean {
+function isWritingText(messages: readonly EveMessage[]): boolean {
 	const last = messages.at(-1);
 	if (last === undefined || last.role === "user") return false;
 	return last.parts.some(
-		(part) => part.type === "text" && part.text.length > 0,
+		(part) =>
+			part.type === "text" &&
+			part.state === "streaming" &&
+			part.text.length > 0,
 	);
 }

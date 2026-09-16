@@ -339,11 +339,19 @@ describe("resolveChannelContext", () => {
 		}
 	});
 
-	it("no reintenta si la conversación del header quedó atada a OTRA sesión", async () => {
+	it("sigue esperando si la conversación tiene la sesión VIEJA de un turno fallido", async () => {
+		// bindSessionToConversation es última-escritura-gana a propósito: una
+		// conversación apuntando a una sesión muerta es exactamente el estado
+		// previo a que el hook ate la nueva. Leer ese campo como "ya no se va a
+		// atar" 401eaba de forma determinística el primer stream del reintento,
+		// y eve no reintenta un 401: el hilo quedaba trabado.
 		vi.useFakeTimers();
 		try {
 			rows.conversationBySession = null;
-			rows.conversationById = { ...CONVERSATION, eve_session_id: "wrun_OTRA" };
+			rows.conversationById = {
+				...CONVERSATION,
+				eve_session_id: "wrun_MUERTA",
+			};
 
 			const pending = resolveChannelContext(
 				createRequest(
@@ -352,10 +360,17 @@ describe("resolveChannelContext", () => {
 				),
 				CONVERSATION.user_id,
 			);
-			await vi.advanceTimersByTimeAsync(0);
 
-			expect(await pending).toBeNull();
-			expect(rows.sessionLookups).toBe(1);
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
 		} finally {
 			vi.useRealTimers();
 		}

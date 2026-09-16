@@ -49,30 +49,30 @@ interface ConversationRow {
  * ¿Vale la pena seguir esperando a que aten el `eve_session_id`?
  *
  * La escalera de reintentos existe por una carrera de milisegundos: la fila ya
- * está, el hook todavía no escribió. Si la conversación que el cliente dice
- * estar mirando no existe (se borró) o quedó atada a OTRA sesión, esa
- * escritura no va a llegar nunca y esperarla es tiempo tirado.
+ * está, el hook todavía no escribió. Lo ÚNICO que prueba que esa escritura no
+ * va a llegar nunca es que la conversación ya no exista, que es el caso que
+ * este corte vino a resolver: desde que se puede borrar un hilo, su sesión
+ * queda huérfana para siempre.
  *
- * Atada a ESTA sesión cuenta como "sí": significa que el hook escribió entre
- * las dos consultas, y la vuelta siguiente de la escalera la va a encontrar.
- * Sin ese caso, el arreglo se comía justamente la carrera que la escalera
- * existe para cubrir.
+ * Cualquier `eve_session_id` que ya esté puesto NO prueba nada: bindSession-
+ * ToConversation es última-escritura-gana a propósito (session-store.ts), así
+ * que una conversación con la sesión vieja de un turno fallido es exactamente
+ * el estado previo a que el hook ate la nueva. Dos ciclos de review se
+ * equivocaron mirando ese campo; acá no se mira más.
  *
- * Fail-open en los dos casos de duda: sin header (no se puede saber) y con
- * error de la consulta (un header que no es uuid tira 22P02). Un chequeo que
- * falla no es evidencia de que el bind sea imposible.
+ * Fail-open ante la duda: sin header no se puede saber, y un error de la
+ * consulta (un header que no es uuid tira 22P02) tampoco es evidencia.
  */
 async function bindStillPossible(
 	admin: ReturnType<typeof createAdminClient>,
 	request: Request,
-	sessionId: string,
 ): Promise<boolean> {
 	const conversationId = request.headers.get("x-innovas-conversation");
 	if (!conversationId) return true;
 
 	const { data, error } = await admin
 		.from("conversations")
-		.select("eve_session_id")
+		.select("id")
 		.eq("id", conversationId)
 		.maybeSingle();
 
@@ -80,8 +80,7 @@ async function bindStillPossible(
 		console.error("bindStillPossible:", error.message);
 		return true;
 	}
-	if (data === null) return false;
-	return data.eve_session_id === null || data.eve_session_id === sessionId;
+	return data !== null;
 }
 
 export async function resolveChannelContext(
@@ -107,7 +106,7 @@ export async function resolveChannelContext(
 			// Desde que se puede borrar un hilo, una sesión huérfana es un caso
 			// común, y sin este corte cada request suyo dormía los 3,1s enteros
 			// de la escalera y disparaba seis consultas antes de dar 401.
-			if (!(await bindStillPossible(admin, request, sessionId))) break;
+			if (!(await bindStillPossible(admin, request))) break;
 			await sleep(BIND_RETRY_DELAYS_MS[attempt]);
 		}
 	} else {
