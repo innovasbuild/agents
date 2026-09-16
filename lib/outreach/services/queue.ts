@@ -280,6 +280,9 @@ export async function listQueue(
 			gate: item.gateResult.status,
 			trabada: item.status === "approved",
 			approvedAt: item.approvedAt,
+			// Por qué quedó trabada, si se sabe: `envio_incierto: …` lo escribe
+			// sendQueuedEmail. null es una traba sin rastro (turno cancelado, deploy).
+			error: item.error,
 		})),
 	};
 }

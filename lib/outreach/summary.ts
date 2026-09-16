@@ -39,7 +39,9 @@ export async function sessionSummary(
 		// (spec: mismo criterio que listQueue en services/queue.ts): sin esto el
 		// único estado que necesita revisión manual queda invisible en el resumen.
 		deps.store.listQueue(input.tenantId, input.userId, ["pending", "approved"]),
-		deps.brainConnected(),
+		// Falla abierta: el aviso es contexto, el cupo y la cola no. Si la consulta
+		// de conexiones se cae, el resumen sale igual sin el aviso.
+		deps.brainConnected().catch(() => true),
 	]);
 	const pending = items.filter((item) => item.status === "pending");
 	const trabadas = items.filter((item) => item.status === "approved");

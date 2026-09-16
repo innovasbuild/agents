@@ -141,6 +141,24 @@ export async function sendQueuedEmail(
 		return refuse(reason, message);
 	};
 
+	/** No se sabe si el mail salió (sin respuesta de Gmail, o un 2xx sin
+	 * confirmación). Si la pieza volviera a pending o quedara failed se libera al
+	 * contacto y se puede mandar un segundo mail. Queda approved (trabada), que
+	 * ya tiene su carril en list_queue y en el resumen de sesión, con el motivo
+	 * en la fila para distinguirla de una trabada por un turno cancelado. */
+	const uncertain = async (cause: unknown) => {
+		const detail = (
+			cause instanceof Error ? cause.message : String(cause)
+		).slice(0, 400);
+		await deps.store.transitionQueueItem(caller.tenantId, item.id, "approved", {
+			error: `envio_incierto: ${detail}`,
+		});
+		return refuse(
+			"envio_incierto",
+			"no hubo respuesta de Gmail y no se sabe si el mail salió: la pieza queda trabada. Revisá en Gmail si el mail salió antes de reintentar.",
+		);
+	};
+
 	let contact: ContactRow;
 	let crmId: string | null;
 	try {
@@ -259,28 +277,17 @@ export async function sendQueuedEmail(
 			await backToPending();
 			throw error;
 		}
-		if (deps.isMailUnknownOutcome(error)) {
-			// Sin respuesta de Gmail el mail pudo haber salido: si la pieza volviera
-			// a pending o quedara failed se libera el contacto y se puede reenviar.
-			// Queda approved (trabada), que ya tiene su carril en list_queue y en el
-			// resumen de sesión, para que lo resuelva una persona mirando Gmail.
-			return refuse(
-				"envio_incierto",
-				"no hubo respuesta de Gmail y no se sabe si el mail salió: la pieza queda trabada. Revisá en Gmail si el mail salió antes de reintentar.",
-			);
-		}
+		if (deps.isMailUnknownOutcome(error)) return await uncertain(error);
 		return finish(
 			"failed",
 			"envio_fallido",
 			`Gmail no aceptó el envío: ${error instanceof Error ? error.message : String(error)}`,
 		);
 	}
+	// Defensa: sendMail ya trata un 2xx sin id como incierto, pero la dep es
+	// inyectable y un no-envío nunca se puede dar por hecho.
 	if (!sent?.id || !sent?.threadId) {
-		return finish(
-			"failed",
-			"sin_confirmacion",
-			"Gmail no confirmó el envío: no se registra como enviado",
-		);
+		return await uncertain(new Error("Gmail no confirmó el id del mensaje"));
 	}
 
 	// Desde acá el mail ya salió: registrar sin pausar ni relanzar.

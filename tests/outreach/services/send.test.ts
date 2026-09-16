@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import type { Canon } from "@/lib/outreach/canon";
 import { emptyGateRules } from "@/lib/outreach/gate-blocks";
-import { queueTouch } from "@/lib/outreach/services/queue";
+import { listQueue, queueTouch } from "@/lib/outreach/services/queue";
 import { sendQueuedEmail } from "@/lib/outreach/services/send";
 import {
 	contactRow,
@@ -277,7 +277,11 @@ describe("sendQueuedEmail", () => {
 		expect((result as { message: string }).message).toContain(
 			"Revisá en Gmail si el mail salió antes de reintentar",
 		);
-		expect(store.queue[0].status).toBe("approved");
+		expect(store.queue[0]).toMatchObject({
+			status: "approved",
+			error: expect.stringContaining("envio_incierto:"),
+			approvedAt: "2026-09-15T12:00:00.000Z",
+		});
 		expect(store.contacts[0]).toMatchObject({
 			touches: 0,
 			stage: "a_contactar",
@@ -292,6 +296,36 @@ describe("sendQueuedEmail", () => {
 			reason: "ya_tomada",
 		});
 		expect(sendMail).toHaveBeenCalledTimes(1);
+	});
+
+	it("Gmail contestó 2xx pero sin confirmar el id: incierto, no fallido", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		sendMail.mockResolvedValueOnce({ id: "", threadId: "" });
+		const result = await sendQueuedEmail(input, deps);
+		expect(result).toMatchObject({ ok: false, reason: "envio_incierto" });
+		expect((result as { message: string }).message).toContain(
+			"Revisá en Gmail si el mail salió antes de reintentar",
+		);
+		expect(store.queue[0]).toMatchObject({
+			status: "approved",
+			error: expect.stringContaining("envio_incierto:"),
+		});
+		expect(store.contacts[0]).toMatchObject({ touches: 0 });
+		expect(await store.countSent(TENANT, { since: new Date(0) })).toMatchObject(
+			{ count: 0 },
+		);
+		expect(store.events.map((e) => e.type)).toEqual(["encolado"]);
+	});
+
+	it("una pieza trabada muestra en list_queue por qué quedó trabada", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		sendMail.mockRejectedValueOnce(new FakeUnknownOutcome("ECONNRESET"));
+		await sendQueuedEmail(input, deps);
+		const listed = await listQueue({ caller }, { store });
+		expect(listed.items[0]).toMatchObject({
+			trabada: true,
+			error: expect.stringContaining("envio_incierto:"),
+		});
 	});
 
 	it("un canon vacío (tenant sin brain o sin canon cargado) no envía", async () => {

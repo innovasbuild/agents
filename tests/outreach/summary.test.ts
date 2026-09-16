@@ -133,6 +133,20 @@ describe("sessionSummary", () => {
 		expect(text).toContain("no vas a poder redactar");
 	});
 
+	it("si la consulta del brain falla, el resumen sale igual sin el aviso", async () => {
+		const store = createFakeStore();
+		store.executors[0].dailyQuota = 10;
+		const text = await sessionSummary(base, {
+			store,
+			now,
+			brainConnected: async () => {
+				throw new Error("Supabase no responde");
+			},
+		});
+		expect(text).toContain("cupo de hoy: 10 de 10");
+		expect(text).not.toContain("no tiene el brain conectado");
+	});
+
 	it("con la cola vacía no empuja a mostrarla", async () => {
 		const store = createFakeStore();
 		const text = await sessionSummary(base, { store, now, brainConnected });
