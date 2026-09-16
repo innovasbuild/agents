@@ -73,6 +73,19 @@ const SLUG_RE = /^[a-z][a-z0-9-]{0,30}$/;
 const clean = (value: string | null, re: RegExp): string | null =>
 	value !== null && re.test(value) ? value : null;
 
+/**
+ * Prepara el texto de búsqueda para un `ilike` dentro de un `or()` de
+ * PostgREST. El `or()` no toma parámetros: recibe una string con sintaxis
+ * propia, donde la coma separa condiciones, los paréntesis delimitan el grupo
+ * y la comilla doble cita valores. Un texto del usuario con esos caracteres no
+ * rompe la consulta, hace algo peor: la reescribe. Se sacan, junto con los
+ * comodines de LIKE, que si no dejarían buscar cualquier cosa.
+ */
+export function ilikePattern(value: string): string | null {
+	const safe = value.replace(/[,()"%_*\\]/g, "").trim();
+	return safe === "" ? null : `%${safe}%`;
+}
+
 export function parseContactFilters(params: URLSearchParams): ContactFilters {
 	const etapa = params.get("etapa");
 	const q = params.get("q")?.trim() ?? "";

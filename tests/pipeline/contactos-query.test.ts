@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	ilikePattern,
 	parseContactFilters,
 	toContactRows,
 } from "@/lib/outreach/contactos-query";
@@ -105,5 +106,33 @@ describe("parseContactFilters", () => {
 		expect(
 			parseContactFilters(new URLSearchParams("ejecutor=mati")).ejecutor,
 		).toBe("mati");
+	});
+});
+
+describe("ilikePattern", () => {
+	it("envuelve el texto en comodines para un ilike", () => {
+		expect(ilikePattern("ana")).toBe("%ana%");
+	});
+
+	it("saca las comas, que en PostgREST separan condiciones dentro de or()", () => {
+		expect(ilikePattern("ana,acme")).not.toContain(",");
+	});
+
+	it("saca los paréntesis, que en PostgREST delimitan el grupo de or()", () => {
+		const pattern = ilikePattern("ana(acme)");
+		expect(pattern).not.toContain("(");
+		expect(pattern).not.toContain(")");
+	});
+
+	it("saca los comodines que trae el usuario, para que no busque cualquier cosa", () => {
+		expect(ilikePattern("a%b_c")).toBe("%abc%");
+	});
+
+	it("saca las comillas dobles, con las que PostgREST cita valores", () => {
+		expect(ilikePattern('ana"acme')).not.toContain('"');
+	});
+
+	it("con un texto que era todo caracteres peligrosos devuelve null", () => {
+		expect(ilikePattern(",,()")).toBeNull();
 	});
 });
