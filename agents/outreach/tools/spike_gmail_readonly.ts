@@ -8,12 +8,10 @@ import { z } from "zod";
 import { tenantScopedConnect } from "../../../lib/connectors/auth";
 import { hasEnabledBinding } from "../../../lib/connectors/bindings";
 import { GOOGLE_CONNECTOR_UID } from "../../../lib/connectors/platform";
-import { GMAIL_SEND_SCOPE } from "../../../lib/gmail/send";
+import { GMAIL_SCOPES } from "../../../lib/gmail/send";
 import { refuse } from "../../../lib/outreach/result";
 import { callerFromSession } from "../../../lib/outreach/session";
 import { GMAIL_AUTH_OPTIONS } from "./send_email";
-
-const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
 export default defineTool({
 	description:
@@ -28,8 +26,7 @@ export default defineTool({
 			return refuse("sin_gmail", "este tenant no tiene Gmail habilitado");
 		}
 		const google = tenantScopedConnect(GOOGLE_CONNECTOR_UID, caller.tenantId, [
-			GMAIL_SEND_SCOPE,
-			GMAIL_READONLY_SCOPE,
+			...GMAIL_SCOPES,
 		]);
 		// getToken pausa el turno y muestra la tarjeta de autorización si el grant
 		// no cubre los dos scopes. El token no se usa para nada más y nunca sale
