@@ -2,12 +2,33 @@
 
 import type { EveMessage } from "eve/client";
 import { useEveAgent } from "eve/react";
+import { EllipsisIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState, useTransition } from "react";
+import {
+	AlertDialog,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
-import { createConversation, renameConversation } from "./actions";
+import { thinkingLabel } from "@/lib/agents/running-tool";
+import {
+	createConversation,
+	deleteConversation,
+	renameConversation,
+} from "./actions";
 
 interface Thread {
 	id: string;
@@ -44,7 +65,11 @@ export function ChatClient({
 
 	return (
 		<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
-			<aside className="space-y-4">
+			{/* min-w-0: un hijo de grid nace con min-width:auto, así que el track
+			    se estira al min-content de los títulos (que van con truncate, o
+			    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
+			    empujaba el ⋯ fuera de la pantalla. */}
+			<aside className="min-w-0 space-y-4">
 				<div className="space-y-2">
 					<label
 						className="block text-muted-foreground text-sm"
@@ -77,33 +102,148 @@ export function ChatClient({
 				</div>
 
 				<ul className="space-y-0.5">
-					{threads.map((thread) => (
-						<li key={thread.id}>
-							<a
-								className={`block truncate rounded-md px-2.5 py-1.5 text-sm transition-colors hover:bg-muted ${
-									thread.id === active?.id
-										? "bg-muted font-medium"
-										: "text-muted-foreground"
+					{threads.map((thread) => {
+						const isActive = thread.id === active?.id;
+						return (
+							<li
+								className={`flex items-center rounded-md transition-colors hover:bg-muted ${
+									isActive ? "bg-muted font-medium" : ""
 								}`}
-								href={`/${slug}/chat?hilo=${thread.id}`}
+								key={thread.id}
 							>
-								{thread.title ?? "Hilo sin título"}
-							</a>
-						</li>
-					))}
+								<a
+									className={`min-w-0 flex-1 truncate rounded-md py-2 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+										isActive ? "" : "text-muted-foreground"
+									}`}
+									href={`/${slug}/chat?hilo=${thread.id}`}
+								>
+									{threadTitle(thread)}
+								</a>
+								<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
+							</li>
+						);
+					})}
 				</ul>
 			</aside>
 
 			{active ? (
 				<Thread key={active.id} slug={slug} thread={active} />
 			) : (
-				<div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center">
+				<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
 					<p className="text-muted-foreground">
 						Elegí un hilo o abrí uno nuevo para hablar con el agente.
 					</p>
 				</div>
 			)}
 		</div>
+	);
+}
+
+function threadTitle(thread: Thread): string {
+	return thread.title ?? "Hilo sin título";
+}
+
+function ThreadMenu({
+	isActive,
+	slug,
+	thread,
+}: {
+	isActive: boolean;
+	slug: string;
+	thread: Thread;
+}) {
+	const router = useRouter();
+	const [confirming, setConfirming] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [pending, startTransition] = useTransition();
+	const title = threadTitle(thread);
+
+	return (
+		<>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					{/* El área táctil se estira más allá del botón: abajo de 768px la
+					    lista de hilos es la navegación principal en un teléfono. */}
+					<Button
+						aria-label={`Opciones de ${title}`}
+						className="relative mr-1 text-muted-foreground after:absolute after:-inset-1.5"
+						size="icon-sm"
+						type="button"
+						variant="ghost"
+					>
+						<EllipsisIcon />
+					</Button>
+				</DropdownMenuTrigger>
+				<DropdownMenuContent align="end">
+					<DropdownMenuItem
+						className="py-2"
+						onSelect={(event) => {
+							// Sin esto el menú devuelve el foco al trigger mientras el
+							// diálogo instala su trampa, y las dos capas se pisan.
+							event.preventDefault();
+							setError(null);
+							setConfirming(true);
+						}}
+						variant="destructive"
+					>
+						Borrar conversación
+					</DropdownMenuItem>
+				</DropdownMenuContent>
+			</DropdownMenu>
+
+			{/* Esc y el click afuera también cierran el diálogo, y con el borrado
+			    en vuelo eso desmonta la única superficie donde se ve el error. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!pending) setConfirming(open);
+				}}
+				open={confirming}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>¿Borrar “{title}”?</AlertDialogTitle>
+						<AlertDialogDescription>
+							Se borra el hilo y su historial, sin vuelta atrás. Si el agente
+							está trabajando acá, borrarlo no lo frena: el turno sigue y un
+							envío ya aprobado va a salir igual.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					{error ? (
+						<p className="text-destructive text-sm" role="alert">
+							{error}
+						</p>
+					) : null}
+					<AlertDialogFooter>
+						<AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel>
+						{/* Botón suelto y no AlertDialogAction: Action cierra el diálogo
+						    al click y el borrado tiene que poder fallar a la vista. */}
+						<Button
+							disabled={pending}
+							onClick={() => {
+								setError(null);
+								startTransition(async () => {
+									const result = await deleteConversation(thread.id, slug);
+									if (!result.ok) {
+										setError(result.error);
+										return;
+									}
+									setConfirming(false);
+									// El hilo abierto dejó de existir: la URL con ?hilo= no
+									// resuelve a nada y la pantalla quedaría en el vacío. Si
+									// el borrado fue de otro hilo no hace falta refrescar: el
+									// revalidatePath de la action ya vuelve con la lista al día.
+									if (isActive) router.replace(`/${slug}/chat`);
+								});
+							}}
+							type="button"
+							variant="destructive"
+						>
+							{pending ? "Borrando…" : "Borrar"}
+						</Button>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
 	);
 }
 
@@ -146,6 +286,29 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 		),
 	);
 	const isAuthorizing = pendingAuthorizations.length > 0;
+
+	// Indicador de trabajo en curso. Tres reglas: con una tarjeta pendiente la
+	// señal es la tarjeta y no los puntitos; con texto ya llegando el propio
+	// texto es el indicador; y en los tramos largos de tool conviene decir en
+	// qué anda, que es donde "Pensando…" a secas no distingue trabado de
+	// laburando.
+	const thinking = useMemo(
+		() =>
+			thinkingLabel({
+				messages: agent.data.messages,
+				status: agent.status,
+				isResuming,
+				isAuthorizing,
+				pendingRequestCount: pendingRequests.length,
+			}),
+		[
+			agent.data.messages,
+			agent.status,
+			isResuming,
+			isAuthorizing,
+			pendingRequests.length,
+		],
+	);
 
 	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
 	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
@@ -190,6 +353,28 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					),
 				)}
 			</div>
+
+			{/* La región vive siempre y se queda VISIBLE cuando está vacía: un
+			    role="status" que se monta junto con su texto no lo anuncia, y
+			    display:none lo saca del árbol de accesibilidad igual que no
+			    montarlo. Vacía no ocupa alto (flex sin hijos no arma línea);
+			    empty:mb-0 le saca el hueco del space-y del padre, que en Tailwind
+			    v4 es margin-block-END sobre cada hijo menos el último. */}
+			<p
+				className="flex items-center gap-2 text-muted-foreground text-sm empty:mb-0"
+				role="status"
+			>
+				{thinking === null ? null : (
+					<>
+						<span aria-hidden="true" className="flex gap-1">
+							<span className="size-1.5 animate-bounce rounded-full bg-current motion-reduce:animate-none" />
+							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:150ms] motion-reduce:animate-none" />
+							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:300ms] motion-reduce:animate-none" />
+						</span>
+						{thinking}
+					</>
+				)}
+			</p>
 
 			{pendingAuthorizations.map(({ key, part }) => (
 				<fieldset className="rounded-lg border bg-card p-4" key={key}>

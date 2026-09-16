@@ -45,6 +45,44 @@ interface ConversationRow {
  *
  * Devuelve `null` ante cualquier duda; el canal traduce eso a 401.
  */
+/**
+ * ¿Vale la pena seguir esperando a que aten el `eve_session_id`?
+ *
+ * La escalera de reintentos existe por una carrera de milisegundos: la fila ya
+ * está, el hook todavía no escribió. Lo ÚNICO que prueba que esa escritura no
+ * va a llegar nunca es que la conversación ya no exista, que es el caso que
+ * este corte vino a resolver: desde que se puede borrar un hilo, su sesión
+ * queda huérfana para siempre.
+ *
+ * Cualquier `eve_session_id` que ya esté puesto NO prueba nada: bindSession-
+ * ToConversation es última-escritura-gana a propósito (session-store.ts), así
+ * que una conversación con la sesión vieja de un turno fallido es exactamente
+ * el estado previo a que el hook ate la nueva. Dos ciclos de review se
+ * equivocaron mirando ese campo; acá no se mira más.
+ *
+ * Fail-open ante la duda: sin header no se puede saber, y un error de la
+ * consulta (un header que no es uuid tira 22P02) tampoco es evidencia.
+ */
+async function bindStillPossible(
+	admin: ReturnType<typeof createAdminClient>,
+	request: Request,
+): Promise<boolean> {
+	const conversationId = request.headers.get("x-innovas-conversation");
+	if (!conversationId) return true;
+
+	const { data, error } = await admin
+		.from("conversations")
+		.select("id")
+		.eq("id", conversationId)
+		.maybeSingle();
+
+	if (error) {
+		console.error("bindStillPossible:", error.message);
+		return true;
+	}
+	return data !== null;
+}
+
 export async function resolveChannelContext(
 	request: Request,
 	userId: string,
@@ -64,6 +102,11 @@ export async function resolveChannelContext(
 			conversation = data as ConversationRow | null;
 
 			if (conversation || attempt >= BIND_RETRY_DELAYS_MS.length) break;
+			// Reintentar solo si la escritura que esperamos todavía puede pasar.
+			// Desde que se puede borrar un hilo, una sesión huérfana es un caso
+			// común, y sin este corte cada request suyo dormía los 3,1s enteros
+			// de la escalera y disparaba seis consultas antes de dar 401.
+			if (!(await bindStillPossible(admin, request))) break;
 			await sleep(BIND_RETRY_DELAYS_MS[attempt]);
 		}
 	} else {

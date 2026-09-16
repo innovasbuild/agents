@@ -13,6 +13,8 @@ const rows = vi.hoisted(() => ({
 		user_id: string;
 		role: string;
 	} | null,
+	/** Cuántas veces se buscó por eve_session_id: mide la escalera de reintentos. */
+	sessionLookups: 0,
 }));
 
 vi.mock("../../lib/supabase/admin", () => ({
@@ -38,6 +40,7 @@ vi.mock("../../lib/supabase/admin", () => ({
 					// pasar por casualidad.
 					if (table === "conversations") {
 						if (builder._kind === "bySession") {
+							rows.sessionLookups += 1;
 							const row = rows.conversationBySession;
 							const matches =
 								row !== null &&
@@ -125,6 +128,7 @@ beforeEach(() => {
 		user_id: CONVERSATION.user_id,
 		role: "tenant_member",
 	};
+	rows.sessionLookups = 0;
 });
 
 describe("resolveChannelContext", () => {
@@ -262,6 +266,134 @@ describe("resolveChannelContext", () => {
 			// Todavía no llegó la escritura de bind-session: el primer intento
 			// falla y el código tiene que esperar antes de reintentar, no
 			// devolver null de una.
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("no reintenta si la conversación del header ya no existe (hilo borrado)", async () => {
+		// Desde que se puede borrar un hilo, su eve_session_id queda huérfano y
+		// nadie lo va a atar nunca. Sin el corte, cada request de esa sesión
+		// dormía los 3,1s enteros de la escalera y hacía seis consultas antes
+		// de dar 401 -- y eso corre en el auth del canal, o sea en cada stream.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = null;
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(await pending).toBeNull();
+			expect(rows.sessionLookups).toBe(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("sí reintenta si la conversación del header está sin atar (la carrera real)", async () => {
+		// El corte de arriba no puede comerse la carrera que motivó la escalera:
+		// la fila existe y todavía tiene eve_session_id en null.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = { ...CONVERSATION, eve_session_id: null };
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+			expect(rows.sessionLookups).toBeGreaterThan(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("sigue esperando si la conversación tiene la sesión VIEJA de un turno fallido", async () => {
+		// bindSessionToConversation es última-escritura-gana a propósito: una
+		// conversación apuntando a una sesión muerta es exactamente el estado
+		// previo a que el hook ate la nueva. Leer ese campo como "ya no se va a
+		// atar" 401eaba de forma determinística el primer stream del reintento,
+		// y eve no reintenta un 401: el hilo quedaba trabado.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = {
+				...CONVERSATION,
+				eve_session_id: "wrun_MUERTA",
+			};
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("sigue esperando si el hook ató ESTA sesión entre las dos consultas", async () => {
+		// La carrera que el corte casi se come: el primer lookup por
+		// eve_session_id falla, el hook escribe, y para cuando se pregunta si
+		// vale la pena esperar la fila YA está atada. Eso no es una sesión
+		// huérfana, es la escritura que estábamos esperando.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = CONVERSATION;
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+
 			await vi.advanceTimersByTimeAsync(50);
 			rows.conversationBySession = CONVERSATION;
 			await vi.advanceTimersByTimeAsync(5000);
