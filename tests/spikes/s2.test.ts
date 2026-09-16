@@ -1,6 +1,11 @@
 // TEMPORAL (spec 03 §13, spike S2): se borra después de correr el spike.
 import { describe, expect, it, vi } from "vitest";
-import { runS2Probes, type S2Deps } from "@/lib/spikes/s2";
+import {
+	runS2AuthorizeStep,
+	runS2Probes,
+	type S2AuthorizeDeps,
+	type S2Deps,
+} from "@/lib/spikes/s2";
 
 const TOKEN = "tok-secreto-readonly-123";
 const SEND_TOKEN = "tok-secreto-send-456";
@@ -340,5 +345,96 @@ describe("runS2Probes", () => {
 		expect(
 			(tokeninfoCall?.[1]?.headers as Record<string, string>)?.Authorization,
 		).toBeUndefined();
+	});
+});
+
+const AUTHORIZE_URL =
+	"https://accounts.google.com/o/oauth2/v2/auth?client_id=abc&scope=gmail.send+gmail.readonly";
+
+function baseAuthorizeInput(authorize: boolean) {
+	return {
+		tenantId: "tenant-1",
+		userId: "user-1",
+		issuer: "https://issuer.test",
+		authorize,
+	};
+}
+
+function baseAuthorizeDeps(
+	overrides: Partial<S2AuthorizeDeps> = {},
+): S2AuthorizeDeps {
+	return {
+		startAuthorizationForSubject: vi
+			.fn()
+			.mockResolvedValue({ url: AUTHORIZE_URL, expiresAt: null }),
+		...overrides,
+	};
+}
+
+describe("runS2AuthorizeStep", () => {
+	it("sin authorize=1 (authorize:false) el paso no corre: devuelve null y no llama a startAuthorizationForSubject", async () => {
+		const startAuthorizationForSubject = vi.fn();
+		const step = await runS2AuthorizeStep(
+			baseAuthorizeInput(false),
+			baseAuthorizeDeps({ startAuthorizationForSubject }),
+		);
+
+		expect(step).toBeNull();
+		expect(startAuthorizationForSubject).not.toHaveBeenCalled();
+	});
+
+	it("con authorize:true pide gmail.send + gmail.readonly y devuelve la URL en el detail", async () => {
+		const startAuthorizationForSubject = vi
+			.fn()
+			.mockResolvedValue({ url: AUTHORIZE_URL, expiresAt: null });
+		const deps = baseAuthorizeDeps({ startAuthorizationForSubject });
+
+		const step = await runS2AuthorizeStep(baseAuthorizeInput(true), deps);
+
+		expect(step).not.toBeNull();
+		expect(step?.step).toBe("s2.authorize");
+		expect(step?.ok).toBe(true);
+		expect(step?.detail).toContain(AUTHORIZE_URL);
+		expect(startAuthorizationForSubject).toHaveBeenCalledWith(
+			"google/google",
+			{ tenantId: "tenant-1", userId: "user-1", issuer: "https://issuer.test" },
+			[
+				"https://www.googleapis.com/auth/gmail.send",
+				"https://www.googleapis.com/auth/gmail.readonly",
+			],
+		);
+	});
+
+	it("nunca aparecen verifier ni request en la salida del paso", async () => {
+		// startAuthorizationForSubject (lib/connectors/auth.ts) ya recorta la
+		// respuesta de Connect a solo {url, expiresAt}; este test deja
+		// constancia de que, aunque el doble devolviera esos campos, el paso
+		// no los reenvía a ningún lado porque solo lee url/expiresAt.
+		const startAuthorizationForSubject = vi.fn().mockResolvedValue({
+			url: AUTHORIZE_URL,
+			expiresAt: 1_893_456_000_000,
+			verifier: "verifier-secreto",
+			request: "request-secreto",
+		});
+		const deps = baseAuthorizeDeps({ startAuthorizationForSubject });
+
+		const step = await runS2AuthorizeStep(baseAuthorizeInput(true), deps);
+
+		expect(JSON.stringify(step)).not.toContain("verifier-secreto");
+		expect(JSON.stringify(step)).not.toContain("request-secreto");
+		expect(JSON.stringify(step)).not.toContain("verifier");
+		expect(JSON.stringify(step)).not.toContain("request");
+	});
+
+	it("si startAuthorizationForSubject tira (ej. UserAuthorizationRequiredError de otro tipo), el paso queda ok:false con el detail del error", async () => {
+		const startAuthorizationForSubject = vi
+			.fn()
+			.mockRejectedValue(new Error("conector google/google no configurado"));
+		const deps = baseAuthorizeDeps({ startAuthorizationForSubject });
+
+		const step = await runS2AuthorizeStep(baseAuthorizeInput(true), deps);
+
+		expect(step?.ok).toBe(false);
+		expect(step?.detail).toContain("conector google/google no configurado");
 	});
 });
