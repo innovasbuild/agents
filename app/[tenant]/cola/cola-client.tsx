@@ -46,24 +46,38 @@ export function ColaClient({
 	// Suscripción con el cliente del usuario (anon key + JWT), nunca con
 	// service role: la RLS de queue_items es lo único que separa la cola de
 	// un tenant de la de otro, y una key elevada en el navegador la rompe.
+	//
+	// getSession() antes de abrir el canal: el cliente recién creado todavía
+	// no cargó la sesión de las cookies (es async), y si el canal se suscribe
+	// primero, se une con la key anon — sin membership, la Realtime API no
+	// registra la suscripción (RLS de queue_items la bloquea) y el que un
+	// setAuth() posterior le empuje el token real al canal ya unido no alcanza
+	// para revivirla. Esperar la sesión evita esa carrera.
 	useEffect(() => {
 		const supabase = createBrowserSupabase();
-		const channel = supabase
-			.channel(`cola-${tenantId}`)
-			.on(
-				"postgres_changes",
-				{
-					event: "*",
-					schema: "public",
-					table: "queue_items",
-					filter: `tenant_id=eq.${tenantId}`,
-				},
-				() => router.refresh(),
-			)
-			.subscribe();
+		let channel: ReturnType<typeof supabase.channel> | null = null;
+		let cancelled = false;
+
+		supabase.auth.getSession().then(() => {
+			if (cancelled) return;
+			channel = supabase
+				.channel(`cola-${tenantId}`)
+				.on(
+					"postgres_changes",
+					{
+						event: "*",
+						schema: "public",
+						table: "queue_items",
+						filter: `tenant_id=eq.${tenantId}`,
+					},
+					() => router.refresh(),
+				)
+				.subscribe();
+		});
 
 		return () => {
-			supabase.removeChannel(channel);
+			cancelled = true;
+			if (channel) supabase.removeChannel(channel);
 		};
 	}, [tenantId, router]);
 

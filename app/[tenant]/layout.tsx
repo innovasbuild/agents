@@ -48,6 +48,20 @@ export default async function TenantLayout({
 					<span className="rounded-full border px-2 py-0.5 text-muted-foreground text-xs">
 						{ROLE_LABELS[tenant.role]}
 					</span>
+					<nav className="ml-auto flex items-center gap-4 text-sm">
+						<a
+							className="text-muted-foreground hover:text-foreground"
+							href={`/${slug}/chat`}
+						>
+							Chat
+						</a>
+						<a
+							className="text-muted-foreground hover:text-foreground"
+							href={`/${slug}/cola`}
+						>
+							Cola
+						</a>
+					</nav>
 				</div>
 			</header>
 			<main className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-8">
