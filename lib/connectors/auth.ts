@@ -1,9 +1,13 @@
 // Único puente con Vercel Connect (spec 02 §5.2). Ningún otro archivo importa
 // @vercel/connect: tests/connectors/import-rule.test.ts lo hace cumplir.
 import {
+	ConnectorInstallationRequiredError,
 	type ConnectTokenParams,
 	getToken,
 	getTokenResponse,
+	NoValidTokenError,
+	startAuthorization,
+	UserAuthorizationRequiredError,
 } from "@vercel/connect";
 import { connect } from "@vercel/connect/eve";
 
@@ -98,4 +102,60 @@ export async function tokenForSubject(
 		...(scopes ? { scopes } : {}),
 	});
 	return { token, expiresAt };
+}
+
+/**
+ * Link de autorización para el mismo subject que tokenForSubject
+ * (tenant:usuario). Lo usa una server action del dashboard: a diferencia de
+ * una tool de eve, no puede pausar el turno con ctx.requireAuth, así que en
+ * vez de un token pide la URL para que el usuario autorice a mano y reintente.
+ */
+export async function startAuthorizationForSubject(
+	connector: string,
+	who: { tenantId: string; userId: string; issuer?: string },
+	scopes?: string[],
+): Promise<{ url: string; expiresAt: number | null }> {
+	if (!who.tenantId || !who.userId) {
+		throw new Error("startAuthorizationForSubject requiere tenant y usuario");
+	}
+	const { url, expiresAt } = await startAuthorization(connector, {
+		subject: {
+			type: "user",
+			id: tenantSubjectId(who.tenantId, who.userId),
+			...(who.issuer ? { issuer: who.issuer } : {}),
+		},
+		...(scopes ? { scopes } : {}),
+	});
+	return { url, expiresAt: expiresAt ?? null };
+}
+
+/**
+ * ¿Este error de Connect significa "hace falta que el usuario autorice de
+ * nuevo" (grant vencido, revocado o nunca dado)? Son las dos clases que
+ * getTokenResponse tira con ese sentido — `no_token` y
+ * `user_authorization_required` (ver dist/token.js de @vercel/connect) — no
+ * cualquier ConnectError: un 500 o un problema de red no es "reautorizá", y
+ * tragarlo como tal le mostraría al usuario un link que no arregla nada.
+ * Este archivo es el único que puede importar @vercel/connect
+ * (tests/connectors/import-rule.test.ts lo hace cumplir), así que quien
+ * necesita distinguir el caso usa este predicado en vez de un instanceof
+ * directo contra las clases del paquete.
+ */
+export function isConnectAuthError(error: unknown): boolean {
+	return (
+		error instanceof NoValidTokenError ||
+		error instanceof UserAuthorizationRequiredError
+	);
+}
+
+/**
+ * ¿Este error de Connect significa "el conector no está instalado" para este
+ * proyecto/tenant? A diferencia de isConnectAuthError, autorizar de nuevo no
+ * arregla esto: falta instalar el conector, algo que solo puede hacer un
+ * admin desde la configuración, no un grant OAuth vencido o revocado. Quien
+ * lo reciba no debe ofrecer un link de autorización (hallazgo 3 de la review
+ * final de etapa 4 — ver lib/outreach/web-context.ts).
+ */
+export function isConnectorNotInstalledError(error: unknown): boolean {
+	return error instanceof ConnectorInstallationRequiredError;
 }
