@@ -7,6 +7,7 @@ import { GOOGLE_CONNECTOR_UID } from "../../../lib/connectors/platform";
 import {
 	GMAIL_SEND_SCOPE,
 	GmailUnauthorizedError,
+	GmailUnknownOutcomeError,
 	sendMail,
 } from "../../../lib/gmail/send";
 import { brainForTenant, loadCanon } from "../../../lib/outreach/canon";
@@ -58,6 +59,8 @@ export default defineTool({
 					sendMail: (mail) => sendMail(token, mail),
 					isMailUnauthorized: (error) =>
 						error instanceof GmailUnauthorizedError,
+					isMailUnknownOutcome: (error) =>
+						error instanceof GmailUnknownOutcomeError,
 					now: () => new Date(),
 				},
 			);

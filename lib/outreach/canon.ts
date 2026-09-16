@@ -1,5 +1,6 @@
 // Canon del tenant para redactar y reglas del gate (spec 03 §5.2 y §6.2):
-// páginas del brain por tag. Si el brain falla, no se redacta ni se encola.
+// páginas del brain por tag. Si el brain falla, o si el tenant no tiene canon
+// cargado, no se redacta ni se encola ni se envía (ver loadCanonOrMissing).
 import { getBrainProvider } from "../brain/provider";
 import { resolveBrainBinding } from "../brain/resolve";
 import type { BrainPage, BrainProvider } from "../brain/types";
@@ -107,17 +108,45 @@ export async function loadCanon(
 	}
 }
 
-/** El canon, o null si el brain no responde: cada servicio arma su negativa. */
-export async function loadCanonOrNull(
+/** Por qué no hay canon usable. Las dos causas frenan igual (sin el canon se
+ * redactaría sin ICP ni voz y el gate correría sin los vetos ni el max_chars
+ * del tenant), pero el ejecutor tiene que poder distinguirlas. */
+export interface CanonMissing {
+	missing: "brain_caido" | "sin_canon";
+}
+
+export function isCanonMissing<T extends object>(
+	value: T | CanonMissing,
+): value is CanonMissing {
+	return "missing" in value;
+}
+
+/** Causa de la negativa `canon_no_disponible`; cada servicio le suma su cola. */
+export function canonMissingText(canon: CanonMissing): string {
+	return canon.missing === "brain_caido"
+		? "no pude leer el canon del cliente en el brain"
+		: "el brain del cliente no está conectado o no tiene el canon cargado";
+}
+
+/** El canon, o por qué no se puede usar: cada servicio arma su negativa. Un
+ * canon vacío (sin binding de brain, o con brain sin páginas `canon:*`) se
+ * trata igual que un brain caído; así la condición no se repite en los tres
+ * servicios que lo consumen. */
+export async function loadCanonOrMissing(
 	load: (executorSlug: string) => Promise<Canon>,
 	executorSlug: string,
-): Promise<Canon | null> {
+): Promise<Canon | CanonMissing> {
+	let canon: Canon;
 	try {
-		return await load(executorSlug);
+		canon = await load(executorSlug);
 	} catch (error) {
-		if (error instanceof CanonUnavailableError) return null;
+		if (error instanceof CanonUnavailableError)
+			return { missing: "brain_caido" };
 		throw error;
 	}
+	return canon.available && canon.pages.length > 0
+		? canon
+		: { missing: "sin_canon" };
 }
 
 export async function brainForTenant(

@@ -96,6 +96,55 @@ describe("importContacts", () => {
 		expect(store.events.map((e) => e.type)).toEqual(["claim_ajeno"]);
 	});
 
+	it("un contacto ya cargado con dueño ajeno en la base, pero con autoría reciente del owner del ejecutor en el CRM, es ya_existia", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({
+				contactKey: "em:laura@acme.test",
+				ownerUserId: OTHER_USER,
+				crmId: "crm-9",
+			}),
+		);
+		let authorshipCalls = 0;
+		const crm = fakeCrm({
+			lastAuthorship: async () => {
+				authorshipCalls++;
+				return { ownerId: "owner-ana", at: new Date("2026-09-10T00:00:00Z") };
+			},
+		});
+		const result = await importContacts(
+			{ csv: "name,email\nLaura,laura@acme.test", caller },
+			{ store, crm, now },
+		);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.rows[0].verdict).toBe("ya_existia");
+		expect(store.events).toEqual([]);
+		// Con crm_id guardado alcanza una consulta de autoría por contacto conocido.
+		expect(authorshipCalls).toBe(1);
+	});
+
+	it("un contacto ya cargado con autoría reciente ajena en el CRM sigue siendo claim_ajeno", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({ contactKey: "em:laura@acme.test", crmId: "crm-9" }),
+		);
+		const crm = fakeCrm({
+			lastAuthorship: async () => ({
+				ownerId: "owner-beto",
+				at: new Date("2026-09-10T00:00:00Z"),
+			}),
+		});
+		const result = await importContacts(
+			{ csv: "name,email\nLaura,laura@acme.test", caller },
+			{ store, crm, now },
+		);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.rows[0].verdict).toBe("claim_ajeno");
+		expect(store.events.map((e) => e.type)).toEqual(["claim_ajeno"]);
+	});
+
 	it("autoría reciente de otro owner en el CRM es claim_ajeno aunque la base no lo conozca", async () => {
 		const store = createFakeStore();
 		store.executors[0].crmOwnerId = "owner-ana";

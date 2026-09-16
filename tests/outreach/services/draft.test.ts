@@ -22,6 +22,20 @@ const caller = {
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = {
 	available: true,
+	pages: [
+		{
+			tag: "canon:icp",
+			slug: "comercial/icp",
+			title: "ICP",
+			body: "A quién le servimos.",
+		},
+	],
+	voice: [],
+	rules: emptyGateRules(),
+};
+// Sin binding de brain, o con brain sin páginas de canon: no se redacta.
+const CANON_VACIO: Canon = {
+	available: false,
 	pages: [],
 	voice: [],
 	rules: emptyGateRules(),
@@ -184,6 +198,20 @@ describe("draftMessage", () => {
 				deps(),
 			),
 		).toMatchObject({ reason: "followup_no_disponible" });
+	});
+
+	it("un canon vacío (tenant sin brain o sin canon cargado) no llama al modelo", async () => {
+		const generate = vi.fn(async () => ({ output: good, usage: {} }));
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
+			{ store: seeded(), loadCanon: async () => CANON_VACIO, generate, now },
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			reason: "canon_no_disponible",
+			message: expect.stringContaining("no está conectado"),
+		});
+		expect(generate).not.toHaveBeenCalled();
 	});
 
 	it("sin hechos con fuente en la ficha, no hay ancla y no se llama al modelo", async () => {

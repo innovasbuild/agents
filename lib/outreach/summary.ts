@@ -11,7 +11,16 @@ export async function sessionSummary(
 		tenantName: string;
 		tenantSlug: string;
 	},
-	deps: { store: OutreachStore; now: () => Date },
+	deps: {
+		store: OutreachStore;
+		now: () => Date;
+		/** ¿El tenant tiene brain? Es una consulta a las conexiones, no una
+		 * lectura del canon: leer el canon entero acá costaría una decena de
+		 * consultas al brain en cada apertura de sesión. Con esto el ejecutor ve
+		 * al abrir el caso más común de "canon ausente"; el de brain conectado
+		 * pero sin páginas `canon:*` lo sigue avisando la negativa de la tool. */
+		brainConnected: () => Promise<boolean>;
+	},
 ): Promise<string> {
 	const header = `Trabajás para ${input.tenantName} (tenant \`${input.tenantSlug}\`). Todo lo que hagas es en nombre de ese cliente y con sus datos.`;
 	const [executor, tenant] = await Promise.all([
@@ -21,7 +30,7 @@ export async function sessionSummary(
 	if (!executor?.slug || !tenant) {
 		return `${header}\n\nQuien habla en esta sesión no es ejecutor de outreach en este tenant: puede consultar, pero no cargar contactos, encolar ni enviar. Si lo pide, explicáselo.`;
 	}
-	const [sent, items] = await Promise.all([
+	const [sent, items, brain] = await Promise.all([
 		deps.store.countSent(input.tenantId, {
 			since: dayStart(tenant.config.timezone, deps.now()),
 			executorUserId: input.userId,
@@ -30,6 +39,7 @@ export async function sessionSummary(
 		// (spec: mismo criterio que listQueue en services/queue.ts): sin esto el
 		// único estado que necesita revisión manual queda invisible en el resumen.
 		deps.store.listQueue(input.tenantId, input.userId, ["pending", "approved"]),
+		deps.brainConnected(),
 	]);
 	const pending = items.filter((item) => item.status === "pending");
 	const trabadas = items.filter((item) => item.status === "approved");
@@ -46,6 +56,9 @@ export async function sessionSummary(
 		header,
 		"",
 		`Estado de hoy del ejecutor \`${executor.slug}\`: cupo de hoy: ${remaining} de ${executor.dailyQuota}; ${queuePhrase} en la cola; ${executor.gmailAuthorizedAt ? "Gmail autorizado" : "Gmail todavía no autorizado (se pide al primer envío)"}.`,
+		brain
+			? ""
+			: "Este cliente no tiene el brain conectado: sin su canon no vas a poder redactar, encolar ni enviar. Decíselo a quien lo pida y que hable con quien administra el tenant.",
 		trabadas.length > 0
 			? "Hay piezas trabadas en la cola: revisá en Gmail si esos mails salieron antes de tocar nada."
 			: "",

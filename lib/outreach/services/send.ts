@@ -2,7 +2,12 @@
 // transición pending → approved es la idempotencia; después de enviar nada
 // pausa ni reenvía.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
-import { type Canon, loadCanonOrNull } from "../canon";
+import {
+	type Canon,
+	canonMissingText,
+	isCanonMissing,
+	loadCanonOrMissing,
+} from "../canon";
 import { outreachEvent } from "../events";
 import { gateSummary, runGate } from "../gate";
 import { canTouch, MAILBOX_GUARD_DAYS, TOUCH_REASON_TEXT } from "../guards";
@@ -27,6 +32,8 @@ export interface SendDeps {
 		messageId: string;
 	}) => Promise<{ id: string; threadId: string }>;
 	isMailUnauthorized: (error: unknown) => boolean;
+	/** ¿El error es "no hubo respuesta de Gmail"? Ver el catch del envío. */
+	isMailUnknownOutcome: (error: unknown) => boolean;
 	now: () => Date;
 }
 
@@ -164,15 +171,19 @@ export async function sendQueuedEmail(
 		}
 		crmId = claim.crmId;
 
-		const canon = await loadCanonOrNull(
+		const canon = await loadCanonOrMissing(
 			deps.loadCanon,
 			executor.slug as string,
 		);
-		if (!canon) {
+		if (isCanonMissing(canon)) {
 			return await finish(
 				"pending",
 				"canon_no_disponible",
-				"no pude leer el canon del cliente: la pieza sigue pendiente, probá de nuevo en un rato",
+				`${canonMissingText(canon)}: la pieza sigue pendiente, ${
+					canon.missing === "brain_caido"
+						? "probá de nuevo en un rato"
+						: "avisale a quien administra el tenant"
+				}`,
 			);
 		}
 		const gate = runGate({
@@ -247,6 +258,16 @@ export async function sendQueuedEmail(
 		if (deps.isMailUnauthorized(error)) {
 			await backToPending();
 			throw error;
+		}
+		if (deps.isMailUnknownOutcome(error)) {
+			// Sin respuesta de Gmail el mail pudo haber salido: si la pieza volviera
+			// a pending o quedara failed se libera el contacto y se puede reenviar.
+			// Queda approved (trabada), que ya tiene su carril en list_queue y en el
+			// resumen de sesión, para que lo resuelva una persona mirando Gmail.
+			return refuse(
+				"envio_incierto",
+				"no hubo respuesta de Gmail y no se sabe si el mail salió: la pieza queda trabada. Revisá en Gmail si el mail salió antes de reintentar.",
+			);
 		}
 		return finish(
 			"failed",

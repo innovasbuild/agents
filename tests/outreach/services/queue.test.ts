@@ -29,6 +29,20 @@ const caller = {
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = {
 	available: true,
+	pages: [
+		{
+			tag: "canon:icp",
+			slug: "comercial/icp",
+			title: "ICP",
+			body: "A quién le servimos.",
+		},
+	],
+	voice: [],
+	rules: emptyGateRules(),
+};
+// Sin binding de brain, o con brain sin páginas de canon: no se encola.
+const CANON_VACIO: Canon = {
+	available: false,
 	pages: [],
 	voice: [],
 	rules: emptyGateRules(),
@@ -145,6 +159,18 @@ describe("queueTouch", () => {
 		expect(await queueTouch(touch, { ...deps, crm })).toMatchObject({
 			ok: false,
 			reason: "claim_ajeno",
+		});
+		expect(store.queue).toHaveLength(0);
+	});
+
+	it("un canon vacío (tenant sin brain o sin canon cargado) no encola", async () => {
+		const { store, deps } = setup();
+		expect(
+			await queueTouch(touch, { ...deps, loadCanon: async () => CANON_VACIO }),
+		).toMatchObject({
+			ok: false,
+			reason: "canon_no_disponible",
+			message: expect.stringContaining("no está conectado"),
 		});
 		expect(store.queue).toHaveLength(0);
 	});

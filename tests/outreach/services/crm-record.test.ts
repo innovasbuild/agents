@@ -7,6 +7,7 @@ import {
 	contactRow,
 	createFakeStore,
 	fakeCrm,
+	OTHER_USER,
 	TENANT,
 	USER,
 } from "../fake-store";
@@ -74,6 +75,33 @@ describe("recordCrmUpdate", () => {
 			crmId: "crm-7",
 		});
 		expect(store.events.map((e) => e.type)).toEqual(["cambio_etapa", "nota"]);
+	});
+
+	it("un contacto con claim ajeno no se toca: ni el CRM ni la base ni los eventos", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({
+				stage: "msg1_enviado",
+				touches: 1,
+				ownerUserId: OTHER_USER,
+			}),
+		);
+		const { adapter, calls } = crmSpy();
+		expect(
+			await recordCrmUpdate(
+				{
+					caller,
+					contactKey: "em:laura@acme.test",
+					stage: "reunion_agendada",
+					note: "Me contestó por teléfono.",
+				},
+				{ store, crm: adapter, now },
+			),
+		).toMatchObject({ ok: false, reason: "claim_ajeno" });
+		expect(calls).toEqual([]);
+		expect(store.events).toEqual([]);
+		expect(store.contacts[0].stage).toBe("msg1_enviado");
 	});
 
 	it("negativas: sin CRM, etapa que retrocede, contacto inexistente", async () => {

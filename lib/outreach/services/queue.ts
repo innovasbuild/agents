@@ -3,9 +3,15 @@
 // base y la autoría del CRM, y el ancla se chequea contra la ficha vigente
 // (queue_touch puede llegar sin pasar por draft_message).
 import type { CrmAdapter } from "../../connectors/crm/adapter";
-import { type Canon, loadCanonOrNull } from "../canon";
+import {
+	type Canon,
+	type CanonMissing,
+	canonMissingText,
+	isCanonMissing,
+	loadCanonOrMissing,
+} from "../canon";
 import { outreachEvent } from "../events";
-import { gateSummary, runGate } from "../gate";
+import { type GateResult, gateSummary, runGate } from "../gate";
 import { type ClaimStatus, claimStatus, crmMatch } from "../guards";
 import { assignLetters } from "../queue-letters";
 import { isRefusal, type Refusal, refuse } from "../result";
@@ -67,11 +73,11 @@ async function gateFor(
 	subject: string,
 	body: string,
 	idioma: string,
-) {
-	const canon = await loadCanonOrNull(deps.loadCanon, executorSlug);
-	return canon
-		? runGate({ subject, body, channel: "email", idioma, rules: canon.rules })
-		: null;
+): Promise<GateResult | CanonMissing> {
+	const canon = await loadCanonOrMissing(deps.loadCanon, executorSlug);
+	return isCanonMissing(canon)
+		? canon
+		: runGate({ subject, body, channel: "email", idioma, rules: canon.rules });
 }
 
 /** Mensaje citable si no hay ficha vigente o la fuente del ancla no sale de
@@ -104,10 +110,10 @@ async function anchorError(
 	return null;
 }
 
-const CANON_DOWN = () =>
+const canonDown = (canon: CanonMissing) =>
 	refuse(
 		"canon_no_disponible",
-		"no pude leer el canon del cliente en el brain: sin sus vetos no encolo",
+		`${canonMissingText(canon)}: sin sus vetos no encolo`,
 	);
 
 export async function queueTouch(
@@ -175,7 +181,7 @@ export async function queueTouch(
 		input.body,
 		input.idioma,
 	);
-	if (!gate) return CANON_DOWN();
+	if (isCanonMissing(gate)) return canonDown(gate);
 	if (gate.status !== "ok") {
 		// gate_fallido tiene dedup de 2 h por contacto y ejecutor, y su payload no
 		// trae queue_item_id: un segundo fallo del mismo contacto en ese lapso no
@@ -310,7 +316,7 @@ export async function updateQueueItem(
 		input.body,
 		item.idioma,
 	);
-	if (!gate) return CANON_DOWN();
+	if (isCanonMissing(gate)) return canonDown(gate);
 	if (gate.status !== "ok") {
 		return {
 			...refuse("gate", `la edición no pasa el gate: ${gateSummary(gate)}`),

@@ -9,6 +9,7 @@ import { isRefusal, type Refusal } from "../result";
 import type { Caller } from "../session";
 import type { OutreachStore } from "../store";
 import { resolveExecutor } from "./executor";
+import { claimForContact } from "./queue";
 
 export type ImportVerdict =
 	| "nuevo"
@@ -105,14 +106,18 @@ export async function importContacts(
 
 		const known = existing.get(key);
 		if (known) {
-			const claim = claimStatus({
-				ownerUserId: known.ownerUserId,
-				executorUserId: caller.userId,
-				executorCrmOwnerId: executor.crmOwnerId,
-				crmAuthorship: null,
-				now,
-			});
-			if (claim === "ajeno") {
+			// Mismo veredicto que queue_touch: la autoría reciente del CRM gana
+			// sobre la base (spec §5.3). Sin consultarla, el mismo contacto daría
+			// claim_ajeno acá y propio al encolar, y dejaría un evento espurio en
+			// un log que no se puede corregir. Una consulta por contacto conocido:
+			// claimForContact reusa el crm_id guardado si lo hay.
+			const { status } = await claimForContact(
+				deps,
+				caller,
+				executor.crmOwnerId,
+				known,
+			);
+			if (status === "ajeno") {
 				rows.push({
 					...base,
 					contactKey: key,

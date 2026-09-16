@@ -8,6 +8,7 @@ import { canAdvance, type OutreachStage } from "../stage";
 import type { OutreachStore } from "../store";
 import { localDate } from "../time";
 import { resolveExecutor } from "./executor";
+import { claimForContact } from "./queue";
 
 export async function recordCrmUpdate(
 	input: {
@@ -32,6 +33,21 @@ export async function recordCrmUpdate(
 			"contacto_inexistente",
 			`no hay un contacto cargado con la clave ${input.contactKey}`,
 		);
+	// Mismo claim que queue_touch y send_email (spec §5.3): esta tool avanza la
+	// etapa y deja nota en el CRM, así que tampoco puede tocar a alguien que
+	// trabaja otro ejecutor. Pesa más acá porque su approval es once().
+	const claim = await claimForContact(
+		deps,
+		caller,
+		executor.crmOwnerId,
+		contact,
+	);
+	if (claim.status === "ajeno") {
+		return refuse(
+			"claim_ajeno",
+			"esta persona ya la trabaja otro ejecutor (base o última conversación en el CRM de menos de 90 días)",
+		);
+	}
 	if (input.stage && !canAdvance(contact.stage, input.stage)) {
 		return refuse(
 			"etapa_no_avanza",

@@ -1,5 +1,6 @@
 import { defineDynamic } from "eve";
 import { defineInstructions } from "eve/instructions";
+import { brainForTenant } from "../../../lib/outreach/canon";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { sessionSummary } from "../../../lib/outreach/summary";
 import { createAdminClient } from "../../../lib/supabase/admin";
@@ -31,7 +32,12 @@ export default defineDynamic({
 						tenantName: tenant.display_name,
 						tenantSlug: tenant.slug,
 					},
-					{ store: createSupabaseOutreachStore(admin), now: () => new Date() },
+					{
+						store: createSupabaseOutreachStore(admin),
+						now: () => new Date(),
+						brainConnected: async () =>
+							(await brainForTenant(tenantId)) !== null,
+					},
 				);
 				return defineInstructions({ content });
 			} catch (error) {

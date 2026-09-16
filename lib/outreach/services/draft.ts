@@ -1,6 +1,11 @@
 // draft_message (spec 03 §6.4): redacta con el modelo del tenant, corre el gate
 // y reintenta con las violaciones. No escribe en la base.
-import { type Canon, loadCanonOrNull } from "../canon";
+import {
+	type Canon,
+	canonMissingText,
+	isCanonMissing,
+	loadCanonOrMissing,
+} from "../canon";
 import { domainFromEmail } from "../domain";
 import { isFichaVigente } from "../ficha";
 import { type GateResult, type GateViolation, runGate } from "../gate";
@@ -105,11 +110,14 @@ export async function draftMessage(
 		);
 	}
 
-	const canon = await loadCanonOrNull(deps.loadCanon, executor.slug as string);
-	if (!canon)
+	const canon = await loadCanonOrMissing(
+		deps.loadCanon,
+		executor.slug as string,
+	);
+	if (isCanonMissing(canon))
 		return refuse(
 			"canon_no_disponible",
-			"no pude leer el canon del cliente en el brain: no redacto sin sus reglas",
+			`${canonMissingText(canon)}: no redacto sin sus reglas`,
 		);
 
 	let violations: GateViolation[] = [];

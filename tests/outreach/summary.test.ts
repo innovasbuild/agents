@@ -12,6 +12,7 @@ const base = {
 };
 
 const gate = { status: "ok" as const, violations: [], warnings: [], notes: [] };
+const brainConnected = async () => true;
 
 let queueCounter = 0;
 function pieceRow(
@@ -65,7 +66,7 @@ describe("sessionSummary", () => {
 			status: "sent",
 			sentAt: "2026-09-15T13:00:00Z",
 		});
-		const text = await sessionSummary(base, { store, now });
+		const text = await sessionSummary(base, { store, now, brainConnected });
 		expect(text).toContain("Trabajás para Acme (tenant `acme`)");
 		expect(text).toContain("ejecutor `ana`");
 		expect(text).toContain("cupo de hoy: 9 de 10");
@@ -76,9 +77,9 @@ describe("sessionSummary", () => {
 	it("para alguien que no es ejecutor lo dice", async () => {
 		const store = createFakeStore();
 		store.executors = [];
-		expect(await sessionSummary(base, { store, now })).toContain(
-			"no es ejecutor de outreach",
-		);
+		expect(
+			await sessionSummary(base, { store, now, brainConnected }),
+		).toContain("no es ejecutor de outreach");
 	});
 
 	it("con pendientes y trabadas cuenta cada una y avisa revisar Gmail", async () => {
@@ -95,7 +96,7 @@ describe("sessionSummary", () => {
 				approvedAt: "2026-09-15T12:00:00Z",
 			}),
 		);
-		const text = await sessionSummary(base, { store, now });
+		const text = await sessionSummary(base, { store, now, brainConnected });
 		expect(text).toContain("2 piezas pendientes y 1 trabada en la cola");
 		expect(text).toContain("revisá en Gmail");
 		expect(text).toContain(
@@ -113,7 +114,7 @@ describe("sessionSummary", () => {
 				approvedAt: "2026-09-15T12:00:00Z",
 			}),
 		);
-		const text = await sessionSummary(base, { store, now });
+		const text = await sessionSummary(base, { store, now, brainConnected });
 		expect(text).toContain("0 piezas pendientes y 1 trabada en la cola");
 		expect(text).toContain("revisá en Gmail");
 		expect(text).toContain(
@@ -121,9 +122,20 @@ describe("sessionSummary", () => {
 		);
 	});
 
+	it("sin brain conectado avisa que sin canon no se puede trabajar", async () => {
+		const store = createFakeStore();
+		const text = await sessionSummary(base, {
+			store,
+			now,
+			brainConnected: async () => false,
+		});
+		expect(text).toContain("no tiene el brain conectado");
+		expect(text).toContain("no vas a poder redactar");
+	});
+
 	it("con la cola vacía no empuja a mostrarla", async () => {
 		const store = createFakeStore();
-		const text = await sessionSummary(base, { store, now });
+		const text = await sessionSummary(base, { store, now, brainConnected });
 		expect(text).toContain("0 piezas pendientes en la cola");
 		expect(text).not.toContain("trabada");
 		expect(text).not.toContain("revisá en Gmail");

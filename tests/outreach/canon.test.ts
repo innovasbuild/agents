@@ -4,7 +4,7 @@ import type { Canon } from "@/lib/outreach/canon";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
-const { CanonUnavailableError, loadCanon, loadCanonOrNull } = await import(
+const { CanonUnavailableError, loadCanon, loadCanonOrMissing } = await import(
 	"@/lib/outreach/canon"
 );
 
@@ -111,29 +111,48 @@ describe("loadCanon", () => {
 	});
 });
 
-describe("loadCanonOrNull", () => {
-	it("devuelve el canon, null si el brain no responde y deja pasar cualquier otro error", async () => {
-		const canon: Canon = {
-			available: true,
-			pages: [],
-			voice: [],
-			rules: {
-				vetos: [],
-				maxChars: { all: null, byChannel: {} },
-				formal: false,
-				errors: [],
-			},
-		};
-		expect(await loadCanonOrNull(async () => canon, "ana")).toBe(canon);
-		expect(
-			await loadCanonOrNull(async () => {
-				throw new CanonUnavailableError(new Error("timeout"));
-			}, "ana"),
-		).toBeNull();
+describe("loadCanonOrMissing", () => {
+	const rules = {
+		vetos: [],
+		maxChars: { all: null, byChannel: {} },
+		formal: false,
+		errors: [],
+	};
+	const canon: Canon = {
+		available: true,
+		pages: [
+			{ tag: "canon:icp", slug: "comercial/icp", title: "ICP", body: "ICP" },
+		],
+		voice: [],
+		rules,
+	};
+
+	it("devuelve el canon y deja pasar cualquier error que no sea del brain", async () => {
+		expect(await loadCanonOrMissing(async () => canon, "ana")).toBe(canon);
 		await expect(
-			loadCanonOrNull(async () => {
+			loadCanonOrMissing(async () => {
 				throw new Error("otro");
 			}, "ana"),
 		).rejects.toThrow("otro");
+	});
+
+	it("un brain que no responde es brain_caido", async () => {
+		expect(
+			await loadCanonOrMissing(async () => {
+				throw new CanonUnavailableError(new Error("timeout"));
+			}, "ana"),
+		).toEqual({ missing: "brain_caido" });
+	});
+
+	it("sin brain o sin páginas de canon es sin_canon: no alcanza con que no falle", async () => {
+		expect(
+			await loadCanonOrMissing(
+				async () => ({ available: false, pages: [], voice: [], rules }),
+				"ana",
+			),
+		).toEqual({ missing: "sin_canon" });
+		expect(
+			await loadCanonOrMissing(async () => ({ ...canon, pages: [] }), "ana"),
+		).toEqual({ missing: "sin_canon" });
 	});
 });

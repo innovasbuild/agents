@@ -17,6 +17,7 @@ import {
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
 class FakeUnauthorized extends Error {}
+class FakeUnknownOutcome extends Error {}
 
 const caller = {
 	tenantId: TENANT,
@@ -27,6 +28,20 @@ const caller = {
 const now = () => new Date("2026-09-15T12:00:00Z");
 const canon: Canon = {
 	available: true,
+	pages: [
+		{
+			tag: "canon:icp",
+			slug: "comercial/icp",
+			title: "ICP",
+			body: "A quién le servimos.",
+		},
+	],
+	voice: [],
+	rules: emptyGateRules(),
+};
+// Sin binding de brain, o con brain sin páginas de canon: no se envía.
+const CANON_VACIO: Canon = {
+	available: false,
 	pages: [],
 	voice: [],
 	rules: emptyGateRules(),
@@ -115,6 +130,7 @@ async function setup(
 		loadCanon: async () => canon,
 		sendMail,
 		isMailUnauthorized: (e: unknown) => e instanceof FakeUnauthorized,
+		isMailUnknownOutcome: (e: unknown) => e instanceof FakeUnknownOutcome,
 		now,
 	};
 	const input = {
@@ -240,7 +256,7 @@ describe("sendQueuedEmail", () => {
 		expect(sendMail).not.toHaveBeenCalled();
 	});
 
-	it("un error de Gmail que no es 401 deja la pieza failed con evento", async () => {
+	it("Gmail contestó con un status (500): el mail no salió, la pieza queda failed con evento", async () => {
 		const { store, deps, input, sendMail } = await setup();
 		sendMail.mockRejectedValueOnce(
 			new Error("Gmail no pudo enviar el mail (500)"),
@@ -251,6 +267,47 @@ describe("sendQueuedEmail", () => {
 		});
 		expect(store.queue[0]).toMatchObject({ status: "failed" });
 		expect(store.events.map((e) => e.type)).toContain("envio_fallido");
+	});
+
+	it("sin respuesta de Gmail no se sabe si salió: la pieza queda trabada, sin tocar toques ni enviados", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		sendMail.mockRejectedValueOnce(new FakeUnknownOutcome("ECONNRESET"));
+		const result = await sendQueuedEmail(input, deps);
+		expect(result).toMatchObject({ ok: false, reason: "envio_incierto" });
+		expect((result as { message: string }).message).toContain(
+			"Revisá en Gmail si el mail salió antes de reintentar",
+		);
+		expect(store.queue[0].status).toBe("approved");
+		expect(store.contacts[0]).toMatchObject({
+			touches: 0,
+			stage: "a_contactar",
+		});
+		expect(await store.countSent(TENANT, { since: new Date(0) })).toMatchObject(
+			{ count: 0 },
+		);
+		expect(store.events.map((e) => e.type)).toEqual(["encolado"]);
+		// Trabada: no se puede reencolar (pieza viva) ni reenviar (no está pending).
+		expect(await sendQueuedEmail(input, deps)).toMatchObject({
+			ok: false,
+			reason: "ya_tomada",
+		});
+		expect(sendMail).toHaveBeenCalledTimes(1);
+	});
+
+	it("un canon vacío (tenant sin brain o sin canon cargado) no envía", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		expect(
+			await sendQueuedEmail(input, {
+				...deps,
+				loadCanon: async () => CANON_VACIO,
+			}),
+		).toMatchObject({
+			ok: false,
+			reason: "canon_no_disponible",
+			message: expect.stringContaining("no está conectado"),
+		});
+		expect(sendMail).not.toHaveBeenCalled();
+		expect(store.queue[0].status).toBe("pending");
 	});
 
 	it("con CRM: 9 propiedades (sin outreach_fecha_respuesta) en la misma llamada, nota [out], cierre de tasks y task al siguiente toque", async () => {
