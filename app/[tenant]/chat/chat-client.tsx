@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
-import { runningToolLabel, runningToolName } from "@/lib/agents/running-tool";
+import { thinkingLabel } from "@/lib/agents/running-tool";
 import {
 	createConversation,
 	deleteConversation,
@@ -162,7 +162,7 @@ function ThreadMenu({
 					    lista de hilos es la navegación principal en un teléfono. */}
 					<Button
 						aria-label={`Opciones de ${title}`}
-						className="relative mr-1 text-muted-foreground after:absolute after:-inset-1"
+						className="relative mr-1 text-muted-foreground after:absolute after:-inset-1.5"
 						size="icon-sm"
 						type="button"
 						variant="ghost"
@@ -172,6 +172,7 @@ function ThreadMenu({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
+						className="py-2"
 						onSelect={(event) => {
 							// Sin esto el menú devuelve el foco al trigger mientras el
 							// diálogo instala su trampa, y las dos capas se pisan.
@@ -198,11 +199,9 @@ function ThreadMenu({
 					<AlertDialogHeader>
 						<AlertDialogTitle>¿Borrar “{title}”?</AlertDialogTitle>
 						<AlertDialogDescription>
-							Se borra el hilo y su historial de esta pantalla, sin vuelta
-							atrás. Los envíos que ya salieron y lo que quedó en el CRM no se
-							tocan. Si el agente está trabajando en este hilo, borrarlo no lo
-							frena: el turno sigue hasta el final y un envío ya aprobado va a
-							salir igual.
+							Se borra el hilo y su historial, sin vuelta atrás. Si el agente
+							está trabajando acá, borrarlo no lo frena: el turno sigue y un
+							envío ya aprobado va a salir igual.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{error ? (
@@ -289,14 +288,23 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	// texto es el indicador; y en los tramos largos de tool conviene decir en
 	// qué anda, que es donde "Pensando…" a secas no distingue trabado de
 	// laburando.
-	const runningTool = useMemo(
-		() => runningToolName(agent.data.messages),
-		[agent.data.messages],
+	const thinking = useMemo(
+		() =>
+			thinkingLabel({
+				messages: agent.data.messages,
+				status: agent.status,
+				isResuming,
+				isAuthorizing,
+				pendingRequestCount: pendingRequests.length,
+			}),
+		[
+			agent.data.messages,
+			agent.status,
+			isResuming,
+			isAuthorizing,
+			pendingRequests.length,
+		],
 	);
-	const isThinking =
-		(isResuming || agent.status === "submitted" || runningTool !== null) &&
-		!isAuthorizing &&
-		pendingRequests.length === 0;
 
 	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
 	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
@@ -342,26 +350,25 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				)}
 			</div>
 
-			{/* La región vive siempre: un role="status" que se monta junto con su
-			    texto no lo anuncia en la mayoría de los lectores de pantalla. */}
+			{/* La región vive siempre y se queda VISIBLE cuando está vacía: un
+			    role="status" que se monta junto con su texto no lo anuncia, y
+			    display:none lo saca del árbol de accesibilidad igual que no
+			    montarlo. Vacía no ocupa alto (flex sin hijos no arma línea);
+			    empty:mt-0 le saca el hueco que le daría el space-y del padre. */}
 			<p
-				className="flex items-center gap-2 text-muted-foreground text-sm empty:hidden"
+				className="flex items-center gap-2 text-muted-foreground text-sm empty:mt-0"
 				role="status"
 			>
-				{isThinking ? (
+				{thinking === null ? null : (
 					<>
 						<span aria-hidden="true" className="flex gap-1">
 							<span className="size-1.5 animate-bounce rounded-full bg-current motion-reduce:animate-none" />
 							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:150ms] motion-reduce:animate-none" />
 							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:300ms] motion-reduce:animate-none" />
 						</span>
-						{isResuming
-							? "Reanudando el hilo…"
-							: runningTool
-								? `${runningToolLabel(runningTool)}…`
-								: "Pensando…"}
+						{thinking}
 					</>
-				) : null}
+				)}
 			</p>
 
 			{pendingAuthorizations.map(({ key, part }) => (

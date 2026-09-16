@@ -1,6 +1,12 @@
+import { readdirSync } from "node:fs";
 import type { EveMessage, EveMessagePart } from "eve/client";
 import { describe, expect, it } from "vitest";
-import { runningToolLabel, runningToolName } from "@/lib/agents/running-tool";
+import {
+	runningToolLabel,
+	runningToolName,
+	TOOLS_SIN_ETIQUETA,
+	thinkingLabel,
+} from "@/lib/agents/running-tool";
 
 type ToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
 type ToolState = ToolPart["state"];
@@ -23,6 +29,14 @@ function messages(...byMessage: unknown[][]): EveMessage[] {
 		role: "assistant",
 		parts,
 	})) as unknown as EveMessage[];
+}
+
+function userMessage(text: string): EveMessage {
+	return {
+		id: "u1",
+		role: "user",
+		parts: [textPart(text)],
+	} as unknown as EveMessage;
 }
 
 describe("runningToolName", () => {
@@ -89,6 +103,18 @@ describe("runningToolName", () => {
 		expect(runningToolName([])).toBeNull();
 	});
 
+	it("sigue buscando hacia atrás si el último mensaje no tocó ningún tool", () => {
+		// Con un follow-up del usuario el último elemento del array no tiene
+		// parts de tool. El indicador no puede apagarse por eso: es justo lo
+		// único que hace el loop de afuera.
+		const list = [
+			...messages([toolPart("send_email", "input-available")]),
+			userMessage("dale"),
+		];
+
+		expect(runningToolName(list)).toBe("send_email");
+	});
+
 	it.each<ToolState>(["input-streaming", "output-error", "output-denied"])(
 		"devuelve null en estado %s",
 		(state) => {
@@ -108,5 +134,101 @@ describe("runningToolLabel", () => {
 		// La UI va en rioplatense: un tool nuevo sin etiqueta cae en el genérico
 		// en vez de mostrar "spike_gmail_readonly" en pantalla.
 		expect(runningToolLabel("spike_gmail_readonly")).toBe("Trabajando");
+	});
+
+	it.each(["constructor", "toString", "hasOwnProperty", "valueOf"])(
+		"no devuelve nada heredado del prototipo para %s",
+		(key) => {
+			// Con un objeto literal y `??`, TOOL_LABELS["constructor"] devuelve la
+			// función Object y la pantalla mostraba "function Object() {…}…".
+			expect(runningToolLabel(key)).toBe("Trabajando");
+		},
+	);
+
+	it("todo tool de outreach tiene etiqueta, salvo los excluidos a propósito", () => {
+		// La tabla es a mano: sin esto, un tool nuevo degradaba en silencio a
+		// "Trabajando…" y nadie se enteraba hasta verlo en pantalla.
+		const sinEtiqueta = readdirSync("agents/outreach/tools")
+			.filter((file) => file.endsWith(".ts"))
+			.map((file) => file.replace(/\.ts$/, ""))
+			.filter((name) => !TOOLS_SIN_ETIQUETA.has(name))
+			.filter((name) => runningToolLabel(name) === "Trabajando");
+
+		expect(sinEtiqueta).toEqual([]);
+	});
+});
+
+describe("thinkingLabel", () => {
+	const base = {
+		messages: [] as EveMessage[],
+		status: "ready",
+		isResuming: false,
+		isAuthorizing: false,
+		pendingRequestCount: 0,
+	};
+
+	it("calla con una tarjeta de aprobación abierta", () => {
+		expect(
+			thinkingLabel({ ...base, status: "streaming", isAuthorizing: true }),
+		).toBeNull();
+		expect(
+			thinkingLabel({ ...base, status: "streaming", pendingRequestCount: 1 }),
+		).toBeNull();
+	});
+
+	it("reanudar le gana al nombre del tool", () => {
+		expect(
+			thinkingLabel({
+				...base,
+				isResuming: true,
+				messages: messages([toolPart("send_email", "input-available")]),
+			}),
+		).toBe("Reanudando el hilo…");
+	});
+
+	it("nombra en castellano el tool en curso", () => {
+		expect(
+			thinkingLabel({
+				...base,
+				status: "streaming",
+				messages: messages([toolPart("research_account", "input-available")]),
+			}),
+		).toBe("Investigando la cuenta…");
+	});
+
+	it("dice Pensando… apenas se manda el mensaje", () => {
+		expect(thinkingLabel({ ...base, status: "submitted" })).toBe("Pensando…");
+	});
+
+	it("sigue diciendo Pensando… mientras llegan los argumentos de un tool", () => {
+		// input-streaming no da un toolName confiable todavía, pero en pantalla
+		// no hay NADA: apagar el indicador acá se lee como que se colgó.
+		expect(
+			thinkingLabel({
+				...base,
+				status: "streaming",
+				messages: messages([toolPart("draft_message", "input-streaming")]),
+			}),
+		).toBe("Pensando…");
+	});
+
+	it("se apaga cuando el texto ya está llegando: el texto es el indicador", () => {
+		expect(
+			thinkingLabel({
+				...base,
+				status: "streaming",
+				messages: messages([textPart("Ya te armo la lista")]),
+			}),
+		).toBeNull();
+	});
+
+	it("no muestra nada con el turno terminado", () => {
+		expect(
+			thinkingLabel({
+				...base,
+				status: "ready",
+				messages: messages([textPart("Listo.")]),
+			}),
+		).toBeNull();
 	});
 });

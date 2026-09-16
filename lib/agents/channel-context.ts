@@ -46,30 +46,42 @@ interface ConversationRow {
  * Devuelve `null` ante cualquier duda; el canal traduce eso a 401.
  */
 /**
- * ¿Sigue habiendo una conversación esperando que le aten el `eve_session_id`?
+ * ¿Vale la pena seguir esperando a que aten el `eve_session_id`?
  *
  * La escalera de reintentos existe por una carrera de milisegundos: la fila ya
  * está, el hook todavía no escribió. Si la conversación que el cliente dice
- * estar mirando no existe (se borró) o ya tiene otra sesión atada, esa
+ * estar mirando no existe (se borró) o quedó atada a OTRA sesión, esa
  * escritura no va a llegar nunca y esperarla es tiempo tirado.
  *
- * Sin el header no se puede saber, y ahí se reintenta como siempre: no se le
- * cierra la puerta a un cliente que no lo manda.
+ * Atada a ESTA sesión cuenta como "sí": significa que el hook escribió entre
+ * las dos consultas, y la vuelta siguiente de la escalera la va a encontrar.
+ * Sin ese caso, el arreglo se comía justamente la carrera que la escalera
+ * existe para cubrir.
+ *
+ * Fail-open en los dos casos de duda: sin header (no se puede saber) y con
+ * error de la consulta (un header que no es uuid tira 22P02). Un chequeo que
+ * falla no es evidencia de que el bind sea imposible.
  */
 async function bindStillPossible(
 	admin: ReturnType<typeof createAdminClient>,
 	request: Request,
+	sessionId: string,
 ): Promise<boolean> {
 	const conversationId = request.headers.get("x-innovas-conversation");
 	if (!conversationId) return true;
 
-	const { data } = await admin
+	const { data, error } = await admin
 		.from("conversations")
 		.select("eve_session_id")
 		.eq("id", conversationId)
 		.maybeSingle();
 
-	return data !== null && data.eve_session_id === null;
+	if (error) {
+		console.error("bindStillPossible:", error.message);
+		return true;
+	}
+	if (data === null) return false;
+	return data.eve_session_id === null || data.eve_session_id === sessionId;
 }
 
 export async function resolveChannelContext(
@@ -95,7 +107,7 @@ export async function resolveChannelContext(
 			// Desde que se puede borrar un hilo, una sesión huérfana es un caso
 			// común, y sin este corte cada request suyo dormía los 3,1s enteros
 			// de la escalera y disparaba seis consultas antes de dar 401.
-			if (!(await bindStillPossible(admin, request))) break;
+			if (!(await bindStillPossible(admin, request, sessionId))) break;
 			await sleep(BIND_RETRY_DELAYS_MS[attempt]);
 		}
 	} else {

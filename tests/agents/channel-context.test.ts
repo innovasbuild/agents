@@ -339,6 +339,61 @@ describe("resolveChannelContext", () => {
 		}
 	});
 
+	it("no reintenta si la conversación del header quedó atada a OTRA sesión", async () => {
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = { ...CONVERSATION, eve_session_id: "wrun_OTRA" };
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(await pending).toBeNull();
+			expect(rows.sessionLookups).toBe(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("sigue esperando si el hook ató ESTA sesión entre las dos consultas", async () => {
+		// La carrera que el corte casi se come: el primer lookup por
+		// eve_session_id falla, el hook escribe, y para cuando se pregunta si
+		// vale la pena esperar la fila YA está atada. Eso no es una sesión
+		// huérfana, es la escritura que estábamos esperando.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = CONVERSATION;
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("devuelve null si eve_session_id nunca se ata (agota los reintentos)", async () => {
 		vi.useFakeTimers();
 		try {

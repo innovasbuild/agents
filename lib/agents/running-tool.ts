@@ -53,7 +53,65 @@ const TOOL_LABELS: Record<string, string> = {
 	update_queue_item: "Actualizando la pieza",
 };
 
-/** Qué mostrar mientras corre `toolName`. Nunca devuelve el id crudo. */
+/**
+ * Tools que a propósito no tienen etiqueta: no son parte del laburo que el
+ * usuario pidió y no vale la pena nombrarlos en pantalla.
+ * `tests/agents/running-tool.test.ts` compara esta lista contra el disco, así
+ * que un tool nuevo rompe el test hasta que alguien decida su etiqueta.
+ */
+export const TOOLS_SIN_ETIQUETA = new Set(["spike_gmail_readonly"]);
+
+export const TOOL_LABEL_KEYS = Object.keys(TOOL_LABELS);
+
+/**
+ * Qué mostrar mientras corre `toolName`. Nunca devuelve el id crudo.
+ *
+ * `Object.hasOwn` y no `??`: con un objeto literal, `TOOL_LABELS["constructor"]`
+ * devuelve la función Object heredada del prototipo y la pantalla mostraría
+ * "function Object() { [native code] }…".
+ */
 export function runningToolLabel(toolName: string): string {
-	return TOOL_LABELS[toolName] ?? "Trabajando";
+	return Object.hasOwn(TOOL_LABELS, toolName)
+		? TOOL_LABELS[toolName]
+		: "Trabajando";
+}
+
+/**
+ * Qué decir en el indicador de actividad, o `null` para no mostrar nada.
+ *
+ * Vive acá y no en el componente para que las reglas se puedan probar: son
+ * cuatro señales que se pisan entre sí y cada una tiene su motivo.
+ */
+export function thinkingLabel(params: {
+	messages: readonly EveMessage[];
+	status: string;
+	isResuming: boolean;
+	isAuthorizing: boolean;
+	pendingRequestCount: number;
+}): string | null {
+	// Con una tarjeta abierta el turno está parqueado esperando a la persona:
+	// la señal es la tarjeta, no los puntitos.
+	if (params.isAuthorizing || params.pendingRequestCount > 0) return null;
+	if (params.isResuming) return "Reanudando el hilo…";
+
+	const tool = runningToolName(params.messages);
+	if (tool !== null) return `${runningToolLabel(tool)}…`;
+
+	// `streaming` sin texto todavía en pantalla incluye el tramo en el que
+	// llegan los argumentos de un tool: ahí no hay NADA que mirar, y una
+	// pantalla vacía se lee como rota. Con texto llegando, el texto ya es el
+	// indicador y los puntitos abajo sobran.
+	if (params.status === "submitted") return "Pensando…";
+	if (params.status === "streaming" && !hasVisibleText(params.messages)) {
+		return "Pensando…";
+	}
+	return null;
+}
+
+function hasVisibleText(messages: readonly EveMessage[]): boolean {
+	const last = messages.at(-1);
+	if (last === undefined || last.role === "user") return false;
+	return last.parts.some(
+		(part) => part.type === "text" && part.text.length > 0,
+	);
 }
