@@ -45,6 +45,33 @@ interface ConversationRow {
  *
  * Devuelve `null` ante cualquier duda; el canal traduce eso a 401.
  */
+/**
+ * ¿Sigue habiendo una conversación esperando que le aten el `eve_session_id`?
+ *
+ * La escalera de reintentos existe por una carrera de milisegundos: la fila ya
+ * está, el hook todavía no escribió. Si la conversación que el cliente dice
+ * estar mirando no existe (se borró) o ya tiene otra sesión atada, esa
+ * escritura no va a llegar nunca y esperarla es tiempo tirado.
+ *
+ * Sin el header no se puede saber, y ahí se reintenta como siempre: no se le
+ * cierra la puerta a un cliente que no lo manda.
+ */
+async function bindStillPossible(
+	admin: ReturnType<typeof createAdminClient>,
+	request: Request,
+): Promise<boolean> {
+	const conversationId = request.headers.get("x-innovas-conversation");
+	if (!conversationId) return true;
+
+	const { data } = await admin
+		.from("conversations")
+		.select("eve_session_id")
+		.eq("id", conversationId)
+		.maybeSingle();
+
+	return data !== null && data.eve_session_id === null;
+}
+
 export async function resolveChannelContext(
 	request: Request,
 	userId: string,
@@ -64,6 +91,11 @@ export async function resolveChannelContext(
 			conversation = data as ConversationRow | null;
 
 			if (conversation || attempt >= BIND_RETRY_DELAYS_MS.length) break;
+			// Reintentar solo si la escritura que esperamos todavía puede pasar.
+			// Desde que se puede borrar un hilo, una sesión huérfana es un caso
+			// común, y sin este corte cada request suyo dormía los 3,1s enteros
+			// de la escalera y disparaba seis consultas antes de dar 401.
+			if (!(await bindStillPossible(admin, request))) break;
 			await sleep(BIND_RETRY_DELAYS_MS[attempt]);
 		}
 	} else {

@@ -13,6 +13,8 @@ const rows = vi.hoisted(() => ({
 		user_id: string;
 		role: string;
 	} | null,
+	/** Cuántas veces se buscó por eve_session_id: mide la escalera de reintentos. */
+	sessionLookups: 0,
 }));
 
 vi.mock("../../lib/supabase/admin", () => ({
@@ -38,6 +40,7 @@ vi.mock("../../lib/supabase/admin", () => ({
 					// pasar por casualidad.
 					if (table === "conversations") {
 						if (builder._kind === "bySession") {
+							rows.sessionLookups += 1;
 							const row = rows.conversationBySession;
 							const matches =
 								row !== null &&
@@ -125,6 +128,7 @@ beforeEach(() => {
 		user_id: CONVERSATION.user_id,
 		role: "tenant_member",
 	};
+	rows.sessionLookups = 0;
 });
 
 describe("resolveChannelContext", () => {
@@ -272,6 +276,64 @@ describe("resolveChannelContext", () => {
 				conversationId: CONVERSATION.id,
 				role: "tenant_member",
 			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("no reintenta si la conversación del header ya no existe (hilo borrado)", async () => {
+		// Desde que se puede borrar un hilo, su eve_session_id queda huérfano y
+		// nadie lo va a atar nunca. Sin el corte, cada request de esa sesión
+		// dormía los 3,1s enteros de la escalera y hacía seis consultas antes
+		// de dar 401 -- y eso corre en el auth del canal, o sea en cada stream.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = null;
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(await pending).toBeNull();
+			expect(rows.sessionLookups).toBe(1);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("sí reintenta si la conversación del header está sin atar (la carrera real)", async () => {
+		// El corte de arriba no puede comerse la carrera que motivó la escalera:
+		// la fila existe y todavía tiene eve_session_id en null.
+		vi.useFakeTimers();
+		try {
+			rows.conversationBySession = null;
+			rows.conversationById = { ...CONVERSATION, eve_session_id: null };
+
+			const pending = resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+			);
+
+			await vi.advanceTimersByTimeAsync(50);
+			rows.conversationBySession = CONVERSATION;
+			await vi.advanceTimersByTimeAsync(5000);
+
+			expect(await pending).toEqual({
+				tenantId: CONVERSATION.tenant_id,
+				tenantSlug: "lagomarcino",
+				conversationId: CONVERSATION.id,
+				role: "tenant_member",
+			});
+			expect(rows.sessionLookups).toBeGreaterThan(1);
 		} finally {
 			vi.useRealTimers();
 		}
