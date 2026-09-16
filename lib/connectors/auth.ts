@@ -4,6 +4,7 @@ import {
 	type ConnectTokenParams,
 	getToken,
 	getTokenResponse,
+	startAuthorization,
 } from "@vercel/connect";
 import { connect } from "@vercel/connect/eve";
 
@@ -98,4 +99,29 @@ export async function tokenForSubject(
 		...(scopes ? { scopes } : {}),
 	});
 	return { token, expiresAt };
+}
+
+/**
+ * Link de autorización para el mismo subject que tokenForSubject
+ * (tenant:usuario). Lo usa una server action del dashboard: a diferencia de
+ * una tool de eve, no puede pausar el turno con ctx.requireAuth, así que en
+ * vez de un token pide la URL para que el usuario autorice a mano y reintente.
+ */
+export async function startAuthorizationForSubject(
+	connector: string,
+	who: { tenantId: string; userId: string; issuer?: string },
+	scopes?: string[],
+): Promise<{ url: string; expiresAt: number | null }> {
+	if (!who.tenantId || !who.userId) {
+		throw new Error("startAuthorizationForSubject requiere tenant y usuario");
+	}
+	const { url, expiresAt } = await startAuthorization(connector, {
+		subject: {
+			type: "user",
+			id: tenantSubjectId(who.tenantId, who.userId),
+			...(who.issuer ? { issuer: who.issuer } : {}),
+		},
+		...(scopes ? { scopes } : {}),
+	});
+	return { url, expiresAt: expiresAt ?? null };
 }
