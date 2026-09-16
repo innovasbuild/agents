@@ -65,7 +65,11 @@ export function ChatClient({
 
 	return (
 		<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
-			<aside className="space-y-4">
+			{/* min-w-0: un hijo de grid nace con min-width:auto, así que el track
+			    se estira al min-content de los títulos (que van con truncate, o
+			    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
+			    empujaba el ⋯ fuera de la pantalla. */}
+			<aside className="min-w-0 space-y-4">
 				<div className="space-y-2">
 					<label
 						className="block text-muted-foreground text-sm"
@@ -125,7 +129,7 @@ export function ChatClient({
 			{active ? (
 				<Thread key={active.id} slug={slug} thread={active} />
 			) : (
-				<div className="flex min-h-64 items-center justify-center rounded-lg border border-dashed p-8 text-center">
+				<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
 					<p className="text-muted-foreground">
 						Elegí un hilo o abrí uno nuevo para hablar con el agente.
 					</p>
