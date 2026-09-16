@@ -29,7 +29,7 @@ const ficha: Ficha = {
 };
 
 describe("ficha", () => {
-	it("el esquema acepta la ficha del researcher", () => {
+	it("el esquema acepta una ficha completa", () => {
 		expect(fichaSchema.parse(ficha)).toEqual(ficha);
 	});
 	it("sanitizeFicha descarta hechos sin URL http(s) y normaliza el dominio", () => {

@@ -4,7 +4,13 @@ import { buildRawMessage } from "./mime";
 
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 
-type MailInput = { to: string; subject: string; body: string };
+type MailInput = {
+	to: string;
+	subject: string;
+	body: string;
+	bcc?: string | null;
+	messageId?: string | null;
+};
 
 export class GmailUnauthorizedError extends Error {
 	constructor() {
@@ -13,28 +19,67 @@ export class GmailUnauthorizedError extends Error {
 	}
 }
 
+/** No se sabe si el mail salió: o no hubo respuesta (red, abort, timeout), o
+ * Gmail ya aceptó la llamada con un 2xx pero no se pudo leer su confirmación.
+ * Quien llama no puede tratarlo como un no-envío. */
+export class GmailUnknownOutcomeError extends Error {
+	constructor(cause: unknown) {
+		super("no hubo respuesta de Gmail: no se sabe si el mail salió", { cause });
+		this.name = "GmailUnknownOutcomeError";
+	}
+}
+
+const SEND_TIMEOUT_MS = 30_000;
+
 export async function sendMail(
 	accessToken: string,
 	input: MailInput,
 ): Promise<{ id: string; threadId: string }> {
-	const res = await fetch(
-		"https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-				"Content-Type": "application/json",
+	// Fuera del try de red: un header inválido no llegó a salir a la red y no
+	// puede reportarse como "no se sabe si el mail salió".
+	const payload = JSON.stringify({ raw: buildRawMessage(input) });
+
+	let res: Response;
+	try {
+		res = await fetch(
+			"https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${accessToken}`,
+					"Content-Type": "application/json",
+				},
+				body: payload,
+				// El timeout entra por el mismo carril que un corte de red: sin
+				// respuesta no se sabe si Gmail llegó a mandar el mail.
+				signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
 			},
-			body: JSON.stringify({ raw: buildRawMessage(input) }),
-		},
-	);
+		);
+	} catch (error) {
+		throw new GmailUnknownOutcomeError(error);
+	}
 
 	if (res.status === 401) throw new GmailUnauthorizedError();
 	if (!res.ok) {
 		throw new Error(
-			`Gmail no pudo enviar el mail (${res.status}): ${await res.text()}`,
+			`Gmail no pudo enviar el mail (${res.status}): ${await res
+				.text()
+				.catch(() => "sin cuerpo")}`,
 		);
 	}
 
-	return (await res.json()) as { id: string; threadId: string };
+	// Desde el 2xx, Gmail ya aceptó la llamada: si el cuerpo se corta a la mitad
+	// (undici tira "terminated") o no trae el id, el mail pudo haber salido.
+	let sent: { id?: string; threadId?: string };
+	try {
+		sent = (await res.json()) as { id?: string; threadId?: string };
+	} catch (error) {
+		throw new GmailUnknownOutcomeError(error);
+	}
+	if (!sent?.id || !sent?.threadId) {
+		throw new GmailUnknownOutcomeError(
+			new Error(`Gmail aceptó la llamada (${res.status}) sin confirmar el id`),
+		);
+	}
+	return { id: sent.id, threadId: sent.threadId };
 }

@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GmailUnauthorizedError, sendMail } from "@/lib/gmail/send";
+import {
+	GmailUnauthorizedError,
+	GmailUnknownOutcomeError,
+	sendMail,
+} from "@/lib/gmail/send";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -25,5 +29,66 @@ describe("sendMail", () => {
 		await expect(
 			sendMail("tok", { to: "a@b.test", subject: "x", body: "y" }),
 		).rejects.toBeInstanceOf(GmailUnauthorizedError);
+	});
+
+	it("un 500 es un error común: Gmail contestó, el mail no salió", async () => {
+		vi.stubGlobal("fetch", async () => new Response("boom", { status: 500 }));
+		const error = await sendMail("tok", {
+			to: "a@b.test",
+			subject: "x",
+			body: "y",
+		}).catch((e) => e);
+		expect(error).toBeInstanceOf(Error);
+		expect(error).not.toBeInstanceOf(GmailUnknownOutcomeError);
+		expect(error.message).toContain("500");
+	});
+
+	it("un 2xx cuyo body no se puede leer es incierto: Gmail ya aceptó la llamada", async () => {
+		vi.stubGlobal("fetch", async () => ({
+			status: 200,
+			ok: true,
+			json: async () => {
+				throw new TypeError("terminated");
+			},
+			text: async () => "",
+		}));
+		await expect(
+			sendMail("tok", { to: "a@b.test", subject: "x", body: "y" }),
+		).rejects.toBeInstanceOf(GmailUnknownOutcomeError);
+	});
+
+	it("un 2xx sin id ni threadId también es incierto", async () => {
+		vi.stubGlobal("fetch", async () => Response.json({}));
+		await expect(
+			sendMail("tok", { to: "a@b.test", subject: "x", body: "y" }),
+		).rejects.toBeInstanceOf(GmailUnknownOutcomeError);
+	});
+
+	it("un error de MIME no es un error de red: sube tal cual", async () => {
+		const fetchMock = vi.fn(async () => Response.json({ id: "m1" }));
+		vi.stubGlobal("fetch", fetchMock);
+		await expect(
+			sendMail("tok", { to: "a@b.test", subject: "x", body: "y", bcc: "\n" }),
+		).rejects.not.toBeInstanceOf(GmailUnknownOutcomeError);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("sin respuesta (red, abort, timeout) tira GmailUnknownOutcomeError", async () => {
+		vi.stubGlobal("fetch", async () => {
+			throw new Error("ECONNRESET");
+		});
+		await expect(
+			sendMail("tok", { to: "a@b.test", subject: "x", body: "y" }),
+		).rejects.toBeInstanceOf(GmailUnknownOutcomeError);
+	});
+
+	it("el fetch lleva un AbortSignal para que el timeout entre por ese carril", async () => {
+		const fetchMock = vi.fn(
+			async (_input: RequestInfo | URL, _init?: RequestInit) =>
+				Response.json({ id: "m1", threadId: "t1" }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		await sendMail("tok", { to: "a@b.test", subject: "x", body: "y" });
+		expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 	});
 });

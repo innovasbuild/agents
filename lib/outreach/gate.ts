@@ -435,3 +435,8 @@ export function runGate(input: GateInput): GateResult {
 				: "ok";
 	return { status, violations, warnings, notes };
 }
+
+/** Resumen citable de un gate que no pasó: las violaciones o, si no hay, las notas. */
+export function gateSummary(gate: GateResult): string {
+	return gate.violations.map((v) => v.what).join("; ") || gate.notes.join("; ");
+}
