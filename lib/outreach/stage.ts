@@ -15,6 +15,21 @@ export const OUTREACH_STAGES = [
 
 export type OutreachStage = (typeof OUTREACH_STAGES)[number];
 
+// Los valores de la base son snake_case en inglés; la UI del dashboard va en
+// castellano rioplatense. Un solo lugar para las dos pantallas que las usan.
+export const STAGE_LABELS: Record<OutreachStage, string> = {
+	a_contactar: "A contactar",
+	msg1_enviado: "Primer mail enviado",
+	sin_respuesta: "Sin respuesta",
+	respuesta_neutra: "Respondió sin definirse",
+	no_interesado: "No le interesa",
+	en_conversacion: "En conversación",
+	reunion_agendada: "Reunión agendada",
+	deal_creado: "Oportunidad abierta",
+	cliente: "Cliente",
+	sin_atribucion: "Sin atribución",
+};
+
 const RANK: Record<OutreachStage, number> = {
 	a_contactar: 0,
 	msg1_enviado: 1,

@@ -4,6 +4,7 @@ import {
 	isNoResponse,
 	nextFollowup,
 	OUTREACH_STAGES,
+	STAGE_LABELS,
 } from "@/lib/outreach/stage";
 
 const day = (n: number) => new Date(Date.UTC(2026, 8, 1 + n));
@@ -82,5 +83,24 @@ describe("cadencia", () => {
 				now: day(20),
 			}),
 		).toBe(false);
+	});
+});
+
+describe("STAGE_LABELS", () => {
+	it("tiene una etiqueta en castellano para cada etapa", () => {
+		for (const stage of OUTREACH_STAGES) {
+			expect(STAGE_LABELS[stage]).toBeTruthy();
+		}
+	});
+
+	it("no repite una etiqueta entre dos etapas", () => {
+		const labels = OUTREACH_STAGES.map((stage) => STAGE_LABELS[stage]);
+		expect(new Set(labels).size).toBe(OUTREACH_STAGES.length);
+	});
+
+	it("no deja ningún valor crudo de la base como etiqueta", () => {
+		for (const stage of OUTREACH_STAGES) {
+			expect(STAGE_LABELS[stage]).not.toBe(stage);
+		}
 	});
 });
