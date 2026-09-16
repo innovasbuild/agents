@@ -4,7 +4,6 @@ import {
 	type ConnectTokenParams,
 	getToken,
 	getTokenResponse,
-	startAuthorization,
 } from "@vercel/connect";
 import { connect } from "@vercel/connect/eve";
 
@@ -99,30 +98,4 @@ export async function tokenForSubject(
 		...(scopes ? { scopes } : {}),
 	});
 	return { token, expiresAt };
-}
-
-/**
- * Arranca el flujo de consentimiento OAuth para el mismo subject tenant:usuario
- * que usan tenantScopedConnect y tokenForSubject (spike S2, temporal). Devuelve
- * solo `url` y `expiresAt`: el `verifier` y el `request` que arma Connect son
- * secretos de un solo uso del propio SDK y no salen de esta función — ni se
- * loguean, ni se devuelven, ni se guardan.
- */
-export async function startAuthorizationForSubject(
-	connector: string,
-	who: { tenantId: string; userId: string; issuer?: string },
-	scopes?: string[],
-): Promise<{ url: string; expiresAt: number | null }> {
-	if (!who.tenantId || !who.userId) {
-		throw new Error("startAuthorizationForSubject requiere tenant y usuario");
-	}
-	const { url, expiresAt } = await startAuthorization(connector, {
-		subject: {
-			type: "user",
-			id: tenantSubjectId(who.tenantId, who.userId),
-			...(who.issuer ? { issuer: who.issuer } : {}),
-		},
-		...(scopes ? { scopes } : {}),
-	});
-	return { url, expiresAt: expiresAt ?? null };
 }

@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
 	getToken: [] as unknown[][],
 	connect: [] as Record<string, unknown>[],
-	startAuthorization: [] as unknown[][],
 }));
 
 vi.mock("@vercel/connect", () => ({
@@ -14,17 +13,6 @@ vi.mock("@vercel/connect", () => ({
 	getTokenResponse: async (...args: unknown[]) => {
 		calls.getToken.push(args);
 		return { token: "llave-simulada", expiresAt: 1_789_325_386_769 };
-	},
-	startAuthorization: async (...args: unknown[]) => {
-		calls.startAuthorization.push(args);
-		return {
-			url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc",
-			expiresAt: 1_789_325_386_769,
-			// Connect también devuelve request/verifier: la función bajo test
-			// tiene que descartarlos, no reenviarlos.
-			request: "request-secreto",
-			verifier: "verifier-secreto",
-		};
 	},
 }));
 
@@ -38,7 +26,6 @@ vi.mock("@vercel/connect/eve", () => ({
 const {
 	apiKeyBearer,
 	apiKeyHeaders,
-	startAuthorizationForSubject,
 	tenantScopedConnect,
 	tenantSubjectId,
 	tokenForSubject,
@@ -53,7 +40,6 @@ type CreateSubject = (principal: {
 beforeEach(() => {
 	calls.getToken = [];
 	calls.connect = [];
-	calls.startAuthorization = [];
 });
 
 describe("apiKeyHeaders", () => {
@@ -176,63 +162,5 @@ describe("tokenForSubject", () => {
 			tokenForSubject("google/google", { tenantId: "tenant-1", userId: "" }),
 		).rejects.toThrow("tokenForSubject requiere tenant y usuario");
 		expect(calls.getToken).toHaveLength(0);
-	});
-});
-
-describe("startAuthorizationForSubject", () => {
-	it("arma el mismo subject tenant:usuario y devuelve solo url y expiresAt", async () => {
-		const result = await startAuthorizationForSubject(
-			"google/google",
-			{ tenantId: "tenant-1", userId: "user-1", issuer: "https://issuer.test" },
-			["https://www.googleapis.com/auth/gmail.readonly"],
-		);
-
-		expect(result).toEqual({
-			url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc",
-			expiresAt: 1_789_325_386_769,
-		});
-		// Ni verifier ni request salen de la función, aunque Connect los mande.
-		expect(Object.keys(result)).toEqual(["url", "expiresAt"]);
-		expect(JSON.stringify(result)).not.toContain("secreto");
-
-		expect(calls.startAuthorization[0]).toEqual([
-			"google/google",
-			{
-				subject: {
-					type: "user",
-					id: "tenant-1:user-1",
-					issuer: "https://issuer.test",
-				},
-				scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
-			},
-		]);
-	});
-
-	it("sin issuer, no manda esa clave al subject", async () => {
-		await startAuthorizationForSubject("google/google", {
-			tenantId: "tenant-1",
-			userId: "user-1",
-		});
-
-		expect(calls.startAuthorization[0]).toEqual([
-			"google/google",
-			{ subject: { type: "user", id: "tenant-1:user-1" } },
-		]);
-	});
-
-	it("rechaza sin tenant o sin usuario: nunca arranca una autorización sin aislar", async () => {
-		await expect(
-			startAuthorizationForSubject("google/google", {
-				tenantId: "",
-				userId: "user-1",
-			}),
-		).rejects.toThrow("startAuthorizationForSubject requiere tenant y usuario");
-		await expect(
-			startAuthorizationForSubject("google/google", {
-				tenantId: "tenant-1",
-				userId: "",
-			}),
-		).rejects.toThrow("startAuthorizationForSubject requiere tenant y usuario");
-		expect(calls.startAuthorization).toHaveLength(0);
 	});
 });

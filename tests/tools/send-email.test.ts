@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
 	serviceError: null as Error | null,
 	requireAuthCalls: 0,
 	serviceInput: null as unknown,
+	connectScopes: null as string[] | undefined | null,
 }));
 
 vi.mock("../../lib/connectors/bindings", () => ({
@@ -15,7 +16,10 @@ vi.mock("../../lib/connectors/auth", () => ({
 		connector: string,
 		tenantId: string,
 		scopes?: string[],
-	) => ({ connector, tenantId, scopes }),
+	) => {
+		state.connectScopes = scopes;
+		return { connector, tenantId, scopes };
+	},
 }));
 vi.mock("../../lib/outreach/crm-session", () => ({
 	crmForSession: async () => null,
@@ -39,7 +43,9 @@ vi.mock("../../lib/outreach/services/send", () => ({
 }));
 
 const { default: tool } = await import("@/agents/outreach/tools/send_email");
-const { GmailUnauthorizedError } = await import("@/lib/gmail/send");
+const { GmailUnauthorizedError, GMAIL_SCOPES } = await import(
+	"@/lib/gmail/send"
+);
 
 const context = {
 	callId: "call-1",
@@ -74,6 +80,7 @@ beforeEach(() => {
 	state.serviceError = null;
 	state.requireAuthCalls = 0;
 	state.serviceInput = null;
+	state.connectScopes = null;
 });
 
 describe("send_email", () => {
@@ -101,5 +108,16 @@ describe("send_email", () => {
 		state.serviceError = new GmailUnauthorizedError();
 		await expect(run()).rejects.toThrow("auth requerida");
 		expect(state.requireAuthCalls).toBe(1);
+	});
+
+	it("pide el token con el mismo conjunto de scopes de GMAIL_SCOPES (send + readonly), no solo send", async () => {
+		await run();
+		expect(state.connectScopes).toEqual([...GMAIL_SCOPES]);
+		expect(state.connectScopes).toContain(
+			"https://www.googleapis.com/auth/gmail.send",
+		);
+		expect(state.connectScopes).toContain(
+			"https://www.googleapis.com/auth/gmail.readonly",
+		);
 	});
 });
