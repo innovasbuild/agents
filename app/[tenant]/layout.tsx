@@ -38,17 +38,22 @@ export default async function TenantLayout({
 						<img
 							src={logoUrl}
 							alt={tenant.displayName}
-							className="h-7 w-auto"
+							className="h-7 w-auto shrink-0"
 						/>
 					) : (
-						<span className="font-semibold tracking-display">
+						// min-w-0 + flex-1 es lo que deja truncar en vez de desbordar:
+						// un flex item sin esto no se achica más allá de su contenido, y
+						// un displayName largo empuja el badge y la nav fuera del header
+						// a 375px (rompe a varias líneas). flex-1 le da el espacio
+						// sobrante para que sea él, y no la nav, el que se angosta.
+						<span className="min-w-0 flex-1 truncate font-semibold tracking-display">
 							{tenant.displayName}
 						</span>
 					)}
-					<span className="rounded-full border px-2 py-0.5 text-muted-foreground text-xs">
+					<span className="hidden shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs sm:inline-block">
 						{ROLE_LABELS[tenant.role]}
 					</span>
-					<nav className="ml-auto flex items-center gap-4 text-sm">
+					<nav className="ml-auto flex shrink-0 items-center gap-4 text-sm">
 						<a
 							className="text-muted-foreground hover:text-foreground"
 							href={`/${slug}/chat`}
