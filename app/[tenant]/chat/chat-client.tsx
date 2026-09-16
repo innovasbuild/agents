@@ -4,7 +4,7 @@ import type { EveMessage } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { EllipsisIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
+import { runningToolLabel, runningToolName } from "@/lib/agents/running-tool";
 import {
 	createConversation,
 	deleteConversation,
@@ -97,28 +98,27 @@ export function ChatClient({
 				</div>
 
 				<ul className="space-y-0.5">
-					{threads.map((thread) => (
-						<li
-							className={`flex items-center rounded-md transition-colors hover:bg-muted ${
-								thread.id === active?.id ? "bg-muted font-medium" : ""
-							}`}
-							key={thread.id}
-						>
-							<a
-								className={`min-w-0 flex-1 truncate py-1.5 pl-2.5 text-sm ${
-									thread.id === active?.id ? "" : "text-muted-foreground"
+					{threads.map((thread) => {
+						const isActive = thread.id === active?.id;
+						return (
+							<li
+								className={`flex items-center rounded-md transition-colors hover:bg-muted ${
+									isActive ? "bg-muted font-medium" : ""
 								}`}
-								href={`/${slug}/chat?hilo=${thread.id}`}
+								key={thread.id}
 							>
-								{thread.title ?? "Hilo sin título"}
-							</a>
-							<ThreadMenu
-								isActive={thread.id === active?.id}
-								slug={slug}
-								thread={thread}
-							/>
-						</li>
-					))}
+								<a
+									className={`min-w-0 flex-1 truncate rounded-md py-2 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+										isActive ? "" : "text-muted-foreground"
+									}`}
+									href={`/${slug}/chat?hilo=${thread.id}`}
+								>
+									{threadTitle(thread)}
+								</a>
+								<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
+							</li>
+						);
+					})}
 				</ul>
 			</aside>
 
@@ -135,6 +135,10 @@ export function ChatClient({
 	);
 }
 
+function threadTitle(thread: Thread): string {
+	return thread.title ?? "Hilo sin título";
+}
+
 function ThreadMenu({
 	isActive,
 	slug,
@@ -148,15 +152,17 @@ function ThreadMenu({
 	const [confirming, setConfirming] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
-	const title = thread.title ?? "Hilo sin título";
+	const title = threadTitle(thread);
 
 	return (
 		<>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
+					{/* El área táctil se estira más allá del botón: abajo de 768px la
+					    lista de hilos es la navegación principal en un teléfono. */}
 					<Button
 						aria-label={`Opciones de ${title}`}
-						className="mr-1 text-muted-foreground"
+						className="relative mr-1 text-muted-foreground after:absolute after:-inset-1"
 						size="icon-sm"
 						type="button"
 						variant="ghost"
@@ -166,7 +172,10 @@ function ThreadMenu({
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">
 					<DropdownMenuItem
-						onSelect={() => {
+						onSelect={(event) => {
+							// Sin esto el menú devuelve el foco al trigger mientras el
+							// diálogo instala su trampa, y las dos capas se pisan.
+							event.preventDefault();
 							setError(null);
 							setConfirming(true);
 						}}
@@ -177,14 +186,23 @@ function ThreadMenu({
 				</DropdownMenuContent>
 			</DropdownMenu>
 
-			<AlertDialog onOpenChange={setConfirming} open={confirming}>
+			{/* Esc y el click afuera también cierran el diálogo, y con el borrado
+			    en vuelo eso desmonta la única superficie donde se ve el error. */}
+			<AlertDialog
+				onOpenChange={(open) => {
+					if (!pending) setConfirming(open);
+				}}
+				open={confirming}
+			>
 				<AlertDialogContent>
 					<AlertDialogHeader>
 						<AlertDialogTitle>¿Borrar “{title}”?</AlertDialogTitle>
 						<AlertDialogDescription>
 							Se borra el hilo y su historial de esta pantalla, sin vuelta
 							atrás. Los envíos que ya salieron y lo que quedó en el CRM no se
-							tocan.
+							tocan. Si el agente está trabajando en este hilo, borrarlo no lo
+							frena: el turno sigue hasta el final y un envío ya aprobado va a
+							salir igual.
 						</AlertDialogDescription>
 					</AlertDialogHeader>
 					{error ? (
@@ -208,9 +226,10 @@ function ThreadMenu({
 									}
 									setConfirming(false);
 									// El hilo abierto dejó de existir: la URL con ?hilo= no
-									// resuelve a nada y la pantalla quedaría en el vacío.
+									// resuelve a nada y la pantalla quedaría en el vacío. Si
+									// el borrado fue de otro hilo no hace falta refrescar: el
+									// revalidatePath de la action ya vuelve con la lista al día.
 									if (isActive) router.replace(`/${slug}/chat`);
-									else router.refresh();
 								});
 							}}
 							type="button"
@@ -265,11 +284,19 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	);
 	const isAuthorizing = pendingAuthorizations.length > 0;
 
-	// Indicador de trabajo en curso: mientras el turno está parqueado esperando
-	// una tarjeta, la señal es la tarjeta y no los puntitos.
-	const runningTool = runningToolName(agent.data.messages);
+	// Indicador de trabajo en curso. Tres reglas: con una tarjeta pendiente la
+	// señal es la tarjeta y no los puntitos; con texto ya llegando el propio
+	// texto es el indicador; y en los tramos largos de tool conviene decir en
+	// qué anda, que es donde "Pensando…" a secas no distingue trabado de
+	// laburando.
+	const runningTool = useMemo(
+		() => runningToolName(agent.data.messages),
+		[agent.data.messages],
+	);
 	const isThinking =
-		(isBusy || isResuming) && !isAuthorizing && pendingRequests.length === 0;
+		(isResuming || agent.status === "submitted" || runningTool !== null) &&
+		!isAuthorizing &&
+		pendingRequests.length === 0;
 
 	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
 	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
@@ -315,24 +342,27 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				)}
 			</div>
 
-			{isThinking ? (
-				<p
-					aria-live="polite"
-					className="flex items-center gap-2 text-muted-foreground text-sm"
-					role="status"
-				>
-					<span aria-hidden="true" className="flex gap-1">
-						<span className="size-1.5 animate-bounce rounded-full bg-current" />
-						<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:150ms]" />
-						<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:300ms]" />
-					</span>
-					{isResuming
-						? "Reanudando el hilo…"
-						: runningTool
-							? `Usando ${runningTool}…`
-							: "Pensando…"}
-				</p>
-			) : null}
+			{/* La región vive siempre: un role="status" que se monta junto con su
+			    texto no lo anuncia en la mayoría de los lectores de pantalla. */}
+			<p
+				className="flex items-center gap-2 text-muted-foreground text-sm empty:hidden"
+				role="status"
+			>
+				{isThinking ? (
+					<>
+						<span aria-hidden="true" className="flex gap-1">
+							<span className="size-1.5 animate-bounce rounded-full bg-current motion-reduce:animate-none" />
+							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:150ms] motion-reduce:animate-none" />
+							<span className="size-1.5 animate-bounce rounded-full bg-current [animation-delay:300ms] motion-reduce:animate-none" />
+						</span>
+						{isResuming
+							? "Reanudando el hilo…"
+							: runningTool
+								? `${runningToolLabel(runningTool)}…`
+								: "Pensando…"}
+					</>
+				) : null}
+			</p>
 
 			{pendingAuthorizations.map(({ key, part }) => (
 				<fieldset className="rounded-lg border bg-card p-4" key={key}>
@@ -531,22 +561,4 @@ function MessageText({ message }: { message: EveMessage }) {
 			<span key={`${message.id}-text-${part.stepIndex}`}>{part.text}</span>
 		) : null,
 	);
-}
-
-// El último tool despachado que todavía no devolvió resultado. Con tramos
-// largos (research_account, import_contacts) "Pensando…" a secas no dice si
-// el agente está trabado o laburando.
-function runningToolName(messages: readonly EveMessage[]): string | null {
-	for (let i = messages.length - 1; i >= 0; i--) {
-		const parts = messages[i].parts;
-		for (let j = parts.length - 1; j >= 0; j--) {
-			const part = parts[j];
-			if (part.type !== "dynamic-tool") continue;
-			return part.state === "input-available" ||
-				part.state === "approval-responded"
-				? part.toolName
-				: null;
-		}
-	}
-	return null;
 }
