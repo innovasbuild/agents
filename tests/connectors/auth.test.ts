@@ -5,6 +5,39 @@ const calls = vi.hoisted(() => ({
 	connect: [] as Record<string, unknown>[],
 }));
 
+// vi.fn (no una función suelta) porque un test de startAuthorizationForSubject
+// necesita pisar su resolución una sola vez (el caso sin expiresAt).
+const startAuthorization = vi.hoisted(() =>
+	vi.fn(
+		async (
+			..._args: unknown[]
+		): Promise<{
+			request: string;
+			verifier: string;
+			url: string;
+			expiresAt?: number;
+		}> => ({
+			request: "req_1",
+			verifier: "ver_1",
+			url: "https://vercel.com/connect/authorize/req_1",
+			expiresAt: 1_789_325_386_769,
+		}),
+	),
+);
+
+// Dobles de las dos clases que isConnectAuthError distingue (ver
+// dist/token.js de @vercel/connect: `no_token` y
+// `user_authorization_required`), más una tercera para probar que un
+// ConnectError que no es ninguna de esas dos no se confunde con un pedido
+// de reautorización.
+const { NoValidTokenError, UserAuthorizationRequiredError, ConnectError } =
+	vi.hoisted(() => {
+		class ConnectError extends Error {}
+		class NoValidTokenError extends ConnectError {}
+		class UserAuthorizationRequiredError extends ConnectError {}
+		return { ConnectError, NoValidTokenError, UserAuthorizationRequiredError };
+	});
+
 vi.mock("@vercel/connect", () => ({
 	getToken: async (...args: unknown[]) => {
 		calls.getToken.push(args);
@@ -14,6 +47,10 @@ vi.mock("@vercel/connect", () => ({
 		calls.getToken.push(args);
 		return { token: "llave-simulada", expiresAt: 1_789_325_386_769 };
 	},
+	startAuthorization,
+	ConnectError,
+	NoValidTokenError,
+	UserAuthorizationRequiredError,
 }));
 
 vi.mock("@vercel/connect/eve", () => ({
@@ -26,6 +63,8 @@ vi.mock("@vercel/connect/eve", () => ({
 const {
 	apiKeyBearer,
 	apiKeyHeaders,
+	isConnectAuthError,
+	startAuthorizationForSubject,
 	tenantScopedConnect,
 	tenantSubjectId,
 	tokenForSubject,
@@ -40,6 +79,7 @@ type CreateSubject = (principal: {
 beforeEach(() => {
 	calls.getToken = [];
 	calls.connect = [];
+	startAuthorization.mockClear();
 });
 
 describe("apiKeyHeaders", () => {
@@ -162,5 +202,102 @@ describe("tokenForSubject", () => {
 			tokenForSubject("google/google", { tenantId: "tenant-1", userId: "" }),
 		).rejects.toThrow("tokenForSubject requiere tenant y usuario");
 		expect(calls.getToken).toHaveLength(0);
+	});
+});
+
+describe("startAuthorizationForSubject", () => {
+	it("pide el link de autorización del subject tenant:usuario con los scopes", async () => {
+		const response = await startAuthorizationForSubject(
+			"google/google",
+			{ tenantId: "tenant-1", userId: "user-1" },
+			["https://www.googleapis.com/auth/gmail.readonly"],
+		);
+		expect(response).toEqual({
+			url: "https://vercel.com/connect/authorize/req_1",
+			expiresAt: 1_789_325_386_769,
+		});
+		expect(startAuthorization.mock.calls[0]).toEqual([
+			"google/google",
+			{
+				subject: { type: "user", id: "tenant-1:user-1" },
+				scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+			},
+		]);
+	});
+
+	it("incluye el issuer cuando el grant se guardó con uno", async () => {
+		await startAuthorizationForSubject("mcp.hubspot.com/hubspot", {
+			tenantId: "tenant-1",
+			userId: "user-1",
+			issuer: "https://issuer.test",
+		});
+		expect(startAuthorization.mock.calls[0]).toEqual([
+			"mcp.hubspot.com/hubspot",
+			{
+				subject: {
+					type: "user",
+					id: "tenant-1:user-1",
+					issuer: "https://issuer.test",
+				},
+			},
+		]);
+	});
+
+	it("rechaza sin tenant o sin usuario: nunca pide un link sin aislar", async () => {
+		await expect(
+			startAuthorizationForSubject("google/google", {
+				tenantId: "",
+				userId: "user-1",
+			}),
+		).rejects.toThrow("startAuthorizationForSubject requiere tenant y usuario");
+		await expect(
+			startAuthorizationForSubject("google/google", {
+				tenantId: "tenant-1",
+				userId: "",
+			}),
+		).rejects.toThrow("startAuthorizationForSubject requiere tenant y usuario");
+		expect(startAuthorization).not.toHaveBeenCalled();
+	});
+
+	it("cuando Connect no manda expiresAt, devuelve null en vez de undefined", async () => {
+		// El mock de arriba siempre manda expiresAt; acá se pisa una vez para
+		// el caso real en que Connect no lo manda.
+		startAuthorization.mockResolvedValueOnce({
+			request: "req_2",
+			verifier: "ver_2",
+			url: "https://vercel.com/connect/authorize/req_2",
+		});
+
+		const response = await startAuthorizationForSubject("google/google", {
+			tenantId: "tenant-1",
+			userId: "user-1",
+		});
+		expect(response).toEqual({
+			url: "https://vercel.com/connect/authorize/req_2",
+			expiresAt: null,
+		});
+	});
+});
+
+describe("isConnectAuthError", () => {
+	it("reconoce un grant vencido o revocado (no_token)", () => {
+		expect(isConnectAuthError(new NoValidTokenError("no valid token"))).toBe(
+			true,
+		);
+	});
+
+	it("reconoce un grant que nunca se dio (user_authorization_required)", () => {
+		expect(
+			isConnectAuthError(new UserAuthorizationRequiredError("auth required")),
+		).toBe(true);
+	});
+
+	it("no confunde otro ConnectError (un 500 de Connect) con un pedido de reautorización", () => {
+		expect(isConnectAuthError(new ConnectError("falló Connect"))).toBe(false);
+	});
+
+	it("no confunde un error cualquiera (de red, por ejemplo) con un pedido de reautorización", () => {
+		expect(isConnectAuthError(new TypeError("fetch failed"))).toBe(false);
+		expect(isConnectAuthError("no es ni un Error")).toBe(false);
 	});
 });

@@ -4,7 +4,9 @@ import {
 	type ConnectTokenParams,
 	getToken,
 	getTokenResponse,
+	NoValidTokenError,
 	startAuthorization,
+	UserAuthorizationRequiredError,
 } from "@vercel/connect";
 import { connect } from "@vercel/connect/eve";
 
@@ -124,4 +126,23 @@ export async function startAuthorizationForSubject(
 		...(scopes ? { scopes } : {}),
 	});
 	return { url, expiresAt: expiresAt ?? null };
+}
+
+/**
+ * ¿Este error de Connect significa "hace falta que el usuario autorice de
+ * nuevo" (grant vencido, revocado o nunca dado)? Son las dos clases que
+ * getTokenResponse tira con ese sentido — `no_token` y
+ * `user_authorization_required` (ver dist/token.js de @vercel/connect) — no
+ * cualquier ConnectError: un 500 o un problema de red no es "reautorizá", y
+ * tragarlo como tal le mostraría al usuario un link que no arregla nada.
+ * Este archivo es el único que puede importar @vercel/connect
+ * (tests/connectors/import-rule.test.ts lo hace cumplir), así que quien
+ * necesita distinguir el caso usa este predicado en vez de un instanceof
+ * directo contra las clases del paquete.
+ */
+export function isConnectAuthError(error: unknown): boolean {
+	return (
+		error instanceof NoValidTokenError ||
+		error instanceof UserAuthorizationRequiredError
+	);
 }

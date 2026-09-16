@@ -3,7 +3,7 @@
 // identidad, pero sin ctx. La diferencia que importa es requireAuth: una tool
 // pausa el turno y muestra la tarjeta de autorización; una server action no
 // puede pausar, así que lanza y la action traduce el error a un link.
-import { tokenForSubject } from "@/lib/connectors/auth";
+import { isConnectAuthError, tokenForSubject } from "@/lib/connectors/auth";
 import { hasEnabledBinding } from "@/lib/connectors/bindings";
 import {
 	GOOGLE_CONNECTOR_UID,
@@ -32,14 +32,43 @@ export class WebReauthRequired extends Error {
 	}
 }
 
+/**
+ * Token de Connect que traduce un grant vencido, revocado o nunca dado en
+ * WebReauthRequired, en vez de dejar pasar el error crudo de Connect: acá es
+ * el único lugar que sabe qué proveedor pidió el token, así que es el único
+ * lugar que puede ponerle el nombre correcto al link de autorización.
+ * hasEnabledBinding en webSendDeps solo mira si el tenant configuró el
+ * binding; esto cubre el caso normal de OAuth, el grant que configuró pero
+ * venció.
+ */
+async function tokenOrReauth(
+	provider: ReauthProvider,
+	connector: string,
+	caller: Caller,
+	scopes?: string[],
+): Promise<string> {
+	try {
+		const { token } = await tokenForSubject(
+			connector,
+			{ tenantId: caller.tenantId, userId: caller.userId },
+			scopes,
+		);
+		return token;
+	} catch (error) {
+		if (isConnectAuthError(error)) throw new WebReauthRequired(provider);
+		throw error;
+	}
+}
+
 /** CrmAuthContext para la web: lanza donde una tool pausaría. */
 function webCrmContext(caller: Caller) {
 	return {
 		async getToken() {
-			const { token } = await tokenForSubject(
-				// El CRM se pide sin scopes explícitos, igual que crmForSession.
+			// El CRM se pide sin scopes explícitos, igual que crmForSession.
+			const token = await tokenOrReauth(
+				"hubspot",
 				HUBSPOT_CONNECTOR_UID,
-				{ tenantId: caller.tenantId, userId: caller.userId },
+				caller,
 			);
 			return { token };
 		},
@@ -49,14 +78,24 @@ function webCrmContext(caller: Caller) {
 	};
 }
 
+/** Solo lo que rejectQueueItem declara (`Pick<QueueDeps, "store" | "now">`):
+ * rechazar una pieza no toca el CRM, así que no hay que pedir el token de
+ * HubSpot para eso — pedirlo de más rompería el rechazo más simple de las
+ * tres acciones si el grant de HubSpot venció. */
+export function webStoreDeps(): Pick<QueueDeps, "store" | "now"> {
+	return {
+		store: createSupabaseOutreachStore(createAdminClient()),
+		now: () => new Date(),
+	};
+}
+
 export async function webQueueDeps(caller: Caller): Promise<QueueDeps> {
 	const brain = await brainForTenant(caller.tenantId);
 	const crm = await crmForSession(webCrmContext(caller), caller.tenantId);
 	return {
-		store: createSupabaseOutreachStore(createAdminClient()),
+		...webStoreDeps(),
 		crm: crm?.adapter ?? null,
 		loadCanon: (slug) => loadCanon(brain, slug),
-		now: () => new Date(),
 	};
 }
 
@@ -66,23 +105,20 @@ export async function webSendDeps(caller: Caller): Promise<SendDeps> {
 	}
 	// GMAIL_SCOPES completo, no solo send: Connect matchea el grant por
 	// conjunto exacto (mismo motivo que en send_email.ts).
-	const { token } = await tokenForSubject(
-		GOOGLE_CONNECTOR_UID,
-		{ tenantId: caller.tenantId, userId: caller.userId },
-		[...GMAIL_SCOPES],
-	);
+	const token = await tokenOrReauth("google", GOOGLE_CONNECTOR_UID, caller, [
+		...GMAIL_SCOPES,
+	]);
 	const [brain, crm] = await Promise.all([
 		brainForTenant(caller.tenantId),
 		crmForSession(webCrmContext(caller), caller.tenantId),
 	]);
 	return {
-		store: createSupabaseOutreachStore(createAdminClient()),
+		...webStoreDeps(),
 		crm: crm?.adapter ?? null,
 		crmAfterSend: crm?.raw ?? null,
 		loadCanon: (slug) => loadCanon(brain, slug),
 		sendMail: (mail) => sendMail(token, mail),
 		isMailUnauthorized: (error) => error instanceof GmailUnauthorizedError,
 		isMailUnknownOutcome: (error) => error instanceof GmailUnknownOutcomeError,
-		now: () => new Date(),
 	};
 }

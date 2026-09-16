@@ -9,7 +9,7 @@ import {
 	GOOGLE_CONNECTOR_UID,
 	HUBSPOT_CONNECTOR_UID,
 } from "@/lib/connectors/platform";
-import { GMAIL_SCOPES } from "@/lib/gmail/send";
+import { GMAIL_SCOPES, GmailUnauthorizedError } from "@/lib/gmail/send";
 import {
 	rejectQueueItem,
 	updateQueueItem,
@@ -19,6 +19,7 @@ import {
 	WebReauthRequired,
 	webQueueDeps,
 	webSendDeps,
+	webStoreDeps,
 } from "@/lib/outreach/web-context";
 import { webSession } from "@/lib/outreach/web-session";
 
@@ -100,6 +101,11 @@ export async function approveAndSend(
 		return { ok: true };
 	} catch (error) {
 		if (error instanceof WebReauthRequired) return reauthResult(error, caller);
+		// sendQueuedEmail relanza esto cuando Gmail (no Connect) rechaza el
+		// token con un 401: el tool del chat la captura con ctx.requireAuth;
+		// acá es lo mismo que un grant vencido, así que se traduce igual.
+		if (error instanceof GmailUnauthorizedError)
+			return reauthResult(new WebReauthRequired("google"), caller);
 		throw error;
 	}
 }
@@ -147,10 +153,13 @@ export async function rejectItem(
 	const session = await webSession(slug);
 	if (!session) return SIN_SESION;
 
-	const deps = await webQueueDeps(session.caller);
+	// Solo { store, now }: rejectQueueItem no toca el CRM (declara
+	// Pick<QueueDeps, "store" | "now">), así que no hay que pedir el token de
+	// HubSpot para rechazar una pieza. webQueueDeps lo pide eager y rompería
+	// el rechazo si el grant de HubSpot venció, sin ninguna razón para eso.
 	const result = await rejectQueueItem(
 		{ caller: session.caller, queueItemId, reason: parsedReason.data },
-		deps,
+		webStoreDeps(),
 	);
 	if (!result.ok) return { ok: false, message: result.message };
 	revalidatePath(`/${slug}/cola`);

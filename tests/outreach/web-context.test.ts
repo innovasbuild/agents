@@ -1,4 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Doble de las clases de @vercel/connect que isConnectAuthError distingue.
+// No se puede usar la real: solo lib/connectors/auth.ts puede importar
+// @vercel/connect (tests/connectors/import-rule.test.ts lo hace cumplir), y
+// acá se mockea el módulo entero.
+class FakeConnectAuthError extends Error {}
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/outreach/store", () => ({
@@ -22,11 +28,18 @@ const tokenForSubject = vi.fn(
 vi.mock("@/lib/connectors/auth", () => ({
 	tokenForSubject,
 	tenantScopedConnect: () => ({ kind: "provider" }),
+	isConnectAuthError: (error: unknown) => error instanceof FakeConnectAuthError,
 }));
 vi.mock("@/lib/outreach/crm-session", () => ({
-	crmForSession: async (ctx: { requireAuth: () => never }) => {
+	crmForSession: async (ctx: {
+		getToken: () => Promise<{ token: string }>;
+		requireAuth: () => never;
+	}) => {
 		// El contexto web tiene que lanzar, no pausar: se prueba invocándolo.
 		expect(() => ctx.requireAuth()).toThrow();
+		// Ejercita tokenOrReauth del lado de HubSpot, igual que crmForSession
+		// real (llama ctx.getToken antes de armar el adapter).
+		await ctx.getToken();
 		return { adapter: { kind: "crm" }, raw: { kind: "raw" } };
 	},
 	HUBSPOT_AUTH_OPTIONS: { authKey: "hubspot", displayName: "HubSpot" },
@@ -44,6 +57,10 @@ const caller = {
 };
 
 describe("webSendDeps", () => {
+	beforeEach(() => {
+		tokenForSubject.mockClear();
+	});
+
 	it("pide el token de Gmail con el conjunto exacto de scopes", async () => {
 		await webSendDeps(caller);
 
@@ -67,5 +84,39 @@ describe("webSendDeps", () => {
 		const error = new WebReauthRequired("google");
 		expect(error.provider).toBe("google");
 		expect(error).toBeInstanceOf(Error);
+	});
+
+	it("traduce un grant de Gmail vencido en WebReauthRequired('google')", async () => {
+		// Fix round 1, hallazgo 1: hasEnabledBinding solo mira si el tenant
+		// configuró el binding; esto cubre el caso normal de OAuth, el grant
+		// que se configuró pero venció (tokenForSubject pega directo contra
+		// Connect y tira su propio error, que antes nadie traducía).
+		tokenForSubject.mockRejectedValueOnce(new FakeConnectAuthError("vencido"));
+
+		const error = await webSendDeps(caller).catch((e) => e);
+
+		expect(error).toBeInstanceOf(WebReauthRequired);
+		expect(error.provider).toBe("google");
+	});
+
+	it("traduce un grant de HubSpot vencido en WebReauthRequired('hubspot')", async () => {
+		// La primera llamada a tokenForSubject es la de Gmail (webSendDeps la
+		// pide antes de armar el CRM, y tiene que salir bien acá); la segunda
+		// es la que hace webCrmContext.getToken dentro de crmForSession, y es
+		// la que se hace fallar para aislar el camino de HubSpot.
+		tokenForSubject.mockResolvedValueOnce({ token: "tok-gmail", expiresAt: 0 });
+		tokenForSubject.mockRejectedValueOnce(new FakeConnectAuthError("vencido"));
+
+		const error = await webSendDeps(caller).catch((e) => e);
+
+		expect(error).toBeInstanceOf(WebReauthRequired);
+		expect(error.provider).toBe("hubspot");
+	});
+
+	it("no traduce un error de Connect que no es de autorización: no tapa un 500 o un problema de red", async () => {
+		const boom = new Error("Connect devolvió 500");
+		tokenForSubject.mockRejectedValueOnce(boom);
+
+		await expect(webSendDeps(caller)).rejects.toBe(boom);
 	});
 });
