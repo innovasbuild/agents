@@ -1,10 +1,14 @@
 // TEMPORAL (spec 03 §13, spike S2): se borra después de correr el spike en
 // producción.
 import { NextResponse } from "next/server";
-import { tokenForSubject } from "@/lib/connectors/auth";
+import {
+	startAuthorizationForSubject,
+	tokenForSubject,
+} from "@/lib/connectors/auth";
 import {
 	type ProbeStep,
 	type QueueItemRef,
+	runS2AuthorizeStep,
 	runS2Probes,
 } from "@/lib/spikes/s2";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -97,6 +101,22 @@ export async function GET(request: Request) {
 	if (queueItemParam && !UUID_RE.test(queueItemParam)) {
 		return json({ error: "queue_item inválido: tiene que ser un uuid" }, 400);
 	}
+	const authorizeRequested = url.searchParams.get("authorize") === "1";
+
+	// authorize=1 arranca una autorización OAuth (efecto): un GET con efecto
+	// desde un request cross-site es un CSRF, porque las cookies de Supabase
+	// son sameSite=lax y una navegación cross-site (ej. un <img>/<a> en otro
+	// sitio) igual manda la sesión. Sec-Fetch-Site solo vale "none" (URL
+	// tipeada a mano / bookmark) o "same-origin" (fetch/link desde esta misma
+	// app); cualquier otro valor (o su ausencia, en un browser viejo) ignora
+	// el parámetro (mismo criterio que la ruta vieja de spikes etapa 3 para
+	// hubspot_write).
+	const secFetchSite = request.headers.get("sec-fetch-site");
+	const crossSite =
+		authorizeRequested &&
+		secFetchSite !== "none" &&
+		secFetchSite !== "same-origin";
+	const authorize = authorizeRequested && !crossSite;
 
 	// Todo lo que sigue puede tirar (cliente admin mal configurado, una
 	// consulta que falla): sin este try, ese 500 se escaparía del helper
@@ -135,19 +155,39 @@ export async function GET(request: Request) {
 
 		const issuer = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 
-		const steps: ProbeStep[] = await runS2Probes(
-			{
-				tenantId: tenant.id,
-				userId: auth.user.id,
-				issuer,
-				callerEmail: auth.user.email ?? "",
-				queueItemId: queueItemParam ?? undefined,
-			},
-			{
-				tokenForSubject,
-				fetch,
-				findQueueItem: (params) => findQueueItem(admin, params),
-			},
+		// s2.authorize va antes de los pasos normales: si hace falta el link
+		// de consentimiento, mejor tenerlo arriba de todo en vez de después de
+		// 7 llamadas externas.
+		const steps: ProbeStep[] = [];
+		const authorizeStep = await runS2AuthorizeStep(
+			{ tenantId: tenant.id, userId: auth.user.id, issuer, authorize },
+			{ startAuthorizationForSubject },
+		);
+		if (authorizeStep) {
+			steps.push(authorizeStep);
+		} else if (crossSite) {
+			steps.push({
+				step: "s2.authorize",
+				ok: false,
+				detail: `authorize ignorado: abrí la URL escribiéndola en la barra (Sec-Fetch-Site: ${secFetchSite ?? "ausente"})`,
+			});
+		}
+
+		steps.push(
+			...(await runS2Probes(
+				{
+					tenantId: tenant.id,
+					userId: auth.user.id,
+					issuer,
+					callerEmail: auth.user.email ?? "",
+					queueItemId: queueItemParam ?? undefined,
+				},
+				{
+					tokenForSubject,
+					fetch,
+					findQueueItem: (params) => findQueueItem(admin, params),
+				},
+			)),
 		);
 
 		return json({ tenant: slug, user_id: auth.user.id, issuer, steps }, 200);

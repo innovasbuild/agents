@@ -57,19 +57,22 @@ const MAX_DETAIL_LENGTH = 500;
 // Corre un paso aislado: si `fn` tira, el paso queda ok:false con el nombre y
 // mensaje del error (nunca un token, porque ninguna `fn` de abajo lo pone en
 // el mensaje de un error propio). Un paso que falla nunca frena a los demás.
+// `maxLength` es configurable porque s2.authorize lleva una URL larga que
+// MAX_DETAIL_LENGTH le cortaría.
 async function runStep(
 	step: string,
 	fn: () => Promise<string>,
+	maxLength: number = MAX_DETAIL_LENGTH,
 ): Promise<ProbeStep> {
 	try {
 		const detail = await fn();
-		return { step, ok: true, detail: detail.slice(0, MAX_DETAIL_LENGTH) };
+		return { step, ok: true, detail: detail.slice(0, maxLength) };
 	} catch (error) {
 		const detail =
 			error instanceof Error
 				? `${error.name}: ${error.message}`
 				: String(error);
-		return { step, ok: false, detail: detail.slice(0, MAX_DETAIL_LENGTH) };
+		return { step, ok: false, detail: detail.slice(0, maxLength) };
 	}
 }
 
@@ -147,6 +150,61 @@ async function fetchTokenInfo(
 		);
 	}
 	return (await response.json()) as TokenInfo;
+}
+
+export interface S2AuthorizeInput {
+	tenantId: string;
+	userId: string;
+	issuer: string;
+	/**
+	 * true solo cuando vino `?authorize=1` Y pasó el chequeo de
+	 * Sec-Fetch-Site en la ruta. Con false, el paso no corre (devuelve null):
+	 * así el gateo por query param queda probado sin tener que invocar la
+	 * ruta de Next.js.
+	 */
+	authorize: boolean;
+}
+
+export interface S2AuthorizeDeps {
+	startAuthorizationForSubject: (
+		connector: string,
+		who: { tenantId: string; userId: string; issuer?: string },
+		scopes?: string[],
+	) => Promise<{ url: string; expiresAt: number | null }>;
+}
+
+// Un link de consentimiento de Google con dos scopes puede superar los 500
+// caracteres del resto de los pasos; con ese largo general la URL quedaría
+// cortada e inservible para el usuario. Margen generoso: ninguna URL de
+// autorización observada se acerca a esto.
+const MAX_AUTHORIZE_DETAIL_LENGTH = 4_000;
+
+/**
+ * Paso de diagnóstico que arranca el consentimiento OAuth para gmail.send +
+ * gmail.readonly (spike S2, temporal). Solo arma la URL: quien la abre y
+ * autoriza es el usuario dueño de la sesión, no esta función.
+ */
+export async function runS2AuthorizeStep(
+	input: S2AuthorizeInput,
+	deps: S2AuthorizeDeps,
+): Promise<ProbeStep | null> {
+	if (!input.authorize) return null;
+	return runStep(
+		"s2.authorize",
+		async () => {
+			const { url, expiresAt } = await deps.startAuthorizationForSubject(
+				"google/google",
+				{
+					tenantId: input.tenantId,
+					userId: input.userId,
+					issuer: input.issuer,
+				},
+				[SCOPE_SEND, SCOPE_READONLY],
+			);
+			return expiresAt ? `${url} (vence ${vence(expiresAt)})` : url;
+		},
+		MAX_AUTHORIZE_DETAIL_LENGTH,
+	);
 }
 
 export async function runS2Probes(
