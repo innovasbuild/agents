@@ -10,6 +10,7 @@ Si falta: STOP y pedir instalación.
 - events es append-only. Nunca UPDATE/DELETE.
 - Nada específico de un tenant en código. Va a tenants/<slug>/ o a la base.
 - Español rioplatense en UI, instrucciones y skills. Código e identificadores en inglés.
+- Tool nueva en `agents/outreach/tools/`: va también su etiqueta en castellano en `TOOL_LABELS` (`lib/agents/running-tool.ts`), que es lo que muestra el indicador de actividad del chat, o entra en `TOOLS_SIN_ETIQUETA` si a propósito no se nombra en pantalla. `tests/agents/running-tool.test.ts` compara la lista contra el disco y falla hasta que alguien decida cuál de las dos.
 - Comandos: npm run dev · npm run typecheck · npm test · npm run lint:fix
 - Base: npm run db:start · npm run db:reset · npm run db:test · npm run db:types (necesitan Docker abierto)
 
