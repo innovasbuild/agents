@@ -54,14 +54,12 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 /**
- * Tools que a propósito no tienen etiqueta: no son parte del laburo que el
- * usuario pidió y no vale la pena nombrarlos en pantalla.
+ * Tools que a propósito no se nombran en pantalla (spikes, diagnóstico). Hoy
+ * está vacía: los doce tools del agente tienen etiqueta.
  * `tests/agents/running-tool.test.ts` compara esta lista contra el disco, así
  * que un tool nuevo rompe el test hasta que alguien decida su etiqueta.
  */
-export const TOOLS_SIN_ETIQUETA = new Set(["spike_gmail_readonly"]);
-
-export const TOOL_LABEL_KEYS = Object.keys(TOOL_LABELS);
+export const TOOLS_SIN_ETIQUETA = new Set<string>();
 
 /**
  * Qué mostrar mientras corre `toolName`. Nunca devuelve el id crudo.

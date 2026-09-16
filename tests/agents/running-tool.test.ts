@@ -132,8 +132,8 @@ describe("runningToolLabel", () => {
 
 	it("nunca deja escapar el identificador crudo", () => {
 		// La UI va en rioplatense: un tool nuevo sin etiqueta cae en el genérico
-		// en vez de mostrar "spike_gmail_readonly" en pantalla.
-		expect(runningToolLabel("spike_gmail_readonly")).toBe("Trabajando");
+		// en vez de mostrar "tool_que_no_existe_todavia" en pantalla.
+		expect(runningToolLabel("tool_que_no_existe_todavia")).toBe("Trabajando");
 	});
 
 	it.each(["constructor", "toString", "hasOwnProperty", "valueOf"])(
