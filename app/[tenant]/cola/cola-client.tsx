@@ -30,13 +30,6 @@ function formatVence(iso: string): string {
 	}).format(at);
 }
 
-/** El mensaje de reauthResult ya nombra el proveedor; el link lo repite en
- * vez de asumir siempre Google, porque editItem también puede pedir
- * reautorizar HubSpot (web-context.ts, webQueueDeps). */
-function authLinkLabel(message: string): string {
-	return message.includes("HubSpot") ? "Autorizá HubSpot" : "Autorizá Google";
-}
-
 export function ColaClient({
 	slug,
 	tenantId,
@@ -114,9 +107,23 @@ function ColaCard({
 
 	function runAction(run: () => Promise<ColaResult>, onOk?: () => void) {
 		startTransition(async () => {
-			const outcome = await run();
-			setResult(outcome.ok ? null : outcome);
-			if (outcome.ok) onOk?.();
+			try {
+				const outcome = await run();
+				setResult(outcome.ok ? null : outcome);
+				if (outcome.ok) onOk?.();
+			} catch {
+				// Las actions traducen los casos conocidos (grant vencido, pieza
+				// ausente, negativa del servicio) a ColaResult; lo que llega acá
+				// es lo que no contemplaron (error de base, timeout, un 500 que
+				// no es de autorización). No sabemos si la acción llegó a
+				// aplicarse del lado del servidor, así que el mensaje no
+				// afirma que falló: pide revisar antes de reintentar.
+				setResult({
+					ok: false,
+					message:
+						"Algo se cortó al procesar la acción. No sabemos si llegó a aplicarse: revisá el estado de la pieza antes de reintentar.",
+				});
+			}
 		});
 	}
 
@@ -220,7 +227,9 @@ function ColaCard({
 									rel="noopener noreferrer"
 									target="_blank"
 								>
-									{authLinkLabel(result.message)}
+									{result.provider === "hubspot"
+										? "Autorizá HubSpot"
+										: "Autorizá Google"}
 								</a>
 							</>
 						) : null}

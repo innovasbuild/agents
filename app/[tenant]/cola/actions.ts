@@ -25,7 +25,12 @@ import { webSession } from "@/lib/outreach/web-session";
 
 export type ColaResult =
 	| { ok: true }
-	| { ok: false; message: string; authUrl?: string };
+	| {
+			ok: false;
+			message: string;
+			authUrl?: string;
+			provider?: "google" | "hubspot";
+	  };
 
 // Una server action la puede invocar cualquier cliente autenticado con los
 // argumentos que quiera: se validan en el borde, igual que el inputSchema de
@@ -62,6 +67,7 @@ async function reauthResult(
 			? "Autorizá Google para poder enviar."
 			: "Autorizá HubSpot para poder registrar el contacto.",
 		authUrl: url,
+		provider: error.provider,
 	};
 }
 

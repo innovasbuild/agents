@@ -98,6 +98,7 @@ describe("approveAndSend", () => {
 		expect(result).toMatchObject({
 			ok: false,
 			authUrl: "https://connect.test/authorize",
+			provider: "google",
 		});
 	});
 
@@ -116,6 +117,7 @@ describe("approveAndSend", () => {
 		expect(result).toMatchObject({
 			ok: false,
 			authUrl: "https://connect.test/authorize",
+			provider: "google",
 		});
 	});
 
