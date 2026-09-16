@@ -3,6 +3,14 @@
 import { buildRawMessage } from "./mime";
 
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+
+// Connect matchea el grant por el CONJUNTO EXACTO de scopes autorizados: si el
+// usuario ya autorizó [send, readonly] y una tool pide solo [send], no matchea
+// ese grant y pide reautorizar, dejando sin token el otro camino que sí pide
+// readonly (spike S2, prod). Por eso todo pedido real de token de Gmail usa
+// esta misma lista, definida una sola vez.
+export const GMAIL_SCOPES = [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE] as const;
 
 type MailInput = {
 	to: string;

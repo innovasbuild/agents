@@ -109,6 +109,23 @@ function senderDomainFor(callerEmail: string): string {
 	return callerEmail.split("@")[1] || "outreach.local";
 }
 
+// Gmail puede devolver el header con la capitalización que trajo el mensaje
+// (a menudo "Message-Id", no "Message-ID"): el nombre se compara sin
+// distinguir mayúsculas.
+function isMessageIdHeader(name: string): boolean {
+	return name.toLowerCase() === "message-id";
+}
+
+// El valor es "<local@domain>". El local part (nuestro uuid) se compara tal
+// cual; el dominio, sin distinguir mayúsculas (algunos relays lo normalizan),
+// y se recortan espacios alrededor del valor completo.
+function normalizeMessageIdValue(value: string): string {
+	const trimmed = value.trim();
+	const at = trimmed.lastIndexOf("@");
+	if (at === -1) return trimmed;
+	return `${trimmed.slice(0, at)}@${trimmed.slice(at + 1).toLowerCase()}`;
+}
+
 function maskEmail(email: string): string {
 	const at = email.indexOf("@");
 	if (at <= 0) return "***";
@@ -332,7 +349,13 @@ export async function runS2Probes(
 				signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
 			});
 			const count = await countMessages(response);
-			return `buscado ${messageId}, status ${response.status}, resultados ${count}`;
+			const base = `buscado ${messageId}, status ${response.status}, resultados ${count}`;
+			// 0 no es conclusión: puede ser tanto "Gmail reescribió el
+			// Message-ID" como "todavía no lo indexó". La respuesta
+			// determinística la da s2.header_match.
+			return count === 0
+				? `${base} (0 resultados no distingue "Gmail lo reescribió" de "todavía no lo indexó")`
+				: base;
 		}),
 	);
 
@@ -374,27 +397,37 @@ export async function runS2Probes(
 					`no se pudo leer el header Message-ID (status ${response.status})`,
 				);
 			}
-			let gmailHeader: string | undefined;
+			let headers: { name: string; value: string }[] = [];
 			try {
 				const data = (await response.json()) as {
 					payload?: { headers?: { name: string; value: string }[] };
 				};
-				gmailHeader = data.payload?.headers?.find(
-					(header) => header.name === "Message-ID",
-				)?.value;
+				headers = data.payload?.headers ?? [];
 			} catch {
-				gmailHeader = undefined;
+				headers = [];
 			}
-			if (!gmailHeader) {
+			const messageIdHeader = headers.find((header) =>
+				isMessageIdHeader(header.name),
+			);
+			if (!messageIdHeader) {
+				// Solo nombres, nunca valores: son headers de un mail real. Esto
+				// distingue "no vino el header" (lista vacía o sin Message-ID)
+				// de "vino con otro nombre" que esta búsqueda ya toleraría.
+				const names =
+					headers.map((header) => header.name).join(", ") || "ninguno";
 				throw new Error(
-					"no se pudo leer el header Message-ID (Gmail no lo devolvió)",
+					`Gmail no devolvió el header Message-ID (status ${response.status}); headers recibidos: ${names}`,
 				);
 			}
+			const gmailHeader = messageIdHeader.value;
 			// El header devuelto acá es metadata de NUESTRO propio mensaje
 			// (el gmail_message_id que guardamos al enviar), sea que Gmail
 			// haya conservado nuestro formato <qi-...> o lo haya reemplazado
 			// por el suyo: no es dato de un tercero.
-			if (gmailHeader === ourMessageId) {
+			if (
+				normalizeMessageIdValue(gmailHeader) ===
+				normalizeMessageIdValue(ourMessageId)
+			) {
 				return `coincide true: Gmail devolvió el mismo Message-ID (${gmailHeader})`;
 			}
 			return `coincide false: Gmail devolvió ${gmailHeader} en vez de ${ourMessageId}`;

@@ -5,7 +5,7 @@ import { tenantScopedConnect } from "../../../lib/connectors/auth";
 import { hasEnabledBinding } from "../../../lib/connectors/bindings";
 import { GOOGLE_CONNECTOR_UID } from "../../../lib/connectors/platform";
 import {
-	GMAIL_SEND_SCOPE,
+	GMAIL_SCOPES,
 	GmailUnauthorizedError,
 	GmailUnknownOutcomeError,
 	sendMail,
@@ -40,9 +40,13 @@ export default defineTool({
 		if (!(await hasEnabledBinding(caller.tenantId, "mail", "gmail"))) {
 			return refuse("sin_gmail", "este tenant no tiene Gmail habilitado");
 		}
-		const gmail = tenantScopedConnect(GOOGLE_CONNECTOR_UID, caller.tenantId, [
-			GMAIL_SEND_SCOPE,
-		]);
+		const gmail = tenantScopedConnect(
+			GOOGLE_CONNECTOR_UID,
+			caller.tenantId,
+			// GMAIL_SCOPES completo, no solo send: el grant se matchea por
+			// conjunto exacto (ver comentario en lib/gmail/send.ts).
+			[...GMAIL_SCOPES],
+		);
 		const { token } = await ctx.getToken(gmail, GMAIL_AUTH_OPTIONS);
 		const [brain, crm] = await Promise.all([
 			brainForTenant(caller.tenantId),

@@ -174,6 +174,101 @@ describe("runS2Probes", () => {
 		expect(searchStep?.detail).not.toContain("coincide");
 	});
 
+	it("s2.header_match: Gmail devuelve el header como 'Message-Id' (no 'Message-ID') y coincide igual", async () => {
+		const tokenForSubject = vi
+			.fn()
+			.mockResolvedValue({ token: TOKEN, expiresAt: EXPIRES_AT });
+		const queueItem = {
+			id: "qi-uuid-1",
+			toEmail: "laura@acme.test",
+			gmailMessageId: "gmail-msg-1",
+		};
+		const fetch = vi.fn().mockImplementation(async (url: string) => {
+			if (url.includes("/messages/gmail-msg-1")) {
+				return fakeResponse(200, {
+					payload: {
+						headers: [{ name: "Message-Id", value: OUR_MESSAGE_ID }],
+					},
+				});
+			}
+			return fakeResponse(200, { messages: [] });
+		});
+		const findQueueItem = vi.fn().mockResolvedValue(queueItem);
+		const deps = baseDeps({ tokenForSubject, fetch, findQueueItem });
+
+		const steps = await runS2Probes(baseInput(), deps);
+
+		const step = steps.find((s) => s.step === "s2.header_match");
+		expect(step?.ok).toBe(true);
+		expect(step?.detail).toContain("coincide true");
+	});
+
+	it("s2.header_match: valor con dominio en otra capitalización y espacios alrededor igual coincide", async () => {
+		const tokenForSubject = vi
+			.fn()
+			.mockResolvedValue({ token: TOKEN, expiresAt: EXPIRES_AT });
+		const queueItem = {
+			id: "qi-uuid-1",
+			toEmail: "laura@acme.test",
+			gmailMessageId: "gmail-msg-1",
+		};
+		const fetch = vi.fn().mockImplementation(async (url: string) => {
+			if (url.includes("/messages/gmail-msg-1")) {
+				return fakeResponse(200, {
+					payload: {
+						headers: [
+							{ name: "Message-ID", value: `  <qi-qi-uuid-1@INNOV.AS>  ` },
+						],
+					},
+				});
+			}
+			return fakeResponse(200, { messages: [] });
+		});
+		const findQueueItem = vi.fn().mockResolvedValue(queueItem);
+		const deps = baseDeps({ tokenForSubject, fetch, findQueueItem });
+
+		const steps = await runS2Probes(baseInput(), deps);
+
+		const step = steps.find((s) => s.step === "s2.header_match");
+		expect(step?.ok).toBe(true);
+		expect(step?.detail).toContain("coincide true");
+	});
+
+	it("s2.header_match: el header no vino — el detail lista los nombres de los headers que sí devolvió Gmail", async () => {
+		const tokenForSubject = vi
+			.fn()
+			.mockResolvedValue({ token: TOKEN, expiresAt: EXPIRES_AT });
+		const queueItem = {
+			id: "qi-uuid-1",
+			toEmail: "laura@acme.test",
+			gmailMessageId: "gmail-msg-1",
+		};
+		const fetch = vi.fn().mockImplementation(async (url: string) => {
+			if (url.includes("/messages/gmail-msg-1")) {
+				return fakeResponse(200, {
+					payload: {
+						headers: [
+							{ name: "Date", value: "Mon, 1 Jan 2030 00:00:00 +0000" },
+							{ name: "From", value: "matias@innov.as" },
+						],
+					},
+				});
+			}
+			return fakeResponse(200, { messages: [] });
+		});
+		const findQueueItem = vi.fn().mockResolvedValue(queueItem);
+		const deps = baseDeps({ tokenForSubject, fetch, findQueueItem });
+
+		const steps = await runS2Probes(baseInput(), deps);
+
+		const step = steps.find((s) => s.step === "s2.header_match");
+		expect(step?.ok).toBe(false);
+		expect(step?.detail).toContain("Date");
+		expect(step?.detail).toContain("From");
+		expect(step?.detail).toContain("status 200");
+		expect(step?.detail).not.toContain("coincide");
+	});
+
 	it("s2.header_match: Gmail devuelve un Message-ID distinto (coincide false) — el hallazgo positivo que busca el spike", async () => {
 		const tokenForSubject = vi
 			.fn()
@@ -255,6 +350,10 @@ describe("runS2Probes", () => {
 		expect(step?.ok).toBe(true);
 		expect(step?.detail).toContain("resultados 0");
 		expect(step?.detail).not.toContain("coincide");
+		// 0 resultados no es conclusión: no distingue reescritura de falta de
+		// indexación. El detail lo tiene que aclarar para que nadie lo lea
+		// como "Gmail reescribió el Message-ID".
+		expect(step?.detail).toContain("no distingue");
 
 		// Sin gmail_message_id guardado, el paso determinístico no puede
 		// correr: queda ok:false con un motivo explícito, no un "coincide".
