@@ -16,6 +16,8 @@ import {
 } from "@/lib/outreach/services/queue";
 import { sendQueuedEmail } from "@/lib/outreach/services/send";
 import {
+	connectSubjectIssuer,
+	WebBindingMissing,
 	WebReauthRequired,
 	webQueueDeps,
 	webSendDeps,
@@ -37,6 +39,7 @@ export type ColaResult =
 // las tools.
 const slugSchema = z.string().regex(/^[a-z0-9-]{1,63}$/);
 const idSchema = z.uuid();
+const toEmailSchema = z.email();
 const subjectSchema = z.string().min(1).max(200);
 const bodySchema = z.string().min(1).max(5000);
 const reasonSchema = z.string().trim().min(1).max(500);
@@ -58,7 +61,10 @@ async function reauthResult(
 	const google = error.provider === "google";
 	const { url } = await startAuthorizationForSubject(
 		google ? GOOGLE_CONNECTOR_UID : HUBSPOT_CONNECTOR_UID,
-		caller,
+		// Mismo subject que tokenOrReauth (lib/outreach/web-context.ts): sin el
+		// issuer, esto autoriza un sujeto distinto del que pidió el token
+		// (hallazgo 2 de la review final).
+		{ ...caller, issuer: connectSubjectIssuer() },
 		google ? [...GMAIL_SCOPES] : undefined,
 	);
 	return {
@@ -71,12 +77,37 @@ async function reauthResult(
 	};
 }
 
+/**
+ * Traduce la falta de binding en un mensaje honesto, sin link: autorizar no
+ * arregla una fila de tenant_connections que solo puede tocar un admin, ni
+ * un conector que no está instalado. A diferencia de reauthResult, esto no
+ * llama a Connect (hallazgo 3 de la review final: pedir la URL de
+ * autorización acá arrancaría una autorización sobre un grant que puede
+ * estar perfecto, dejándolo vigente sin servir hasta que alguien la
+ * consienta sin necesidad).
+ */
+function bindingMissingResult(error: WebBindingMissing): ColaResult {
+	const google = error.provider === "google";
+	return {
+		ok: false,
+		message: google
+			? "Este cliente no tiene Gmail configurado: pedile a un admin del tenant que lo habilite."
+			: "Este cliente no tiene HubSpot configurado: pedile a un admin del tenant que lo habilite.",
+	};
+}
+
 export async function approveAndSend(
 	slug: string,
 	queueItemId: string,
+	toEmail: string,
+	subject: string,
+	body: string,
 ): Promise<ColaResult> {
 	if (!slugSchema.safeParse(slug).success) return INVALIDO;
 	if (!idSchema.safeParse(queueItemId).success) return INVALIDO;
+	if (!toEmailSchema.safeParse(toEmail).success) return INVALIDO;
+	if (!subjectSchema.safeParse(subject).success) return INVALIDO;
+	if (!bodySchema.safeParse(body).success) return INVALIDO;
 
 	const session = await webSession(slug);
 	if (!session) return SIN_SESION;
@@ -96,9 +127,16 @@ export async function approveAndSend(
 				sessionId: `web:${randomUUID()}`,
 				callId: queueItemId,
 				queueItemId,
-				to: item.toEmail,
-				subject: item.subject,
-				body: item.body,
+				// Lo que la persona tiene en pantalla (los argumentos, no lo que
+				// acabamos de leer de item más arriba): si se manda item.subject/
+				// item.body/item.toEmail, la guarda pieza_cambiada de send.ts
+				// compara la base contra sí misma y nunca puede fallar (hallazgo 1
+				// de la review final). Es seguro — sendQueuedEmail manda siempre
+				// los valores de la base al enviar (send.ts:268-274); lo que llega
+				// del cliente se usa ahí solo para comparar.
+				to: toEmail,
+				subject,
+				body,
 			},
 			deps,
 		);
@@ -106,6 +144,7 @@ export async function approveAndSend(
 		revalidatePath(`/${slug}/cola`);
 		return { ok: true };
 	} catch (error) {
+		if (error instanceof WebBindingMissing) return bindingMissingResult(error);
 		if (error instanceof WebReauthRequired) return reauthResult(error, caller);
 		// sendQueuedEmail relanza esto cuando Gmail (no Connect) rechaza el
 		// token con un 401: el tool del chat la captura con ctx.requireAuth;
@@ -139,6 +178,7 @@ export async function editItem(
 		revalidatePath(`/${slug}/cola`);
 		return { ok: true };
 	} catch (error) {
+		if (error instanceof WebBindingMissing) return bindingMissingResult(error);
 		if (error instanceof WebReauthRequired)
 			return reauthResult(error, session.caller);
 		throw error;

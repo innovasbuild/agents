@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { brandStyle } from "@/lib/brand/contrast";
@@ -35,10 +36,17 @@ export default async function TenantLayout({
 				<div className="mx-auto flex h-14 max-w-[1200px] items-center gap-3 px-4 md:px-6">
 					{logoUrl ? (
 						// biome-ignore lint/performance/noImgElement: el logo es del cliente, sin loader
+						// h-auto + max-h-7 (no h-7 fijo) + max-w: con las dos en auto,
+						// el navegador escala el logo para entrar en esa caja sin
+						// deformarlo. h-7 fijo con solo un max-width lo achataba a
+						// 28px sin importar cuánto se angostara. Sin esto, un logo
+						// ancho desborda el header a 375px: es la única rama sin un
+						// elemento flexible (el fix anterior cubrió solo la rama sin
+						// logo, con min-w-0 flex-1 en el nombre).
 						<img
 							src={logoUrl}
 							alt={tenant.displayName}
-							className="h-7 w-auto shrink-0"
+							className="h-auto max-h-7 w-auto max-w-[140px] shrink-0"
 						/>
 					) : (
 						// min-w-0 + flex-1 es lo que deja truncar en vez de desbordar:
@@ -54,18 +62,18 @@ export default async function TenantLayout({
 						{ROLE_LABELS[tenant.role]}
 					</span>
 					<nav className="ml-auto flex shrink-0 items-center gap-4 text-sm">
-						<a
+						<Link
 							className="text-muted-foreground hover:text-foreground"
 							href={`/${slug}/chat`}
 						>
 							Chat
-						</a>
-						<a
+						</Link>
+						<Link
 							className="text-muted-foreground hover:text-foreground"
 							href={`/${slug}/cola`}
 						>
 							Cola
-						</a>
+						</Link>
 					</nav>
 				</div>
 			</header>

@@ -1,6 +1,7 @@
 // Único puente con Vercel Connect (spec 02 §5.2). Ningún otro archivo importa
 // @vercel/connect: tests/connectors/import-rule.test.ts lo hace cumplir.
 import {
+	ConnectorInstallationRequiredError,
 	type ConnectTokenParams,
 	getToken,
 	getTokenResponse,
@@ -145,4 +146,16 @@ export function isConnectAuthError(error: unknown): boolean {
 		error instanceof NoValidTokenError ||
 		error instanceof UserAuthorizationRequiredError
 	);
+}
+
+/**
+ * ¿Este error de Connect significa "el conector no está instalado" para este
+ * proyecto/tenant? A diferencia de isConnectAuthError, autorizar de nuevo no
+ * arregla esto: falta instalar el conector, algo que solo puede hacer un
+ * admin desde la configuración, no un grant OAuth vencido o revocado. Quien
+ * lo reciba no debe ofrecer un link de autorización (hallazgo 3 de la review
+ * final de etapa 4 — ver lib/outreach/web-context.ts).
+ */
+export function isConnectorNotInstalledError(error: unknown): boolean {
+	return error instanceof ConnectorInstallationRequiredError;
 }

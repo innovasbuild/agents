@@ -43,6 +43,8 @@ export function ColaClient({
 }) {
 	const router = useRouter();
 
+	const [realtimeCaido, setRealtimeCaido] = useState(false);
+
 	// Suscripción con el cliente del usuario (anon key + JWT), nunca con
 	// service role: la RLS de queue_items es lo único que separa la cola de
 	// un tenant de la de otro, y una key elevada en el navegador la rompe.
@@ -58,22 +60,32 @@ export function ColaClient({
 		let channel: ReturnType<typeof supabase.channel> | null = null;
 		let cancelled = false;
 
-		supabase.auth.getSession().then(() => {
-			if (cancelled) return;
-			channel = supabase
-				.channel(`cola-${tenantId}`)
-				.on(
-					"postgres_changes",
-					{
-						event: "*",
-						schema: "public",
-						table: "queue_items",
-						filter: `tenant_id=eq.${tenantId}`,
-					},
-					() => router.refresh(),
-				)
-				.subscribe();
-		});
+		supabase.auth.getSession().then(
+			() => {
+				if (cancelled) return;
+				channel = supabase
+					.channel(`cola-${tenantId}`)
+					.on(
+						"postgres_changes",
+						{
+							event: "*",
+							schema: "public",
+							table: "queue_items",
+							filter: `tenant_id=eq.${tenantId}`,
+						},
+						() => router.refresh(),
+					)
+					.subscribe();
+			},
+			// getSession() rechaza si la cookie de sesión está corrompida: sin
+			// este catch quedaba una promesa sin manejar y la suscripción nunca
+			// arrancaba, en silencio (la lista queda vieja, la precondición del
+			// hallazgo 1 — aprobar sobre texto que ya no es el vigente). Avisar
+			// acá para que la persona sepa que tiene que refrescar a mano.
+			() => {
+				if (!cancelled) setRealtimeCaido(true);
+			},
+		);
 
 		return () => {
 			cancelled = true;
@@ -81,23 +93,36 @@ export function ColaClient({
 		};
 	}, [tenantId, router]);
 
+	const aviso = realtimeCaido ? (
+		<p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
+			La actualización automática no está andando: refrescá la página para ver
+			la cola al día antes de aprobar algo.
+		</p>
+	) : null;
+
 	if (rows.length === 0) {
 		return (
-			<p className="text-muted-foreground">
-				No hay piezas esperando. Pedile al agente que arme la cola desde el
-				chat.
-			</p>
+			<div className="flex flex-col gap-4">
+				{aviso}
+				<p className="text-muted-foreground">
+					No hay piezas esperando. Pedile al agente que arme la cola desde el
+					chat.
+				</p>
+			</div>
 		);
 	}
 
 	return (
-		<ul className="flex flex-col gap-4">
-			{rows.map((row) => (
-				<li key={row.id}>
-					<ColaCard currentUserId={currentUserId} row={row} slug={slug} />
-				</li>
-			))}
-		</ul>
+		<div className="flex flex-col gap-4">
+			{aviso}
+			<ul className="flex flex-col gap-4">
+				{rows.map((row) => (
+					<li key={row.id}>
+						<ColaCard currentUserId={currentUserId} row={row} slug={slug} />
+					</li>
+				))}
+			</ul>
+		</div>
 	);
 }
 
@@ -142,7 +167,15 @@ function ColaCard({
 	}
 
 	function handleApprove() {
-		runAction(() => approveAndSend(slug, row.id));
+		// row.toEmail/subject/body, no el estado de edición: son los que la
+		// persona tiene en pantalla en modo vista (el botón "Aprobar y enviar"
+		// solo se ve ahí). approveAndSend los reenvía tal cual a
+		// sendQueuedEmail, que los compara contra la base antes de mandar nada
+		// (hallazgo 1 de la review final): si alguien editó la pieza en otra
+		// pestaña, esto es lo que hace que la guarda note la diferencia.
+		runAction(() =>
+			approveAndSend(slug, row.id, row.toEmail, row.subject, row.body),
+		);
 	}
 
 	function handleSaveEdit() {
@@ -251,24 +284,31 @@ function ColaCard({
 				) : null}
 			</CardContent>
 			<CardFooter className="flex flex-wrap gap-2">
-				{row.trabada ? null : isOwner ? (
-					<CardActions
-						isPending={isPending}
-						mode={mode}
-						onApprove={handleApprove}
-						onCancel={() => {
-							setMode("view");
-							setSubject(row.subject);
-							setBody(row.body);
-							setReason("");
-							setResult(null);
-						}}
-						onEdit={() => setMode("edit")}
-						onReject={() => setMode("reject")}
-						onRejectConfirm={handleReject}
-						onSaveEdit={handleSaveEdit}
-						reasonEmpty={reason.trim().length === 0}
-					/>
+				{isOwner ? (
+					// row.trabada corta acá, no antes: si cortara antes de
+					// isOwner, una pieza trabada ajena se quedaba sin footer y
+					// perdía el "De <dueño>" (hallazgo 6a de la review final). El
+					// dueño se tiene que ver siempre en una pieza que no es tuya,
+					// esté trabada o no.
+					row.trabada ? null : (
+						<CardActions
+							isPending={isPending}
+							mode={mode}
+							onApprove={handleApprove}
+							onCancel={() => {
+								setMode("view");
+								setSubject(row.subject);
+								setBody(row.body);
+								setReason("");
+								setResult(null);
+							}}
+							onEdit={() => setMode("edit")}
+							onReject={() => setMode("reject")}
+							onRejectConfirm={handleReject}
+							onSaveEdit={handleSaveEdit}
+							reasonEmpty={reason.trim().length === 0}
+						/>
+					)
 				) : (
 					<p className="text-muted-foreground text-sm">
 						De {row.ownerSlug ?? "otra persona"}

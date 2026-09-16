@@ -1,18 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Doble de las clases de @vercel/connect que isConnectAuthError distingue.
-// No se puede usar la real: solo lib/connectors/auth.ts puede importar
-// @vercel/connect (tests/connectors/import-rule.test.ts lo hace cumplir), y
-// acá se mockea el módulo entero.
+// Dobles de las clases de @vercel/connect que isConnectAuthError e
+// isConnectorNotInstalledError distinguen. No se puede usar las reales: solo
+// lib/connectors/auth.ts puede importar @vercel/connect
+// (tests/connectors/import-rule.test.ts lo hace cumplir), y acá se mockea el
+// módulo entero.
 class FakeConnectAuthError extends Error {}
+class FakeConnectorNotInstalledError extends Error {}
 
+const hasEnabledBinding = vi.fn(async () => true);
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/outreach/store", () => ({
 	createSupabaseOutreachStore: () => ({ kind: "store" }),
 }));
-vi.mock("@/lib/connectors/bindings", () => ({
-	hasEnabledBinding: async () => true,
-}));
+vi.mock("@/lib/connectors/bindings", () => ({ hasEnabledBinding }));
 vi.mock("@/lib/outreach/canon", () => ({
 	brainForTenant: async () => ({ kind: "brain" }),
 	loadCanon: async () => ({ available: true, pages: [], voice: [], rules: {} }),
@@ -29,6 +30,8 @@ vi.mock("@/lib/connectors/auth", () => ({
 	tokenForSubject,
 	tenantScopedConnect: () => ({ kind: "provider" }),
 	isConnectAuthError: (error: unknown) => error instanceof FakeConnectAuthError,
+	isConnectorNotInstalledError: (error: unknown) =>
+		error instanceof FakeConnectorNotInstalledError,
 }));
 vi.mock("@/lib/outreach/crm-session", () => ({
 	crmForSession: async (ctx: {
@@ -45,7 +48,7 @@ vi.mock("@/lib/outreach/crm-session", () => ({
 	HUBSPOT_AUTH_OPTIONS: { authKey: "hubspot", displayName: "HubSpot" },
 }));
 
-const { webSendDeps, WebReauthRequired } = await import(
+const { webSendDeps, WebBindingMissing, WebReauthRequired } = await import(
 	"@/lib/outreach/web-context"
 );
 
@@ -57,8 +60,19 @@ const caller = {
 };
 
 describe("webSendDeps", () => {
+	const envAntes = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
 	beforeEach(() => {
 		tokenForSubject.mockClear();
+		hasEnabledBinding.mockReset().mockResolvedValue(true);
+	});
+
+	afterEach(() => {
+		// Asignar undefined acá no borra la variable: process.env coacciona
+		// cualquier valor asignado a string, así que process.env.X = undefined
+		// deja la STRING "undefined" (4 caracteres, truthy) en vez de vaciarla.
+		if (envAntes === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+		else process.env.NEXT_PUBLIC_SUPABASE_URL = envAntes;
 	});
 
 	it("pide el token de Gmail con el conjunto exacto de scopes", async () => {
@@ -118,5 +132,41 @@ describe("webSendDeps", () => {
 		tokenForSubject.mockRejectedValueOnce(boom);
 
 		await expect(webSendDeps(caller)).rejects.toBe(boom);
+	});
+
+	it("propaga el issuer del canal de eve al pedir el token, no un subject distinto (hallazgo 2)", async () => {
+		process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+
+		await webSendDeps(caller);
+
+		expect(tokenForSubject.mock.calls[0]?.[1]).toMatchObject({
+			tenantId: "t1",
+			userId: "u1",
+			issuer: "http://127.0.0.1:54321",
+		});
+	});
+
+	it("sin binding de Gmail habilitado, tira WebBindingMissing('google') sin pedir token (hallazgo 3)", async () => {
+		hasEnabledBinding.mockResolvedValue(false);
+
+		const error = await webSendDeps(caller).catch((e) => e);
+
+		expect(error).toBeInstanceOf(WebBindingMissing);
+		expect(error.provider).toBe("google");
+		expect(tokenForSubject).not.toHaveBeenCalled();
+	});
+
+	it("un conector no instalado en Connect tira WebBindingMissing, no WebReauthRequired (hallazgo 3)", async () => {
+		// A diferencia del binding apagado (arriba), acá el tenant sí tiene la
+		// fila habilitada pero Connect nunca tuvo el conector instalado:
+		// mismo resultado — no se arregla autorizando — por eso comparte clase.
+		tokenForSubject.mockRejectedValueOnce(
+			new FakeConnectorNotInstalledError("no instalado"),
+		);
+
+		const error = await webSendDeps(caller).catch((e) => e);
+
+		expect(error).toBeInstanceOf(WebBindingMissing);
+		expect(error.provider).toBe("google");
 	});
 });
