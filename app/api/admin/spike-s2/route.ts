@@ -11,9 +11,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
-// Hasta 6 llamadas externas (2 tokens + tokeninfo + 2 listados gmail + 1
-// metadata) de 10s cada una.
-export const maxDuration = 60;
+// Peor caso: 7 llamadas externas serializadas de 8s (lib/spikes/s2.ts) más
+// las consultas a la base. Con margen generoso porque acá SÍ importa que
+// lleguen todos los pasos: si Vercel corta la función a mitad de camino, no
+// vuelve ningún paso (se sirven todos juntos al final).
+export const maxDuration = 120;
 
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -33,38 +35,46 @@ async function findQueueItem(
 	params: { tenantId: string; executorUserId: string; queueItemId?: string },
 ): Promise<QueueItemRef | null> {
 	if (params.queueItemId) {
-		const { data } = await admin
+		const { data, error } = await admin
 			.from("queue_items")
-			.select("id, contact_id")
+			.select("id, executor_user_id, to_email, gmail_message_id")
 			.eq("tenant_id", params.tenantId)
 			.eq("id", params.queueItemId)
 			.maybeSingle();
-		return data ? { id: data.id, contactId: data.contact_id } : null;
+		if (error) {
+			throw new Error(`error consultando queue_items: ${error.message}`);
+		}
+		if (!data) return null;
+		if (data.executor_user_id !== params.executorUserId) {
+			throw new Error(
+				"esa pieza la mandó otro ejecutor: corré el spike con la sesión de esa persona",
+			);
+		}
+		return {
+			id: data.id,
+			toEmail: data.to_email,
+			gmailMessageId: data.gmail_message_id,
+		};
 	}
-	const { data } = await admin
+	const { data, error } = await admin
 		.from("queue_items")
-		.select("id, contact_id")
+		.select("id, to_email, gmail_message_id")
 		.eq("tenant_id", params.tenantId)
 		.eq("executor_user_id", params.executorUserId)
 		.eq("status", "sent")
 		.order("sent_at", { ascending: false })
 		.limit(1)
 		.maybeSingle();
-	return data ? { id: data.id, contactId: data.contact_id } : null;
-}
-
-async function getContactEmail(
-	admin: ReturnType<typeof createAdminClient>,
-	tenantId: string,
-	contactId: string,
-): Promise<string | null> {
-	const { data } = await admin
-		.from("contacts")
-		.select("email")
-		.eq("tenant_id", tenantId)
-		.eq("id", contactId)
-		.maybeSingle();
-	return data?.email ?? null;
+	if (error) {
+		throw new Error(`error consultando queue_items: ${error.message}`);
+	}
+	return data
+		? {
+				id: data.id,
+				toEmail: data.to_email,
+				gmailMessageId: data.gmail_message_id,
+			}
+		: null;
 }
 
 export async function GET(request: Request) {
@@ -88,54 +98,64 @@ export async function GET(request: Request) {
 		return json({ error: "queue_item inválido: tiene que ser un uuid" }, 400);
 	}
 
-	const admin = createAdminClient();
-	const { data: tenant } = await admin
-		.from("tenants")
-		.select("id, slug")
-		.eq("slug", slug)
-		.maybeSingle();
+	// Todo lo que sigue puede tirar (cliente admin mal configurado, una
+	// consulta que falla): sin este try, ese 500 se escaparía del helper
+	// json() y saldría sin Cache-Control: no-store.
+	try {
+		const admin = createAdminClient();
+		const { data: tenant } = await admin
+			.from("tenants")
+			.select("id, slug")
+			.eq("slug", slug)
+			.maybeSingle();
 
-	if (!tenant) {
-		// 403 y no 404: el slug de un tenant no es un oráculo de existencia
-		// para quien no tiene permiso ahí.
-		return json({ error: "sin permiso" }, 403);
+		if (!tenant) {
+			// 403 y no 404: el slug de un tenant no es un oráculo de existencia
+			// para quien no tiene permiso ahí.
+			return json({ error: "sin permiso" }, 403);
+		}
+
+		// La RLS ya limita lo que este usuario ve: si no es admin del tenant,
+		// no hay fila y el pedido sigue solo si es platform_admin (igual que
+		// en app/api/invitations/route.ts y en la ruta vieja de spikes
+		// etapa 3).
+		const { data: membership } = await supabase
+			.from("memberships")
+			.select("role")
+			.eq("tenant_id", tenant.id)
+			.eq("user_id", auth.user.id)
+			.in("role", ["tenant_admin", "platform_admin"])
+			.maybeSingle();
+
+		const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
+
+		if (!membership && !isPlatformAdmin) {
+			return json({ error: "sin permiso" }, 403);
+		}
+
+		const issuer = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+
+		const steps: ProbeStep[] = await runS2Probes(
+			{
+				tenantId: tenant.id,
+				userId: auth.user.id,
+				issuer,
+				callerEmail: auth.user.email ?? "",
+				queueItemId: queueItemParam ?? undefined,
+			},
+			{
+				tokenForSubject,
+				fetch,
+				findQueueItem: (params) => findQueueItem(admin, params),
+			},
+		);
+
+		return json({ tenant: slug, user_id: auth.user.id, issuer, steps }, 200);
+	} catch (error) {
+		const detail =
+			error instanceof Error
+				? `${error.name}: ${error.message}`
+				: String(error);
+		return json({ error: "error interno", detail: detail.slice(0, 300) }, 500);
 	}
-
-	// La RLS ya limita lo que este usuario ve: si no es admin del tenant, no
-	// hay fila y el pedido sigue solo si es platform_admin (igual que en
-	// app/api/invitations/route.ts y en la ruta vieja de spikes etapa 3).
-	const { data: membership } = await supabase
-		.from("memberships")
-		.select("role")
-		.eq("tenant_id", tenant.id)
-		.eq("user_id", auth.user.id)
-		.in("role", ["tenant_admin", "platform_admin"])
-		.maybeSingle();
-
-	const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
-
-	if (!membership && !isPlatformAdmin) {
-		return json({ error: "sin permiso" }, 403);
-	}
-
-	const issuer = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-
-	const steps: ProbeStep[] = await runS2Probes(
-		{
-			tenantId: tenant.id,
-			userId: auth.user.id,
-			issuer,
-			callerEmail: auth.user.email ?? "",
-			queueItemId: queueItemParam ?? undefined,
-		},
-		{
-			tokenForSubject,
-			fetch,
-			findQueueItem: (params) => findQueueItem(admin, params),
-			getContactEmail: (tenantId, contactId) =>
-				getContactEmail(admin, tenantId, contactId),
-		},
-	);
-
-	return json({ tenant: slug, user_id: auth.user.id, issuer, steps }, 200);
 }
