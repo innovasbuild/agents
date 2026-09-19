@@ -4,12 +4,17 @@ import type { ReactNode } from "react";
 import { brandStyle } from "@/lib/brand/contrast";
 import { resolveTenantAccess, type TenantRole } from "@/lib/tenants/resolve";
 
-const NAV = [
+const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
 	{ href: "/chat", label: "Chat" },
 	{ href: "/cola", label: "Cola" },
 	{ href: "/pipeline", label: "Pipeline" },
 	{ href: "/contactos", label: "Contactos" },
-] as const;
+	{ href: "/cuentas", label: "Cuentas" },
+	{ href: "/metricas", label: "Métricas" },
+	// /settings hace notFound() para tenant_member: el link no se muestra,
+	// no tiene sentido ofrecer una ruta que va a 404.
+	{ href: "/settings", label: "Configuración", adminOnly: true },
+];
 
 const ROLE_LABELS: Record<TenantRole, string> = {
 	platform_admin: "Admin de plataforma",
@@ -75,7 +80,9 @@ export default async function TenantLayout({
 				    esta tira, no de la página. */}
 				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
 					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
-						{NAV.map((item) => (
+						{NAV.filter(
+							(item) => !item.adminOnly || tenant.role !== "tenant_member",
+						).map((item) => (
 							<li key={item.href}>
 								<Link
 									className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
