@@ -382,8 +382,8 @@ Se aplican en la rama que tiene el resultado del spike (`claude/jovial-gates-06e
 
 ## 13. Fuera de alcance
 
-- Proveedor `mcp` construido.
-- Búsqueda híbrida y `brain_chunks`.
+- Proveedor `mcp` construido. Planificado en la Etapa 11 del roadmap, junto con servir este brain como MCP a las herramientas del cliente.
+- Búsqueda híbrida y `brain_chunks`. Anotada en la Etapa 11 como "cuando haga falta", con la señal para prenderla.
 - Editor del cliente (Etapa 4).
 - Adjuntos y binarios en el brain.
 - Borrado de páginas.
