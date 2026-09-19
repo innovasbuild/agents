@@ -189,7 +189,7 @@ Tareas:
 - [ ] `/metricas` (por hook, segmento, canal, ejecutor).
 - [ ] `/settings` (modelo default, ejecutores, cupos, conexiones del tenant).
 - [ ] Realtime en `/cola` y `/pipeline`.
-- [ ] Editor del brain (spec 2026-09-13-brain-design §8).
+- [ ] Editor del brain (spec 2026-09-13-brain-design §8). El acceso del cliente por MCP desde sus propias tools es la Etapa 11.
 - [ ] `/qa` en desktop y mobile.
 - [ ] `/design-review`.
 - [ ] `/ship` + `/context-save`.
@@ -227,6 +227,8 @@ Tareas:
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís "armá la cola de hoy" y el trabajo corre durable en Vercel.
+
+El emisor OAuth que se arma acá lo reusa la Etapa 11 para servir el brain por MCP. Conviene dejarlo genérico: el `resource` cambia, el emisor no.
 
 ---
 
@@ -304,6 +306,42 @@ Tareas:
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** un prospecto escribe por WhatsApp al número de un cliente, el agente lo califica, deriva a un comercial, y el comercial le contesta desde la plataforma sin salir de ella.
+
+---
+
+## Etapa 11 · Brain por MCP: servirlo a los clientes y consumir brains externos — `[ ]`
+
+**Modelo Claude Code:** Opus 5, effort `high` para la spec (es auth y es superficie expuesta a terceros). Sesión nueva con Sonnet 5 para el wiring.
+**Modelo runtime:** n/a para el endpoint; el del tenant para el agente.
+**Spec/Plan:** `docs/superpowers/specs/11-brain-mcp.md` · `docs/superpowers/plans/11-brain-mcp.md`
+
+Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se usa desde el agente. Faltan las dos puntas: que el cliente lo use desde **sus** herramientas (Claude Code, Codex, claude.ai) y que un cliente pueda tener su brain **en un servidor aparte**, aislado de los demás tenants, sin perder las mismas tres tools.
+
+**Depende de:** Etapa 2 (bindings por tenant, ya cerrada), Etapa 6 (Supabase como emisor OAuth 2.1: se reusa ese emisor, no se inventa una segunda auth) y, para que el cliente tenga dónde editar, Etapa 4 (editor del brain).
+
+### A. Servir el brain desde la plataforma
+
+- [ ] Endpoint MCP remoto del brain, por tenant, con `brain_search`, `brain_read` y `brain_upsert`. Es **distinto** del canal MCP de la Etapa 6: ahí se le delega una tarea al agente, acá se leen y escriben páginas directo.
+- [ ] Auth con el emisor OAuth de la Etapa 6. El token resuelve tenant y usuario; la membresía define el alcance. Un token de un tenant nunca ve páginas de otro: se lee por el mismo camino, con `tenant_id` y RLS.
+- [ ] **Decisión a confirmar en la spec:** por MCP escribe una persona, no el agente, así que `brain_upsert` no pide aprobación (la aprobación existe porque el agente propone). Propuesta: escriben `tenant_admin` y `platform_admin`, los demás miembros solo leen. La escritura pasa igual por `brain_upsert_page`, deja revisión con `author_kind: "user"` y evento.
+- [ ] Rate limit y tamaño de respuesta: es una superficie pública autenticada, no un endpoint interno.
+- [ ] Doc de conexión para el cliente: Claude Code, Codex y claude.ai.
+
+### B. Consumir brains externos
+
+- [ ] Construir el proveedor `mcp` que la spec del brain ya dejó diseñado (`2026-09-13-brain-design.md` §4.4): binding por tenant con `connector_uid` de Vercel Connect, `config.url` y mapeo de nombres de tools. El adapter traduce al contrato de tres tools y la aprobación de `brain_upsert` sigue siendo nuestra, no del servidor remoto.
+- [ ] **Caso "brain aislado":** el mismo wiki desplegado aparte, con base propia del cliente, consumido por el proveedor `mcp` y conectado también desde las tools del cliente. Requiere empaquetar el wiki como servicio desplegable. Es lo que hacía `innovas-brains-mcp` en Railway, ahora como opción de aislamiento para quien la pida y no como forma default.
+- [ ] Un brain de terceros (gbrain o a medida) entra por el mismo proveedor, siempre que sea **MCP remoto sobre HTTP**: eve y Connect no hablan con procesos stdio (lección de ColdIQ, Etapa 2).
+- [ ] **Decisión a confirmar en la spec:** si un tenant puede tener dos brains a la vez (wiki propio más MCP externo) o sigue siendo uno solo. Hoy `resolveBrainBinding` toma el `wiki` y descarta el resto con un aviso.
+
+### C. Configurable por tenant y por agente
+
+- [ ] Hoy el brain se habilita por tenant (`tenant_connections`) pero las tools están cableadas dentro de `agents/outreach/tools/brain.ts`: cualquier agente nuevo que lo necesite tendría que repetir ese archivo. Mover la tool a `lib/` y que cada agente la monte.
+- [ ] Que cada agente declare en `tenant_agents.config` si usa brain y con qué alcance (solo lectura, o lectura y escritura). Un agente sin brain declarado no expone ninguna tool `brain_*`, igual que hoy pasa con un tenant sin binding.
+
+**Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools.
+
+**Cuando haga falta, no ahora:** búsqueda híbrida con embeddings (`2026-09-13-brain-design.md` §6.2), que se activa por tenant con `config.search = "hybrid"` más un backfill. Señal para prenderla: el agente busca algo que existe y no lo encuentra, o el brain de un tenant pasa de unas 150 páginas.
 
 ---
 
