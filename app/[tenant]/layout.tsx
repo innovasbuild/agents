@@ -4,6 +4,13 @@ import type { ReactNode } from "react";
 import { brandStyle } from "@/lib/brand/contrast";
 import { resolveTenantAccess, type TenantRole } from "@/lib/tenants/resolve";
 
+const NAV = [
+	{ href: "/chat", label: "Chat" },
+	{ href: "/cola", label: "Cola" },
+	{ href: "/pipeline", label: "Pipeline" },
+	{ href: "/contactos", label: "Contactos" },
+] as const;
+
 const ROLE_LABELS: Record<TenantRole, string> = {
 	platform_admin: "Admin de plataforma",
 	tenant_admin: "Admin",
@@ -61,21 +68,25 @@ export default async function TenantLayout({
 					<span className="hidden shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs sm:inline-block">
 						{ROLE_LABELS[tenant.role]}
 					</span>
-					<nav className="ml-auto flex shrink-0 items-center gap-4 text-sm">
-						<Link
-							className="text-muted-foreground hover:text-foreground"
-							href={`/${slug}/chat`}
-						>
-							Chat
-						</Link>
-						<Link
-							className="text-muted-foreground hover:text-foreground"
-							href={`/${slug}/cola`}
-						>
-							Cola
-						</Link>
-					</nav>
 				</div>
+				{/* La nav vive en su propia fila, no adentro del header: con cuatro
+				    destinos ya no entraba junto al logo y el nombre a 375px, y las
+				    entregas que vienen suman tres más. El scroll horizontal es de
+				    esta tira, no de la página. */}
+				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
+					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
+						{NAV.map((item) => (
+							<li key={item.href}>
+								<Link
+									className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
+									href={`/${slug}${item.href}`}
+								>
+									{item.label}
+								</Link>
+							</li>
+						))}
+					</ul>
+				</nav>
 			</header>
 			<main className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-8">
 				{children}
