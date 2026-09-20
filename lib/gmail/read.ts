@@ -3,6 +3,10 @@
 // reconciliación de envíos inciertos leen de acá).
 import { GmailUnauthorizedError } from "./send";
 
+// Mismo valor que send.ts (SEND_TIMEOUT_MS): sin este timeout, una respuesta
+// colgada de Gmail bloquea para siempre al cron que llama a estas funciones.
+const READ_TIMEOUT_MS = 30_000;
+
 export interface GmailMessage {
 	id: string;
 	threadId: string;
@@ -93,10 +97,17 @@ function isAutoReplyMessage(
 	return xAutoreply !== null;
 }
 
-// El From llega como "Nombre <mail>" o como "mail" a secas: se compara en
-// minúsculas tolerando las dos formas.
+// El From llega como "Nombre <mail>" o como "mail" a secas: hay que extraer
+// la dirección exacta, no buscarla como substring — "diana@acme.test" contiene
+// "ana@acme.test" y un includes() la matchearía como si fuera nuestra.
+function extractEmailAddress(from: string): string {
+	const match = from.match(/<([^>]+)>/);
+	const raw = match ? match[1] : from;
+	return raw.trim().toLowerCase();
+}
+
 function isFromExecutor(from: string, ourEmail: string): boolean {
-	return from.toLowerCase().includes(ourEmail.toLowerCase());
+	return extractEmailAddress(from) === ourEmail.trim().toLowerCase();
 }
 
 function toGmailMessage(raw: GmailApiMessage, ourEmail: string): GmailMessage {
@@ -128,7 +139,10 @@ export async function fetchThread(
 ): Promise<GmailMessage[]> {
 	const res = await fetch(
 		`https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=full`,
-		{ headers: { Authorization: `Bearer ${accessToken}` } },
+		{
+			headers: { Authorization: `Bearer ${accessToken}` },
+			signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+		},
 	);
 
 	if (res.status === 401) throw new GmailUnauthorizedError();
@@ -152,7 +166,10 @@ export async function findByRfc822Id(
 		`https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(
 			`rfc822msgid:${rfc822MessageId}`,
 		)}`,
-		{ headers: { Authorization: `Bearer ${accessToken}` } },
+		{
+			headers: { Authorization: `Bearer ${accessToken}` },
+			signal: AbortSignal.timeout(READ_TIMEOUT_MS),
+		},
 	);
 
 	if (res.status === 401) throw new GmailUnauthorizedError();

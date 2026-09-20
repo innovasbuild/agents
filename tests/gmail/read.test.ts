@@ -53,6 +53,23 @@ describe("fetchThread", () => {
 		expect(msg.isFromUs).toBe(false);
 	});
 
+	it("no matchea por substring: diana@acme.test no es ana@acme.test", async () => {
+		vi.stubGlobal("fetch", async () =>
+			threadResponse([
+				message({
+					payload: {
+						headers: [{ name: "From", value: "Diana Falsa <diana@acme.test>" }],
+						body: { data: b64("Hola, me interesa") },
+					},
+				}),
+			]),
+		);
+
+		const [msg] = await fetchThread("tok", "t1", "ana@acme.test");
+
+		expect(msg.isFromUs).toBe(false);
+	});
+
 	it("extrae el Message-ID RFC822, que es lo que necesita el follow-up", async () => {
 		vi.stubGlobal("fetch", async () => threadResponse([message()]));
 
@@ -142,6 +159,35 @@ describe("fetchThread", () => {
 		expect(msg.body).toBe("Texto plano");
 	});
 
+	it("lee el cuerpo de un text/plain anidado a dos niveles de profundidad", async () => {
+		vi.stubGlobal("fetch", async () =>
+			threadResponse([
+				message({
+					payload: {
+						headers: [{ name: "From", value: "ana@acme.test" }],
+						mimeType: "multipart/mixed",
+						parts: [
+							{
+								mimeType: "multipart/alternative",
+								parts: [
+									{
+										mimeType: "text/plain",
+										body: { data: b64("Texto a dos niveles") },
+									},
+									{ mimeType: "text/html", body: { data: b64("<p>HTML</p>") } },
+								],
+							},
+						],
+					},
+				}),
+			]),
+		);
+
+		const [msg] = await fetchThread("tok", "t1", "mati@innov.as");
+
+		expect(msg.body).toBe("Texto a dos niveles");
+	});
+
 	it("un 401 tira GmailUnauthorizedError, igual que el envío", async () => {
 		vi.stubGlobal("fetch", async () => new Response("{}", { status: 401 }));
 
@@ -154,6 +200,18 @@ describe("fetchThread", () => {
 		vi.stubGlobal("fetch", async () => Response.json({ id: "t1" }));
 
 		expect(await fetchThread("tok", "t1", "mati@innov.as")).toEqual([]);
+	});
+
+	it("el fetch lleva un AbortSignal para que el timeout entre por ese carril", async () => {
+		const fetchMock = vi.fn(
+			async (_input: RequestInfo | URL, _init?: RequestInit) =>
+				threadResponse([message()]),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await fetchThread("tok", "t1", "mati@innov.as");
+
+		expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 	});
 });
 
@@ -173,5 +231,17 @@ describe("findByRfc822Id", () => {
 		vi.stubGlobal("fetch", async () => Response.json({}));
 
 		expect(await findByRfc822Id("tok", "<x@y.test>")).toBeNull();
+	});
+
+	it("el fetch lleva un AbortSignal para que el timeout entre por ese carril", async () => {
+		const fetchMock = vi.fn(
+			async (_input: RequestInfo | URL, _init?: RequestInit) =>
+				Response.json({}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await findByRfc822Id("tok", "<x@y.test>");
+
+		expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 	});
 });
