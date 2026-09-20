@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import {
 	logModelEvent,
 	recordCrmUpdate,
@@ -20,7 +21,7 @@ const caller = {
 };
 const now = () => new Date("2026-09-15T12:00:00Z");
 
-function crmSpy() {
+function crmSpy(overrides: Partial<CrmAdapter> = {}) {
 	const calls: unknown[][] = [];
 	const adapter = fakeCrm({
 		upsertContact: async (input) => {
@@ -30,6 +31,7 @@ function crmSpy() {
 		addNote: async (id, note) => {
 			calls.push(["note", id, note.body]);
 		},
+		...overrides,
 	});
 	return { adapter, calls };
 }
@@ -41,7 +43,13 @@ describe("recordCrmUpdate", () => {
 		store.contacts.push(
 			contactRow({ stage: "msg1_enviado", touches: 1, ownerUserId: USER }),
 		);
-		const { adapter, calls } = crmSpy();
+		// Ya hay un deal abierto: este test es sobre nota/etapa, no sobre deals
+		// (esos tienen su propio describe más abajo).
+		const { adapter, calls } = crmSpy({
+			listOpenDeals: async () => [
+				{ id: "deal-0", stage: "decisionmakerboughtin" },
+			],
+		});
 		const result = await recordCrmUpdate(
 			{
 				caller,
@@ -131,6 +139,108 @@ describe("recordCrmUpdate", () => {
 				{ store, crm: crmSpy().adapter, now },
 			),
 		).toMatchObject({ reason: "contacto_inexistente" });
+	});
+
+	it("crea el deal al pasar a en_conversacion y deja el evento deal_creado", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({ stage: "sin_respuesta", touches: 1, ownerUserId: USER }),
+		);
+		const createDeal = vi.fn(async () => ({ id: "deal-9" }));
+		const { adapter } = crmSpy({
+			listOpenDeals: async () => [],
+			createDeal,
+		});
+		const result = await recordCrmUpdate(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				stage: "en_conversacion",
+				note: null,
+			},
+			{ store, crm: adapter, now },
+		);
+		expect(result).toEqual({
+			ok: true,
+			crmId: "crm-7",
+			stage: "en_conversacion",
+		});
+		expect(createDeal).toHaveBeenCalledWith({
+			contactCrmId: "crm-7",
+			companyCrmId: null,
+			name: "En Paralelo · Acme",
+			description: "vector: v1 · hook: h1 · canal: email",
+			ownerId: "owner-ana",
+		});
+		expect(store.events.map((e) => e.type)).toEqual([
+			"cambio_etapa",
+			"deal_creado",
+		]);
+	});
+
+	it("no crea un deal duplicado si el contacto ya tiene uno abierto", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({ stage: "sin_respuesta", touches: 1, ownerUserId: USER }),
+		);
+		const createDeal = vi.fn(async () => ({ id: "deal-9" }));
+		const { adapter } = crmSpy({
+			listOpenDeals: async () => [
+				{ id: "deal-1", stage: "decisionmakerboughtin" },
+			],
+			createDeal,
+		});
+		const result = await recordCrmUpdate(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				stage: "en_conversacion",
+				note: null,
+			},
+			{ store, crm: adapter, now },
+		);
+		expect(result).toEqual({
+			ok: true,
+			crmId: "crm-7",
+			stage: "en_conversacion",
+		});
+		expect(createDeal).not.toHaveBeenCalled();
+		expect(store.events.map((e) => e.type)).toEqual(["cambio_etapa"]);
+	});
+
+	it("un fallo al crear el deal no impide que la etapa quede movida", async () => {
+		const store = createFakeStore();
+		store.executors[0].crmOwnerId = "owner-ana";
+		store.contacts.push(
+			contactRow({ stage: "sin_respuesta", touches: 1, ownerUserId: USER }),
+		);
+		const { adapter } = crmSpy({
+			listOpenDeals: async () => [],
+			createDeal: async () => {
+				throw new Error("HubSpot respondió 500");
+			},
+		});
+		const result = await recordCrmUpdate(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				stage: "en_conversacion",
+				note: null,
+			},
+			{ store, crm: adapter, now },
+		);
+		expect(result).toEqual({
+			ok: true,
+			crmId: "crm-7",
+			stage: "en_conversacion",
+		});
+		expect(store.contacts[0].stage).toBe("en_conversacion");
+		expect(store.events.map((e) => e.type)).toEqual([
+			"cambio_etapa",
+			"crm_sync_pendiente",
+		]);
 	});
 });
 

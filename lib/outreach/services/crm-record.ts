@@ -89,6 +89,59 @@ export async function recordCrmUpdate(
 				payload: { from: fromStage, to: input.stage, origen: "chat" },
 			}),
 		);
+		// Deal solo nace al pasar a conversación o reunión agendada (CLAUDE.md
+		// § Reglas de escritura 6). La etapa ya quedó persistida arriba, así que
+		// un fallo acá no puede tumbarla: se registra y se sigue (mismo criterio
+		// que recordInCrm en send.ts para los fallos del CRM después del efecto
+		// que no se puede perder).
+		if (
+			input.stage === "en_conversacion" ||
+			input.stage === "reunion_agendada"
+		) {
+			try {
+				const open = await deps.crm.listOpenDeals(crmId);
+				// Un deal duplicado en HubSpot hay que borrarlo a mano: el MCP no
+				// fusiona ni borra registros.
+				if (open.length === 0) {
+					const deal = await deps.crm.createDeal({
+						contactCrmId: crmId,
+						companyCrmId: null,
+						name: `En Paralelo · ${contact.company ?? contact.name ?? contact.contactKey}`,
+						description: `vector: ${contact.vector ?? "-"} · hook: ${contact.hook ?? "-"} · canal: email`,
+						ownerId: executor.crmOwnerId as string,
+					});
+					events.push(
+						outreachEvent({
+							tenant_id: caller.tenantId,
+							actor_user_id: caller.userId,
+							contact_key: contact.contactKey,
+							channel: null,
+							type: "deal_creado",
+							summary: `deal ${deal.id} creado al pasar a ${input.stage}`,
+							payload: { deal_id: deal.id, crm_id: crmId, stage: input.stage },
+						}),
+					);
+				}
+			} catch (error) {
+				events.push(
+					outreachEvent({
+						tenant_id: caller.tenantId,
+						actor_user_id: caller.userId,
+						contact_key: contact.contactKey,
+						channel: null,
+						type: "crm_sync_pendiente",
+						summary: "no se pudo crear el deal en HubSpot",
+						payload: {
+							crm_id: crmId,
+							error: (error instanceof Error
+								? error.message
+								: String(error)
+							).slice(0, 500),
+						},
+					}),
+				);
+			}
+		}
 	}
 	if (input.note) {
 		events.push(

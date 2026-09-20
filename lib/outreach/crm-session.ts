@@ -54,6 +54,8 @@ export function withReauth(
 		addNote: guard(adapter.addNote),
 		completeOpenTasks: guard(adapter.completeOpenTasks),
 		createTask: guard(adapter.createTask),
+		listOpenDeals: guard(adapter.listOpenDeals),
+		createDeal: guard(adapter.createDeal),
 	};
 }
 
