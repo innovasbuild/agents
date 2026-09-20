@@ -52,8 +52,7 @@ export function modelCostUsd(args: {
 	}
 	const price = MODEL_PRICES[args.model];
 	return {
-		usd:
-			(inputTokens * price.input + outputTokens * price.output) / 1_000_000,
+		usd: (inputTokens * price.input + outputTokens * price.output) / 1_000_000,
 		source: "tabla",
 		inputTokens,
 		outputTokens,

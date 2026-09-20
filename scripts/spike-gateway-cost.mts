@@ -14,6 +14,9 @@ const gateway = (result.providerMetadata as Record<string, unknown> | undefined)
 	?.gateway as Record<string, unknown> | undefined;
 
 console.log("usage:", JSON.stringify(result.usage));
-console.log("providerMetadata keys:", Object.keys(result.providerMetadata ?? {}));
+console.log(
+	"providerMetadata keys:",
+	Object.keys(result.providerMetadata ?? {}),
+);
 console.log("gateway keys:", Object.keys(gateway ?? {}));
 console.log("gateway.cost:", gateway?.cost, typeof gateway?.cost);

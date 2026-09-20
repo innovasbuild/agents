@@ -35,6 +35,7 @@ import type {
 	ListOpenDealsInput,
 } from "../../../lib/outreach/services/followups";
 import { runScheduledFollowups } from "../../../lib/outreach/services/followups";
+import { generateDraft } from "../../../lib/outreach/services/generate-draft";
 import { queueTouch } from "../../../lib/outreach/services/queue";
 import {
 	scheduleKeyFor,
@@ -46,7 +47,6 @@ import {
 	type OutreachStore,
 } from "../../../lib/outreach/store";
 import { createAdminClient } from "../../../lib/supabase/admin";
-import { generateDraft } from "../../../lib/outreach/services/generate-draft";
 import { createUsageRecorder, metered } from "../../../lib/workflows/usage";
 
 const SCHEDULE = "followups";
