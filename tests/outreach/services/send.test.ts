@@ -224,6 +224,7 @@ describe("sendQueuedEmail", () => {
 			crmOwnerId: null,
 			dailyQuota: 30,
 			gmailAuthorizedAt: null,
+			gmailReadAuthorizedAt: null,
 		});
 		expect(
 			await sendQueuedEmail(

@@ -33,6 +33,7 @@ export interface ExecutorRow {
 	crmOwnerId: string | null;
 	dailyQuota: number;
 	gmailAuthorizedAt: string | null;
+	gmailReadAuthorizedAt: string | null;
 }
 
 export interface TenantOutreach {
@@ -356,7 +357,7 @@ export function createSupabaseOutreachStore(
 			const { data, error } = await client
 				.from("executors")
 				.select(
-					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at",
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at, gmail_read_authorized_at",
 				)
 				.eq("tenant_id", tenantId)
 				.eq("user_id", userId)
@@ -370,6 +371,7 @@ export function createSupabaseOutreachStore(
 				crmOwnerId: data.crm_owner_id ?? null,
 				dailyQuota: data.daily_quota,
 				gmailAuthorizedAt: data.gmail_authorized_at ?? null,
+				gmailReadAuthorizedAt: data.gmail_read_authorized_at ?? null,
 			};
 		},
 
@@ -604,7 +606,7 @@ export function createSupabaseOutreachStore(
 			const { data, error } = await client
 				.from("executors")
 				.select(
-					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at",
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at, gmail_read_authorized_at",
 				)
 				.eq("tenant_id", tenantId)
 				.not("gmail_read_authorized_at", "is", null);
@@ -616,6 +618,7 @@ export function createSupabaseOutreachStore(
 				crmOwnerId: r.crm_owner_id ?? null,
 				dailyQuota: r.daily_quota,
 				gmailAuthorizedAt: r.gmail_authorized_at ?? null,
+				gmailReadAuthorizedAt: r.gmail_read_authorized_at ?? null,
 			}));
 		},
 

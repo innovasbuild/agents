@@ -28,6 +28,7 @@ export const PASSING_BODY = [
 export interface FakeStore extends OutreachStore {
 	executors: ExecutorRow[];
 	tenants: Map<string, TenantOutreach>;
+	tenantActive: Map<string, boolean>;
 	contacts: ContactRow[];
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
@@ -109,9 +110,11 @@ export function createFakeStore(): FakeStore {
 				crmOwnerId: null,
 				dailyQuota: 30,
 				gmailAuthorizedAt: null,
+				gmailReadAuthorizedAt: null,
 			},
 		],
 		tenants: new Map([[TENANT, defaultTenant()]]),
+		tenantActive: new Map([[TENANT, true]]),
 		contacts: [],
 		accounts: [],
 		queue: [],
@@ -257,16 +260,17 @@ export function createFakeStore(): FakeStore {
 
 		async listActiveTenants() {
 			const tenants: { id: string; slug: string }[] = [];
-			for (const [id, value] of store.tenants.entries()) {
-				// En el fake store, todos los tenants están "activos" si existen.
-				tenants.push({ id, slug: id });
+			for (const [id] of store.tenants.entries()) {
+				if (store.tenantActive.get(id) === true) {
+					tenants.push({ id, slug: id });
+				}
 			}
 			return tenants;
 		},
 
 		async listExecutorsWithGmailRead(tenantId) {
 			return store.executors.filter(
-				(e) => e.tenantId === tenantId && e.gmailAuthorizedAt !== null,
+				(e) => e.tenantId === tenantId && e.gmailReadAuthorizedAt !== null,
 			);
 		},
 
