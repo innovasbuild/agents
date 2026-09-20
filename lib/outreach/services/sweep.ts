@@ -38,13 +38,17 @@ export interface SweepTenant {
 /** El ejecutor tal como lo necesita el barrido. El `email` no sale de
  * `executors` (esa tabla no lo guarda): lo resuelve el cableado del schedule
  * contra `auth.users`, porque `fetchThread` lo necesita para saber cuáles
- * mensajes del hilo son nuestros. */
+ * mensajes del hilo son nuestros. Puede venir en `null` si el usuario no tiene
+ * email: el barrido lo trata como ejecutor fallido (ver `runSweep`) en vez de
+ * saltearlo en silencio. */
 export interface SweepExecutor {
 	tenantId: string;
 	userId: string;
 	slug: string | null;
-	email: string;
+	email: string | null;
 }
+
+type SweepExecutorWithEmail = SweepExecutor & { email: string };
 
 export type SweepContact = Pick<
 	ContactRow,
@@ -102,10 +106,18 @@ export interface SweepDeps {
 export interface SweepTenantResult {
 	tenantId: string;
 	slug: string;
+	/** Respuestas reales que el agente va a poder clasificar: el contacto queda
+	 * en `respuesta_neutra`, que es por donde filtra `read_replies`. */
 	respuestas: number;
+	/** Respuestas reales de contactos que ya estaban más arriba en la escalera.
+	 * Quedan registradas como evento, pero `read_replies` no las va a mostrar. */
+	respuestasAvanzadas: number;
 	rebotes: number;
 	reconciliadas: number;
 	trabadas: number;
+	/** Hilos que no se pudieron mirar (Gmail tiró). Ni respuesta ni rebote: algo
+	 * que quedó sin revisar y el resumen tiene que poder decirlo. */
+	contactosFallidos: number;
 	ejecutoresFallidos: string[];
 }
 
@@ -165,26 +177,41 @@ export async function takeScheduleLock(
 	);
 }
 
-/** ¿Este tenant tiene algo para que el agente interprete? Solo las respuestas
- * reales abren el hilo de la mañana: un rebote o una pieza trabada son para el
- * resumen, no para clasificar. */
+/**
+ * ¿Este tenant tiene algo para que el agente interprete? Solo las respuestas
+ * que el agente va a poder VER: `read_replies` filtra por `respuesta_neutra`,
+ * así que una respuesta de alguien que ya está más arriba en la escalera no
+ * abre nada — el hilo diría "encontré N" y la tool devolvería vacío. Un rebote
+ * o una pieza trabada tampoco: son para el resumen, no para clasificar.
+ */
 export function needsHandoff(tenant: SweepTenantResult): boolean {
 	return tenant.respuestas > 0;
 }
 
 /**
- * El lock primero, todo lo demás después. Si ya corrió hoy devuelve `null` sin
- * tocar la base: no parcialmente, no "sigo igual por las dudas".
+ * Los tenants se listan ANTES del lock, a propósito: es el único `await` que
+ * puede tirar afuera de los try/catch del barrido, y si tirara con el lock ya
+ * tomado, el 23505 bloquearía cualquier reintento de esa jornada. Un hipo de
+ * red no puede costar un día entero de escucha.
+ *
+ * Con el lock tomado, si ya corrió hoy devuelve `null` sin tocar nada más: no
+ * parcialmente, no "sigo igual por las dudas".
  */
 export async function runMorningSweep(
-	deps: SweepDeps & { takeLock(): Promise<boolean> },
+	deps: SweepDeps & {
+		takeLock(tenants: readonly SweepTenant[]): Promise<boolean>;
+	},
 ): Promise<SweepResult | null> {
-	if (!(await deps.takeLock())) return null;
-	return await runSweep(deps);
+	const tenants = await deps.store.listActiveTenants();
+	if (!(await deps.takeLock(tenants))) return null;
+	return await runSweep(deps, tenants);
 }
 
-export async function runSweep(deps: SweepDeps): Promise<SweepResult> {
-	const tenants = await deps.store.listActiveTenants();
+export async function runSweep(
+	deps: SweepDeps,
+	knownTenants?: readonly SweepTenant[],
+): Promise<SweepResult> {
+	const tenants = knownTenants ?? (await deps.store.listActiveTenants());
 	const results: SweepTenantResult[] = [];
 
 	for (const tenant of tenants) {
@@ -192,9 +219,11 @@ export async function runSweep(deps: SweepDeps): Promise<SweepResult> {
 			tenantId: tenant.id,
 			slug: tenant.slug,
 			respuestas: 0,
+			respuestasAvanzadas: 0,
 			rebotes: 0,
 			reconciliadas: 0,
 			trabadas: 0,
+			contactosFallidos: 0,
 			ejecutoresFallidos: [],
 		};
 		results.push(acc);
@@ -206,9 +235,22 @@ export async function runSweep(deps: SweepDeps): Promise<SweepResult> {
 				// Nivel 2: un ejecutor cuyo token murió no frena a los demás del
 				// mismo tenant.
 				try {
-					const token = await deps.getToken(executor);
-					await sweepThreads(deps, tenant, executor, token, acc);
-					await reconcileApproved(deps, tenant, executor, token, acc);
+					if (!executor.email) {
+						// Sin el email no hay forma de saber qué mensajes del hilo son
+						// nuestros: barrerlo igual registraría nuestro propio mail como
+						// si fuera la respuesta del contacto. Se corta acá, antes de leer
+						// nada, y queda a la vista en ejecutoresFallidos.
+						throw new Error(
+							"no tiene email en auth.users: sin eso no se puede distinguir nuestros mensajes de los del contacto",
+						);
+					}
+					const active: SweepExecutorWithEmail = {
+						...executor,
+						email: executor.email,
+					};
+					const token = await deps.getToken(active);
+					await sweepThreads(deps, tenant, active, token, acc);
+					await reconcileApproved(deps, tenant, active, token, acc);
 				} catch (error) {
 					acc.ejecutoresFallidos.push(executor.slug ?? executor.userId);
 					console.error(
@@ -228,7 +270,7 @@ export async function runSweep(deps: SweepDeps): Promise<SweepResult> {
 async function sweepThreads(
 	deps: SweepDeps,
 	tenant: SweepTenant,
-	executor: SweepExecutor,
+	executor: SweepExecutorWithEmail,
 	token: string,
 	acc: SweepTenantResult,
 ): Promise<void> {
@@ -242,66 +284,109 @@ async function sweepThreads(
 	for (const contact of contacts) {
 		if (!contact.gmailThreadId) continue;
 
-		const messages = await deps.fetchThread(
-			token,
-			contact.gmailThreadId,
-			executor.email,
-		);
-		const knownMessageIds = new Set(
-			await deps.store.listKnownInboundIds(tenant.id, contact.contactKey),
-		);
-		const effects = planListen({
-			contact,
-			messages,
-			knownMessageIds,
-			now: deps.now(),
-		});
-		if (effects.length === 0) continue;
-
-		// Los eventos primero: son el hecho, y son append-only con dedup por
-		// gmail_message_id. Si el patch de abajo falla, el hecho quedó.
-		await deps.store.insertEvents(
-			effects.map((effect) =>
-				outreachEvent({
-					tenant_id: tenant.id,
-					actor_user_id: executor.userId,
-					contact_key: contact.contactKey,
-					type: effect.event.type,
-					summary: effect.event.summary,
-					payload: { gmail_message_id: effect.event.gmailMessageId },
-				}),
-			),
-		);
-
-		const patch: ContactPatch = {};
-		// Una auto-respuesta viene con repliedAt en null a propósito (listen.ts):
-		// no es una respuesta real y no apaga la cadencia de follow-ups.
-		const lastReplied = lastWith(effects, (e) => e.repliedAt !== null);
-		const lastStage = lastWith(effects, (e) => e.stage !== null);
-		const bounced = effects.some((e) => e.event.type === "rebote");
-
-		for (const effect of effects) {
-			if (effect.event.type === "rebote") acc.rebotes++;
-			else if (effect.repliedAt !== null) acc.respuestas++;
+		// Nivel 3: un hilo que explota no frena a los contactos que siguen.
+		// `fetchThread` tira ante cualquier respuesta no-OK de Gmail — un hilo
+		// borrado (404), un 429, un 5xx — y sin esto un solo hilo roto se llevaba
+		// puestos todos los contactos que faltaban y la reconciliación del
+		// ejecutor, reportado como "sin Gmail" aunque el token estuviera vivo.
+		try {
+			await sweepThread(
+				deps,
+				{
+					tenant,
+					executor,
+					token,
+					contact,
+					threadId: contact.gmailThreadId,
+				},
+				acc,
+			);
+		} catch (error) {
+			acc.contactosFallidos++;
+			console.error(
+				`sweep: hilo ${contact.gmailThreadId} de ${contact.contactKey} (${tenant.slug}):`,
+				error,
+			);
 		}
+	}
+}
 
-		if (lastReplied) patch.repliedAt = lastReplied.repliedAt;
-		if (lastStage?.stage) patch.stage = lastStage.stage;
-		// Respondió o rebotó: en los dos casos el próximo toque programado deja de
-		// tener sentido (spec 03 §8.2). Seguir escribiéndole a una casilla que
-		// rebota es el peor de los dos.
-		if (lastReplied || bounced) patch.nextStepAt = null;
+async function sweepThread(
+	deps: SweepDeps,
+	input: {
+		tenant: SweepTenant;
+		executor: SweepExecutorWithEmail;
+		token: string;
+		contact: SweepContact;
+		threadId: string;
+	},
+	acc: SweepTenantResult,
+): Promise<void> {
+	const { tenant, executor, token, contact, threadId } = input;
 
-		if (Object.keys(patch).length > 0) {
-			await deps.store.updateContact(tenant.id, contact.id, patch);
-		}
+	const messages = await deps.fetchThread(token, threadId, executor.email);
+	const knownMessageIds = new Set(
+		await deps.store.listKnownInboundIds(tenant.id, contact.contactKey),
+	);
+	const effects = planListen({
+		contact,
+		messages,
+		knownMessageIds,
+		now: deps.now(),
+	});
+	if (effects.length === 0) return;
+
+	// Los eventos primero: son el hecho, y son append-only con dedup por
+	// gmail_message_id. Si el patch de abajo falla, el hecho quedó.
+	await deps.store.insertEvents(
+		effects.map((effect) =>
+			outreachEvent({
+				tenant_id: tenant.id,
+				actor_user_id: executor.userId,
+				contact_key: contact.contactKey,
+				type: effect.event.type,
+				summary: effect.event.summary,
+				payload: { gmail_message_id: effect.event.gmailMessageId },
+			}),
+		),
+	);
+
+	const patch: ContactPatch = {};
+	// Una auto-respuesta viene con repliedAt en null a propósito (listen.ts):
+	// no es una respuesta real y no apaga la cadencia de follow-ups.
+	const lastReplied = lastWith(effects, (e) => e.repliedAt !== null);
+	const lastStage = lastWith(effects, (e) => e.stage !== null);
+	const bounced = effects.some((e) => e.event.type === "rebote");
+
+	if (lastReplied) patch.repliedAt = lastReplied.repliedAt;
+	if (lastStage?.stage) patch.stage = lastStage.stage;
+	// Respondió o rebotó: en los dos casos el próximo toque programado deja de
+	// tener sentido (spec 03 §8.2). Seguir escribiéndole a una casilla que
+	// rebota es el peor de los dos.
+	if (lastReplied || bounced) patch.nextStepAt = null;
+
+	// El contador se decide con la etapa en la que el contacto QUEDA, no con la
+	// que traía: `canAdvance` no baja a nadie, así que una respuesta de alguien
+	// ya en `en_conversacion` o más arriba se registra pero nunca va a salir en
+	// `read_replies` (que filtra por `respuesta_neutra`). Contarla ahí haría que
+	// el handoff le prometa al agente respuestas que la tool no le va a dar.
+	const finalStage = patch.stage ?? contact.stage;
+	for (const effect of effects) {
+		if (effect.event.type === "rebote") acc.rebotes++;
+		else if (effect.repliedAt === null) continue;
+		else if (finalStage === "respuesta_neutra") acc.respuestas++;
+		else acc.respuestasAvanzadas++;
+	}
+
+	if (Object.keys(patch).length > 0) {
+		await deps.store.updateContact(tenant.id, contact.id, patch);
 	}
 }
 
 async function reconcileApproved(
 	deps: SweepDeps,
 	tenant: SweepTenant,
-	executor: SweepExecutor,
+	executor: SweepExecutorWithEmail,
 	token: string,
 	acc: SweepTenantResult,
 ): Promise<void> {

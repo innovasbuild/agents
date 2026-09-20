@@ -33,7 +33,15 @@ const SCHEDULE = "morning-sweep";
 function handoffPrompt(tenant: SweepTenantResult): string {
 	const extra: string[] = [];
 	if (tenant.rebotes > 0) extra.push(`${tenant.rebotes} rebote(s)`);
+	if (tenant.respuestasAvanzadas > 0) {
+		extra.push(
+			`${tenant.respuestasAvanzadas} respuesta(s) de gente que ya venía conversando`,
+		);
+	}
 	if (tenant.trabadas > 0) extra.push(`${tenant.trabadas} pieza(s) trabada(s)`);
+	if (tenant.contactosFallidos > 0) {
+		extra.push(`${tenant.contactosFallidos} hilo(s) que Gmail no dejó leer`);
+	}
 	if (tenant.ejecutoresFallidos.length > 0) {
 		extra.push(`sin Gmail: ${tenant.ejecutoresFallidos.join(", ")}`);
 	}
@@ -50,8 +58,10 @@ function handoffPrompt(tenant: SweepTenantResult): string {
 
 /** El email del ejecutor no está en `executors`: sale de `auth.users`. Sin él
  * no se puede saber qué mensajes del hilo son nuestros, y confundirlos
- * registraría nuestro propio mail como si fuera la respuesta del otro. Por eso
- * un ejecutor sin email se saltea en vez de barrerse con el email vacío. */
+ * registraría nuestro propio mail como si fuera la respuesta del otro. Acá va
+ * en `null` y el que decide es `runSweep`, que lo anota en `ejecutoresFallidos`
+ * — saltearlo en silencio dejaría un buzón sin barrer noche tras noche sin que
+ * el resumen lo diga nunca. */
 function buildStore(): SweepStore {
 	const admin = createAdminClient();
 	const store = createSupabaseOutreachStore(admin);
@@ -63,19 +73,17 @@ function buildStore(): SweepStore {
 			const executors: SweepExecutor[] = [];
 			for (const row of rows) {
 				const { data, error } = await admin.auth.admin.getUserById(row.userId);
-				const email = data?.user?.email ?? null;
-				if (error || !email) {
+				if (error) {
 					console.error(
-						`${SCHEDULE}: sin email para el ejecutor ${row.slug ?? row.userId}:`,
-						error?.message ?? "el usuario no tiene email",
+						`${SCHEDULE}: no pude leer el usuario ${row.slug ?? row.userId}:`,
+						error.message,
 					);
-					continue;
 				}
 				executors.push({
 					tenantId: row.tenantId,
 					userId: row.userId,
 					slug: row.slug,
-					email,
+					email: data?.user?.email ?? null,
 				});
 			}
 			return executors;
@@ -106,12 +114,13 @@ export default defineSchedule({
 		const result = await runMorningSweep({
 			store,
 			// El lock, una vez por corrida y antes de iterar nada: si ya corrió hoy,
-			// runMorningSweep devuelve null sin tocar nada.
-			async takeLock() {
+			// runMorningSweep devuelve null sin tocar nada. Los tenants llegan ya
+			// listados (runMorningSweep los pide antes de llamar acá) justamente
+			// para que un error al listarlos no queme el lock del día.
+			async takeLock(tenants) {
 				// `runs.tenant_id` es NOT NULL y el lock es global de la corrida:
 				// cualquier tenant activo sirve para la FK, la identidad del lock es
 				// `schedule_key`.
-				const tenants = await store.listActiveTenants();
 				const anyTenant = tenants[0];
 				if (!anyTenant) return false;
 				return await takeScheduleLock(
@@ -146,6 +155,19 @@ export default defineSchedule({
 
 		if (!result) return;
 
+		// OJO, esto HOY NO FUNCIONA y es a propósito que quede escrito así.
+		// `to(eve, {})` tira siempre: `eveChannel()` no implementa `receive()` —
+		// no expone esa opción (ver EveChannelInput en
+		// node_modules/eve/dist/src/eve-channel/types.d.ts) y
+		// `invokeChannelReceive` lanza «channel "eve" does not implement
+		// receive()». Además `appAuth` no trae `conversationId`, que el hook
+		// bind-session exige. El handoff empieza a andar recién cuando exista un
+		// canal para los schedules (o cuando la sesión de la mañana la abra la
+		// app) — decisión parkeada, no un olvido.
+		//
+		// Mientras tanto: el catch de abajo se come el error, el barrido queda
+		// registrado igual y la persona ve las respuestas en /contactos y en el
+		// resumen que abre el chat (spec 03 §8.5).
 		for (const tenant of result.tenants) {
 			// Si no hay nada que interpretar, no se manda nada.
 			if (!needsHandoff(tenant)) continue;

@@ -647,7 +647,11 @@ export function createSupabaseOutreachStore(
 				.select(CONTACT_COLUMNS)
 				.eq("tenant_id", tenantId)
 				.eq("owner_user_id", ownerUserId)
-				.not("gmail_thread_id", "is", null);
+				.not("gmail_thread_id", "is", null)
+				// Orden estable: sin esto, dos corridas del barrido recorren los
+				// contactos en órdenes distintos y un problema que afecte a algunos
+				// no se ve como patrón en los logs.
+				.order("contact_key", { ascending: true });
 			if (error) fail("listar contactos con hilo", error);
 			return (data ?? []).map(toContact);
 		},
