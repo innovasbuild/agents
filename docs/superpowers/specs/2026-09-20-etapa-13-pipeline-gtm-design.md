@@ -4,7 +4,7 @@ fecha: 2026-09-20
 estado: aprobada en brainstorming, pendiente de revisión escrita
 modelo: Opus 5 (spec) · Sonnet 5 (implementación, sesión nueva)
 etapa: 13 (nueva, ver §15)
-fuente: docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md (Etapa 12, PR #29, sin mergear al escribir esto) · docs/superpowers/specs/03-agente-outreach-v1.md (D2, D4, D5, D13, §6.3, §6.4) · docs/superpowers/specs/02-conexiones-innovas.md (D2 catálogo por capacidad, §5.2) · docs/superpowers/specs/2026-09-12-arquitectura-plataforma-design.md (D2, D3) · docs/superpowers/specs/2026-09-19-etapa-5-escucha-followups-design.md (D1, D4) · docs.apollo.io · docs.typesafe.ai · vercel.com/docs/ai-gateway/sdks-and-apis/typesafe
+fuente: docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md (Etapa 12, spec y plan en `main` vía PR #29, sin implementar) · docs/superpowers/specs/03-agente-outreach-v1.md (D2, D4, D5, D13, §6.3, §6.4) · docs/superpowers/specs/02-conexiones-innovas.md (D2 catálogo por capacidad, §5.2) · docs/superpowers/specs/2026-09-12-arquitectura-plataforma-design.md (D2, D3) · docs/superpowers/specs/2026-09-19-etapa-5-escucha-followups-design.md (D1, D4) · docs.apollo.io · docs.typesafe.ai · vercel.com/docs/ai-gateway/sdks-and-apis/typesafe
 ---
 
 # Etapa 13 · Pipeline de GTM
@@ -413,7 +413,7 @@ S1 y S2 son la primera tarea de E2; S3, S4 y S5 son de E1.
 - **Datos personales de terceros pasando por un modelo.** Mitigación: `zeroDataRetention` en las llamadas a Jev, RLS por tenant, y nada de PII en logs.
 - **Volumen que tapa la cola.** 200 descubiertos pueden volverse 40 piezas y desbordar el cupo diario. Mitigación: `draft-queue` respeta `executors.daily_quota` y encola de a poco; el resto espera como `contacto_listo`.
 - **La reputación de la casilla** con volumen nuevo de gente fría. Mitigación: el cupo diario y el gate de estilo que ya existen; no se toca nada de eso acá.
-- **Dependencia de la Etapa 12 sin mergear** (PR #29). Esta etapa no arranca hasta que esos rieles estén en `main`.
+- **Dependencia de la Etapa 12 sin implementar.** Su spec y su plan están en `main` (PR #29), pero los rieles (`work_items`, runner, dispatcher, `usage_entries`) todavía no existen como código. Esta etapa no arranca hasta que estén.
 
 ## 15. Enmiendas
 

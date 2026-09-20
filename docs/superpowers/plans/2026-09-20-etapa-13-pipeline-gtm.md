@@ -16,7 +16,7 @@ La spec parte la etapa en cuatro entregas. Este plan detalla **E1 (descubrimient
 
 ## Global Constraints
 
-- **La Etapa 12 tiene que estar mergeada antes de empezar** (PR #29). Este plan consume `lib/workflows/` (registry, runner, enqueue, types, store), la tabla `work_items`, `tenant_workflows`, `tenant_budgets` y `usage_entries`. Sin eso no hay dónde apoyarse.
+- **La Etapa 12 tiene que estar implementada antes de empezar.** Su spec y su plan ya están en `main` (PR #29); lo que falta es el código. Este plan consume `lib/workflows/` (registry, runner, enqueue, types, store), la tabla `work_items`, `tenant_workflows`, `tenant_budgets` y `usage_entries`. Sin eso no hay dónde apoyarse.
 - **eve queda en `0.54.2`.** No se sube en esta etapa.
 - **En `agents/` los imports son relativos**, nunca `@/`: eve no resuelve los paths de tsconfig en los módulos que compila. Lo mismo en `lib/` para todo lo que importe algo de `agents/`. En `tests/` se usa `@/`.
 - **Toda tabla nueva lleva `tenant_id` y RLS.** Lectura para `(select public.is_member_of(tenant_id)) or (select public.is_platform_admin())`; `insert/update/delete` revocados a `authenticated` y `anon`.
