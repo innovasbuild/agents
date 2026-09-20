@@ -245,6 +245,22 @@ Diseño nuevo → superpowers:brainstorming · Bug → /investigate · Probar en
 
 Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indicado, y termina con spec y plan en `docs/superpowers/`, PR vía `/ship`, y `/context-save`. El "modelo runtime" es el que usa el agente en producción para lo que esa etapa habilita.
 
+### Estado de avance
+
+| Etapa | Estado | PR(s) |
+|---|---|---|
+| 0 · Bootstrap y spike de riesgo | ✅ hecho | — |
+| 1 · Esqueleto multi-tenant | ✅ hecho | — |
+| 2 · Conexiones del tenant `innovas` | ✅ hecho | — |
+| 3 · Agente de outreach v1 | ✅ hecho | #15 y previos |
+| 4 · Dashboard | ✅ hecho | #23, #24 |
+| 5 · Escucha, follow-ups y fuentes | ✅ hecho — falta ColdIQ/Places como flujo de carga (deferido, etapa propia) | #26 |
+| 6 · Canal MCP (Claude / ChatGPT) | ⬜ no arrancada | — |
+| 7 · Segundo tenant | ⬜ no arrancada | — |
+| 8 · Chat SDK | ⬜ no arrancada | — |
+
+Detalle y deuda conocida de la Etapa 5: `.superpowers/sdd/2026-09-19-etapa-5-escucha/progress.md` en el worktree que la corrió (gitignored, no viaja con el repo).
+
 ### Etapa 0 · Bootstrap y spike de riesgo (1 día)
 
 **Modelo Claude Code:** Opus 5, effort `high`. Es la etapa con más decisiones y menos código. Si el spike de Gmail no destraba en dos intentos, subir a Fable 5.1 solo para ese problema.
