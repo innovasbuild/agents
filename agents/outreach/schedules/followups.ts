@@ -141,9 +141,12 @@ async function draftAndQueue(
 	}
 
 	// El Message-ID del último mensaje del hilo es lo que hace que la
-	// respuesta caiga adentro de la conversación (in-reply-to/references). Si
-	// Gmail no deja leer el hilo, igual se encola: gmailThreadId alcanza para
-	// no perder la pieza, aunque salga como mensaje nuevo del lado de Gmail.
+	// respuesta caiga adentro de la conversación (in-reply-to/references). Sin
+	// él NO se encola: `send_email` exige los dos campos de hilo, así que una
+	// pieza con solo `gmailThreadId` le saldría al prospecto como conversación
+	// nueva y quien aprueba vería un borrador normal, sin marca de nada. Se
+	// corta acá, antes de gastar el draft, y el salteo queda a la vista en el
+	// resumen de la corrida; mañana se reintenta.
 	let replyToMessageId: string | null = null;
 	try {
 		const messages = await fetchThread(
@@ -156,6 +159,12 @@ async function draftAndQueue(
 		console.error(
 			`${SCHEDULE}: no pude leer el hilo ${input.gmailThreadId} de ${input.contactKey}:`,
 			error,
+		);
+	}
+	if (!replyToMessageId) {
+		return refuse(
+			"sin_hilo",
+			`no pude resolver el mensaje al que responder del hilo ${input.gmailThreadId}: un follow-up sin eso saldría fuera del hilo`,
 		);
 	}
 

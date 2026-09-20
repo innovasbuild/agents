@@ -155,6 +155,18 @@ export async function queueTouch(
 				? "el contacto ya respondió: no corresponde mandarle un follow-up"
 				: "el contacto todavía no recibió ningún toque: no hay follow-up sin primer mensaje",
 		);
+	} else if (!input.gmailThreadId || !input.replyToMessageId) {
+		// El envío (services/send.ts) exige los DOS para responder adentro de la
+		// conversación: con uno solo no manda threadId ni In-Reply-To/References
+		// y el follow-up le sale al prospecto como conversación nueva, sin que
+		// quien aprueba tenga forma de darse cuenta. Un follow-up fuera de hilo
+		// no es un follow-up (spec §4.4, y draftMessage lo rechaza por lo mismo):
+		// antes que mandar un mail huérfano en silencio, no se encola. El
+		// schedule lo reporta como salteado y reintenta al otro día.
+		return refuse(
+			"sin_hilo",
+			"no pude resolver el hilo completo (thread y mensaje al que responder): un follow-up sin eso saldría como conversación nueva",
+		);
 	}
 	const attribution = attributionError(tenant, input);
 	if (attribution) return refuse("atribucion_invalida", attribution);
