@@ -1,12 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { createFakeStore, TENANT, USER, OTHER_USER } from "./fake-store";
+import { createFakeStore, OTHER_USER, TENANT, USER } from "./fake-store";
 
 describe("lecturas de los schedules en el fake store", () => {
 	it("listContactsWithThread solo trae contactos con gmail_thread_id", async () => {
 		const store = createFakeStore();
 		store.contacts.push(
-			{ ...store.contactSeed(), contactKey: "em:con@hilo.test", gmailThreadId: "t1", ownerUserId: USER },
-			{ ...store.contactSeed(), contactKey: "em:sin@hilo.test", gmailThreadId: null, ownerUserId: USER },
+			{
+				...store.contactSeed(),
+				contactKey: "em:con@hilo.test",
+				gmailThreadId: "t1",
+				ownerUserId: USER,
+			},
+			{
+				...store.contactSeed(),
+				contactKey: "em:sin@hilo.test",
+				gmailThreadId: null,
+				ownerUserId: USER,
+			},
 		);
 
 		const rows = await store.listContactsWithThread(TENANT, USER);
@@ -18,11 +28,26 @@ describe("lecturas de los schedules en el fake store", () => {
 		const store = createFakeStore();
 		const vencido = "2026-09-01T00:00:00Z";
 		store.contacts.push(
-			{ ...store.contactSeed(), contactKey: "em:debe@test.com", nextStepAt: vencido, touches: 1, repliedAt: null },
-			{ ...store.contactSeed(), contactKey: "em:respondio@test.com", nextStepAt: vencido, touches: 1, repliedAt: vencido },
+			{
+				...store.contactSeed(),
+				contactKey: "em:debe@test.com",
+				nextStepAt: vencido,
+				touches: 1,
+				repliedAt: null,
+			},
+			{
+				...store.contactSeed(),
+				contactKey: "em:respondio@test.com",
+				nextStepAt: vencido,
+				touches: 1,
+				repliedAt: vencido,
+			},
 		);
 
-		const rows = await store.listDueFollowups(TENANT, new Date("2026-09-19T12:00:00Z"));
+		const rows = await store.listDueFollowups(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
 
 		expect(rows.map((r) => r.contactKey)).toEqual(["em:debe@test.com"]);
 	});
@@ -37,7 +62,10 @@ describe("lecturas de los schedules en el fake store", () => {
 			repliedAt: null,
 		});
 
-		const rows = await store.listDueFollowups(TENANT, new Date("2026-09-19T12:00:00Z"));
+		const rows = await store.listDueFollowups(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
 
 		expect(rows).toEqual([]);
 	});
@@ -52,7 +80,82 @@ describe("lecturas de los schedules en el fake store", () => {
 			repliedAt: null,
 		});
 
-		const rows = await store.listDueFollowups(TENANT, new Date("2026-09-19T12:00:00Z"));
+		const rows = await store.listDueFollowups(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows).toEqual([]);
+	});
+
+	it("listExhaustedContacts trae a quien agotó los tres toques hace más de NO_RESPONSE_AFTER_DAYS", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:agotado@test.com",
+			touches: 3,
+			repliedAt: null,
+			firstTouchAt: "2026-08-01T00:00:00Z",
+		});
+
+		const rows = await store.listExhaustedContacts(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows.map((r) => r.contactKey)).toEqual(["em:agotado@test.com"]);
+	});
+
+	it("listExhaustedContacts excluye a quien todavía no llega a tres toques", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:dos_toques@test.com",
+			touches: 2,
+			repliedAt: null,
+			firstTouchAt: "2026-08-01T00:00:00Z",
+		});
+
+		const rows = await store.listExhaustedContacts(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows).toEqual([]);
+	});
+
+	it("listExhaustedContacts excluye a quien ya respondió", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:respondio@test.com",
+			touches: 3,
+			repliedAt: "2026-08-15T00:00:00Z",
+			firstTouchAt: "2026-08-01T00:00:00Z",
+		});
+
+		const rows = await store.listExhaustedContacts(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows).toEqual([]);
+	});
+
+	it("listExhaustedContacts excluye a quien todavía no cumplió NO_RESPONSE_AFTER_DAYS desde el primer toque", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:reciente@test.com",
+			touches: 3,
+			repliedAt: null,
+			firstTouchAt: "2026-09-18T00:00:00Z",
+		});
+
+		const rows = await store.listExhaustedContacts(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
 
 		expect(rows).toEqual([]);
 	});
@@ -60,8 +163,18 @@ describe("lecturas de los schedules en el fake store", () => {
 	it("listContactsWithThread filtra por owner_user_id", async () => {
 		const store = createFakeStore();
 		store.contacts.push(
-			{ ...store.contactSeed(), contactKey: "em:del@user.test", gmailThreadId: "t1", ownerUserId: USER },
-			{ ...store.contactSeed(), contactKey: "em:del@otro.test", gmailThreadId: "t2", ownerUserId: OTHER_USER },
+			{
+				...store.contactSeed(),
+				contactKey: "em:del@user.test",
+				gmailThreadId: "t1",
+				ownerUserId: USER,
+			},
+			{
+				...store.contactSeed(),
+				contactKey: "em:del@otro.test",
+				gmailThreadId: "t2",
+				ownerUserId: OTHER_USER,
+			},
 		);
 
 		const rows = await store.listContactsWithThread(TENANT, USER);

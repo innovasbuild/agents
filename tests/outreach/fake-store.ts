@@ -1,6 +1,7 @@
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { parseOutreachConfig } from "@/lib/outreach/config";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
+import { NO_RESPONSE_AFTER_DAYS } from "@/lib/outreach/stage";
 import type {
 	AccountRow,
 	ContactRow,
@@ -307,6 +308,18 @@ export function createFakeStore(): FakeStore {
 					new Date(c.nextStepAt) <= now &&
 					c.touches < 3 &&
 					c.repliedAt === null,
+			);
+		},
+
+		async listExhaustedContacts(tenantId, now) {
+			const threshold = now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000;
+			return store.contacts.filter(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.touches >= 3 &&
+					c.repliedAt === null &&
+					c.firstTouchAt !== null &&
+					new Date(c.firstTouchAt).getTime() < threshold,
 			);
 		},
 

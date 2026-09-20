@@ -10,7 +10,7 @@ import {
 import type { OutreachEventInsert } from "./events";
 import type { Ficha } from "./ficha";
 import type { GateResult } from "./gate";
-import type { OutreachStage } from "./stage";
+import { NO_RESPONSE_AFTER_DAYS, type OutreachStage } from "./stage";
 
 export type QueueItemStatus =
 	| "pending"
@@ -233,6 +233,11 @@ export interface OutreachStore {
 	): Promise<ContactRow[]>;
 	/** Contactos vencidos para seguimiento (no respondidos, < 3 toques). */
 	listDueFollowups(tenantId: string, now: Date): Promise<ContactRow[]>;
+	/** Contactos agotados (Task 10): touches >= 3, sin respuesta, y su primer
+	 * toque más viejo que NO_RESPONSE_AFTER_DAYS. Es el universo sobre el que
+	 * corre el freno de oportunidades (`oportunidad_frenada`), no el de los
+	 * follow-ups: esos ya se cortaron. */
+	listExhaustedContacts(tenantId: string, now: Date): Promise<ContactRow[]>;
 	/** IDs de mensaje Gmail conocidos en eventos de respuesta/rebote. */
 	listKnownInboundIds(tenantId: string, contactKey: string): Promise<string[]>;
 	/** Eventos de respuesta, sin interpretar, de contactos que siguen en
@@ -665,6 +670,21 @@ export function createSupabaseOutreachStore(
 				.lt("touches", 3)
 				.is("replied_at", null);
 			if (error) fail("listar seguimientos vencidos", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listExhaustedContacts(tenantId, now) {
+			const threshold = new Date(
+				now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000,
+			).toISOString();
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.gte("touches", 3)
+				.is("replied_at", null)
+				.lt("first_touch_at", threshold);
+			if (error) fail("listar contactos agotados", error);
 			return (data ?? []).map(toContact);
 		},
 
