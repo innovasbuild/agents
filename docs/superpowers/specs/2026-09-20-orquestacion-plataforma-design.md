@@ -506,7 +506,7 @@ S1 es la primera tarea de la implementación. S3 es parte de la Etapa 14.
 
 ## 14. Delta del roadmap
 
-**No aplicado.** Se aplica a `docs/01-roadmap-etapas.md` como un commit aparte cuando esta spec esté aprobada, para no pisar a quien esté editando el archivo.
+**Aplicado el 2026-09-20** en `docs/01-roadmap-etapas.md` y `docs/innovas-agents-kickoff.md` (PR #30), una vez que terminó el hilo que estaba editando el roadmap. Las correcciones de §14.3 también: las Etapas 3, 4 y 5 quedaron `[x]` siguiendo el registro de avance del kickoff (PR #27), y la línea de ColdIQ/Places pasó a la Etapa 13.
 
 ### 14.1 Etapas nuevas
 
