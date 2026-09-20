@@ -138,10 +138,22 @@ export async function queueTouch(
 			`no hay un contacto cargado con la clave ${input.contactKey}`,
 		);
 	if (!contact.email) return refuse("sin_email", "el contacto no tiene email");
-	if (contact.stage !== "a_contactar" || contact.touches > 0) {
+	// msg1 y follow-up piden la invariante contraria: msg1 es solo para quien
+	// todavía no tiene ningún toque; un follow-up, por definición, va a alguien
+	// que ya fue tocado y todavía no respondió (si respondió, no corresponde).
+	if (input.kind === "msg1") {
+		if (contact.stage !== "a_contactar" || contact.touches > 0) {
+			return refuse(
+				"etapa_incompatible",
+				`el contacto está en ${contact.stage}: el primer mensaje es solo para a_contactar`,
+			);
+		}
+	} else if (contact.touches === 0 || contact.repliedAt) {
 		return refuse(
 			"etapa_incompatible",
-			`el contacto está en ${contact.stage}: el primer mensaje es solo para a_contactar`,
+			contact.repliedAt
+				? "el contacto ya respondió: no corresponde mandarle un follow-up"
+				: "el contacto todavía no recibió ningún toque: no hay follow-up sin primer mensaje",
 		);
 	}
 	const attribution = attributionError(tenant, input);

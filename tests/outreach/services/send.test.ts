@@ -195,7 +195,14 @@ describe("sendQueuedEmail", () => {
 
 	it("un follow-up con hilo guardado responde adentro: sendMail recibe threadId, inReplyTo y references", async () => {
 		const store = createFakeStore();
-		store.contacts.push(contactRow());
+		// Un followup real cae sobre un contacto ya tocado, no uno fresco.
+		store.contacts.push(
+			contactRow({
+				stage: "msg1_enviado",
+				touches: 1,
+				gmailThreadId: "th-old",
+			}),
+		);
 		store.accounts.push(accountRow());
 		const queued = await queueTouch(
 			{

@@ -221,6 +221,9 @@ describe("queueTouch", () => {
 
 	it("una pieza de followup guarda el hilo y el mensaje al que responde", async () => {
 		const { store, deps } = setup();
+		// Un followup real cae sobre un contacto ya tocado, no sobre uno fresco.
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
 		const result = await queueTouch(
 			{
 				caller,
@@ -247,7 +250,9 @@ describe("queueTouch", () => {
 
 	it("un followup no exige ancla, a diferencia del msg1", async () => {
 		// El check de la base solo exige ancla para kind = 'msg1'.
-		const { deps } = setup();
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
 		const result = await queueTouch(
 			{
 				caller,
@@ -264,6 +269,64 @@ describe("queueTouch", () => {
 			deps,
 		);
 		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("un followup_2 sobre un contacto en msg1_enviado con un toque se encola bien", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("un followup sobre un contacto que ya respondió se refusa: no corresponde", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		store.contacts[0].repliedAt = "2026-09-10T00:00:00Z";
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: false, reason: "etapa_incompatible" });
+	});
+
+	it("un msg1 sobre un contacto ya tocado sigue refusado con la regla de siempre", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(touch, deps);
+		expect(result).toMatchObject({ ok: false, reason: "etapa_incompatible" });
+		if (!result.ok) {
+			expect(result.message).toContain(
+				"el primer mensaje es solo para a_contactar",
+			);
+		}
 	});
 });
 
