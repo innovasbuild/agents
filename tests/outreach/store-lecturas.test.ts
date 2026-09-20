@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { outreachEvent } from "@/lib/outreach/events";
+import { isNoResponse, NO_RESPONSE_AFTER_DAYS } from "@/lib/outreach/stage";
 import type { FakeStore } from "./fake-store";
 import { createFakeStore, OTHER_USER, TENANT, USER } from "./fake-store";
 
@@ -225,6 +226,40 @@ describe("lecturas de los schedules en el fake store", () => {
 		);
 
 		expect(rows).toEqual([]);
+	});
+
+	// M2: `isNoResponse()` es la definición canónica de "agotado" y estaba
+	// muerta — la store la había reimplementado en SQL, con el borde distinto
+	// (`<` estricto vs `>=`). Dos copias de la misma regla divergen tarde o
+	// temprano: ahora el SQL es un prefiltro y la palabra final la tiene
+	// `isNoResponse`. El instante exacto de los 14 días es donde se veía la
+	// diferencia.
+	it("listExhaustedContacts usa isNoResponse: a los NO_RESPONSE_AFTER_DAYS justos ya está agotado", async () => {
+		const now = new Date("2026-09-19T12:00:00Z");
+		const justo = new Date(
+			now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000,
+		).toISOString();
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:justo@test.com",
+			touches: 3,
+			repliedAt: null,
+			firstTouchAt: justo,
+		});
+
+		const rows = await store.listExhaustedContacts(TENANT, now);
+
+		expect(rows.map((r) => r.contactKey)).toEqual(["em:justo@test.com"]);
+		// Y la definición canónica dice lo mismo sobre esa misma fila.
+		expect(
+			isNoResponse({
+				touches: 3,
+				firstTouchAt: new Date(justo),
+				repliedAt: null,
+				now,
+			}),
+		).toBe(true);
 	});
 
 	it("listExhaustedContacts excluye a quien todavía no cumplió NO_RESPONSE_AFTER_DAYS desde el primer toque", async () => {

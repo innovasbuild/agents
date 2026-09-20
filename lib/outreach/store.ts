@@ -10,7 +10,12 @@ import {
 import type { OutreachEventInsert } from "./events";
 import type { Ficha } from "./ficha";
 import type { GateResult } from "./gate";
-import { NO_RESPONSE_AFTER_DAYS, type OutreachStage } from "./stage";
+import {
+	isNoResponse,
+	MAX_TOUCHES,
+	NO_RESPONSE_AFTER_DAYS,
+	type OutreachStage,
+} from "./stage";
 
 export type QueueItemStatus =
 	| "pending"
@@ -696,6 +701,11 @@ export function createSupabaseOutreachStore(
 		},
 
 		async listExhaustedContacts(tenantId, now) {
+			// La definición de "agotado" es UNA: `isNoResponse()` (stage.ts). Este
+			// SQL es solo un prefiltro para no traerse la tabla entera — por eso
+			// `lte` y no `lt`, para no ser más estricto que la regla canónica en el
+			// borde. La palabra final la tiene la función, abajo. Antes había dos
+			// copias de la misma regla y solo una tenía test.
 			const threshold = new Date(
 				now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000,
 			).toISOString();
@@ -703,11 +713,18 @@ export function createSupabaseOutreachStore(
 				.from("contacts")
 				.select(CONTACT_COLUMNS)
 				.eq("tenant_id", tenantId)
-				.gte("touches", 3)
+				.gte("touches", MAX_TOUCHES)
 				.is("replied_at", null)
-				.lt("first_touch_at", threshold);
+				.lte("first_touch_at", threshold);
 			if (error) fail("listar contactos agotados", error);
-			const candidates = (data ?? []).map(toContact);
+			const candidates = (data ?? []).map(toContact).filter((c) =>
+				isNoResponse({
+					touches: c.touches,
+					firstTouchAt: c.firstTouchAt ? new Date(c.firstTouchAt) : null,
+					repliedAt: c.repliedAt ? new Date(c.repliedAt) : null,
+					now,
+				}),
+			);
 			if (candidates.length === 0) return [];
 
 			// Idempotencia del freno: `oportunidad_frenada` tiene dedup de 2h en

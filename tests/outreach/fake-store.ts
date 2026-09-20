@@ -1,7 +1,7 @@
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { parseOutreachConfig } from "@/lib/outreach/config";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
-import { NO_RESPONSE_AFTER_DAYS } from "@/lib/outreach/stage";
+import { isNoResponse } from "@/lib/outreach/stage";
 import type {
 	AccountRow,
 	ContactRow,
@@ -323,7 +323,6 @@ export function createFakeStore(): FakeStore {
 		},
 
 		async listExhaustedContacts(tenantId, now) {
-			const threshold = now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000;
 			// Idempotencia del freno: quien ya tiene un evento oportunidad_frenada
 			// no vuelve, igual que hace la store real (el dedup de events_dedup()
 			// es de 2h, no alcanza contra un cron diario).
@@ -337,13 +336,17 @@ export function createFakeStore(): FakeStore {
 					)
 					.map((e) => e.contact_key as string),
 			);
+			// La definición de "agotado" es la misma función que usa la store real:
+			// isNoResponse(). Una sola regla, no una copia.
 			return store.contacts.filter(
 				(c) =>
 					c.tenantId === tenantId &&
-					c.touches >= 3 &&
-					c.repliedAt === null &&
-					c.firstTouchAt !== null &&
-					new Date(c.firstTouchAt).getTime() < threshold &&
+					isNoResponse({
+						touches: c.touches,
+						firstTouchAt: c.firstTouchAt ? new Date(c.firstTouchAt) : null,
+						repliedAt: c.repliedAt ? new Date(c.repliedAt) : null,
+						now,
+					}) &&
 					!yaFrenados.has(c.contactKey),
 			);
 		},
