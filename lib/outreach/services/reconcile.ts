@@ -26,7 +26,8 @@ function elapsedText(approvedAt: string | null, now: Date): string {
 }
 
 export function planReconcile(input: {
-	item: QueueItemRow;
+	// Solo `approvedAt`: es lo único que el veredicto mira.
+	item: Pick<QueueItemRow, "approvedAt">;
 	found: { id: string; threadId: string } | null;
 	now: Date;
 }): ReconcileVerdict {

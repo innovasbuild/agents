@@ -1,10 +1,13 @@
 // Núcleo puro de la escucha: decide qué efectos corresponden a los mensajes
 // de un hilo de Gmail, sin ejecutarlos. No toca la base ni Gmail — eso lo
 // hace el sweep que consume `planListen` en una task posterior.
-import type { GmailMessage } from "@/lib/gmail/read";
-import type { OutreachStage } from "@/lib/outreach/stage";
-import { canAdvance } from "@/lib/outreach/stage";
-import type { ContactRow } from "@/lib/outreach/store";
+// Imports relativos y no "@/": el sweep que consume esto vive dentro de un
+// schedule de eve, que no resuelve los paths de tsconfig (mismo motivo que
+// lib/agents/channel-context.ts).
+import type { GmailMessage } from "../gmail/read";
+import type { OutreachStage } from "./stage";
+import { canAdvance } from "./stage";
+import type { ContactRow } from "./store";
 
 export interface ListenEffect {
 	event: {
@@ -24,7 +27,9 @@ function summaryOf(message: GmailMessage): string {
 }
 
 export function planListen(input: {
-	contact: ContactRow;
+	// Solo la etapa: es todo lo que la decisión mira, y pedir la fila entera
+	// obligaría al sweep a leer columnas que no usa.
+	contact: Pick<ContactRow, "stage">;
 	messages: readonly GmailMessage[];
 	knownMessageIds: ReadonlySet<string>;
 	now: Date;

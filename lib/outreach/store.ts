@@ -97,6 +97,7 @@ export type ContactPatch = Partial<
 		| "firstTouchAt"
 		| "lastTouchAt"
 		| "nextStepAt"
+		| "repliedAt"
 		| "gmailThreadId"
 	>
 >;
@@ -331,6 +332,7 @@ const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	firstTouchAt: "first_touch_at",
 	lastTouchAt: "last_touch_at",
 	nextStepAt: "next_step_at",
+	repliedAt: "replied_at",
 	gmailThreadId: "gmail_thread_id",
 };
 
