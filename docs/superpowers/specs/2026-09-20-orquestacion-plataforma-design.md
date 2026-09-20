@@ -160,7 +160,7 @@ Una fila es "este workflow tiene que procesar este sujeto". Es estado operativo,
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | uuid pk | |
+| `id` | bigint identity pk | No uuid: es una cola, nadie la referencia desde afuera, y un uuid v4 fragmenta el índice (`supabase-postgres-best-practices`, regla de PK). Mismo criterio que `events` |
 | `tenant_id` | uuid | FK `tenants`, cascade |
 | `workflow` | text | Validado contra el registry en código; sin FK |
 | `subject_type` | text | `account`, `contact`, … Validado contra el registry |
@@ -194,7 +194,7 @@ La llaman:
 
 - **el runner**, cuando un ítem termina `done`: mira en el registry qué workflows reclaman lo que este deja, y encola para cada uno que el tenant tenga prendido;
 - **las puertas**, cuando el cambio viene de afuera: un CSV importado, un contacto editado a mano, una página de canon reescrita en el brain;
-- **un sembrador por workflow**, opcional, para trabajo que nace del paso del tiempo y no de un evento (una ficha que venció). Es una query declarada en el registry que el dispatcher corre antes de reclamar.
+- **un sembrador por workflow**, opcional, para trabajo que nace del paso del tiempo y no de un evento (una ficha que venció). Es una función `seed` de la implementación del workflow, que el runner corre antes de reclamar; el registry lo declara con `entry: "seed"`.
 
 Un choque con el índice único (`23505`) devuelve `ya_visto` y no es error.
 
@@ -269,7 +269,7 @@ La lista definitiva sale de recorrer `lib/*/services/` al armar el registry; est
 
 | Campo | Tipo | Notas |
 |---|---|---|
-| `id` | uuid pk | |
+| `id` | bigint identity pk | Append-only: mismo criterio que `events` |
 | `tenant_id` | uuid | |
 | `run_id` | uuid | FK `runs`, nullable (un nodo llamado desde el chat también asienta) |
 | `workflow` | text | Nullable |
@@ -293,7 +293,11 @@ Sin `UPDATE` ni `DELETE`, igual que `events`. Lectura: `amount` de `model_usd` e
 
 Antes de reclamar, el runner suma lo gastado hoy. Al tope: no reclama, los ítems quedan `pending` intactos, la pasada se cierra como `budget_exhausted` y el aviso sale **una vez** por día.
 
-Los nodos que ya llaman al modelo (`draftMessage`, `runResearch`, clasificación) dejan de descartar el `usage` y asientan. Entra en esta etapa: sin eso el criterio de cierre 3 no se cumple.
+**Dónde se engancha la medición: en la puerta, no en el servicio.** Un envoltorio `metered()` rodea la función `generate` que cada puerta ya le inyecta al servicio, y asienta el costo de cada llamada. Los servicios no conocen el libro de consumo y sus tests no cambian. Como es fácil olvidarlo en una puerta nueva, un test contra el disco obliga: todo archivo que importa `generateText` de `ai` tiene que usar `metered`.
+
+Hoy llaman al modelo tres puertas: las tools `draft_message` y `research_account`, y el schedule `followups` (que redacta los follow-ups). La clasificación de respuestas no es una llamada propia: la hace el agente dentro de su turno. Las tres asientan en esta etapa; sin eso el criterio de cierre 3 no se cumple.
+
+El costo sale de lo que informe el AI Gateway en `providerMetadata` y, si no informa, de una tabla de precios por modelo en código (spike S1).
 
 ### 7.3 Nivel 2: política por tenant
 
@@ -370,13 +374,18 @@ export const WORKFLOWS = {
     produces: "ficha_vigente",
     nodes: ["outreach/research"],
     optionalNodes: [],
+    resources: ["model_usd"],
     caps: { itemsPerTick: 5, costUsdPerRun: 1 },
-    configSchema: refreshFichasConfigSchema,
+    entry: "seed",
   },
 } as const;
 ```
 
-`claims` y `produces` son etiquetas del grafo: el runner encola aguas abajo para todo workflow cuyo `claims` coincida con el `produces` del que terminó.
+`claims` y `produces` son etiquetas del grafo: el runner encola aguas abajo para todo workflow cuyo `claims` coincida con el `produces` del que terminó. `resources` son los recursos medidos que gasta, contra los que se chequea el presupuesto diario. `entry` dice de dónde le llega el trabajo (`seed`, `door` o `upstream`) y es lo que le permite al test 5 de §9.3 distinguir un `claims` huérfano de uno que entra por sembrador o por puerta.
+
+La clave de un nodo es mecánica: `lib/<dominio>/services/<archivo>.ts` → `"<dominio>/<archivo>"`. Un archivo de servicio que no es un nodo por sí mismo (un helper, o la llamada al modelo de otro nodo) va a una lista de excluidos con su motivo.
+
+Los parámetros propios de un workflow no llevan schema en el registry: `parseTenantWorkflowConfig` valida lo que es de la plataforma (cadencia, ítems por tick, nodos opcionales) y le pasa el resto a la implementación como `params`.
 
 ### 9.2 Runner
 
@@ -411,7 +420,7 @@ Regla que sale de acá y va a `docs/02-orquestacion.md`: **una tool de eve no co
 |---|---|
 | `tenant_id`, `workflow` | PK. `workflow` validado contra el registry, sin FK |
 | `enabled` | **Default `false`.** Un workflow desatendido gasta plata solo: se prende a propósito |
-| `config` jsonb | Validado con el schema zod que el workflow declara en el registry |
+| `config` jsonb | Validado por `parseTenantWorkflowConfig`: lo de la plataforma con schema zod, el resto pasa como `params` del workflow |
 | `last_run_at` | Para la cadencia |
 | `created_at` | |
 
