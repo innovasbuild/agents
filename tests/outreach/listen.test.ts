@@ -43,10 +43,52 @@ describe("planListen", () => {
 		expect(effects).toEqual([]);
 	});
 
-	it("un mensaje ya registrado no se procesa de nuevo", () => {
+	it("un mensaje ya registrado, con el contacto ya marcado, no se procesa de nuevo", () => {
 		const effects = planListen({
-			contact: contactRow({ stage: "msg1_enviado" }),
+			contact: contactRow({
+				stage: "respuesta_neutra",
+				repliedAt: "2026-09-18T10:00:00Z",
+			}),
 			messages: [inbound({ id: "m1" })],
+			knownMessageIds: new Set(["m1"]),
+			now: NOW,
+		});
+
+		expect(effects).toEqual([]);
+	});
+
+	// B2: el sweep escribe el evento primero y el patch del contacto después. Si
+	// el patch falla, el mensaje queda "conocido" y el contacto sin replied_at,
+	// y hasta ahora ninguna corrida futura lo podía reparar: el dedup lo
+	// salteaba para siempre y le seguían saliendo follow-ups.
+	it("una respuesta ya registrada cuyo patch nunca se aplicó se vuelve a emitir", () => {
+		const [effect] = planListen({
+			contact: contactRow({ stage: "msg1_enviado", repliedAt: null }),
+			messages: [inbound({ id: "m1" })],
+			knownMessageIds: new Set(["m1"]),
+			now: NOW,
+		});
+
+		expect(effect.event.gmailMessageId).toBe("m1");
+		expect(effect.repliedAt).toBe(NOW.toISOString());
+		expect(effect.stage).toBe("respuesta_neutra");
+	});
+
+	it("un auto-reply ya registrado no se re-emite: su replied_at null es el estado correcto", () => {
+		const effects = planListen({
+			contact: contactRow({ stage: "msg1_enviado", repliedAt: null }),
+			messages: [inbound({ id: "m1", isAutoReply: true })],
+			knownMessageIds: new Set(["m1"]),
+			now: NOW,
+		});
+
+		expect(effects).toEqual([]);
+	});
+
+	it("un rebote ya registrado no se re-emite: no deja replied_at que comparar", () => {
+		const effects = planListen({
+			contact: contactRow({ stage: "msg1_enviado", repliedAt: null }),
+			messages: [inbound({ id: "m1", isBounce: true })],
 			knownMessageIds: new Set(["m1"]),
 			now: NOW,
 		});

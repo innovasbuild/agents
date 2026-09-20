@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { GmailMessage } from "@/lib/gmail/read";
+import type { OutreachEventInsert } from "@/lib/outreach/events";
 import {
 	needsHandoff,
 	runMorningSweep,
@@ -13,6 +14,7 @@ import {
 	takeScheduleLock,
 	UNIQUE_VIOLATION,
 } from "@/lib/outreach/services/sweep";
+import type { ContactPatch } from "@/lib/outreach/store";
 
 const SWEEP_SOURCE = readFileSync(
 	join(__dirname, "..", "..", "..", "lib", "outreach", "services", "sweep.ts"),
@@ -183,6 +185,7 @@ const contacto = (over: Partial<SweepContact> = {}): SweepContact => ({
 	gmailThreadId: "hilo-1",
 	stage: "msg1_enviado",
 	touches: 1,
+	repliedAt: null,
 	...over,
 });
 
@@ -388,7 +391,7 @@ describe("qué cuenta como respuesta", () => {
 		});
 	});
 
-	it("un mensaje ya conocido no se registra dos veces", async () => {
+	it("un mensaje ya conocido, con el contacto ya marcado, no se registra dos veces", async () => {
 		const insertEvents = vi.fn(async () => {});
 
 		const result = await runSweep(
@@ -396,7 +399,14 @@ describe("qué cuenta como respuesta", () => {
 				store: {
 					...deps().store,
 					insertEvents,
-					listContactsWithThread: async () => [contacto()],
+					// Con replied_at puesto, el patch de esa respuesta ya se aplicó: no
+					// hay nada que reparar (ver "una escritura a medias" más abajo).
+					listContactsWithThread: async () => [
+						contacto({
+							stage: "respuesta_neutra",
+							repliedAt: "2026-09-18T10:00:00Z",
+						}),
+					],
 					listKnownInboundIds: async () => ["m1"],
 				},
 				fetchThread: async () => [mensaje()],
@@ -617,6 +627,95 @@ describe("reconciliación de piezas aprobadas", () => {
 		await runSweep(deps({ store: { ...deps().store, listQueue } }));
 
 		expect(listQueue).toHaveBeenCalledWith("t1", "u1", ["approved"]);
+	});
+});
+
+describe("una escritura a medias se repara en la corrida siguiente", () => {
+	// B2: el evento va primero (es el hecho, y es append-only), pero ese mismo
+	// evento es el dedup. Si el patch del contacto falla, el mensaje queda
+	// "conocido" y el contacto sin replied_at: antes de este arreglo ninguna
+	// corrida futura lo podía tocar y le seguían saliendo follow-ups a alguien
+	// que ya había contestado.
+	const escenario = () => {
+		const eventos: OutreachEventInsert[] = [];
+		const estado = { repliedAt: null as string | null, updateOk: false };
+		const updateContact = vi.fn(
+			async (_tenantId: string, _id: string, patch: ContactPatch) => {
+				if (!estado.updateOk) throw new Error("la base tosió");
+				if (patch.repliedAt !== undefined) estado.repliedAt = patch.repliedAt;
+				return {} as never;
+			},
+		);
+		const store = {
+			...deps().store,
+			insertEvents: vi.fn(async (rows: readonly OutreachEventInsert[]) => {
+				// La base dedupea por gmail_message_id: un re-insert no duplica.
+				for (const row of rows) {
+					const id = (row.payload as { gmail_message_id?: string })
+						?.gmail_message_id;
+					if (
+						!eventos.some(
+							(e) =>
+								(e.payload as { gmail_message_id?: string })
+									?.gmail_message_id === id,
+						)
+					)
+						eventos.push(row);
+				}
+			}),
+			listKnownInboundIds: async () =>
+				eventos
+					.map(
+						(e) =>
+							(e.payload as { gmail_message_id?: string })?.gmail_message_id,
+					)
+					.filter((id): id is string => typeof id === "string"),
+			listContactsWithThread: async () => [
+				contacto({ repliedAt: estado.repliedAt }),
+			],
+			updateContact,
+		};
+		return { eventos, estado, store, updateContact };
+	};
+
+	it("si updateContact falla, el evento queda y el contacto no se marca", async () => {
+		const { eventos, estado, store } = escenario();
+
+		const result = await runSweep(
+			deps({ store, fetchThread: async () => [mensaje()] }),
+		);
+
+		expect(eventos).toHaveLength(1);
+		expect(estado.repliedAt).toBeNull();
+		expect(result.tenants[0].contactosFallidos).toBe(1);
+	});
+
+	it("la corrida siguiente termina el trabajo: vuelve a aplicar el patch", async () => {
+		const { estado, store, updateContact } = escenario();
+
+		await runSweep(deps({ store, fetchThread: async () => [mensaje()] }));
+		estado.updateOk = true;
+		const second = await runSweep(
+			deps({ store, fetchThread: async () => [mensaje()] }),
+		);
+
+		expect(estado.repliedAt).toBe("2026-09-19T10:00:00.000Z");
+		expect(updateContact).toHaveBeenCalledTimes(2);
+		expect(second.tenants[0].respuestas).toBe(1);
+		expect(second.tenants[0].contactosFallidos).toBe(0);
+	});
+
+	it("una vez reparado, el mensaje deja de reprocesarse", async () => {
+		const { estado, store, updateContact } = escenario();
+
+		estado.updateOk = true;
+		await runSweep(deps({ store, fetchThread: async () => [mensaje()] }));
+		const third = await runSweep(
+			deps({ store, fetchThread: async () => [mensaje()] }),
+		);
+
+		expect(updateContact).toHaveBeenCalledTimes(1);
+		expect(third.tenants[0].respuestas).toBe(0);
 	});
 });
 

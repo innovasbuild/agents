@@ -50,9 +50,17 @@ export interface SweepExecutor {
 
 type SweepExecutorWithEmail = SweepExecutor & { email: string };
 
+/** `repliedAt` no es decorativo: es lo que deja ver si el patch de una
+ * respuesta ya registrada llegó a aplicarse (ver `planListen`). */
 export type SweepContact = Pick<
 	ContactRow,
-	"id" | "tenantId" | "contactKey" | "gmailThreadId" | "stage" | "touches"
+	| "id"
+	| "tenantId"
+	| "contactKey"
+	| "gmailThreadId"
+	| "stage"
+	| "touches"
+	| "repliedAt"
 >;
 
 export type SweepQueueItem = Pick<

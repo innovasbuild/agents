@@ -27,9 +27,11 @@ function summaryOf(message: GmailMessage): string {
 }
 
 export function planListen(input: {
-	// Solo la etapa: es todo lo que la decisión mira, y pedir la fila entera
-	// obligaría al sweep a leer columnas que no usa.
-	contact: Pick<ContactRow, "stage">;
+	// La etapa y el replied_at: lo primero decide hasta dónde puede avanzar el
+	// contacto, lo segundo si el patch de una respuesta ya registrada llegó a
+	// aplicarse. Pedir la fila entera obligaría al sweep a leer columnas que no
+	// usa.
+	contact: Pick<ContactRow, "stage" | "repliedAt">;
 	messages: readonly GmailMessage[];
 	knownMessageIds: ReadonlySet<string>;
 	now: Date;
@@ -41,7 +43,24 @@ export function planListen(input: {
 		if (message.isFromUs) continue;
 
 		// 2. El dedup de la base es el segundo cinturón; este es el primero.
-		if (input.knownMessageIds.has(message.id)) continue;
+		//
+		// Pero el evento prueba que el HECHO quedó registrado, no que el patch
+		// del contacto se haya aplicado: el sweep escribe el evento primero
+		// (events es append-only y el evento no se puede perder) y el patch
+		// después. Si el patch falla, el mensaje queda "conocido" con el contacto
+		// sin `replied_at`, la cadencia de follow-ups viva, y nadie lo repara.
+		// Por eso una respuesta real cuyo `replied_at` sigue en null se vuelve a
+		// emitir: la corrida siguiente termina el trabajo a medias. El re-insert
+		// del evento lo absorbe el dedup por `gmail_message_id` (23505 = ya
+		// registrado).
+		//
+		// Solo aplica a las respuestas reales: un rebote y un auto-reply no
+		// escriben `replied_at` a propósito, así que su estado correcto es
+		// indistinguible de un patch que falló y reprocesarlos todos los días no
+		// repararía nada.
+		const realReply = !message.isBounce && !message.isAutoReply;
+		const patchPendiente = realReply && input.contact.repliedAt === null;
+		if (input.knownMessageIds.has(message.id) && !patchPendiente) continue;
 
 		// 3. Un rebote no es una respuesta: no toca replied_at ni la etapa.
 		if (message.isBounce) {
