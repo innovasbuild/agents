@@ -253,6 +253,84 @@ describe("sendQueuedEmail", () => {
 		);
 	});
 
+	// B3: la guarda de "ya respondió" vivía solo en queueTouch, o sea hasta 7
+	// días antes del envío real. Entre encolar y aprobar, la persona puede
+	// contestar: mandarle igual el "che, no me respondiste" es el peor error
+	// posible de la etapa.
+	it("un follow-up a quien contestó DESPUÉS del encolado no sale", async () => {
+		const store = createFakeStore();
+		store.contacts.push(
+			contactRow({
+				stage: "msg1_enviado",
+				touches: 1,
+				gmailThreadId: "th-old",
+			}),
+		);
+		store.accounts.push(accountRow());
+		const queued = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: `Re: ${SUBJECT}`,
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "th-old",
+			},
+			{ store, crm: null, loadCanon: async () => canon, now },
+		);
+		if (!queued.ok) throw new Error(queued.message);
+
+		// El barrido de la mañana siguiente encuentra la respuesta.
+		store.contacts[0].repliedAt = "2026-09-16T09:00:00Z";
+		store.contacts[0].stage = "respuesta_neutra";
+
+		const sendMail = vi.fn(async () => ({ id: "gm-2", threadId: "th-old" }));
+		const result = await sendQueuedEmail(
+			{
+				caller,
+				sessionId: "wrun_2",
+				callId: "call-2",
+				queueItemId: queued.queueItemId,
+				to: "laura@acme.test",
+				subject: `Re: ${SUBJECT}`,
+				body: PASSING_BODY,
+			},
+			{
+				store,
+				crm: null,
+				crmAfterSend: null,
+				loadCanon: async () => canon,
+				sendMail,
+				isMailUnauthorized: (e: unknown) => e instanceof FakeUnauthorized,
+				isMailUnknownOutcome: (e: unknown) => e instanceof FakeUnknownOutcome,
+				now,
+			},
+		);
+
+		expect(result).toMatchObject({ ok: false, reason: "ya_respondio" });
+		expect(sendMail).not.toHaveBeenCalled();
+		expect(store.queue[0]).toMatchObject({
+			status: "failed",
+			error: "ya_respondio",
+		});
+		expect(store.events.map((e) => e.type)).toContain("envio_fallido");
+	});
+
+	it("un msg1 no mira replied_at: la guarda es solo para los follow-ups", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		// Un contacto con replied_at y todavía en a_contactar no es un estado que
+		// el sistema produzca, pero la guarda no tiene por qué frenar un primer
+		// mensaje: ahí "ya respondió" no quiere decir nada.
+		store.contacts[0].repliedAt = "2026-09-14T09:00:00Z";
+
+		expect(await sendQueuedEmail(input, deps)).toMatchObject({ ok: true });
+		expect(sendMail).toHaveBeenCalled();
+	});
+
 	it("una segunda llamada con la misma pieza no envía de nuevo", async () => {
 		const { deps, input, sendMail } = await setup();
 		await sendQueuedEmail(input, deps);

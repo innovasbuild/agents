@@ -177,6 +177,21 @@ export async function sendQueuedEmail(
 		}
 		contact = found;
 
+		// La otra guarda de esto vive en `queueTouch`, o sea en el momento de
+		// ENCOLAR: la pieza vence recién a los 7 días, así que entre esa
+		// validación y este envío hay hasta una semana en la que la persona puede
+		// haber contestado (el barrido de la mañana lo marca). Mandarle igual un
+		// follow-up de "no me respondiste" a quien respondió es la falla que la
+		// etapa entera existe para evitar, así que se revalida acá, con el dato
+		// recién leído. Un msg1 no entra: ahí `replied_at` no significa nada.
+		if (item.kind !== "msg1" && contact.repliedAt) {
+			return await finish(
+				"failed",
+				"ya_respondio",
+				"esta persona respondió después de que se encoló la pieza: no corresponde mandarle un follow-up",
+			);
+		}
+
 		const claim = await claimForContact(
 			deps,
 			caller,
