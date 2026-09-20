@@ -378,6 +378,42 @@ export function createFakeStore(): FakeStore {
 			return result;
 		},
 
+		async countRecentReplies(tenantId, since) {
+			const enRespuestaNeutra = new Set(
+				store.contacts
+					.filter(
+						(c) => c.tenantId === tenantId && c.stage === "respuesta_neutra",
+					)
+					.map((c) => c.contactKey),
+			);
+			const contadas = new Set<string>();
+			for (const event of store.events) {
+				if (event.tenant_id !== tenantId || event.type !== "respuesta")
+					continue;
+				if (!event.contact_key || !enRespuestaNeutra.has(event.contact_key))
+					continue;
+				const createdAt = eventCreatedAt.get(event);
+				if (!createdAt || new Date(createdAt) < since) continue;
+				contadas.add(event.contact_key);
+			}
+			return contadas.size;
+		},
+
+		async countStalled(tenantId, since) {
+			let count = 0;
+			for (const event of store.events) {
+				if (
+					event.tenant_id !== tenantId ||
+					event.type !== "oportunidad_frenada"
+				)
+					continue;
+				const createdAt = eventCreatedAt.get(event);
+				if (!createdAt || new Date(createdAt) < since) continue;
+				count++;
+			}
+			return count;
+		},
+
 		contactSeed(): ContactRow {
 			return contactRow();
 		},

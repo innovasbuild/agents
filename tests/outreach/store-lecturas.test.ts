@@ -248,4 +248,207 @@ describe("lecturas de los schedules en el fake store", () => {
 
 		expect(rows.map((r) => r.id)).toEqual([TENANT]);
 	});
+
+	it("countRecentReplies cuenta contactos en respuesta_neutra con evento respuesta desde `since`", async () => {
+		const store = createFakeStore();
+		store.contacts.push(
+			{
+				...store.contactSeed(),
+				contactKey: "em:respondio@test.com",
+				stage: "respuesta_neutra",
+			},
+			{
+				...store.contactSeed(),
+				contactKey: "em:no_respondio@test.com",
+				stage: "sin_respuesta",
+			},
+		);
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:respondio@test.com",
+				type: "respuesta",
+				summary: "Gracias, lo vemos la semana que viene.",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countRecentReplies(
+			TENANT,
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(1);
+	});
+
+	it("countRecentReplies no cuenta a quien respondió pero ya no está en respuesta_neutra", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:avanzo@test.com",
+			stage: "en_conversacion",
+		});
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:avanzo@test.com",
+				type: "respuesta",
+				summary: "Dale, hablemos.",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countRecentReplies(
+			TENANT,
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
+
+	it("countRecentReplies excluye eventos anteriores a `since`", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:respondio@test.com",
+			stage: "respuesta_neutra",
+		});
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:respondio@test.com",
+				type: "respuesta",
+				summary: "Gracias, lo vemos la semana que viene.",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countRecentReplies(
+			TENANT,
+			new Date("2030-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
+
+	it("countRecentReplies no cruza tenants", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:respondio@test.com",
+			stage: "respuesta_neutra",
+		});
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:respondio@test.com",
+				type: "respuesta",
+				summary: "Gracias, lo vemos la semana que viene.",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countRecentReplies(
+			"otro-tenant",
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
+
+	it("countStalled cuenta eventos oportunidad_frenada desde `since`", async () => {
+		const store = createFakeStore();
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:agotado@test.com",
+				type: "oportunidad_frenada",
+				summary: "tres toques sin respuesta, con deal abierto",
+				payload: {},
+			}),
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:otro_agotado@test.com",
+				type: "oportunidad_frenada",
+				summary: "tres toques sin respuesta, con deal abierto",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countStalled(
+			TENANT,
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(2);
+	});
+
+	it("countStalled ignora eventos de otro tipo", async () => {
+		const store = createFakeStore();
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:respondio@test.com",
+				type: "respuesta",
+				summary: "Gracias, lo vemos la semana que viene.",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countStalled(
+			TENANT,
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
+
+	it("countStalled excluye eventos anteriores a `since`", async () => {
+		const store = createFakeStore();
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:agotado@test.com",
+				type: "oportunidad_frenada",
+				summary: "tres toques sin respuesta, con deal abierto",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countStalled(
+			TENANT,
+			new Date("2030-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
+
+	it("countStalled no cruza tenants", async () => {
+		const store = createFakeStore();
+		await store.insertEvents([
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:agotado@test.com",
+				type: "oportunidad_frenada",
+				summary: "tres toques sin respuesta, con deal abierto",
+				payload: {},
+			}),
+		]);
+
+		const count = await store.countStalled(
+			"otro-tenant",
+			new Date("2000-01-01T00:00:00Z"),
+		);
+
+		expect(count).toBe(0);
+	});
 });

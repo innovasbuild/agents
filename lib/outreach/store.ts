@@ -243,6 +243,12 @@ export interface OutreachStore {
 	/** Eventos de respuesta, sin interpretar, de contactos que siguen en
 	 * `respuesta_neutra` (Task 8: revisión humana de escucha). */
 	listPendingReplies(tenantId: string): Promise<PendingReply[]>;
+	/** Contactos en `respuesta_neutra` con evento `respuesta` desde `since`
+	 * (resumen de sesión: Task 11). */
+	countRecentReplies(tenantId: string, since: Date): Promise<number>;
+	/** Eventos `oportunidad_frenada` desde `since` (resumen de sesión:
+	 * Task 11). */
+	countStalled(tenantId: string, since: Date): Promise<number>;
 }
 
 export interface PendingReply {
@@ -771,6 +777,38 @@ export function createSupabaseOutreachStore(
 				});
 			}
 			return result;
+		},
+
+		async countRecentReplies(tenantId, since) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("stage", "respuesta_neutra");
+			if (contactsError)
+				fail("leer contactos en respuesta_neutra", contactsError);
+			const keys = (contacts ?? []).map((r) => r.contact_key as string);
+			if (keys.length === 0) return 0;
+			const { data: events, error: eventsError } = await client
+				.from("events")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("type", "respuesta")
+				.gte("created_at", since.toISOString())
+				.in("contact_key", keys);
+			if (eventsError) fail("contar respuestas recientes", eventsError);
+			return new Set((events ?? []).map((r) => r.contact_key as string)).size;
+		},
+
+		async countStalled(tenantId, since) {
+			const { data, error } = await client
+				.from("events")
+				.select("id")
+				.eq("tenant_id", tenantId)
+				.eq("type", "oportunidad_frenada")
+				.gte("created_at", since.toISOString());
+			if (error) fail("contar oportunidades frenadas", error);
+			return (data ?? []).length;
 		},
 	};
 }
