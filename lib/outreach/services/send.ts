@@ -30,6 +30,9 @@ export interface SendDeps {
 		body: string;
 		bcc: string | null;
 		messageId: string;
+		threadId?: string | null;
+		inReplyTo?: string | null;
+		references?: string | null;
 	}) => Promise<{ id: string; threadId: string }>;
 	isMailUnauthorized: (error: unknown) => boolean;
 	/** ¿El error es "no hubo respuesta de Gmail"? Ver el catch del envío. */
@@ -265,12 +268,21 @@ export async function sendQueuedEmail(
 	let sent: { id: string; threadId: string };
 	try {
 		const senderDomain = caller.email.split("@")[1] || "outreach.local";
+		// Un follow-up con hilo guardado responde adentro: sin esto, cada follow-up
+		// abriría una conversación nueva en vez de caer bajo el primer mensaje.
 		sent = await deps.sendMail({
 			to: item.toEmail,
 			subject: item.subject,
 			body: item.body,
 			bcc: tenant.config.bcc,
 			messageId: `<qi-${item.id}@${senderDomain}>`,
+			...(item.gmailThreadId && item.replyToMessageId
+				? {
+						threadId: item.gmailThreadId,
+						inReplyTo: item.replyToMessageId,
+						references: item.replyToMessageId,
+					}
+				: {}),
 		});
 	} catch (error) {
 		if (deps.isMailUnauthorized(error)) {

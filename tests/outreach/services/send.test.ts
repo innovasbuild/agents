@@ -179,6 +179,73 @@ describe("sendQueuedEmail", () => {
 		expect(store.events.map((e) => e.type)).toEqual(["encolado", "envio"]);
 	});
 
+	it("un msg1 sin hilo guardado no manda threadId, inReplyTo ni references", async () => {
+		const { deps, input, sendMail } = await setup();
+		await sendQueuedEmail(input, deps);
+		// toHaveBeenCalledWith es igualdad recursiva: si sendMail hubiera recibido
+		// threadId, inReplyTo o references, este objeto exacto no matchearía.
+		expect(sendMail).toHaveBeenCalledWith({
+			to: "laura@acme.test",
+			subject: SUBJECT,
+			body: PASSING_BODY,
+			bcc: "123@bcc.hubspot.com",
+			messageId: `<qi-${input.queueItemId}@innov.test>`,
+		});
+	});
+
+	it("un follow-up con hilo guardado responde adentro: sendMail recibe threadId, inReplyTo y references", async () => {
+		const store = createFakeStore();
+		store.contacts.push(contactRow());
+		store.accounts.push(accountRow());
+		const queued = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: `Re: ${SUBJECT}`,
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "th-old",
+			},
+			{ store, crm: null, loadCanon: async () => canon, now },
+		);
+		if (!queued.ok) throw new Error(queued.message);
+		const sendMail = vi.fn(async () => ({ id: "gm-2", threadId: "th-old" }));
+		const deps = {
+			store,
+			crm: null,
+			crmAfterSend: null,
+			loadCanon: async () => canon,
+			sendMail,
+			isMailUnauthorized: (e: unknown) => e instanceof FakeUnauthorized,
+			isMailUnknownOutcome: (e: unknown) => e instanceof FakeUnknownOutcome,
+			now,
+		};
+		const result = await sendQueuedEmail(
+			{
+				caller,
+				sessionId: "wrun_2",
+				callId: "call-2",
+				queueItemId: queued.queueItemId,
+				to: "laura@acme.test",
+				subject: `Re: ${SUBJECT}`,
+				body: PASSING_BODY,
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+		expect(sendMail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				threadId: "th-old",
+				inReplyTo: "<laura-1@acme.test>",
+				references: "<laura-1@acme.test>",
+			}),
+		);
+	});
+
 	it("una segunda llamada con la misma pieza no envía de nuevo", async () => {
 		const { deps, input, sendMail } = await setup();
 		await sendQueuedEmail(input, deps);

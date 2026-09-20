@@ -218,6 +218,53 @@ describe("queueTouch", () => {
 		expect(store.queue).toHaveLength(0);
 		expect(store.events).toHaveLength(0);
 	});
+
+	it("una pieza de followup guarda el hilo y el mensaje al que responde", async () => {
+		const { store, deps } = setup();
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: Crecer sin sumar gente",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+		expect(store.queue[0]).toMatchObject({
+			kind: "followup_2",
+			replyToMessageId: "<laura-1@acme.test>",
+			gmailThreadId: "t1",
+			ancla: null,
+		});
+	});
+
+	it("un followup no exige ancla, a diferencia del msg1", async () => {
+		// El check de la base solo exige ancla para kind = 'msg1'.
+		const { deps } = setup();
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: x",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<a@b.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
 });
 
 describe("listQueue, updateQueueItem, rejectQueueItem", () => {
