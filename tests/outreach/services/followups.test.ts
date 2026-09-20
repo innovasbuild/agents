@@ -4,7 +4,13 @@ import {
 	type DraftAndQueueInput,
 	type FollowupsStore,
 	runFollowups,
+	runScheduledFollowups,
 } from "@/lib/outreach/services/followups";
+import {
+	scheduleKeyFor,
+	takeScheduleLock,
+	UNIQUE_VIOLATION,
+} from "@/lib/outreach/services/sweep";
 
 const contacto = (over: Record<string, unknown> = {}) => ({
 	id: "c1",
@@ -50,6 +56,126 @@ describe("el contrato de la store", () => {
 		const store: FollowupsStore = incompleta;
 
 		expect(store).toBeDefined();
+	});
+});
+
+// M4: el lock de esta corrida vivía suelto en el cableado del schedule, sin un
+// solo test, mientras el del sweep tenía seis. Mismo contrato que
+// runMorningSweep: tenants ANTES del lock, y si ya corrió hoy no se hace nada,
+// ni parcialmente.
+describe("el lock de la corrida de follow-ups", () => {
+	it("si ya corrió hoy no encola nada, ni parcialmente", async () => {
+		const listDueFollowups = vi.fn(async () => []);
+		const listExhaustedContacts = vi.fn(async () => []);
+		const draftAndQueue = vi.fn(async () => ({ ok: true as const }));
+
+		const result = await runScheduledFollowups({
+			...deps({
+				draftAndQueue,
+				store: { ...deps().store, listDueFollowups, listExhaustedContacts },
+			}),
+			takeLock: async () => false,
+		});
+
+		expect(result).toBeNull();
+		expect(listDueFollowups).not.toHaveBeenCalled();
+		expect(listExhaustedContacts).not.toHaveBeenCalled();
+		expect(draftAndQueue).not.toHaveBeenCalled();
+	});
+
+	it("los tenants se listan ANTES del lock: un hipo de red no quema el día", async () => {
+		const takeLock = vi.fn(async () => true);
+
+		await expect(
+			runScheduledFollowups({
+				...deps({
+					store: {
+						...deps().store,
+						listActiveTenants: async () => {
+							throw new Error("base caída");
+						},
+					},
+				}),
+				takeLock,
+			}),
+		).rejects.toThrow("base caída");
+		// El lock no se tomó: el próximo disparo del día puede reintentar.
+		expect(takeLock).not.toHaveBeenCalled();
+	});
+
+	it("el lock recibe los tenants ya listados, no los vuelve a pedir", async () => {
+		const listActiveTenants = vi.fn(async () => [
+			{ id: "t1", slug: "innovas" },
+		]);
+		const takeLock = vi.fn(async () => true);
+
+		await runScheduledFollowups({
+			...deps({ store: { ...deps().store, listActiveTenants } }),
+			takeLock,
+		});
+
+		expect(listActiveTenants).toHaveBeenCalledTimes(1);
+		expect(takeLock).toHaveBeenCalledWith([{ id: "t1", slug: "innovas" }]);
+	});
+
+	it("con el lock tomado encola normalmente", async () => {
+		const draftAndQueue = vi.fn(async () => ({ ok: true as const }));
+
+		const result = await runScheduledFollowups({
+			...deps({ draftAndQueue }),
+			takeLock: async () => true,
+		});
+
+		expect(result?.encoladas).toBe(1);
+		expect(draftAndQueue).toHaveBeenCalledTimes(1);
+	});
+
+	it("un error transitorio al tomar el lock no lo quema: revienta y no encola", async () => {
+		const draftAndQueue = vi.fn(async () => ({ ok: true as const }));
+
+		await expect(
+			runScheduledFollowups({
+				...deps({ draftAndQueue }),
+				takeLock: async () => {
+					throw new Error("connection failure");
+				},
+			}),
+		).rejects.toThrow("connection failure");
+		expect(draftAndQueue).not.toHaveBeenCalled();
+	});
+
+	it("un segundo disparo del mismo día no hace trabajo (lock real, por schedule_key)", async () => {
+		// takeScheduleLock contra una tabla `runs` con índice único por
+		// schedule_key: el primer disparo entra, el segundo choca con 23505.
+		const tomados = new Set<string>();
+		const insertRun = vi.fn(async (row: { schedule_key: string }) => {
+			if (tomados.has(row.schedule_key))
+				return { error: { code: UNIQUE_VIOLATION, message: "duplicate key" } };
+			tomados.add(row.schedule_key);
+			return { error: null };
+		});
+		const draftAndQueue = vi.fn(async () => ({ ok: true as const }));
+		const now = new Date("2026-09-19T11:00:00Z");
+		const runDeps = {
+			...deps({ draftAndQueue }),
+			takeLock: (tenants: readonly { id: string; slug: string }[]) =>
+				takeScheduleLock(
+					{ insertRun },
+					{
+						scheduleKey: scheduleKeyFor("followups", now),
+						tenantId: tenants[0].id,
+						agent: "outreach",
+					},
+				),
+		};
+
+		const first = await runScheduledFollowups(runDeps);
+		const second = await runScheduledFollowups(runDeps);
+
+		expect(first?.encoladas).toBe(1);
+		expect(second).toBeNull();
+		expect(draftAndQueue).toHaveBeenCalledTimes(1);
+		expect(insertRun).toHaveBeenCalledTimes(2);
 	});
 });
 

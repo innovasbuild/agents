@@ -34,7 +34,7 @@ import type {
 	FollowupsStore,
 	ListOpenDealsInput,
 } from "../../../lib/outreach/services/followups";
-import { runFollowups } from "../../../lib/outreach/services/followups";
+import { runScheduledFollowups } from "../../../lib/outreach/services/followups";
 import { queueTouch } from "../../../lib/outreach/services/queue";
 import {
 	scheduleKeyFor,
@@ -241,12 +241,9 @@ async function listOpenDeals(
 	return createHubSpotAdapter(token).listOpenDeals(input.crmId);
 }
 
-function buildFollowupsStore(
-	store: OutreachStore,
-	tenants: { id: string; slug: string }[],
-): FollowupsStore {
+function buildFollowupsStore(store: OutreachStore): FollowupsStore {
 	return {
-		listActiveTenants: () => Promise.resolve(tenants),
+		listActiveTenants: () => store.listActiveTenants(),
 		listDueFollowups: (tenantId, now) => store.listDueFollowups(tenantId, now),
 		listExhaustedContacts: (tenantId, now) =>
 			store.listExhaustedContacts(tenantId, now),
@@ -265,30 +262,31 @@ export default defineSchedule({
 		const now = new Date();
 		const scheduleKey = scheduleKeyFor(SCHEDULE, now);
 
-		// Los tenants se listan ANTES del lock, igual que en morning-sweep: si
-		// esto tira, el lock del día no se toma y el próximo disparo puede
-		// reintentar sin esperar a mañana.
-		const tenants = await store.listActiveTenants();
-		const anyTenant = tenants[0];
-		if (!anyTenant) return;
-
-		const locked = await takeScheduleLock(
-			{
-				insertRun: async (row) => {
-					const { error } = await admin.from("runs").insert(row);
-					return { error };
-				},
-			},
-			{ scheduleKey, tenantId: anyTenant.id, agent: AGENT },
-		);
-		if (!locked) return;
-
-		const result = await runFollowups({
-			store: buildFollowupsStore(store, tenants),
+		// El lock es una dep de runScheduledFollowups, igual que en el sweep: la
+		// disciplina de "tenants antes del lock" y "si ya corrió hoy no se hace
+		// nada, ni parcialmente" vive en el servicio, testeada, y no en este
+		// cableado. `runs.tenant_id` es NOT NULL y el lock es de la corrida, no
+		// del tenant: se pasa cualquier tenant activo solo para la FK.
+		const result = await runScheduledFollowups({
+			store: buildFollowupsStore(store),
 			draftAndQueue: (input) => draftAndQueue(store, input),
 			listOpenDeals: (input) => listOpenDeals(store, input),
 			now: () => new Date(),
+			takeLock: async (tenants) => {
+				const anyTenant = tenants[0];
+				if (!anyTenant) return false;
+				return await takeScheduleLock(
+					{
+						insertRun: async (row) => {
+							const { error } = await admin.from("runs").insert(row);
+							return { error };
+						},
+					},
+					{ scheduleKey, tenantId: anyTenant.id, agent: AGENT },
+				);
+			},
 		});
+		if (!result) return;
 
 		console.log(
 			`${SCHEDULE}: ${result.encoladas} encolada(s), ${result.salteadas.length} salteada(s), ${result.frenadas} frenada(s), ${result.frenoFallido.length} freno(s) fallido(s)`,

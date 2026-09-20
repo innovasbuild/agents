@@ -141,10 +141,34 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : "error desconocido";
 }
 
+/**
+ * La corrida con lock, hermana de `runMorningSweep`. El lock vivía suelto en
+ * el cableado del schedule, donde ningún test lo podía ejercer; acá adentro es
+ * una dep más y el invariante queda fijado por los tests, no por un comentario.
+ *
+ * Los tenants se listan ANTES del lock, a propósito: es el único `await` que
+ * puede tirar afuera de los try/catch de la corrida, y si tirara con el lock ya
+ * tomado, el 23505 bloquearía cualquier reintento de esa jornada. Un hipo de
+ * red no puede costar un día entero de follow-ups.
+ *
+ * Con el lock tomado, si ya corrió hoy devuelve `null` sin tocar nada: no
+ * parcialmente, no "sigo igual por las dudas".
+ */
+export async function runScheduledFollowups(
+	deps: FollowupsDeps & {
+		takeLock(tenants: readonly FollowupsTenant[]): Promise<boolean>;
+	},
+): Promise<FollowupsResult | null> {
+	const tenants = await deps.store.listActiveTenants();
+	if (!(await deps.takeLock(tenants))) return null;
+	return await runFollowups(deps, tenants);
+}
+
 export async function runFollowups(
 	deps: FollowupsDeps,
+	knownTenants?: readonly FollowupsTenant[],
 ): Promise<FollowupsResult> {
-	const tenants = await deps.store.listActiveTenants();
+	const tenants = knownTenants ?? (await deps.store.listActiveTenants());
 	const now = deps.now();
 	const result: FollowupsResult = {
 		encoladas: 0,
