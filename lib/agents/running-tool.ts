@@ -38,7 +38,7 @@ export function runningToolName(
 // Etiqueta en castellano de cada tool, para el indicador de actividad: la UI
 // va en rioplatense y `toolName` son identificadores en inglés (CLAUDE.md).
 // Un tool sin entrada acá cae en "Trabajando…", nunca muestra el id crudo.
-const TOOL_LABELS: Record<string, string> = {
+export const TOOL_LABELS: Record<string, string> = {
 	brain: "Leyendo el brain",
 	crm_setup_outreach_properties: "Preparando el CRM",
 	crm_upsert_contact: "Escribiendo en el CRM",
@@ -47,6 +47,7 @@ const TOOL_LABELS: Record<string, string> = {
 	list_queue: "Mirando la cola",
 	log_event: "Registrando el evento",
 	queue_touch: "Anotando el toque",
+	read_replies: "Leyendo respuestas",
 	reject_queue_item: "Descartando la pieza",
 	research_account: "Investigando la cuenta",
 	send_email: "Mandando el mail",

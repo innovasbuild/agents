@@ -8,6 +8,7 @@ import type {
 	NewContact,
 	NewQueueItem,
 	OutreachStore,
+	PendingReply,
 	QueueItemRow,
 	TenantOutreach,
 } from "@/lib/outreach/store";
@@ -103,6 +104,13 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 }
 
 export function createFakeStore(): FakeStore {
+	// La base real tiene `created_at` en `events`, generado por la columna;
+	// acá no hay fila real, así que se sintetiza uno monótono por inserción
+	// para que listPendingReplies pueda devolver una `fecha` y preservar
+	// orden cronológico entre eventos del mismo contacto.
+	let eventSeq = 0;
+	const eventCreatedAt = new WeakMap<OutreachEventInsert, string>();
+
 	const store: FakeStore = {
 		executors: [
 			{
@@ -257,6 +265,12 @@ export function createFakeStore(): FakeStore {
 			};
 		},
 		async insertEvents(rows) {
+			for (const row of rows) {
+				eventCreatedAt.set(
+					row,
+					new Date(2026, 0, 1, 0, ++eventSeq).toISOString(),
+				);
+			}
 			store.events.push(...rows);
 		},
 
@@ -310,6 +324,31 @@ export function createFakeStore(): FakeStore {
 				}
 			}
 			return ids;
+		},
+
+		async listPendingReplies(tenantId): Promise<PendingReply[]> {
+			const byKey = new Map(
+				store.contacts
+					.filter(
+						(c) => c.tenantId === tenantId && c.stage === "respuesta_neutra",
+					)
+					.map((c) => [c.contactKey, c]),
+			);
+			const result: PendingReply[] = [];
+			for (const event of store.events) {
+				if (event.tenant_id !== tenantId || event.type !== "respuesta")
+					continue;
+				const contact = event.contact_key ? byKey.get(event.contact_key) : null;
+				if (!contact) continue;
+				result.push({
+					contactKey: contact.contactKey,
+					name: contact.name,
+					company: contact.company,
+					text: event.summary,
+					occurredAt: eventCreatedAt.get(event) ?? new Date(0).toISOString(),
+				});
+			}
+			return result;
 		},
 
 		contactSeed(): ContactRow {

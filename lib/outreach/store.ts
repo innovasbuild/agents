@@ -226,11 +226,25 @@ export interface OutreachStore {
 	/** Ejecutores del tenant con Gmail autorizado. */
 	listExecutorsWithGmailRead(tenantId: string): Promise<ExecutorRow[]>;
 	/** Contactos del tenant con hilo de Gmail asignado a un ejecutor específico. */
-	listContactsWithThread(tenantId: string, ownerUserId: string): Promise<ContactRow[]>;
+	listContactsWithThread(
+		tenantId: string,
+		ownerUserId: string,
+	): Promise<ContactRow[]>;
 	/** Contactos vencidos para seguimiento (no respondidos, < 3 toques). */
 	listDueFollowups(tenantId: string, now: Date): Promise<ContactRow[]>;
 	/** IDs de mensaje Gmail conocidos en eventos de respuesta/rebote. */
 	listKnownInboundIds(tenantId: string, contactKey: string): Promise<string[]>;
+	/** Eventos de respuesta, sin interpretar, de contactos que siguen en
+	 * `respuesta_neutra` (Task 8: revisión humana de escucha). */
+	listPendingReplies(tenantId: string): Promise<PendingReply[]>;
+}
+
+export interface PendingReply {
+	contactKey: string;
+	name: string | null;
+	company: string | null;
+	text: string;
+	occurredAt: string;
 }
 
 const CONTACT_COLUMNS =
@@ -599,7 +613,10 @@ export function createSupabaseOutreachStore(
 				.select("id, slug")
 				.eq("active", true);
 			if (error) fail("listar tenants activos", error);
-			return (data ?? []).map((r) => ({ id: r.id as string, slug: r.slug as string }));
+			return (data ?? []).map((r) => ({
+				id: r.id as string,
+				slug: r.slug as string,
+			}));
 		},
 
 		async listExecutorsWithGmailRead(tenantId) {
@@ -660,6 +677,52 @@ export function createSupabaseOutreachStore(
 				if (typeof msgId === "string") ids.push(msgId);
 			}
 			return ids;
+		},
+
+		async listPendingReplies(tenantId) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key, name, company")
+				.eq("tenant_id", tenantId)
+				.eq("stage", "respuesta_neutra");
+			if (contactsError)
+				fail("listar contactos en respuesta_neutra", contactsError);
+			const pending = contacts ?? [];
+			if (pending.length === 0) return [];
+			const byKey = new Map(
+				pending.map((c) => [
+					c.contact_key as string,
+					{
+						name: (c.name as string | null) ?? null,
+						company: (c.company as string | null) ?? null,
+					},
+				]),
+			);
+
+			const { data: events, error: eventsError } = await client
+				.from("events")
+				.select("contact_key, summary, created_at")
+				.eq("tenant_id", tenantId)
+				.eq("type", "respuesta")
+				.in("contact_key", Array.from(byKey.keys()))
+				.order("created_at", { ascending: true });
+			if (eventsError) fail("listar eventos de respuesta", eventsError);
+
+			const result: PendingReply[] = [];
+			for (const row of events ?? []) {
+				const contactKey = row.contact_key as string | null;
+				if (!contactKey) continue;
+				const contact = byKey.get(contactKey);
+				if (!contact) continue;
+				result.push({
+					contactKey,
+					name: contact.name,
+					company: contact.company,
+					text: (row.summary as string | null) ?? "",
+					occurredAt: row.created_at as string,
+				});
+			}
+			return result;
 		},
 	};
 }
