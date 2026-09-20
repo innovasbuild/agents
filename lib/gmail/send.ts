@@ -18,6 +18,11 @@ type MailInput = {
 	body: string;
 	bcc?: string | null;
 	messageId?: string | null;
+	/** Message-ID RFC822 del mensaje al que se responde. Gmail reescribe el
+	 * propio, así que este valor se lee de Gmail, no se inventa. */
+	inReplyTo?: string | null;
+	references?: string | null;
+	threadId?: string | null;
 };
 
 export class GmailUnauthorizedError extends Error {
@@ -45,7 +50,10 @@ export async function sendMail(
 ): Promise<{ id: string; threadId: string }> {
 	// Fuera del try de red: un header inválido no llegó a salir a la red y no
 	// puede reportarse como "no se sabe si el mail salió".
-	const payload = JSON.stringify({ raw: buildRawMessage(input) });
+	const payload = JSON.stringify({
+		raw: buildRawMessage(input),
+		...(input.threadId ? { threadId: input.threadId } : {}),
+	});
 
 	let res: Response;
 	try {

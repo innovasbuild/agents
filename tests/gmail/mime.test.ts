@@ -94,4 +94,46 @@ describe("buildRawMessage", () => {
 			buildRawMessage({ to: "a@b.test", subject: "Hola\nX", body: "x" }),
 		).toThrow("header inválido");
 	});
+
+	it("agrega In-Reply-To cuando se le pasa el Message-ID original", () => {
+		const raw = buildRawMessage({
+			to: "a@b.test",
+			subject: "Re: Hola",
+			body: "Cuerpo",
+			inReplyTo: "<abc@mail.gmail.com>",
+		});
+
+		expect(decodeMime(raw)).toContain("In-Reply-To: <abc@mail.gmail.com>");
+	});
+
+	it("agrega References cuando se le pasa", () => {
+		const raw = buildRawMessage({
+			to: "a@b.test",
+			subject: "Re: Hola",
+			body: "Cuerpo",
+			references: "<abc@mail.gmail.com>",
+		});
+
+		expect(decodeMime(raw)).toContain("References: <abc@mail.gmail.com>");
+	});
+
+	it("sin hilo no agrega ninguno de los dos headers", () => {
+		const raw = decodeMime(
+			buildRawMessage({ to: "a@b.test", subject: "Hola", body: "Cuerpo" }),
+		);
+
+		expect(raw).not.toContain("In-Reply-To");
+		expect(raw).not.toContain("References");
+	});
+
+	it("un salto de línea en In-Reply-To no puede inyectar otro header", () => {
+		expect(() =>
+			buildRawMessage({
+				to: "a@b.test",
+				subject: "Hola",
+				body: "Cuerpo",
+				inReplyTo: "<a>\r\nBcc: fuga@mal.test",
+			}),
+		).toThrow();
+	});
 });

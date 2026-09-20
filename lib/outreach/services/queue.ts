@@ -16,7 +16,7 @@ import { type ClaimStatus, claimStatus, crmMatch } from "../guards";
 import { assignLetters } from "../queue-letters";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
-import type { ContactRow, OutreachStore } from "../store";
+import type { ContactRow, OutreachStore, QueueItemKind } from "../store";
 import { findFichaVigente } from "./draft";
 import { attributionError, resolveExecutor } from "./executor";
 
@@ -30,13 +30,17 @@ export interface QueueDeps {
 export interface QueueTouchInput {
 	caller: Caller;
 	contactKey: string;
-	kind: "msg1";
+	kind: QueueItemKind;
 	subject: string;
 	body: string;
 	hook: string;
 	vector: string;
 	idioma: string;
-	ancla: { hecho: string; fuente: string };
+	// La base solo exige ancla para kind = 'msg1': un follow-up responde dentro
+	// del hilo, no abre con un hecho citado de la ficha.
+	ancla?: { hecho: string; fuente: string } | null;
+	replyToMessageId?: string | null;
+	gmailThreadId?: string | null;
 }
 
 export async function claimForContact(
@@ -134,22 +138,50 @@ export async function queueTouch(
 			`no hay un contacto cargado con la clave ${input.contactKey}`,
 		);
 	if (!contact.email) return refuse("sin_email", "el contacto no tiene email");
-	if (contact.stage !== "a_contactar" || contact.touches > 0) {
+	// msg1 y follow-up piden la invariante contraria: msg1 es solo para quien
+	// todavía no tiene ningún toque; un follow-up, por definición, va a alguien
+	// que ya fue tocado y todavía no respondió (si respondió, no corresponde).
+	if (input.kind === "msg1") {
+		if (contact.stage !== "a_contactar" || contact.touches > 0) {
+			return refuse(
+				"etapa_incompatible",
+				`el contacto está en ${contact.stage}: el primer mensaje es solo para a_contactar`,
+			);
+		}
+	} else if (contact.touches === 0 || contact.repliedAt) {
 		return refuse(
 			"etapa_incompatible",
-			`el contacto está en ${contact.stage}: el primer mensaje es solo para a_contactar`,
+			contact.repliedAt
+				? "el contacto ya respondió: no corresponde mandarle un follow-up"
+				: "el contacto todavía no recibió ningún toque: no hay follow-up sin primer mensaje",
+		);
+	} else if (!input.gmailThreadId || !input.replyToMessageId) {
+		// El envío (services/send.ts) exige los DOS para responder adentro de la
+		// conversación: con uno solo no manda threadId ni In-Reply-To/References
+		// y el follow-up le sale al prospecto como conversación nueva, sin que
+		// quien aprueba tenga forma de darse cuenta. Un follow-up fuera de hilo
+		// no es un follow-up (spec §4.4, y draftMessage lo rechaza por lo mismo):
+		// antes que mandar un mail huérfano en silencio, no se encola. El
+		// schedule lo reporta como salteado y reintenta al otro día.
+		return refuse(
+			"sin_hilo",
+			"no pude resolver el hilo completo (thread y mensaje al que responder): un follow-up sin eso saldría como conversación nueva",
 		);
 	}
 	const attribution = attributionError(tenant, input);
 	if (attribution) return refuse("atribucion_invalida", attribution);
 
-	const anchor = await anchorError(
-		deps,
-		caller.tenantId,
-		contact.email,
-		input.ancla.fuente,
-	);
-	if (anchor) return refuse("sin_ancla", anchor);
+	// El ancla solo la exige el primer mensaje: un follow-up no abre con un
+	// hecho nuevo de la ficha, responde dentro del hilo ya abierto.
+	if (input.kind === "msg1") {
+		const anchor = await anchorError(
+			deps,
+			caller.tenantId,
+			contact.email,
+			input.ancla?.fuente ?? "",
+		);
+		if (anchor) return refuse("sin_ancla", anchor);
+	}
 
 	const claim = await claimForContact(
 		deps,
@@ -214,11 +246,11 @@ export async function queueTouch(
 		hook: input.hook,
 		vector: input.vector,
 		idioma: input.idioma,
-		ancla: input.ancla,
+		ancla: input.ancla ?? null,
 		draftOriginal: { subject: input.subject, body: input.body },
 		gateResult: gate,
-		replyToMessageId: null,
-		gmailThreadId: null,
+		replyToMessageId: input.replyToMessageId ?? null,
+		gmailThreadId: input.gmailThreadId ?? null,
 	});
 	if (item === "pieza_viva")
 		return refuse("pieza_viva", "esta persona ya tiene una pieza en la cola");

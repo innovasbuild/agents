@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Canon } from "@/lib/outreach/canon";
 import { CanonUnavailableError } from "@/lib/outreach/canon";
+import { DEFAULT_OUTREACH_MODELS } from "@/lib/outreach/config";
 import { emptyGateRules, parseGateBlocks } from "@/lib/outreach/gate-blocks";
 import { draftMessage } from "@/lib/outreach/services/draft";
 import {
@@ -160,7 +161,7 @@ describe("draftMessage", () => {
 		).toMatchObject({ ok: true, attempts: 2 });
 	});
 
-	it("negativas: contacto inexistente, sin ficha vigente, canon caído, follow-up", async () => {
+	it("negativas: contacto inexistente, sin ficha vigente, canon caído", async () => {
 		const deps = (store = seeded()) => ({
 			store,
 			loadCanon: async () => canon,
@@ -192,12 +193,37 @@ describe("draftMessage", () => {
 				},
 			),
 		).toMatchObject({ reason: "canon_no_disponible" });
-		expect(
-			await draftMessage(
-				{ caller, contactKey: "em:laura@acme.test", kind: "followup_2" },
-				deps(),
-			),
-		).toMatchObject({ reason: "followup_no_disponible" });
+	});
+
+	it("ya no rechaza un followup_2: los follow-ups llegaron con la escucha", async () => {
+		const store = seeded();
+		store.contacts[0].gmailThreadId = "th-1";
+		const generate = vi.fn(async () => ({ output: good, usage: {} }));
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "followup_2" },
+			{ store, loadCanon: async () => canon, generate, now },
+		);
+		expect(result).toMatchObject({ ok: true, attempts: 1 });
+		expect(generate).toHaveBeenCalledWith(
+			DEFAULT_OUTREACH_MODELS.draft_followup,
+			expect.any(String),
+			expect.any(String),
+		);
+	});
+
+	it("un followup necesita que el contacto ya tenga un hilo abierto", async () => {
+		// Un contacto sin gmail_thread_id no puede recibir un follow-up en hilo.
+		const store = seeded();
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "followup_2" },
+			{
+				store,
+				loadCanon: async () => canon,
+				generate: async () => ({ output: good, usage: {} }),
+				now,
+			},
+		);
+		expect(result).toMatchObject({ ok: false, reason: "sin_hilo" });
 	});
 
 	it("un canon vacío (tenant sin brain o sin canon cargado) no llama al modelo", async () => {

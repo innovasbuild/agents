@@ -65,12 +65,6 @@ export async function draftMessage(
 	input: { caller: Caller; contactKey: string; kind: QueueItemKind },
 	deps: DraftDeps,
 ): Promise<DraftResult> {
-	if (input.kind !== "msg1") {
-		return refuse(
-			"followup_no_disponible",
-			"los follow-ups llegan con la escucha de Gmail (Entrega 4): por ahora solo primer mensaje",
-		);
-	}
 	const resolved = await resolveExecutor(deps.store, input.caller, null);
 	if (isRefusal(resolved)) return resolved;
 	const { executor, tenant } = resolved;
@@ -84,6 +78,14 @@ export async function draftMessage(
 			`no hay un contacto cargado con la clave ${input.contactKey}`,
 		);
 	if (!contact.email) return refuse("sin_email", "el contacto no tiene email");
+	// Un follow-up cae bajo el primer mensaje: sin hilo abierto no hay dónde
+	// responder, y mandarlo fuera de hilo es justo lo que la escucha evita.
+	if (input.kind !== "msg1" && !contact.gmailThreadId) {
+		return refuse(
+			"sin_hilo",
+			"este contacto no tiene un hilo abierto: el follow-up tiene que caer bajo el primer mensaje",
+		);
+	}
 
 	const { domain, account } = await findFichaVigente(
 		deps.store,
@@ -120,6 +122,13 @@ export async function draftMessage(
 			`${canonMissingText(canon)}: no redacto sin sus reglas`,
 		);
 
+	// Follow-ups usan el modelo más liviano del tenant: msg1 es el único que
+	// necesita el modelo caro de research+redacción desde cero.
+	const model =
+		input.kind === "msg1"
+			? tenant.config.models.draft_msg1
+			: tenant.config.models.draft_followup;
+
 	let violations: GateViolation[] = [];
 	for (let attempt = 1; attempt <= MAX_DRAFT_ATTEMPTS; attempt++) {
 		const { system, prompt } = buildDraftPrompt({
@@ -137,11 +146,7 @@ export async function draftMessage(
 				: null,
 			previousViolations: violations,
 		});
-		const { output } = await deps.generate(
-			tenant.config.models.draft_msg1,
-			system,
-			prompt,
-		);
+		const { output } = await deps.generate(model, system, prompt);
 		const parsed = draftOutputSchema.safeParse(output);
 		if (!parsed.success) {
 			violations = [

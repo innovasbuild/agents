@@ -10,7 +10,12 @@ import {
 import type { OutreachEventInsert } from "./events";
 import type { Ficha } from "./ficha";
 import type { GateResult } from "./gate";
-import type { OutreachStage } from "./stage";
+import {
+	isNoResponse,
+	MAX_TOUCHES,
+	NO_RESPONSE_AFTER_DAYS,
+	type OutreachStage,
+} from "./stage";
 
 export type QueueItemStatus =
 	| "pending"
@@ -33,6 +38,7 @@ export interface ExecutorRow {
 	crmOwnerId: string | null;
 	dailyQuota: number;
 	gmailAuthorizedAt: string | null;
+	gmailReadAuthorizedAt: string | null;
 }
 
 export interface TenantOutreach {
@@ -96,6 +102,7 @@ export type ContactPatch = Partial<
 		| "firstTouchAt"
 		| "lastTouchAt"
 		| "nextStepAt"
+		| "repliedAt"
 		| "gmailThreadId"
 	>
 >;
@@ -220,6 +227,41 @@ export interface OutreachStore {
 	): Promise<{ count: number; lastSentAt: Date | null }>;
 	/** Un insert descartado por el dedup (0 filas) o un 23505 cuentan como ya registrado. */
 	insertEvents(rows: readonly OutreachEventInsert[]): Promise<void>;
+	/** Tenants activos del sistema. */
+	listActiveTenants(): Promise<{ id: string; slug: string }[]>;
+	/** Ejecutores del tenant con Gmail autorizado. */
+	listExecutorsWithGmailRead(tenantId: string): Promise<ExecutorRow[]>;
+	/** Contactos del tenant con hilo de Gmail asignado a un ejecutor específico. */
+	listContactsWithThread(
+		tenantId: string,
+		ownerUserId: string,
+	): Promise<ContactRow[]>;
+	/** Contactos vencidos para seguimiento (no respondidos, < 3 toques). */
+	listDueFollowups(tenantId: string, now: Date): Promise<ContactRow[]>;
+	/** Contactos agotados (Task 10): touches >= 3, sin respuesta, y su primer
+	 * toque más viejo que NO_RESPONSE_AFTER_DAYS. Es el universo sobre el que
+	 * corre el freno de oportunidades (`oportunidad_frenada`), no el de los
+	 * follow-ups: esos ya se cortaron. */
+	listExhaustedContacts(tenantId: string, now: Date): Promise<ContactRow[]>;
+	/** IDs de mensaje Gmail conocidos en eventos de respuesta/rebote. */
+	listKnownInboundIds(tenantId: string, contactKey: string): Promise<string[]>;
+	/** Eventos de respuesta, sin interpretar, de contactos que siguen en
+	 * `respuesta_neutra` (Task 8: revisión humana de escucha). */
+	listPendingReplies(tenantId: string): Promise<PendingReply[]>;
+	/** Contactos en `respuesta_neutra` con evento `respuesta` desde `since`
+	 * (resumen de sesión: Task 11). */
+	countRecentReplies(tenantId: string, since: Date): Promise<number>;
+	/** Eventos `oportunidad_frenada` desde `since` (resumen de sesión:
+	 * Task 11). */
+	countStalled(tenantId: string, since: Date): Promise<number>;
+}
+
+export interface PendingReply {
+	contactKey: string;
+	name: string | null;
+	company: string | null;
+	text: string;
+	occurredAt: string;
 }
 
 const CONTACT_COLUMNS =
@@ -306,6 +348,7 @@ const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	firstTouchAt: "first_touch_at",
 	lastTouchAt: "last_touch_at",
 	nextStepAt: "next_step_at",
+	repliedAt: "replied_at",
 	gmailThreadId: "gmail_thread_id",
 };
 
@@ -346,7 +389,7 @@ export function createSupabaseOutreachStore(
 			const { data, error } = await client
 				.from("executors")
 				.select(
-					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at",
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at, gmail_read_authorized_at",
 				)
 				.eq("tenant_id", tenantId)
 				.eq("user_id", userId)
@@ -360,6 +403,7 @@ export function createSupabaseOutreachStore(
 				crmOwnerId: data.crm_owner_id ?? null,
 				dailyQuota: data.daily_quota,
 				gmailAuthorizedAt: data.gmail_authorized_at ?? null,
+				gmailReadAuthorizedAt: data.gmail_read_authorized_at ?? null,
 			};
 		},
 
@@ -579,6 +623,225 @@ export function createSupabaseOutreachStore(
 				if (error && error.code !== "23505")
 					fail(`registrar el evento ${row.type}`, error);
 			}
+		},
+
+		async listActiveTenants() {
+			const { data, error } = await client
+				.from("tenants")
+				.select("id, slug")
+				.eq("active", true);
+			if (error) fail("listar tenants activos", error);
+			return (data ?? []).map((r) => ({
+				id: r.id as string,
+				slug: r.slug as string,
+			}));
+		},
+
+		async listExecutorsWithGmailRead(tenantId) {
+			const { data, error } = await client
+				.from("executors")
+				.select(
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at, gmail_read_authorized_at",
+				)
+				.eq("tenant_id", tenantId)
+				.not("gmail_read_authorized_at", "is", null);
+			if (error) fail("listar ejecutores con Gmail", error);
+			return (data ?? []).map((r) => ({
+				tenantId: r.tenant_id,
+				userId: r.user_id,
+				slug: r.slug ?? null,
+				crmOwnerId: r.crm_owner_id ?? null,
+				dailyQuota: r.daily_quota,
+				gmailAuthorizedAt: r.gmail_authorized_at ?? null,
+				gmailReadAuthorizedAt: r.gmail_read_authorized_at ?? null,
+			}));
+		},
+
+		async listContactsWithThread(tenantId, ownerUserId) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("owner_user_id", ownerUserId)
+				.not("gmail_thread_id", "is", null)
+				// Orden estable: sin esto, dos corridas del barrido recorren los
+				// contactos en órdenes distintos y un problema que afecte a algunos
+				// no se ve como patrón en los logs.
+				.order("contact_key", { ascending: true });
+			if (error) fail("listar contactos con hilo", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listDueFollowups(tenantId, now) {
+			// Simetría con listContactsWithThread: el carril de follow-ups entra
+			// por el mismo universo que el de la escucha. Sin grant de lectura
+			// nadie está leyendo las respuestas de ese ejecutor, así que seguirle
+			// encolando toques es mandar a ciegas — si no puedo escuchar, no sigo
+			// tocando.
+			const { data: readers, error: readersError } = await client
+				.from("executors")
+				.select("user_id")
+				.eq("tenant_id", tenantId)
+				.not("gmail_read_authorized_at", "is", null);
+			if (readersError)
+				fail("listar ejecutores con lectura de Gmail", readersError);
+			const readerIds = (readers ?? []).map((r) => r.user_id as string);
+			if (readerIds.length === 0) return [];
+
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.in("owner_user_id", readerIds)
+				.lte("next_step_at", now.toISOString())
+				.lt("touches", 3)
+				.is("replied_at", null);
+			if (error) fail("listar seguimientos vencidos", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listExhaustedContacts(tenantId, now) {
+			// La definición de "agotado" es UNA: `isNoResponse()` (stage.ts). Este
+			// SQL es solo un prefiltro para no traerse la tabla entera — por eso
+			// `lte` y no `lt`, para no ser más estricto que la regla canónica en el
+			// borde. La palabra final la tiene la función, abajo. Antes había dos
+			// copias de la misma regla y solo una tenía test.
+			const threshold = new Date(
+				now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000,
+			).toISOString();
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.gte("touches", MAX_TOUCHES)
+				.is("replied_at", null)
+				.lte("first_touch_at", threshold);
+			if (error) fail("listar contactos agotados", error);
+			const candidates = (data ?? []).map(toContact).filter((c) =>
+				isNoResponse({
+					touches: c.touches,
+					firstTouchAt: c.firstTouchAt ? new Date(c.firstTouchAt) : null,
+					repliedAt: c.repliedAt ? new Date(c.repliedAt) : null,
+					now,
+				}),
+			);
+			if (candidates.length === 0) return [];
+
+			// Idempotencia del freno: `oportunidad_frenada` tiene dedup de 2h en
+			// events_dedup(), no de 24h, así que el trigger de la base no alcanza
+			// contra un cron diario. Un contacto que ya tiene el evento no vuelve
+			// a aparecer acá, así que nunca se re-emite ni se re-cuenta.
+			const { data: frenados, error: frenadosError } = await client
+				.from("events")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("type", "oportunidad_frenada")
+				.in(
+					"contact_key",
+					candidates.map((c) => c.contactKey),
+				);
+			if (frenadosError)
+				fail("listar oportunidades ya frenadas", frenadosError);
+			const yaFrenados = new Set(
+				(frenados ?? []).map((r) => r.contact_key as string),
+			);
+
+			return candidates.filter((c) => !yaFrenados.has(c.contactKey));
+		},
+
+		async listKnownInboundIds(tenantId, contactKey) {
+			const { data, error } = await client
+				.from("events")
+				.select("payload")
+				.eq("tenant_id", tenantId)
+				.eq("contact_key", contactKey)
+				.in("type", ["respuesta", "rebote"]);
+			if (error) fail("listar IDs de rebote/respuesta", error);
+			const ids: string[] = [];
+			for (const row of data ?? []) {
+				const payload = row.payload as Record<string, unknown> | null;
+				const msgId = payload?.gmail_message_id;
+				if (typeof msgId === "string") ids.push(msgId);
+			}
+			return ids;
+		},
+
+		async listPendingReplies(tenantId) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key, name, company")
+				.eq("tenant_id", tenantId)
+				.eq("stage", "respuesta_neutra");
+			if (contactsError)
+				fail("listar contactos en respuesta_neutra", contactsError);
+			const pending = contacts ?? [];
+			if (pending.length === 0) return [];
+			const byKey = new Map(
+				pending.map((c) => [
+					c.contact_key as string,
+					{
+						name: (c.name as string | null) ?? null,
+						company: (c.company as string | null) ?? null,
+					},
+				]),
+			);
+
+			const { data: events, error: eventsError } = await client
+				.from("events")
+				.select("contact_key, summary, created_at")
+				.eq("tenant_id", tenantId)
+				.eq("type", "respuesta")
+				.in("contact_key", Array.from(byKey.keys()))
+				.order("created_at", { ascending: true });
+			if (eventsError) fail("listar eventos de respuesta", eventsError);
+
+			const result: PendingReply[] = [];
+			for (const row of events ?? []) {
+				const contactKey = row.contact_key as string | null;
+				if (!contactKey) continue;
+				const contact = byKey.get(contactKey);
+				if (!contact) continue;
+				result.push({
+					contactKey,
+					name: contact.name,
+					company: contact.company,
+					text: (row.summary as string | null) ?? "",
+					occurredAt: row.created_at as string,
+				});
+			}
+			return result;
+		},
+
+		async countRecentReplies(tenantId, since) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("stage", "respuesta_neutra");
+			if (contactsError)
+				fail("leer contactos en respuesta_neutra", contactsError);
+			const keys = (contacts ?? []).map((r) => r.contact_key as string);
+			if (keys.length === 0) return 0;
+			const { data: events, error: eventsError } = await client
+				.from("events")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("type", "respuesta")
+				.gte("created_at", since.toISOString())
+				.in("contact_key", keys);
+			if (eventsError) fail("contar respuestas recientes", eventsError);
+			return new Set((events ?? []).map((r) => r.contact_key as string)).size;
+		},
+
+		async countStalled(tenantId, since) {
+			const { data, error } = await client
+				.from("events")
+				.select("id")
+				.eq("tenant_id", tenantId)
+				.eq("type", "oportunidad_frenada")
+				.gte("created_at", since.toISOString());
+			if (error) fail("contar oportunidades frenadas", error);
+			return (data ?? []).length;
 		},
 	};
 }

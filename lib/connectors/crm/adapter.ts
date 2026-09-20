@@ -31,4 +31,15 @@ export interface CrmAdapter {
 		crmId: string,
 		task: { title: string; dueAt: Date; ownerId: string | null },
 	): Promise<void>;
+	/** Deals del contacto que no están en closedwon ni closedlost (task 6). */
+	listOpenDeals(contactCrmId: string): Promise<{ id: string; stage: string }[]>;
+	/** Nace en pipeline `default`, stage `1404975950` (Contactado): los IDs
+	 * salen del CLAUDE.md del repo, no se inventan. */
+	createDeal(input: {
+		contactCrmId: string;
+		companyCrmId: string | null;
+		name: string;
+		description: string;
+		ownerId: string;
+	}): Promise<{ id: string }>;
 }

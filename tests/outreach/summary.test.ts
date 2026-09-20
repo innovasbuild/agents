@@ -157,4 +157,66 @@ describe("sessionSummary", () => {
 			"Al arrancar, mostrá la cola por letras con list_queue.",
 		);
 	});
+
+	it("el resumen nombra las respuestas sin interpretar de las últimas 24 h", async () => {
+		const store = createFakeStore();
+		const texto = await sessionSummary(base, {
+			store: { ...store, countRecentReplies: async () => 2 },
+			now,
+			brainConnected,
+		});
+
+		expect(texto).toMatch(/2 respuestas/);
+	});
+
+	it("sin respuestas nuevas no inventa una línea vacía", async () => {
+		const store = createFakeStore();
+		const texto = await sessionSummary(base, {
+			store: { ...store, countRecentReplies: async () => 0 },
+			now,
+			brainConnected,
+		});
+
+		expect(texto).not.toMatch(/0 respuestas/);
+	});
+
+	it("el resumen nombra las oportunidades frenadas de las últimas 24 h", async () => {
+		const store = createFakeStore();
+		const texto = await sessionSummary(base, {
+			store: { ...store, countStalled: async () => 3 },
+			now,
+			brainConnected,
+		});
+
+		expect(texto).toMatch(/3 oportunidades frenadas/);
+	});
+
+	it("sin oportunidades frenadas nuevas no inventa una línea vacía", async () => {
+		const store = createFakeStore();
+		const texto = await sessionSummary(base, {
+			store: { ...store, countStalled: async () => 0 },
+			now,
+			brainConnected,
+		});
+
+		expect(texto).not.toMatch(/oportunidad/);
+	});
+
+	it("una respuesta y una oportunidad frenada, con singular correcto", async () => {
+		const store = createFakeStore();
+		const texto = await sessionSummary(base, {
+			store: {
+				...store,
+				countRecentReplies: async () => 1,
+				countStalled: async () => 1,
+			},
+			now,
+			brainConnected,
+		});
+
+		expect(texto).toMatch(/1 respuesta sin interpretar/);
+		expect(texto).not.toMatch(/1 respuestas/);
+		expect(texto).toMatch(/1 oportunidad frenada/);
+		expect(texto).not.toMatch(/1 oportunidades/);
+	});
 });

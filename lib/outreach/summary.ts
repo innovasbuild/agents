@@ -1,6 +1,6 @@
 // Resumen que entra en las instrucciones al abrir la sesión (spec 03 §6.1 y
-// §8.5). En esta entrega: ejecutor, cupo y cola; respuestas y oportunidades
-// frenadas llegan con la escucha (Entrega 4).
+// §8.5): ejecutor, cupo, cola, respuestas sin interpretar y oportunidades
+// frenadas.
 import type { OutreachStore } from "./store";
 import { dayStart } from "./time";
 
@@ -30,7 +30,8 @@ export async function sessionSummary(
 	if (!executor?.slug || !tenant) {
 		return `${header}\n\nQuien habla en esta sesión no es ejecutor de outreach en este tenant: puede consultar, pero no cargar contactos, encolar ni enviar. Si lo pide, explicáselo.`;
 	}
-	const [sent, items, brain] = await Promise.all([
+	const last24h = new Date(deps.now().getTime() - 24 * 60 * 60 * 1000);
+	const [sent, items, brain, recentReplies, stalled] = await Promise.all([
 		deps.store.countSent(input.tenantId, {
 			since: dayStart(tenant.config.timezone, deps.now()),
 			executorUserId: input.userId,
@@ -42,6 +43,8 @@ export async function sessionSummary(
 		// Falla abierta: el aviso es contexto, el cupo y la cola no. Si la consulta
 		// de conexiones se cae, el resumen sale igual sin el aviso.
 		deps.brainConnected().catch(() => true),
+		deps.store.countRecentReplies(input.tenantId, last24h),
+		deps.store.countStalled(input.tenantId, last24h),
 	]);
 	const pending = items.filter((item) => item.status === "pending");
 	const trabadas = items.filter((item) => item.status === "approved");
@@ -54,6 +57,14 @@ export async function sessionSummary(
 		trabadas.length === 1 ? "1 trabada" : `${trabadas.length} trabadas`;
 	const queuePhrase =
 		trabadas.length > 0 ? `${pendingPhrase} y ${trabadaPhrase}` : pendingPhrase;
+	const repliesPhrase =
+		recentReplies === 1
+			? "1 respuesta sin interpretar"
+			: `${recentReplies} respuestas sin interpretar`;
+	const stalledPhrase =
+		stalled === 1
+			? "1 oportunidad frenada"
+			: `${stalled} oportunidades frenadas`;
 	return [
 		header,
 		"",
@@ -66,6 +77,12 @@ export async function sessionSummary(
 			: "",
 		pending.length + trabadas.length > 0
 			? "Al arrancar, mostrá la cola por letras con list_queue."
+			: "",
+		recentReplies > 0
+			? `Hay ${repliesPhrase} de las últimas 24 h: revisalas con read_replies antes de arrancar.`
+			: "",
+		stalled > 0
+			? `Se frenaron ${stalledPhrase} en las últimas 24 h por falta de respuesta.`
 			: "",
 	]
 		.filter(Boolean)

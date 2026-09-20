@@ -218,6 +218,176 @@ describe("queueTouch", () => {
 		expect(store.queue).toHaveLength(0);
 		expect(store.events).toHaveLength(0);
 	});
+
+	it("una pieza de followup guarda el hilo y el mensaje al que responde", async () => {
+		const { store, deps } = setup();
+		// Un followup real cae sobre un contacto ya tocado, no sobre uno fresco.
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: Crecer sin sumar gente",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+		expect(store.queue[0]).toMatchObject({
+			kind: "followup_2",
+			replyToMessageId: "<laura-1@acme.test>",
+			gmailThreadId: "t1",
+			ancla: null,
+		});
+	});
+
+	// M5: send.ts exige los DOS campos de hilo para responder adentro de la
+	// conversación. Con uno solo no manda ninguno, y el follow-up sale como
+	// conversación nueva al prospecto sin que el que aprueba se entere. Si el
+	// hilo no está completo, no se encola: el schedule lo reporta como salteado
+	// y al día siguiente reintenta.
+	it("un followup sin replyToMessageId no se encola: saldría fuera del hilo", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: null,
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+
+		expect(result).toMatchObject({ ok: false, reason: "sin_hilo" });
+		expect(store.queue).toEqual([]);
+	});
+
+	it("un followup sin gmailThreadId tampoco se encola", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: null,
+			},
+			deps,
+		);
+
+		expect(result).toMatchObject({ ok: false, reason: "sin_hilo" });
+		expect(store.queue).toEqual([]);
+	});
+
+	it("un msg1 sigue sin necesitar hilo: abre la conversación", async () => {
+		const { store, deps } = setup();
+
+		expect(await queueTouch(touch, deps)).toMatchObject({ ok: true });
+		expect(store.queue).toHaveLength(1);
+	});
+
+	it("un followup no exige ancla, a diferencia del msg1", async () => {
+		// El check de la base solo exige ancla para kind = 'msg1'.
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: x",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<a@b.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("un followup_2 sobre un contacto en msg1_enviado con un toque se encola bien", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("un followup sobre un contacto que ya respondió se refusa: no corresponde", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		store.contacts[0].repliedAt = "2026-09-10T00:00:00Z";
+		const result = await queueTouch(
+			{
+				caller,
+				contactKey: "em:laura@acme.test",
+				kind: "followup_2",
+				subject: "Re: seguimos en contacto",
+				body: PASSING_BODY,
+				hook: "h1",
+				vector: "v1",
+				idioma: "es_ar",
+				replyToMessageId: "<laura-1@acme.test>",
+				gmailThreadId: "t1",
+			},
+			deps,
+		);
+		expect(result).toMatchObject({ ok: false, reason: "etapa_incompatible" });
+	});
+
+	it("un msg1 sobre un contacto ya tocado sigue refusado con la regla de siempre", async () => {
+		const { store, deps } = setup();
+		store.contacts[0].stage = "msg1_enviado";
+		store.contacts[0].touches = 1;
+		const result = await queueTouch(touch, deps);
+		expect(result).toMatchObject({ ok: false, reason: "etapa_incompatible" });
+		if (!result.ok) {
+			expect(result.message).toContain(
+				"el primer mensaje es solo para a_contactar",
+			);
+		}
+	});
 });
 
 describe("listQueue, updateQueueItem, rejectQueueItem", () => {

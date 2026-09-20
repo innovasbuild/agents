@@ -91,4 +91,23 @@ describe("sendMail", () => {
 		await sendMail("tok", { to: "a@b.test", subject: "x", body: "y" });
 		expect(fetchMock.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
 	});
+
+	it("manda threadId en el body cuando la pieza responde un hilo", async () => {
+		const fetchMock = vi.fn(async () =>
+			Response.json({ id: "m1", threadId: "t1" }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await sendMail("tok", {
+			to: "a@b.test",
+			subject: "Re: Hola",
+			body: "Cuerpo",
+			threadId: "t1",
+		});
+
+		const calls = (fetchMock.mock.calls as any);
+		const init = calls[0][1];
+		const body = JSON.parse(String(init.body));
+		expect(body.threadId).toBe("t1");
+	});
 });

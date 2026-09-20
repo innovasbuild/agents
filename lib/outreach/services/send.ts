@@ -30,6 +30,9 @@ export interface SendDeps {
 		body: string;
 		bcc: string | null;
 		messageId: string;
+		threadId?: string | null;
+		inReplyTo?: string | null;
+		references?: string | null;
 	}) => Promise<{ id: string; threadId: string }>;
 	isMailUnauthorized: (error: unknown) => boolean;
 	/** ¿El error es "no hubo respuesta de Gmail"? Ver el catch del envío. */
@@ -174,6 +177,21 @@ export async function sendQueuedEmail(
 		}
 		contact = found;
 
+		// La otra guarda de esto vive en `queueTouch`, o sea en el momento de
+		// ENCOLAR: la pieza vence recién a los 7 días, así que entre esa
+		// validación y este envío hay hasta una semana en la que la persona puede
+		// haber contestado (el barrido de la mañana lo marca). Mandarle igual un
+		// follow-up de "no me respondiste" a quien respondió es la falla que la
+		// etapa entera existe para evitar, así que se revalida acá, con el dato
+		// recién leído. Un msg1 no entra: ahí `replied_at` no significa nada.
+		if (item.kind !== "msg1" && contact.repliedAt) {
+			return await finish(
+				"failed",
+				"ya_respondio",
+				"esta persona respondió después de que se encoló la pieza: no corresponde mandarle un follow-up",
+			);
+		}
+
 		const claim = await claimForContact(
 			deps,
 			caller,
@@ -265,12 +283,21 @@ export async function sendQueuedEmail(
 	let sent: { id: string; threadId: string };
 	try {
 		const senderDomain = caller.email.split("@")[1] || "outreach.local";
+		// Un follow-up con hilo guardado responde adentro: sin esto, cada follow-up
+		// abriría una conversación nueva en vez de caer bajo el primer mensaje.
 		sent = await deps.sendMail({
 			to: item.toEmail,
 			subject: item.subject,
 			body: item.body,
 			bcc: tenant.config.bcc,
 			messageId: `<qi-${item.id}@${senderDomain}>`,
+			...(item.gmailThreadId && item.replyToMessageId
+				? {
+						threadId: item.gmailThreadId,
+						inReplyTo: item.replyToMessageId,
+						references: item.replyToMessageId,
+					}
+				: {}),
 		});
 	} catch (error) {
 		if (deps.isMailUnauthorized(error)) {

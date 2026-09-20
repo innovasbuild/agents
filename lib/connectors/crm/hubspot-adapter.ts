@@ -227,5 +227,48 @@ export function createHubSpotAdapter(
 				},
 			});
 		},
+
+		async listOpenDeals(contactCrmId) {
+			const data = await searchAssociated(
+				"deals",
+				contactCrmId,
+				[],
+				["dealstage"],
+				100,
+			);
+			return (data.results ?? [])
+				.filter(
+					(row) =>
+						row.properties.dealstage !== "closedwon" &&
+						row.properties.dealstage !== "closedlost",
+				)
+				.map((row) => ({ id: row.id, stage: row.properties.dealstage ?? "" }));
+		},
+
+		async createDeal({
+			contactCrmId,
+			companyCrmId,
+			name,
+			description,
+			ownerId,
+		}) {
+			const created = (await call("/crm/v3/objects/deals", {
+				method: "POST",
+				body: {
+					properties: {
+						dealname: name,
+						pipeline: "default",
+						dealstage: "1404975950",
+						description,
+						hubspot_owner_id: ownerId,
+					},
+					associations: [
+						association(contactCrmId, 3),
+						...(companyCrmId ? [association(companyCrmId, 341)] : []),
+					],
+				},
+			})) as { id: string };
+			return { id: created.id };
+		},
 	};
 }
