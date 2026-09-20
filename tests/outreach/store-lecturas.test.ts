@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { outreachEvent } from "@/lib/outreach/events";
 import { createFakeStore, OTHER_USER, TENANT, USER } from "./fake-store";
 
 describe("lecturas de los schedules en el fake store", () => {
@@ -151,6 +152,34 @@ describe("lecturas de los schedules en el fake store", () => {
 			repliedAt: null,
 			firstTouchAt: "2026-09-18T00:00:00Z",
 		});
+
+		const rows = await store.listExhaustedContacts(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows).toEqual([]);
+	});
+
+	it("listExhaustedContacts excluye a quien ya tiene un evento oportunidad_frenada (idempotencia del freno)", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:ya_frenado@test.com",
+			touches: 3,
+			repliedAt: null,
+			firstTouchAt: "2026-08-01T00:00:00Z",
+		});
+		store.events.push(
+			outreachEvent({
+				tenant_id: TENANT,
+				actor_user_id: null,
+				contact_key: "em:ya_frenado@test.com",
+				type: "oportunidad_frenada",
+				summary: "tres toques sin respuesta, con deal abierto",
+				payload: {},
+			}),
+		);
 
 		const rows = await store.listExhaustedContacts(
 			TENANT,

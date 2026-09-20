@@ -313,13 +313,27 @@ export function createFakeStore(): FakeStore {
 
 		async listExhaustedContacts(tenantId, now) {
 			const threshold = now.getTime() - NO_RESPONSE_AFTER_DAYS * 86_400_000;
+			// Idempotencia del freno: quien ya tiene un evento oportunidad_frenada
+			// no vuelve, igual que hace la store real (el dedup de events_dedup()
+			// es de 2h, no alcanza contra un cron diario).
+			const yaFrenados = new Set(
+				store.events
+					.filter(
+						(e) =>
+							e.tenant_id === tenantId &&
+							e.type === "oportunidad_frenada" &&
+							e.contact_key,
+					)
+					.map((e) => e.contact_key as string),
+			);
 			return store.contacts.filter(
 				(c) =>
 					c.tenantId === tenantId &&
 					c.touches >= 3 &&
 					c.repliedAt === null &&
 					c.firstTouchAt !== null &&
-					new Date(c.firstTouchAt).getTime() < threshold,
+					new Date(c.firstTouchAt).getTime() < threshold &&
+					!yaFrenados.has(c.contactKey),
 			);
 		},
 

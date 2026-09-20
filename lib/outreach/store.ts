@@ -685,7 +685,29 @@ export function createSupabaseOutreachStore(
 				.is("replied_at", null)
 				.lt("first_touch_at", threshold);
 			if (error) fail("listar contactos agotados", error);
-			return (data ?? []).map(toContact);
+			const candidates = (data ?? []).map(toContact);
+			if (candidates.length === 0) return [];
+
+			// Idempotencia del freno: `oportunidad_frenada` tiene dedup de 2h en
+			// events_dedup(), no de 24h, así que el trigger de la base no alcanza
+			// contra un cron diario. Un contacto que ya tiene el evento no vuelve
+			// a aparecer acá, así que nunca se re-emite ni se re-cuenta.
+			const { data: frenados, error: frenadosError } = await client
+				.from("events")
+				.select("contact_key")
+				.eq("tenant_id", tenantId)
+				.eq("type", "oportunidad_frenada")
+				.in(
+					"contact_key",
+					candidates.map((c) => c.contactKey),
+				);
+			if (frenadosError)
+				fail("listar oportunidades ya frenadas", frenadosError);
+			const yaFrenados = new Set(
+				(frenados ?? []).map((r) => r.contact_key as string),
+			);
+
+			return candidates.filter((c) => !yaFrenados.has(c.contactKey));
 		},
 
 		async listKnownInboundIds(tenantId, contactKey) {

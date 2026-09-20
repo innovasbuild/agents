@@ -53,10 +53,12 @@ const AGENT = "outreach";
 
 const issuer = () => process.env.NEXT_PUBLIC_SUPABASE_URL;
 
-/** CRM del tenant con el token del ejecutor dueño del contacto. `null` si el
- * tenant no tiene HubSpot conectado, o si ese ejecutor todavía no autorizó su
- * grant — en los dos casos el freno de oportunidades simplemente no corre
- * para ese contacto, no es un error de la corrida. */
+/** CRM del tenant con el token del ejecutor dueño del contacto, para
+ * `draftAndQueue` — SOLO para eso. A diferencia de `listOpenDeals` de abajo,
+ * acá un CRM ausente es aceptable de verdad: `queueTouch` funciona sin CRM
+ * (el claim se resuelve con `ownerUserId` local), así que perder el token no
+ * puede costar el follow-up. `null` cubre tenant sin HubSpot conectado y
+ * grant vencido por igual, a propósito. */
 async function crmForExecutor(
 	tenantId: string,
 	userId: string,
@@ -195,9 +197,16 @@ async function draftAndQueue(
 }
 
 /** Deals abiertos del contacto agotado (Task 6), con el CRM del ejecutor que
- * lo tiene asignado. Sin ejecutor o sin CRM conectado, no hay forma de saber
- * si hay un deal abierto: se trata como "ninguno" (no frena nada), no como
- * un fallo de la corrida. */
+ * lo tiene asignado.
+ *
+ * Ojo con lo que devuelve `[]` acá: solo "el tenant no tiene HubSpot
+ * conectado" es un estado normal (nunca va a haber freno para ese tenant, y
+ * eso no es una alarma). "El contacto agotado no tiene ejecutor asignado" y
+ * "el token de HubSpot murió" NO son lo mismo que "no hay deals" — son
+ * fallos, y tienen que tirar para que `flagExhaustedContacts` los cuente en
+ * `frenoFallido` en vez de disfrazarlos de "sin deal". Antes esta función
+ * tragaba los tres casos igual (`crmForExecutor` con try/catch propio) y una
+ * corrida con HubSpot caído se reportaba idéntica a una sana. */
 async function listOpenDeals(
 	store: OutreachStore,
 	input: ListOpenDealsInput,
@@ -205,10 +214,22 @@ async function listOpenDeals(
 	const [contact] = await store.findContactsByKeys(input.tenantId, [
 		input.contactKey,
 	]);
-	if (!contact?.ownerUserId) return [];
-	const crm = await crmForExecutor(input.tenantId, contact.ownerUserId);
-	if (!crm) return [];
-	return crm.listOpenDeals(input.crmId);
+	if (!contact?.ownerUserId) {
+		// Un contacto que llegó a agotado pasó por 3 toques enviados, y enviar
+		// exige ejecutor: si no lo tiene, algo está inconsistente. No es un
+		// "sin deal", es un dato roto.
+		throw new Error(
+			`el contacto agotado ${input.contactKey} no tiene ejecutor asignado: no se puede resolver el CRM`,
+		);
+	}
+	if (!(await hasEnabledBinding(input.tenantId, "crm", "hubspot"))) return [];
+
+	const { token } = await tokenForSubject(HUBSPOT_CONNECTOR_UID, {
+		tenantId: input.tenantId,
+		userId: contact.ownerUserId,
+		issuer: issuer(),
+	});
+	return createHubSpotAdapter(token).listOpenDeals(input.crmId);
 }
 
 function buildFollowupsStore(
@@ -221,6 +242,8 @@ function buildFollowupsStore(
 		listExhaustedContacts: (tenantId, now) =>
 			store.listExhaustedContacts(tenantId, now),
 		insertEvents: (rows) => store.insertEvents(rows),
+		updateContact: (tenantId, id, patch) =>
+			store.updateContact(tenantId, id, patch),
 	};
 }
 
@@ -259,7 +282,15 @@ export default defineSchedule({
 		});
 
 		console.log(
-			`${SCHEDULE}: ${result.encoladas} encolada(s), ${result.salteadas.length} salteada(s), ${result.frenadas} frenada(s)`,
+			`${SCHEDULE}: ${result.encoladas} encolada(s), ${result.salteadas.length} salteada(s), ${result.frenadas} frenada(s), ${result.frenoFallido.length} freno(s) fallido(s)`,
 		);
+		if (result.frenoFallido.length > 0) {
+			// Visibilidad explícita: sin esto, un CRM caído se ve idéntico a una
+			// noche sin deals abiertos en ningún lado salvo este log.
+			console.error(
+				`${SCHEDULE}: no se pudo resolver el freno de ${result.frenoFallido.length} contacto(s):`,
+				result.frenoFallido,
+			);
+		}
 	},
 });
