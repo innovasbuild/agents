@@ -27,7 +27,7 @@ Este documento está pensado para pegarlo en `docs/00-kickoff.md` del repo nuevo
 | Superficie de chat | **Chat web en el dashboard** primero | Slack/WhatsApp/Telegram después vía `chatSdkChannel` (Chat SDK), mismo agente. |
 | Canal del primer agente | **Email desde la casilla de cada ejecutor** (Gmail vía Vercel Connect, Custom OAuth) | Automatizable de punta a punta con cola de aprobación; entregabilidad de casilla real. LinkedIn queda como cola asistida. |
 | CRM | **Por tenant, como conexión MCP.** `innovas` → **HubSpot** (MCP remoto oficial `mcp.hubspot.com`) | El Atomic CRM ya no existe. El agente escribe contactos, notas y atribución de outreach en el CRM del tenant; la plataforma guarda solo lo operativo (cola, eventos, runs). Otro tenant puede traer Tokko, Pipedrive o una planilla sin tocar código. |
-| Prospectos | Lista propia (CSV) + ColdIQ + Google Places | En ese orden. La lista propia destraba el primer envío. |
+| Prospectos | Lista propia (CSV) + **Apollo** + ColdIQ + Google Places | La lista propia destraba el primer envío. Apollo es la fuente del pipeline de GTM (Etapa 13); ColdIQ y Places quedan disponibles por el mismo `LeadsAdapter`. |
 | Brain | Capacidad `brain` con proveedor `wiki` sobre Supabase, editable por el cliente; proveedor `mcp` para gbrain u otros | `brain_search`, `brain_read`, `brain_upsert` como tools propias del agente. Spec 2026-09-13-brain-design. |
 | Tenancy y acceso | Multi-tenant desde el día uno; entran el equipo de INNOV.AS y gente de cada cliente | Roles `platform_admin` (INNOV.AS opera la plataforma), `tenant_admin`, `tenant_member`. RLS por `tenant_id`. |
 | Código | Repo nuevo, aislado de `innovas/site` y de cualquier otro repo | Se integra por MCP/API, nunca por import. |
@@ -60,7 +60,7 @@ events · queue_items · runs  └─ places   → Google Places (OpenAPI)
 Principios:
 1. **El agente es el centro, los canales son puertas.** Chat web, MCP, y después Slack o WhatsApp llegan al mismo agente con las mismas tools y aprobaciones.
 2. **El modelo nunca ve credenciales.** Todo pasa por `connections/` de eve o por Vercel Connect.
-3. **Todo efecto externo con aprobación.** Enviar mail, crear contacto en el CRM, crear deal: `approval: always()` hasta que el flujo demuestre estar calibrado; después se relaja por tool y por tenant desde `config_values`.
+3. **Aprobación según el efecto, en cuatro niveles** (enmienda de la Etapa 12, spec `2026-09-20-orquestacion-plataforma-design.md` §7). Nivel 0, solo la base propia: corre solo. Nivel 1, gasta plata de terceros: corre solo con presupuesto. Nivel 2, escribe en sistemas del tenant (crear contacto en el CRM, crear deal): política por tenant, default `always`. Nivel 3, le llega a una persona de afuera (enviar un mail): aprobación humana siempre, con una única excepción por tenant + canal + tipo que nace apagada. Reemplaza la regla anterior, "todo efecto externo con aprobación", que leída literal impedía cualquier trabajo desatendido. La regla operativa de `CLAUDE.md` cambia junto con el código de la Etapa 12, no antes.
 4. **Append-only para la verdad.** `events` no se edita; `contacts` y `queue_items` son estado derivado.
 5. **El canon del tenant vive en su brain; los procedimientos, en skills estáticas del agente.** Las skills de `agents/outreach/skills/` dicen qué leer y el agente lo lee con `brain_search` por tags de canon. Sin `sync-brain` ni `tenants/<slug>/skills/` (spec brain B5).
 6. **Nada especial para `innovas`.** Si una decisión solo sirve para INNOV.AS, va a datos del tenant, no a código.
@@ -256,8 +256,18 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 4 · Dashboard | ✅ hecho | #23, #24 |
 | 5 · Escucha, follow-ups y fuentes | ✅ hecho — falta ColdIQ/Places como flujo de carga (deferido, etapa propia) | #26 |
 | 6 · Canal MCP (Claude / ChatGPT) | ⬜ no arrancada | — |
-| 7 · Segundo tenant | ⬜ no arrancada | — |
+| 7 · Segundo tenant | ⬜ no arrancada — va después de la 12 y la 13 | — |
 | 8 · Chat SDK | ⬜ no arrancada | — |
+| 9 · Observabilidad por cliente | ⬜ no arrancada — conviene después de la 12 | — |
+| 10 · Agentes inbound y handoff | ⬜ no arrancada | — |
+| 11 · Brain por MCP | ⬜ no arrancada | #25 (spec) |
+| 12 · Modelo de orquestación | 📝 spec y plan listos, sin implementar | #29 |
+| 13 · Pipeline de GTM | 📝 spec y plan listos, sin implementar | #30 |
+| 14 · Subida de eve | ⬜ no arrancada | — |
+| 15 · Propuesta comercial | ⬜ no arrancada | — |
+| 16 · Auto-respuesta con umbral | ⬜ no arrancada — arranca por datos, no por fecha | — |
+
+**Orden de ejecución:** 5 → 12 → 13 → 7. El número de una etapa no es su orden; el detalle está en `docs/01-roadmap-etapas.md`, "Orden de ejecución".
 
 Detalle y deuda conocida de la Etapa 5: `.superpowers/sdd/2026-09-19-etapa-5-escucha/progress.md` en el worktree que la corrió (gitignored, no viaja con el repo).
 
@@ -387,7 +397,7 @@ Entregables: `channels/slack.ts` o WhatsApp Cloud API vía `chatSdkChannel`, con
 
 - Editor visual de flujos.
 - `innovas-brains-mcp` se archiva sin desplegar (spec brain B4).
-- LinkedIn automático. Solo cola asistida si se pide.
+- LinkedIn automático. Sin API oficial, entra por un proveedor tercero que todavía no se eligió (Unipile es el único con arquitectura de API para integrar desde un backend propio). Tiene su lugar previsto y apagado en la Etapa 13, con la aprobación por lote y la cola por canal que dependen de él.
 - Multi-idioma. es-AR único, con el chequeo cableado en el gate.
 - Facturación por tenant. Se mide `runs.cost_usd`; se cobra después.
 

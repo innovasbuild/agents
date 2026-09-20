@@ -428,7 +428,7 @@ S1 y S2 son la primera tarea de E2; S3, S4 y S5 son de E1.
 
 ### Al roadmap (`docs/01-roadmap-etapas.md`)
 
-La Etapa 13 se agrega con las cuatro entregas de §2.1, después de la 12 y antes de la 7, con el orden ya acordado: **5 → 12 → 13 → 7**.
+La Etapa 13 se agrega con las cuatro entregas de §2.1, después de la 12 y antes de la 7, con el orden ya acordado: **5 → 12 → 13 → 7**. **Aplicado el 2026-09-20**, junto con las enmiendas al kickoff de abajo, en un PR propio posterior al #30 que trajo esta spec.
 
 ### Al kickoff (`docs/innovas-agents-kickoff.md`)
 

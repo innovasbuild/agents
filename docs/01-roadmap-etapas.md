@@ -23,6 +23,18 @@ Este documento es el **tracker de ejecución** del kickoff (`docs/innovas-agents
 
 Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` cerrada (spec + plan + PR mergeado + criterio cumplido).
 
+## Orden de ejecución
+
+**El número de una etapa no es su orden.** Las etapas nuevas se numeran al final para no romper las referencias que ya existen, y se ejecutan donde tienen sentido:
+
+**5 → 12 → 13 → 7**, y después el resto.
+
+- La **12** (orquestación) y la **13** (pipeline de GTM) van **antes** del segundo tenant. La prueba de la Etapa 7 es "corre sin tocar `agents/` ni `lib/`"; hacerla antes validaría con el cliente nuevo la corrida manejada desde el chat, que es justo lo que la 12 y la 13 reemplazan.
+- La **9** (observabilidad) conviene después de la 12, que es la que le genera los datos (`runs` con conteos, `usage_entries`).
+- La **14** (subida de eve) es independiente de la 12 y la 13: se puede correr en paralelo con cualquiera.
+- La **16** no arranca por fecha sino por datos: hace falta historial de piezas aprobadas sin edición.
+- Las **6, 8, 10 y 11** no se mueven.
+
 ---
 
 ## Etapa 0 · Bootstrap y spike de riesgo — `[x]`
@@ -148,7 +160,9 @@ Tareas:
 
 ---
 
-## Etapa 3 · Agente de outreach v1 — `[ ]`
+## Etapa 3 · Agente de outreach v1 — `[x]`
+
+**Estado:** cerrada según el registro de avance del kickoff (§8, "Estado de avance", PR #27). Las casillas de abajo no se tildaron una por una: su lista fue reemplazada por las entregas de la spec 03 (§14 y §17), y el detalle de lo hecho vive ahí.
 
 **Modelo Claude Code:** Opus 5, effort `high` para `instructions.ts`, gate de estilo y evals. Sesión nueva con Sonnet 5, effort `high`, para tools/subagente/wiring.
 **Modelo runtime:** chat `anthropic/claude-sonnet-5` · `researcher` `anthropic/claude-haiku-4.5` · primer toque en frío `anthropic/claude-opus-5`.
@@ -174,7 +188,9 @@ Tareas:
 
 ---
 
-## Etapa 4 · Dashboard — `[ ]`
+## Etapa 4 · Dashboard — `[x]`
+
+**Estado:** cerrada según el registro de avance del kickoff (PR #27; entregas en PRs #22 a #24). Las casillas de abajo no se tildaron una por una: el detalle vive en `docs/superpowers/specs/2026-09-16-etapa-4-dashboard-cola-design.md` y sus planes.
 
 **Modelo Claude Code:** Sonnet 5, effort `medium`. `/design-review` al final, también con Sonnet.
 **Modelo runtime:** n/a.
@@ -198,7 +214,9 @@ Tareas:
 
 ---
 
-## Etapa 5 · Escucha, follow-ups y fuentes — `[ ]`
+## Etapa 5 · Escucha, follow-ups y fuentes — `[x]`
+
+**Estado:** cerrada según el registro de avance del kickoff (PR #26 y #27). Spec real: `docs/superpowers/specs/2026-09-19-etapa-5-escucha-followups-design.md`. Su D1 sacó las fuentes del alcance: ColdIQ y Places como flujo de carga pasan a la **Etapa 13**.
 
 **Modelo Claude Code:** Sonnet 5, effort `high` (Opus para debugging de Cron en Vercel si hace falta).
 **Modelo runtime:** `morning-sweep` y clasificación en `anthropic/claude-haiku-4.5` · follow-ups en `anthropic/claude-sonnet-5`.
@@ -208,7 +226,7 @@ Tareas:
 - [ ] `schedules/morning-sweep.ts` iterando tenants activos.
 - [ ] `schedules/followups.ts` iterando tenants activos.
 - [ ] `read_replies` con clasificación de respuestas.
-- [ ] Flujo de carga desde el chat con ColdIQ y Places.
+- ~~Flujo de carga desde el chat con ColdIQ y Places.~~ Movido a la Etapa 13 (D1 de la spec de la Etapa 5).
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** una respuesta real en tu Gmail mueve el contacto a `respondio` sin intervención, y el follow-up vencido aparece en la cola a la mañana.
@@ -342,6 +360,99 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 **Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools.
 
 **Cuando haga falta, no ahora:** búsqueda híbrida con embeddings (`2026-09-13-brain-design.md` §6.2), que se activa por tenant con `config.search = "hybrid"` más un backfill. Señal para prenderla: el agente busca algo que existe y no lo encuentra, o el brain de un tenant pasa de unas 150 páginas.
+
+---
+
+## Etapa 12 · Modelo de orquestación — `[ ]`
+
+**Modelo Claude Code:** Fable 5.1 para la spec (hecha). Sesión nueva con Sonnet 5, effort `high`, para la implementación.
+**Modelo runtime:** el de cada nodo por tier (`barato` → Haiku 4.5, `medio` → Sonnet 5, `fuerte` → Opus 5).
+**Spec/Plan:** `docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md` · `docs/superpowers/plans/2026-09-20-etapa-12-orquestacion.md` (PR #29, mergeado)
+
+Agregada el 2026-09-20. Las reglas para que todo lo que se construya después (workflows por tenant, trabajo desatendido) quede ordenado: qué es un nodo, un workflow y un agente, cuándo se usa cada uno, qué contrato cumplen, y una escala de efectos de cuatro niveles que reemplaza la regla binaria de aprobación. **Se ejecuta antes de la 7** (ver "Orden de ejecución").
+
+**Depende de:** Etapa 5.
+
+- [ ] **E1 · Medición:** `usage_entries`, los nodos que ya llaman al modelo asientan, `runs.cost_usd` se escribe por primera vez.
+- [ ] **E2 · Rieles:** `work_items` y reclamo con lease, `enqueue()`, registry con tests que obligan, runner, `tenant_workflows`, `tenant_budgets`.
+- [ ] **E3 · Primer workflow:** `refresh-fichas` y el dispatcher, contra producción.
+- [ ] **E4 · La ley:** `docs/02-orquestacion.md` y el bloque de reglas en `CLAUDE.md`, que se mergea con el código y no antes.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** una ficha vencida se refresca sola en producción, con su fila en `runs` (la cuenta cierra) y sus asientos en `usage_entries`; con el presupuesto en cero corta como `budget_exhausted` sin perder ítems; y los tests del registry fallan cuando se los rompe a propósito.
+
+---
+
+## Etapa 13 · Pipeline de GTM — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec (hecha). Sesión nueva con Sonnet 5, effort `high`, para la implementación.
+**Modelo runtime:** calificación y verificación de hechos con `typesafe-ai/jev` por el AI Gateway · redacción con Opus 5 (la que ya existe).
+**Spec/Plan:** `docs/superpowers/specs/2026-09-20-etapa-13-pipeline-gtm-design.md` · `docs/superpowers/plans/2026-09-20-etapa-13-pipeline-gtm.md` (PR #30)
+
+Agregada el 2026-09-20. Una persona define un foco de búsqueda y el sistema descubre empresas y personas en Apollo, las califica contra el ICP con Jev, revela el email **solo de las que pasan**, y deja la pieza `pending` en la cola. Califica antes de enriquecer porque buscar cuesta un crédito por página y revelar un email cuesta uno por cabeza. Absorbe el "flujo de carga con ColdIQ y Places" que la Etapa 5 dejó afuera.
+
+**Depende de:** Etapa 12 **implementada** (no alcanza con su spec).
+
+- [ ] **E1 · Descubrimiento:** `LeadsAdapter` con Apollo (dos llaves, fallback), `search_focuses`, workflow `target-search`.
+- [ ] **E2 · Calificación:** workflow `icp-scoring` con Jev, niveles del ICP en la config del tenant, tres carriles por confianza, evals con 20 casos etiquetados a mano.
+- [ ] **E3 · Enrichment y pieza:** revelado de email con promoción de `contact_key`, `verify-fact`, `draft-queue` con cupo diario.
+- [ ] **E4 · Pantallas:** `/focos` con el embudo y la bandeja "para revisar", columna de puntaje en `/contactos`.
+- [ ] **Diferido:** LinkedIn (proveedor sin decidir; Unipile es el único con arquitectura de API) y, con él, la cola por canal y la aprobación por lote.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** un foco real descubre contactos en Apollo, Jev los califica, **ningún descartado consume un crédito de email**, y un calificado termina como pieza en `/cola` que sale con su atribución completa en HubSpot.
+
+---
+
+## Etapa 14 · Subida de eve — `[ ]`
+
+**Modelo Claude Code:** Opus 5, effort `high`. Es un framework en preview y nueve versiones menores de salto.
+**Modelo runtime:** n/a.
+**Spec/Plan:** a escribir al arrancarla.
+
+Agregada el 2026-09-20. De `0.54.2` a la vigente. No es un spike: la 0.58 cambió las rutas de agentes nombrados a `/eve/<name>/v1/*` (hoy se usa `/eve/agents/outreach/eve/v1/`), y eso toca el cliente del chat, los tests de canal y el dispatch de schedules. Adentro va el spike de `defineWorkflowTool` con `ctx.ask` que necesita la Etapa 15, y que en 0.54.2 no corría con el agente en `agents/outreach/` (spec 03 §16).
+
+**Depende de:** Etapa 5. Independiente de la 12 y la 13.
+
+- [ ] Releer `node_modules/eve/docs` completo en la versión nueva.
+- [ ] Rutas de agentes nombrados, cliente del chat, tests de canal, dispatch de schedules.
+- [ ] Spike: `defineWorkflowTool` con `ctx.ask` en `agents/outreach/`.
+- [ ] Volver a correr los criterios de cierre de las Etapas 5 y 12 después de subir.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** producción corre sobre la versión nueva, el chat y los schedules andan igual que antes, y el spike de `defineWorkflowTool` tiene respuesta.
+
+---
+
+## Etapa 15 · Propuesta comercial — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec. Sesión nueva con Sonnet 5 para la implementación.
+**Modelo runtime:** a definir en la spec.
+**Spec/Plan:** a escribir al arrancarla.
+
+Agregada el 2026-09-20. Un agente conversacional: la persona pide un contacto, el agente levanta el contexto de las interacciones previas, se sube un archivo (normalmente el transcript de una reunión), y con el brain del tenant arma una propuesta en un formato fijo. Es agente y no workflow porque hay alguien conversando y el camino depende de lo que diga el transcript (spec de la Etapa 12, §4.2).
+
+**Depende de:** Etapa 14 si usa `defineWorkflowTool`; si no, de ninguna.
+
+**Terminado cuando:** a partir de un transcript real, sale una propuesta en el formato del tenant, con el contexto del contacto, sin que la persona tenga que pegar nada a mano.
+
+---
+
+## Etapa 16 · Auto-respuesta con umbral — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec (es la excepción del nivel 3: algo le llega a una persona sin click humano).
+**Modelo runtime:** a definir en la spec.
+**Spec/Plan:** a escribir al arrancarla.
+
+Agregada el 2026-09-20. La escucha de la Etapa 5 responde sola cuando tiene confianza alta en su capacidad de responder, y si no, notifica y espera. Es la excepción del nivel 3 que la Etapa 12 dejó diseñada y apagada (§7.4): se prende por tenant + canal + tipo de pieza.
+
+**Depende de:** Etapa 5 **y** historial suficiente. **No arranca por fecha, arranca por datos:** hace falta una tasa medida de piezas de ese tipo aprobadas sin edición.
+
+- [ ] La confianza la pone un verificador con contexto fresco, nunca el nodo que redactó.
+- [ ] Tope diario propio, aparte de los presupuestos.
+- [ ] Todo lo que sale solo queda marcado y aparece en una lista de "salió sin aprobación".
+
+**Terminado cuando:** con el interruptor prendido para un tenant y un tipo de respuesta, las que superan el umbral salen solas, las demás esperan a una persona, y todas las automáticas se pueden auditar.
 
 ---
 
