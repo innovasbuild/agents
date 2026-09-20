@@ -1,7 +1,7 @@
 ---
 title: Brain por tenant · capacidad con tools propias y wiki sobre Supabase
 fecha: 2026-09-13
-estado: aprobada en brainstorming
+estado: implementada (ver §15)
 fuente: docs/superpowers/specs/02-conexiones-innovas.md §2 D6, §6.2, §10 S5 y S6 (rama claude/jovial-gates-06e495, commits a5fd05b y 4fe6004) · docs/innovas-agents-kickoff.md §5 · repo ~/Sites/innovas/brains (commit ac62c39) · bóveda de Obsidian en el shared drive del brain de Innovas
 reemplaza: el servicio innovas-brains-mcp en Railway como forma del brain
 ---
@@ -398,3 +398,31 @@ Se aplican en la rama que tiene el resultado del spike (`claude/jovial-gates-06e
 - **Tags de canon mal asignados:** la skill no encuentra el ICP. Se mitiga revisando el dry-run y con un test manual por tag desde el chat.
 - **Re-import durante la transición:** una página editada por el agente y luego en Drive queda salteada. El reporte lo muestra y se resuelve con `--force` o a mano.
 - **Sesiones largas con canon viejo:** una sesión que ya leyó una página no ve cambios posteriores hasta volver a leerla. Aceptable para canon.
+
+## 15. Resultado de la verificación
+
+**Implementada y en producción.** El plan `docs/superpowers/plans/2026-09-13-brain.md` se ejecutó en la rama de la Etapa 2 y entró a `main` por el PR #2 (`worktree-brain-por-tenant`). Están las tres migraciones (`brain_tables`, `brain_upsert_page`, `brain_search_pages`), sus tests pgTAP, `lib/brain/`, las tools en `agents/outreach/tools/brain.ts`, el script de import y la configuración de Innovas en `tenants/innovas/`.
+
+**Verificado el 2026-09-14** contra el deploy de producción, dentro de la verificación de cierre de la Etapa 2 (`docs/01-roadmap-etapas.md`, Etapa 2):
+
+- `brain_search` respondió con el ICP de Innovas desde el chat, así que la bóveda quedó importada (criterio 1 de §1).
+- Un tenant de prueba sin bindings no expuso ninguna tool (criterio 3 de §1).
+
+**Uso posterior:** la Etapa 3 lee del brain el canon, la voz y los vetos del tenant en `lib/outreach/canon.ts` y las reglas del gate de estilo.
+
+**Desvío registrado:** `approved_by_user_id` queda nulo (§5.3 y §14). En eve 0.54.2 el `responder` solo llega a la política `approval.response`, no a `execute`.
+
+**Falta completar acá**, con una consulta a producción, el detalle del import: páginas por categoría, tags de canon asignados y wikilinks sin resolver que quedaron.
+
+```sql
+select category, status, count(*) from public.brain_pages
+where tenant_id = (select id from public.tenants where slug = 'innovas')
+group by category, status order by category;
+
+select tag, count(*) from public.brain_pages, unnest(tags) as tag
+where tenant_id = (select id from public.tenants where slug = 'innovas')
+  and tag like 'canon:%'
+group by tag order by tag;
+```
+
+**Pendientes de la spec, planificados:** el editor del cliente (§8) en la Etapa 4; el proveedor `mcp` (§4.4) y servir este brain como MCP a las herramientas del cliente, en la Etapa 11; la búsqueda híbrida (§6.2), anotada en la Etapa 11 como "cuando haga falta".
