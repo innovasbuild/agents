@@ -32,6 +32,7 @@ export interface FakeStore extends OutreachStore {
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
 	events: OutreachEventInsert[];
+	contactSeed(): ContactRow;
 }
 
 let counter = 0;
@@ -252,6 +253,61 @@ export function createFakeStore(): FakeStore {
 		},
 		async insertEvents(rows) {
 			store.events.push(...rows);
+		},
+
+		async listActiveTenants() {
+			const tenants: { id: string; slug: string }[] = [];
+			for (const [id, value] of store.tenants.entries()) {
+				// En el fake store, todos los tenants están "activos" si existen.
+				tenants.push({ id, slug: id });
+			}
+			return tenants;
+		},
+
+		async listExecutorsWithGmailRead(tenantId) {
+			return store.executors.filter(
+				(e) => e.tenantId === tenantId && e.gmailAuthorizedAt !== null,
+			);
+		},
+
+		async listContactsWithThread(tenantId, ownerUserId) {
+			return store.contacts.filter(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.ownerUserId === ownerUserId &&
+					c.gmailThreadId !== null,
+			);
+		},
+
+		async listDueFollowups(tenantId, now) {
+			return store.contacts.filter(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.nextStepAt !== null &&
+					new Date(c.nextStepAt) <= now &&
+					c.touches < 3 &&
+					c.repliedAt === null,
+			);
+		},
+
+		async listKnownInboundIds(tenantId, contactKey) {
+			const ids: string[] = [];
+			for (const event of store.events) {
+				if (
+					event.tenant_id === tenantId &&
+					event.contact_key === contactKey &&
+					(event.type === "respuesta" || event.type === "rebote")
+				) {
+					const payload = event.payload as Record<string, unknown> | null;
+					const msgId = payload?.gmail_message_id;
+					if (typeof msgId === "string") ids.push(msgId);
+				}
+			}
+			return ids;
+		},
+
+		contactSeed(): ContactRow {
+			return contactRow();
 		},
 	};
 	return store;

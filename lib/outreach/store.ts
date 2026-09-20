@@ -220,6 +220,16 @@ export interface OutreachStore {
 	): Promise<{ count: number; lastSentAt: Date | null }>;
 	/** Un insert descartado por el dedup (0 filas) o un 23505 cuentan como ya registrado. */
 	insertEvents(rows: readonly OutreachEventInsert[]): Promise<void>;
+	/** Tenants activos del sistema. */
+	listActiveTenants(): Promise<{ id: string; slug: string }[]>;
+	/** Ejecutores del tenant con Gmail autorizado. */
+	listExecutorsWithGmailRead(tenantId: string): Promise<ExecutorRow[]>;
+	/** Contactos del tenant con hilo de Gmail asignado a un ejecutor específico. */
+	listContactsWithThread(tenantId: string, ownerUserId: string): Promise<ContactRow[]>;
+	/** Contactos vencidos para seguimiento (no respondidos, < 3 toques). */
+	listDueFollowups(tenantId: string, now: Date): Promise<ContactRow[]>;
+	/** IDs de mensaje Gmail conocidos en eventos de respuesta/rebote. */
+	listKnownInboundIds(tenantId: string, contactKey: string): Promise<string[]>;
 }
 
 const CONTACT_COLUMNS =
@@ -579,6 +589,74 @@ export function createSupabaseOutreachStore(
 				if (error && error.code !== "23505")
 					fail(`registrar el evento ${row.type}`, error);
 			}
+		},
+
+		async listActiveTenants() {
+			const { data, error } = await client
+				.from("tenants")
+				.select("id, slug")
+				.eq("active", true);
+			if (error) fail("listar tenants activos", error);
+			return (data ?? []).map((r) => ({ id: r.id as string, slug: r.slug as string }));
+		},
+
+		async listExecutorsWithGmailRead(tenantId) {
+			const { data, error } = await client
+				.from("executors")
+				.select(
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at",
+				)
+				.eq("tenant_id", tenantId)
+				.not("gmail_read_authorized_at", "is", null);
+			if (error) fail("listar ejecutores con Gmail", error);
+			return (data ?? []).map((r) => ({
+				tenantId: r.tenant_id,
+				userId: r.user_id,
+				slug: r.slug ?? null,
+				crmOwnerId: r.crm_owner_id ?? null,
+				dailyQuota: r.daily_quota,
+				gmailAuthorizedAt: r.gmail_authorized_at ?? null,
+			}));
+		},
+
+		async listContactsWithThread(tenantId, ownerUserId) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("owner_user_id", ownerUserId)
+				.not("gmail_thread_id", "is", null);
+			if (error) fail("listar contactos con hilo", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listDueFollowups(tenantId, now) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.lte("next_step_at", now.toISOString())
+				.lt("touches", 3)
+				.is("replied_at", null);
+			if (error) fail("listar seguimientos vencidos", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listKnownInboundIds(tenantId, contactKey) {
+			const { data, error } = await client
+				.from("events")
+				.select("payload")
+				.eq("tenant_id", tenantId)
+				.eq("contact_key", contactKey)
+				.in("type", ["respuesta", "rebote"]);
+			if (error) fail("listar IDs de rebote/respuesta", error);
+			const ids: string[] = [];
+			for (const row of data ?? []) {
+				const payload = row.payload as Record<string, unknown> | null;
+				const msgId = payload?.gmail_message_id;
+				if (typeof msgId === "string") ids.push(msgId);
+			}
+			return ids;
 		},
 	};
 }
