@@ -63,4 +63,31 @@ describe("generateResearch", () => {
 			{ ok: false, reason: "url_no_permitida", message: "no" },
 		]);
 	});
+
+	it("devuelve usage y providerMetadata para que la puerta asiente el consumo", async () => {
+		const usage = { inputTokens: 100, outputTokens: 20 };
+		const providerMetadata = { gateway: { cost: "0.002" } };
+		const generateText = (async () => ({
+			output: { name: "Acme" },
+			usage,
+			providerMetadata,
+		})) as never;
+
+		const result = await generateResearch(
+			{
+				model: "anthropic/claude-haiku-4.5",
+				system: "s",
+				prompt: "p",
+				readPage: async () => ({
+					ok: false as const,
+					reason: "x",
+					message: "x",
+				}),
+			},
+			{ generateText },
+		);
+
+		expect(result.usage).toBe(usage);
+		expect(result.providerMetadata).toBe(providerMetadata);
+	});
 });
