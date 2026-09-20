@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { outreachEvent } from "@/lib/outreach/events";
+import type { FakeStore } from "./fake-store";
 import { createFakeStore, OTHER_USER, TENANT, USER } from "./fake-store";
+
+/** Un contacto vencido real siempre tiene ejecutor con lectura de Gmail: sin
+ * grant de lectura nadie está escuchando sus respuestas, y ahí el carril de
+ * follow-ups no corre (simetría con listContactsWithThread). */
+function conEscucha(store: FakeStore, userId = USER): FakeStore {
+	const executor = store.executors.find((e) => e.userId === userId);
+	if (executor) executor.gmailReadAuthorizedAt = "2026-09-01T00:00:00Z";
+	else
+		store.executors.push({
+			tenantId: TENANT,
+			userId,
+			slug: userId,
+			crmOwnerId: null,
+			dailyQuota: 30,
+			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
+			gmailReadAuthorizedAt: "2026-09-01T00:00:00Z",
+		});
+	return store;
+}
 
 describe("lecturas de los schedules en el fake store", () => {
 	it("listContactsWithThread solo trae contactos con gmail_thread_id", async () => {
@@ -26,12 +46,13 @@ describe("lecturas de los schedules en el fake store", () => {
 	});
 
 	it("listDueFollowups excluye a quien ya respondió", async () => {
-		const store = createFakeStore();
+		const store = conEscucha(createFakeStore());
 		const vencido = "2026-09-01T00:00:00Z";
 		store.contacts.push(
 			{
 				...store.contactSeed(),
 				contactKey: "em:debe@test.com",
+				ownerUserId: USER,
 				nextStepAt: vencido,
 				touches: 1,
 				repliedAt: null,
@@ -39,6 +60,7 @@ describe("lecturas de los schedules en el fake store", () => {
 			{
 				...store.contactSeed(),
 				contactKey: "em:respondio@test.com",
+				ownerUserId: USER,
 				nextStepAt: vencido,
 				touches: 1,
 				repliedAt: vencido,
@@ -54,10 +76,11 @@ describe("lecturas de los schedules en el fake store", () => {
 	});
 
 	it("listDueFollowups excluye a quien ya agotó los tres toques", async () => {
-		const store = createFakeStore();
+		const store = conEscucha(createFakeStore());
 		store.contacts.push({
 			...store.contactSeed(),
 			contactKey: "em:agotado@test.com",
+			ownerUserId: USER,
 			nextStepAt: "2026-09-01T00:00:00Z",
 			touches: 3,
 			repliedAt: null,
@@ -72,11 +95,72 @@ describe("lecturas de los schedules en el fake store", () => {
 	});
 
 	it("listDueFollowups excluye a quien todavía no vence", async () => {
-		const store = createFakeStore();
+		const store = conEscucha(createFakeStore());
 		store.contacts.push({
 			...store.contactSeed(),
 			contactKey: "em:futuro@test.com",
+			ownerUserId: USER,
 			nextStepAt: "2026-10-01T00:00:00Z",
+			touches: 1,
+			repliedAt: null,
+		});
+
+		const rows = await store.listDueFollowups(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows).toEqual([]);
+	});
+
+	// M1: los dos carriles operan sobre las mismas filas pero entraban por
+	// universos distintos. Si no puedo escuchar, no sigo tocando: encolarle un
+	// follow-up a alguien cuyas respuestas nadie lee es mandar a ciegas.
+	it("listDueFollowups excluye al contacto cuyo ejecutor no tiene lectura de Gmail", async () => {
+		const store = conEscucha(createFakeStore());
+		store.executors.push({
+			tenantId: TENANT,
+			userId: OTHER_USER,
+			slug: "sin_escucha",
+			crmOwnerId: null,
+			dailyQuota: 30,
+			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
+			gmailReadAuthorizedAt: null,
+		});
+		store.contacts.push(
+			{
+				...store.contactSeed(),
+				contactKey: "em:escuchado@test.com",
+				ownerUserId: USER,
+				nextStepAt: "2026-09-01T00:00:00Z",
+				touches: 1,
+				repliedAt: null,
+			},
+			{
+				...store.contactSeed(),
+				contactKey: "em:a_ciegas@test.com",
+				ownerUserId: OTHER_USER,
+				nextStepAt: "2026-09-01T00:00:00Z",
+				touches: 1,
+				repliedAt: null,
+			},
+		);
+
+		const rows = await store.listDueFollowups(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows.map((r) => r.contactKey)).toEqual(["em:escuchado@test.com"]);
+	});
+
+	it("listDueFollowups no trae nada si ningún ejecutor del tenant tiene lectura", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...store.contactSeed(),
+			contactKey: "em:a_ciegas@test.com",
+			ownerUserId: USER,
+			nextStepAt: "2026-09-01T00:00:00Z",
 			touches: 1,
 			repliedAt: null,
 		});

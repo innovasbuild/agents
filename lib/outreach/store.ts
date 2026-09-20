@@ -668,10 +668,26 @@ export function createSupabaseOutreachStore(
 		},
 
 		async listDueFollowups(tenantId, now) {
+			// Simetría con listContactsWithThread: el carril de follow-ups entra
+			// por el mismo universo que el de la escucha. Sin grant de lectura
+			// nadie está leyendo las respuestas de ese ejecutor, así que seguirle
+			// encolando toques es mandar a ciegas — si no puedo escuchar, no sigo
+			// tocando.
+			const { data: readers, error: readersError } = await client
+				.from("executors")
+				.select("user_id")
+				.eq("tenant_id", tenantId)
+				.not("gmail_read_authorized_at", "is", null);
+			if (readersError)
+				fail("listar ejecutores con lectura de Gmail", readersError);
+			const readerIds = (readers ?? []).map((r) => r.user_id as string);
+			if (readerIds.length === 0) return [];
+
 			const { data, error } = await client
 				.from("contacts")
 				.select(CONTACT_COLUMNS)
 				.eq("tenant_id", tenantId)
+				.in("owner_user_id", readerIds)
 				.lte("next_step_at", now.toISOString())
 				.lt("touches", 3)
 				.is("replied_at", null);

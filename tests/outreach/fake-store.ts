@@ -301,9 +301,20 @@ export function createFakeStore(): FakeStore {
 		},
 
 		async listDueFollowups(tenantId, now) {
+			// Mismo universo que listContactsWithThread: solo contactos de un
+			// ejecutor con lectura de Gmail (ver la store real).
+			const readers = new Set(
+				store.executors
+					.filter(
+						(e) => e.tenantId === tenantId && e.gmailReadAuthorizedAt !== null,
+					)
+					.map((e) => e.userId),
+			);
 			return store.contacts.filter(
 				(c) =>
 					c.tenantId === tenantId &&
+					c.ownerUserId !== null &&
+					readers.has(c.ownerUserId) &&
 					c.nextStepAt !== null &&
 					new Date(c.nextStepAt) <= now &&
 					c.touches < 3 &&
