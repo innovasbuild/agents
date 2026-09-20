@@ -42,22 +42,27 @@ export type FollowupsExhaustedContact = Pick<
  * nunca un efecto externo. */
 export type FollowupsContactPatch = Pick<ContactPatch, "nextStepAt" | "stage">;
 
+/** Los ocho métodos son obligatorios, igual que en `SweepStore`: un cableado
+ * incompleto tiene que ser un error de tipo, no una degradación silenciosa.
+ * Cuando `listExhaustedContacts`, `insertEvents` y `updateContact` eran
+ * opcionales, olvidarse de `updateContact` compilaba y corría, y el freno
+ * pasaba a ser lo que su propio comentario advertía: un contador, no un freno
+ * — el evento quedaba, `next_step_at` seguía vivo y la etapa no subía. Sin
+ * error, sin warning, sin test rojo. Los fakes implementan los tres. */
 export interface FollowupsStore {
 	listActiveTenants(): Promise<FollowupsTenant[]>;
 	listDueFollowups(tenantId: string, now: Date): Promise<FollowupsDueContact[]>;
-	/** Opcional en el tipo porque no todo caller (ni todo test) necesita el
-	 * freno de oportunidades: sin ella, esa mitad simplemente no corre.
-	 * Idempotencia: la implementación real excluye a quien ya tiene un evento
+	/** Idempotencia: la implementación real excluye a quien ya tiene un evento
 	 * `oportunidad_frenada` — acá no hay forma de saberlo sin volver a leer la
 	 * base, así que es responsabilidad de la store, no de esta función. */
-	listExhaustedContacts?(
+	listExhaustedContacts(
 		tenantId: string,
 		now: Date,
 	): Promise<FollowupsExhaustedContact[]>;
-	insertEvents?(rows: readonly OutreachEventInsert[]): Promise<void>;
-	/** Sin ella, el freno registra el evento pero no corta `next_step_at` ni
-	 * sube la etapa: queda un contador, no un freno. */
-	updateContact?(
+	insertEvents(rows: readonly OutreachEventInsert[]): Promise<void>;
+	/** Es lo que hace que el freno frene: corta `next_step_at` y, si la
+	 * escalera lo permite, sube la etapa. */
+	updateContact(
 		tenantId: string,
 		id: string,
 		patch: FollowupsContactPatch,
@@ -240,8 +245,7 @@ async function flagExhaustedContacts(
 	now: Date,
 	result: FollowupsResult,
 ): Promise<void> {
-	const contacts =
-		(await deps.store.listExhaustedContacts?.(tenant.id, now)) ?? [];
+	const contacts = await deps.store.listExhaustedContacts(tenant.id, now);
 
 	for (const contact of contacts) {
 		if (!contact.crmId) continue; // estado normal: nunca tuvo CRM asociado.
@@ -259,7 +263,7 @@ async function flagExhaustedContacts(
 			// El evento primero: es el hecho, y es lo que hace idempotente la
 			// próxima corrida (listExhaustedContacts lo excluye). Si el patch de
 			// abajo falla, el hecho quedó igual.
-			await deps.store.insertEvents?.([
+			await deps.store.insertEvents([
 				outreachEvent({
 					tenant_id: tenant.id,
 					actor_user_id: null,
@@ -274,7 +278,7 @@ async function flagExhaustedContacts(
 			if (contact.stage && canAdvance(contact.stage, "sin_respuesta")) {
 				patch.stage = "sin_respuesta";
 			}
-			await deps.store.updateContact?.(tenant.id, contact.id, patch);
+			await deps.store.updateContact(tenant.id, contact.id, patch);
 
 			result.frenadas++;
 		} catch (error) {

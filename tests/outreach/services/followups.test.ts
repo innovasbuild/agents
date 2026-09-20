@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { refuse } from "@/lib/outreach/result";
 import {
 	type DraftAndQueueInput,
+	type FollowupsStore,
 	runFollowups,
 } from "@/lib/outreach/services/followups";
 
@@ -16,14 +17,40 @@ const contacto = (over: Record<string, unknown> = {}) => ({
 	...over,
 });
 
+// La store del fixture implementa los ocho métodos, como cualquier cableado
+// real: desde M3 el contrato es obligatorio y un cableado incompleto es un
+// error de tipo, no un freno degradado a contador.
 const deps = (over: Record<string, unknown> = {}) => ({
 	store: {
 		listActiveTenants: async () => [{ id: "t1", slug: "innovas" }],
 		listDueFollowups: async () => [contacto()],
+		listExhaustedContacts: async () => [],
+		insertEvents: vi.fn(async () => {}),
+		updateContact: vi.fn(async () => ({}) as never),
 	},
 	draftAndQueue: vi.fn(async () => ({ ok: true as const })),
 	now: () => new Date("2026-09-19T11:00:00Z"),
 	...over,
+});
+
+describe("el contrato de la store", () => {
+	// M3: mientras las tres deps del freno fueron opcionales, un cableado que se
+	// olvidara de updateContact compilaba, corría, y el freno quedaba en lo que
+	// su propio comentario advertía: un contador. El @ts-expect-error es el
+	// test — si alguien vuelve a hacerlas opcionales, `npm run typecheck` se
+	// pone rojo acá porque el error esperado deja de existir.
+	it("una store sin updateContact no tipa: el freno no puede degradarse a contador", () => {
+		const incompleta = {
+			listActiveTenants: async () => [],
+			listDueFollowups: async () => [],
+			listExhaustedContacts: async () => [],
+			insertEvents: async () => {},
+		};
+		// @ts-expect-error falta updateContact, y es obligatorio.
+		const store: FollowupsStore = incompleta;
+
+		expect(store).toBeDefined();
+	});
 });
 
 describe("runFollowups", () => {
