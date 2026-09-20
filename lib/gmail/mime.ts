@@ -4,6 +4,10 @@ type MailInput = {
 	body: string;
 	bcc?: string | null;
 	messageId?: string | null;
+	/** Message-ID RFC822 del mensaje al que se responde. Gmail reescribe el
+	 * propio, así que este valor se lee de Gmail, no se inventa. */
+	inReplyTo?: string | null;
+	references?: string | null;
 };
 
 const isAscii = (value: string) => /^[\x20-\x7E]*$/.test(value);
@@ -25,6 +29,8 @@ export function buildRawMessage({
 	body,
 	bcc,
 	messageId,
+	inReplyTo,
+	references,
 }: MailInput): string {
 	// El subject se valida crudo: codificado en base64 ya no mostraría el salto.
 	if (/[\r\n]/.test(subject)) throw new Error("header inválido: Subject");
@@ -33,6 +39,8 @@ export function buildRawMessage({
 		...(bcc ? [header("Bcc", bcc)] : []),
 		header("Subject", encodeSubject(subject)),
 		...(messageId ? [header("Message-ID", messageId)] : []),
+		...(inReplyTo ? [header("In-Reply-To", inReplyTo)] : []),
+		...(references ? [header("References", references)] : []),
 		"MIME-Version: 1.0",
 		'Content-Type: text/plain; charset="UTF-8"',
 		"Content-Transfer-Encoding: base64",
