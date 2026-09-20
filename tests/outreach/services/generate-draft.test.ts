@@ -5,7 +5,7 @@
 // intento del gate. Se prueba con `generateText` inyectado: no llama al modelo.
 import { NoObjectGeneratedError } from "ai";
 import { describe, expect, it } from "vitest";
-import { generateDraft } from "@/agents/outreach/tools/draft_message";
+import { generateDraft } from "@/lib/outreach/services/generate-draft";
 
 const responseStub = {
 	id: "r1",
@@ -96,5 +96,20 @@ describe("generateDraft", () => {
 		await expect(
 			generateDraft("m", "system", "prompt", { generateText }),
 		).rejects.toThrow("timeout de red");
+	});
+
+	it("pasa el providerMetadata de generateText, que es de donde sale el costo", async () => {
+		const providerMetadata = { gateway: { cost: "0.01" } };
+		const generateText = (async () => ({
+			output: { subject: "s", body: "b" },
+			usage: usageStub,
+			providerMetadata,
+		})) as never;
+
+		const result = await generateDraft("m", "system", "prompt", {
+			generateText,
+		});
+
+		expect(result.providerMetadata).toBe(providerMetadata);
 	});
 });

@@ -46,7 +46,8 @@ import {
 	type OutreachStore,
 } from "../../../lib/outreach/store";
 import { createAdminClient } from "../../../lib/supabase/admin";
-import { generateDraft } from "../tools/draft_message";
+import { generateDraft } from "../../../lib/outreach/services/generate-draft";
+import { createUsageRecorder, metered } from "../../../lib/workflows/usage";
 
 const SCHEDULE = "followups";
 const AGENT = "outreach";
@@ -174,8 +175,23 @@ async function draftAndQueue(
 		{
 			store,
 			loadCanon: (slug) => loadCanon(brain, slug),
-			generate: (model, system, prompt) =>
-				generateDraft(model, system, prompt, { generateText }),
+			generate: metered(
+				(model: string, system: string, prompt: string) =>
+					generateDraft(model, system, prompt, { generateText }),
+				{
+					model: (model) => model,
+					record: createUsageRecorder(admin),
+					base: {
+						tenantId: input.tenantId,
+						// El schedule no corre dentro de un turno: su fila de runs es la
+						// del lock del día y no se enlaza acá. El asiento igual cuenta
+						// para el presupuesto diario, que suma por tenant y por fecha.
+						runId: null,
+						workflow: null,
+						node: "outreach/draft",
+					},
+				},
+			),
 			now: () => new Date(),
 		},
 	);
