@@ -1,6 +1,6 @@
 "use client";
 
-import type { EveMessage } from "eve/client";
+import type { EveMessage, EveMessagePart } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { EllipsisIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -620,9 +620,106 @@ function FreeformAnswer({
 }
 
 function MessageText({ message }: { message: EveMessage }) {
-	return message.parts.map((part) =>
-		part.type === "text" ? (
-			<span key={`${message.id}-text-${part.stepIndex}`}>{part.text}</span>
-		) : null,
+	return message.parts.map((part) => {
+		if (part.type === "text") {
+			return (
+				<span key={`${message.id}-text-${part.stepIndex}`}>{part.text}</span>
+			);
+		}
+		if (
+			part.type === "dynamic-tool" &&
+			part.toolName === "draft_message" &&
+			part.state === "output-available"
+		) {
+			return <DraftMessageCard key={part.toolCallId} part={part} />;
+		}
+		return null;
+	});
+}
+
+interface DraftMessageOutput {
+	ok: boolean;
+	reason?: string;
+	message?: string;
+	subject?: string;
+	body?: string;
+	hook?: string;
+	hookLabel?: string;
+	vector?: string;
+	vectorLabel?: string;
+	idioma?: string;
+	idiomaLabel?: string;
+	ancla?: { hecho: string; fuente: string };
+}
+
+// contactKey llega como "em:rivara@rivara.com.ar" (o "li:..."/"h:..."): para
+// mostrar "Para" solo tiene sentido pelar el prefijo del email.
+function emailFromContactKey(contactKey: unknown): string | null {
+	if (typeof contactKey !== "string") return null;
+	const [prefix, ...rest] = contactKey.split(":");
+	return prefix === "em" && rest.length > 0 ? rest.join(":") : null;
+}
+
+/**
+ * Resultado de draft_message como tarjeta legible: campos con su etiqueta en
+ * castellano y hook/vector/idioma con el label del tenant, no el slug crudo
+ * (spec 03 §4.3 — mismo criterio que ApprovalPayload para tarjetas de
+ * aprobación).
+ */
+function DraftMessageCard({
+	part,
+}: {
+	part: Extract<
+		EveMessagePart,
+		{ type: "dynamic-tool"; state: "output-available" }
+	>;
+}) {
+	const output = part.output as DraftMessageOutput | null | undefined;
+	if (!output) return null;
+
+	if (!output.ok) {
+		return (
+			<fieldset className="space-y-1 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+				<legend className="px-1 font-medium text-sm">
+					No se pudo redactar el mensaje
+				</legend>
+				<p>{output.message ?? "El intento de redactar la pieza falló."}</p>
+			</fieldset>
+		);
+	}
+
+	const to = emailFromContactKey(
+		(part.input as { contactKey?: unknown })?.contactKey,
+	);
+
+	return (
+		<fieldset className="space-y-3 rounded-lg border bg-card p-4 text-sm">
+			<legend className="px-1 font-medium text-sm">Mensaje redactado</legend>
+			<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+				{to ? (
+					<Fragment>
+						<dt className="text-muted-foreground">Para</dt>
+						<dd>{to}</dd>
+					</Fragment>
+				) : null}
+				<dt className="text-muted-foreground">Asunto</dt>
+				<dd>{output.subject}</dd>
+				<dt className="text-muted-foreground">Hook</dt>
+				<dd>{output.hookLabel ?? output.hook}</dd>
+				<dt className="text-muted-foreground">Vector</dt>
+				<dd>{output.vectorLabel ?? output.vector}</dd>
+				<dt className="text-muted-foreground">Idioma</dt>
+				<dd>{output.idiomaLabel ?? output.idioma}</dd>
+			</dl>
+			<p className="whitespace-pre-wrap rounded-md border bg-background p-3">
+				<span className="sr-only">Cuerpo: </span>
+				{output.body}
+			</p>
+			{output.ancla ? (
+				<p className="text-muted-foreground text-xs">
+					Ancla: {output.ancla.hecho} ({output.ancla.fuente})
+				</p>
+			) : null}
+		</fieldset>
 	);
 }

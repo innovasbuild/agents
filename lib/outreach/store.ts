@@ -44,6 +44,8 @@ export interface ExecutorRow {
 export interface TenantOutreach {
 	config: OutreachConfig;
 	values: Record<ConfigValueKind, string[]>;
+	/** Etiqueta legible de cada valor, para mostrar en vez del slug (spec 03 §4.3). */
+	labels: Record<ConfigValueKind, Record<string, string>>;
 	defaultHooks: Record<string, string | null>;
 }
 
@@ -419,7 +421,7 @@ export function createSupabaseOutreachStore(
 			if (!agent) return null;
 			const { data: rows, error: valuesError } = await client
 				.from("config_values")
-				.select("kind, value, meta")
+				.select("kind, value, label, meta")
 				.eq("tenant_id", tenantId)
 				.eq("active", true);
 			if (valuesError) fail("leer config_values", valuesError);
@@ -429,10 +431,17 @@ export function createSupabaseOutreachStore(
 				hook: [],
 				idioma: [],
 			};
+			const labels: Record<ConfigValueKind, Record<string, string>> = {
+				segmento: {},
+				vector: {},
+				hook: {},
+				idioma: {},
+			};
 			const defaultHooks: Record<string, string | null> = {};
 			for (const row of rows ?? []) {
 				const kind = row.kind as ConfigValueKind;
 				values[kind].push(row.value as string);
+				labels[kind][row.value as string] = row.label as string;
 				if (kind === "vector") {
 					const hook = (row.meta as { default_hook?: unknown } | null)
 						?.default_hook;
@@ -443,7 +452,7 @@ export function createSupabaseOutreachStore(
 			const config = parseOutreachConfig(
 				(agent.config as { outreach?: unknown } | null)?.outreach,
 			);
-			return { config, values, defaultHooks };
+			return { config, values, labels, defaultHooks };
 		},
 
 		async findContactsByKeys(tenantId, keys) {

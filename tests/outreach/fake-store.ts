@@ -56,6 +56,12 @@ export function defaultTenant(
 			hook: ["h1"],
 			idioma: ["es_ar", "es_es"],
 		},
+		labels: {
+			segmento: { mid_market_ar: "Mid market Argentina" },
+			vector: { v1: "Vector de prueba" },
+			hook: { h1: "Hook de prueba" },
+			idioma: { es_ar: "Español rioplatense", es_es: "Español peninsular" },
+		},
 		defaultHooks: { v1: "h1" },
 		...overrides,
 	};
