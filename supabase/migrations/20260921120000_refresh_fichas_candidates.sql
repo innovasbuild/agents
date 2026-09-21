@@ -1,8 +1,16 @@
 -- Sembrador de refresh-fichas (spec orquestación §6.2 y §6.3). Devuelve las
--- cuentas vencidas que el workflow todavía no encoló desde su último research.
--- Sin el "todavía no encoló", una cuenta que el workflow ya rechazó
--- (sin_ancla) sigue vencida para siempre, ocupa el límite y deja sin turno a
--- las que vencen después. enqueue() igual deduplica por huella: son dos capas.
+-- cuentas vencidas que el workflow todavía no encoló desde su último
+-- vencimiento. Sin el "todavía no encoló", una cuenta que el workflow ya
+-- rechazó (sin_ancla) sigue vencida para siempre, ocupa el límite y deja sin
+-- turno a las que vencen después. enqueue() igual deduplica por huella: son
+-- dos capas.
+--
+-- La comparación es contra expires_at y no contra researched_at: un research
+-- desde el chat puede guardar la cuenta mientras esta siembra está
+-- insertando, así que un ítem podía nacer después de researched_at aunque
+-- naciera antes de que la siembra lo viera. Con expires_at eso no puede
+-- pasar: un ítem de este vencimiento siempre nace después de que la ficha
+-- vence, y un refresh mueve expires_at 90 días adelante.
 
 create index accounts_tenant_expires_idx
   on public.accounts (tenant_id, expires_at);
@@ -31,7 +39,7 @@ language sql stable security definer set search_path = '' as $$
           and w.workflow = 'refresh-fichas'
           and w.subject_type = 'account'
           and w.subject_id = a.id
-          and w.created_at >= a.researched_at
+          and w.created_at >= a.expires_at
      )
    order by a.expires_at, a.id
    limit greatest(p_limit, 0);
