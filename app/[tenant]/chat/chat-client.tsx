@@ -1,10 +1,18 @@
 "use client";
 
+import type { UserContent } from "ai";
 import type { EveMessage, EveMessagePart } from "eve/client";
 import { useEveAgent } from "eve/react";
-import { EllipsisIcon } from "lucide-react";
+import { EllipsisIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { Fragment, useMemo, useState, useTransition } from "react";
+import {
+	type ChangeEvent,
+	Fragment,
+	useMemo,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -240,8 +248,45 @@ function ThreadMenu({
 	);
 }
 
+// Tope del lado del cliente para no mandar un payload JSON gigante en un solo
+// POST. eve restaura imágenes hasta 3 MiB y PDFs hasta 20 MiB como bytes; el
+// resto queda como referencia a su ruta en el sandbox (docs/sandbox.mdx
+// #inbound-attachments), así que 15 MB cubre holgadamente el caso de uso
+// (un CSV de contactos) sin acercarse a esos límites de otros tipos.
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
+function fileToDataUrl(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result as string);
+		reader.onerror = () =>
+			reject(reader.error ?? new Error("no se pudo leer el archivo"));
+		reader.readAsDataURL(file);
+	});
+}
+
 function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const [text, setText] = useState("");
+	const [file, setFile] = useState<File | null>(null);
+	const [fileError, setFileError] = useState<string | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+		const picked = event.target.files?.[0] ?? null;
+		if (picked && picked.size > MAX_ATTACHMENT_BYTES) {
+			setFileError("El archivo pesa más de 15 MB: elegí uno más chico.");
+			setFile(null);
+			return;
+		}
+		setFileError(null);
+		setFile(picked);
+	}
+
+	function clearFile() {
+		setFile(null);
+		setFileError(null);
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	}
 
 	// eve_session_id lo ata únicamente bind-session.ts (hook server-side de
 	// eve), de forma asíncrona cuando arranca la sesión con
@@ -464,34 +509,97 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 			) : null}
 
 			<form
-				className="sticky bottom-0 flex gap-2 border-t bg-background py-4"
+				className="sticky bottom-0 space-y-2 border-t bg-background py-4"
 				onSubmit={(event) => {
 					event.preventDefault();
 					const message = text.trim();
-					if (message.length === 0 || isInputBlocked) return;
+					if ((message.length === 0 && !file) || isInputBlocked) return;
 
-					void agent.send(
-						message,
-						isBusy ? { turnPolicy: "steer" } : undefined,
-					);
-					if (!thread.title) void renameConversation(thread.id, message, slug);
+					const options = isBusy
+						? ({ turnPolicy: "steer" } as const)
+						: undefined;
+					const attachment = file;
+					void (async () => {
+						if (!attachment) {
+							await agent.send(message, options);
+							return;
+						}
+						const content: UserContent = [
+							...(message.length > 0
+								? [{ type: "text", text: message } as const]
+								: []),
+							{
+								type: "file",
+								data: await fileToDataUrl(attachment),
+								mediaType: attachment.type || "application/octet-stream",
+								filename: attachment.name,
+							},
+						];
+						await agent.send(content, options);
+					})();
+
+					if (!thread.title && message)
+						void renameConversation(thread.id, message, slug);
 					setText("");
+					clearFile();
 				}}
 			>
-				<Input
-					aria-label="Mensaje para el agente"
-					disabled={isInputBlocked}
-					onChange={(event) => setText(event.target.value)}
-					placeholder={
-						pendingRequests.length > 0
-							? "Respondé la tarjeta pendiente para seguir"
-							: "Escribí un mensaje para el agente"
-					}
-					value={text}
-				/>
-				<Button disabled={isInputBlocked} type="submit">
-					Enviar
-				</Button>
+				{file ? (
+					<p className="flex items-center gap-2 text-muted-foreground text-sm">
+						<FileIcon aria-hidden="true" className="size-4 shrink-0" />
+						<span className="truncate">{file.name}</span>
+						<button
+							aria-label="Quitar archivo adjunto"
+							className="text-muted-foreground hover:text-foreground"
+							onClick={clearFile}
+							type="button"
+						>
+							<XIcon className="size-3.5" />
+						</button>
+					</p>
+				) : null}
+				{fileError ? (
+					<p className="text-destructive text-sm" role="alert">
+						{fileError}
+					</p>
+				) : null}
+				<div className="flex gap-2">
+					<input
+						className="sr-only"
+						disabled={isInputBlocked}
+						onChange={handleFileChange}
+						ref={fileInputRef}
+						tabIndex={-1}
+						type="file"
+					/>
+					<Button
+						aria-label="Adjuntar archivo"
+						disabled={isInputBlocked}
+						onClick={() => fileInputRef.current?.click()}
+						size="icon"
+						type="button"
+						variant="outline"
+					>
+						<PaperclipIcon />
+					</Button>
+					<Input
+						aria-label="Mensaje para el agente"
+						disabled={isInputBlocked}
+						onChange={(event) => setText(event.target.value)}
+						placeholder={
+							pendingRequests.length > 0
+								? "Respondé la tarjeta pendiente para seguir"
+								: "Escribí un mensaje para el agente"
+						}
+						value={text}
+					/>
+					<Button
+						disabled={isInputBlocked || (text.trim().length === 0 && !file)}
+						type="submit"
+					>
+						Enviar
+					</Button>
+				</div>
 			</form>
 		</section>
 	);
