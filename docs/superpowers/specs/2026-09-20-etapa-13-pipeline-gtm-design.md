@@ -425,6 +425,7 @@ S1 y S2 son la primera tarea de E2; S3, S4 y S5 son de E1.
 4. **§7.2, `MODEL_PRICES`:** suma `"typesafe-ai/jev": { input: 0.04, output: 0 }` como respaldo del costo informado por el Gateway.
 5. **§14.1, Etapa 13:** "cola por pieza y por lote, con cambio de canal" sale del alcance y vuelve con LinkedIn (D15, D16).
 6. **§9.2 y el tipo `ItemOutcome`:** un ítem puede dejar **varios** ítems aguas abajo, y de otro `subjectType`. `{ ok: true, downstreamHash?: string }` pasa a admitir `{ ok: true, downstream?: Array<{ subjectId: string; inputHash: string }> }`. El runner sigue siendo el único que crea aristas; ahora puede crear más de una (§4.1).
+7. **`tests/workflows/registry.test.ts`, "un workflow con nodos que gastan declara tope de costo y sus recursos":** la condición pasa de exigir `costUsdPerRun > 0` para todo workflow con nodos de efecto ≥ 1, a exigir solo que declare al menos un recurso en `resources`. `costUsdPerRun` es específico del gasto en USD/modelo; un workflow puede gastar otro recurso (como `apollo_credits`) sin gastar modelo.
 
 ### Al roadmap (`docs/01-roadmap-etapas.md`)
 

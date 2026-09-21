@@ -20,6 +20,8 @@ export const NODES: Record<string, NodeInfo> = {
 	"outreach/replies": { effect: 0, tier: null },
 	// Encola follow-ups redactando con el modelo: gasta.
 	"outreach/followups": { effect: 1, tier: "medio" },
+	// Gasta créditos de Apollo, no tokens de modelo.
+	"outreach/target-search": { effect: 1, tier: null },
 };
 
 export const SERVICES_EXCLUIDOS: Record<string, string> = {
@@ -43,6 +45,17 @@ export const WORKFLOWS: Record<string, WorkflowInfo> = {
 		optionalNodes: [],
 		resources: ["model_usd"],
 		caps: { itemsPerTick: 5, costUsdPerRun: 1 },
+		entry: "seed",
+	},
+	"target-search": {
+		agent: "outreach",
+		subjectType: "search_focus",
+		claims: "foco_activo",
+		produces: "contacto_descubierto",
+		nodes: ["outreach/target-search"],
+		optionalNodes: [],
+		resources: ["apollo_credits"],
+		caps: { itemsPerTick: 2, costUsdPerRun: 0 },
 		entry: "seed",
 	},
 };
