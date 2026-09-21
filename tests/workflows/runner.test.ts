@@ -309,6 +309,24 @@ describe("runWorkflowPass", () => {
 		};
 		await expect(pass(store, okImpl)).rejects.toThrow("db caída");
 	});
+
+	it("si la pasada explota después de abrir la corrida, cierra la fila como failed y relanza", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.enabledWorkflows = async () => {
+			throw new Error("no se pudo leer enabledWorkflows");
+		};
+
+		await expect(pass(store, okImpl)).rejects.toThrow(
+			"no se pudo leer enabledWorkflows",
+		);
+
+		expect(store.runs[0]).toMatchObject({
+			workflow: "refresh-fichas",
+			status: "failed",
+			error: "no se pudo leer enabledWorkflows",
+		});
+	});
 });
 
 // "wf-a"/"wf-b" y los nodos "test/nivel-2"/"test/nivel-3" solo existen en el

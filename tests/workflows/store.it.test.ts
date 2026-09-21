@@ -2,11 +2,14 @@
 // `npm test`: se dispara con `npm run test:it:workflows`. Es la prueba del
 // criterio de cierre 6 de la spec: dos pasadas a la vez no procesan lo mismo.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { isLocalSupabaseUrl } from "@/lib/agents/eval-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseWorkflowStore } from "@/lib/workflows/store";
 
-const enabled = process.env.WORKFLOWS_IT === "1";
+const enabled =
+	process.env.WORKFLOWS_IT === "1" &&
+	isLocalSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
 const TENANT = "aaaaaaaa-0000-0000-0000-0000000000f1";
 
 describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
@@ -16,11 +19,7 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 	let store: ReturnType<typeof createSupabaseWorkflowStore>;
 
 	beforeAll(async () => {
-		admin = createClient(
-			process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
-			process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
-			{ auth: { persistSession: false } },
-		);
+		admin = createAdminClient();
 		store = createSupabaseWorkflowStore(admin);
 		await admin.from("tenants").delete().eq("id", TENANT);
 		const { error } = await admin
