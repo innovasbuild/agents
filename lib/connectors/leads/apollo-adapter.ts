@@ -145,11 +145,39 @@ export function createApolloAdapterForKey(
 	};
 }
 
-/** Firma pública; la Task 3 le agrega el fallback entre llaves. */
+/**
+ * Prueba las llaves del tenant en orden: ante un agotamiento de créditos pasa
+ * a la siguiente (spec etapa 13 D5). Cualquier otro error corta acá mismo:
+ * un 500 de Apollo no se arregla gastando la otra llave.
+ */
 export function createApolloAdapter(
 	keys: string[],
 	fetchImpl: typeof fetch = fetch,
 ): LeadsAdapter {
 	if (keys.length === 0) throw new Error("createApolloAdapter sin llaves");
-	return createApolloAdapterForKey(keys[0], fetchImpl);
+	const adapters = keys.map((key) => createApolloAdapterForKey(key, fetchImpl));
+
+	async function withFallback<T>(
+		operation: (adapter: LeadsAdapter) => Promise<T>,
+	): Promise<T> {
+		let last: unknown;
+		for (const adapter of adapters) {
+			try {
+				return await operation(adapter);
+			} catch (error) {
+				if (!(error instanceof ApolloOutOfCreditsError)) throw error;
+				last = error;
+			}
+		}
+		throw last;
+	}
+
+	return {
+		searchOrganizations: (criteria, page) =>
+			withFallback((adapter) => adapter.searchOrganizations(criteria, page)),
+		searchPeople: (criteria, orgIds, page) =>
+			withFallback((adapter) => adapter.searchPeople(criteria, orgIds, page)),
+		revealEmail: (personExternalId) =>
+			withFallback((adapter) => adapter.revealEmail(personExternalId)),
+	};
 }
