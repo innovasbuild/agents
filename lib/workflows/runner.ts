@@ -133,7 +133,8 @@ export async function runWorkflowPass(
 	): Promise<PassResult> => {
 		const finishedAt = deps.now();
 		await store.closeRun(runId, { status, error, ...counts, finishedAt });
-		await store.touchLastRun(tenantId, input.workflow, finishedAt);
+		// La cadencia se cuenta desde el inicio: si no, lo que dura la pasada corre el próximo turno.
+		await store.touchLastRun(tenantId, input.workflow, startedAt);
 		return { status, ...counts, stoppedBy };
 	};
 
