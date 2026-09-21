@@ -145,4 +145,35 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 			),
 		).toBeNull();
 	});
+
+	it("closeAbandonedRuns cierra como failed solo las pasadas viejas", async () => {
+		const vieja = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(Date.now() - 20 * 60_000),
+		});
+		const reciente = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(),
+		});
+
+		const cerradas = await store.closeAbandonedRuns(
+			new Date(Date.now() - 10 * 60_000),
+			new Date(),
+		);
+
+		expect(cerradas).toBeGreaterThanOrEqual(1);
+		const { data } = await admin
+			.from("runs")
+			.select("id, status, error, finished_at")
+			.in("id", [vieja, reciente]);
+		const byId = new Map((data ?? []).map((r) => [r.id, r]));
+		expect(byId.get(vieja)).toMatchObject({ status: "failed" });
+		expect(byId.get(vieja)?.error).toContain("abandonada");
+		expect(byId.get(vieja)?.finished_at).not.toBeNull();
+		expect(byId.get(reciente)).toMatchObject({ status: "running" });
+	});
 });

@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { isWorkflow, WORKFLOWS } from "./registry";
 
-const DEFAULT_CADENCE_MINUTES = 60;
+export const DEFAULT_CADENCE_MINUTES = 60;
 
 const platformSchema = z.looseObject({
 	cadence_minutes: z.number().int().min(5).max(10_080).optional(),

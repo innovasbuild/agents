@@ -1,8 +1,9 @@
 // WorkflowStore sobre Supabase, con el cliente admin (las tablas de
 // orquestación no aceptan escritura de authenticated). Imports relativos.
-import type { AdminLike } from "./usage";
+
 import type { RunnerStore } from "./runner";
 import type { WorkItem } from "./types";
+import type { AdminLike } from "./usage";
 
 type Row = Record<string, unknown>;
 const UNIQUE_VIOLATION = "23505";
@@ -32,6 +33,7 @@ export function createSupabaseWorkflowStore(
 	admin: AdminLike & { rpc: (fn: string, args: Row) => any },
 ): RunnerStore & {
 	listEnabled(tenantId: string): Promise<EnabledWorkflowRow[]>;
+	closeAbandonedRuns(before: Date, at: Date): Promise<number>;
 } {
 	return {
 		async insertWorkItem(row) {
@@ -169,7 +171,9 @@ export function createSupabaseWorkflowStore(
 				.eq("resource", resource)
 				.maybeSingle();
 			must(error, "dailyLimit");
-			return Number((data as { daily_limit: unknown } | null)?.daily_limit ?? 0);
+			return Number(
+				(data as { daily_limit: unknown } | null)?.daily_limit ?? 0,
+			);
 		},
 
 		async enabledWorkflows(tenantId) {
@@ -206,6 +210,23 @@ export function createSupabaseWorkflowStore(
 				config: r.config,
 				lastRunAt: (r.last_run_at as string | null) ?? null,
 			}));
+		},
+
+		async closeAbandonedRuns(before, at) {
+			// Global a propósito: el dispatcher es uno solo para todos los tenants.
+			const { data, error } = await admin
+				.from("runs")
+				.update({
+					status: "failed",
+					error: "corrida abandonada: la función murió sin cerrarla",
+					finished_at: at.toISOString(),
+				})
+				.eq("status", "running")
+				.not("workflow", "is", null)
+				.lt("started_at", before.toISOString())
+				.select("id");
+			must(error, "closeAbandonedRuns");
+			return ((data as Row[] | null) ?? []).length;
 		},
 	};
 }
