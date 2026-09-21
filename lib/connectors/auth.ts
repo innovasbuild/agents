@@ -34,6 +34,11 @@ export function apiKeyHeaders(
 	});
 }
 
+/** Llaves crudas de una lista de conectores api-key, en el mismo orden (spec etapa 13 Task 9). */
+export async function apiKeyValues(connectorUids: string[]): Promise<string[]> {
+	return Promise.all(connectorUids.map((uid) => getToken(uid, APP_SUBJECT)));
+}
+
 /** Bearer con `expiresAt`: eve renueva antes de que venza en vez de esperar un 401. */
 export function apiKeyBearer(connectorUid: string): {
 	getToken: () => Promise<{ token: string; expiresAt: number }>;

@@ -32,6 +32,12 @@ export const PROVIDERS = {
 		kind: "connection",
 		authKind: "connect_api_key",
 	},
+	apollo: {
+		capability: "leads",
+		multiple: true,
+		kind: "connection",
+		authKind: "connect_api_key",
+	},
 	"google-places": {
 		capability: "leads",
 		multiple: true,

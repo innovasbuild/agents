@@ -10,14 +10,20 @@
 // módulos que compila.
 import { generateText } from "ai";
 import { defineSchedule } from "eve/schedules";
+import { apiKeyValues } from "../../../lib/connectors/auth";
+import { loadTenantBindings } from "../../../lib/connectors/bindings";
+import { createApolloAdapter } from "../../../lib/connectors/leads/apollo-adapter";
+import { refuse } from "../../../lib/outreach/result";
 import { generateResearch } from "../../../lib/outreach/services/generate-research";
 import { researchAccount } from "../../../lib/outreach/services/research";
+import { searchTargetsPage } from "../../../lib/outreach/services/target-search";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { fetchPublicPage, resolveHost } from "../../../lib/outreach/web-page";
 import {
 	createRefreshFichas,
 	type ResearchNode,
 } from "../../../lib/outreach/workflows/refresh-fichas";
+import { createTargetSearchWorkflow } from "../../../lib/outreach/workflows/target-search";
 import { createAdminClient } from "../../../lib/supabase/admin";
 import {
 	type DispatchTenant,
@@ -87,6 +93,60 @@ export default defineSchedule({
 			);
 		};
 
+		// target-search no llega por ctx.useNode como research (que recibe el
+		// tenant explícito en cada llamada): sus deps son fijas para todos los
+		// tenants, así que `recordCredits` (a la que el workflow solo le pasa
+		// credits y runId, spec etapa 13 Task 9) no tiene de dónde sacar el
+		// tenant salvo de acá. Guardarlo en esta variable alcanza porque el
+		// dispatcher nunca corre las pasadas de dos tenants a la vez
+		// (runDispatch las recorre con un for secuencial) ni dos ítems de la
+		// misma pasada a la vez (runWorkflowPass, "de a uno"): `search` la fija
+		// justo antes de que el workflow pueda volver a llamar a `recordCredits`.
+		let targetSearchTenantId: string | null = null;
+
+		const targetSearch = createTargetSearchWorkflow({
+			loadFocuses: (tenantId) => outreach.listActiveFocuses(tenantId),
+			loadFocus: (tenantId, id) => outreach.loadFocus(tenantId, id),
+			updateFocus: (tenantId, id, patch) =>
+				outreach.updateFocus(tenantId, id, patch),
+			async search(focus, page) {
+				targetSearchTenantId = focus.tenantId;
+				const bindings = await loadTenantBindings(focus.tenantId);
+				const binding = bindings.find(
+					(b) => b.capability === "leads" && b.provider === "apollo",
+				);
+				const connectorUids =
+					(binding?.config.connectorUids as string[] | undefined) ?? [];
+				if (connectorUids.length === 0) {
+					return refuse(
+						"sin_binding_apollo",
+						"el tenant no tiene Apollo conectado",
+					);
+				}
+				const keys = await apiKeyValues(connectorUids);
+				return searchTargetsPage(
+					{ focus, page },
+					{
+						store: outreach,
+						leads: createApolloAdapter(keys),
+						crm: null,
+						now: () => new Date(),
+					},
+				);
+			},
+			recordCredits: (credits, runId) =>
+				record({
+					tenantId: targetSearchTenantId as string,
+					runId,
+					workflow: "target-search",
+					node: "outreach/target-search",
+					resource: "apollo_credits",
+					amount: credits,
+					unit: "credits",
+					meta: {},
+				}),
+		});
+
 		const outcomes = await runDispatch({
 			agent: AGENT,
 			store: createSupabaseWorkflowStore(admin),
@@ -119,7 +179,10 @@ export default defineSchedule({
 				});
 				return tenants;
 			},
-			impls: { "refresh-fichas": createRefreshFichas({ store: outreach }) },
+			impls: {
+				"refresh-fichas": createRefreshFichas({ store: outreach }),
+				"target-search": targetSearch,
+			},
 			nodes: { "outreach/research": research },
 			now: () => new Date(),
 		});
