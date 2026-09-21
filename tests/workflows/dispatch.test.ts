@@ -349,4 +349,30 @@ describe("runDispatch", () => {
 			{ tenant: "dos", outcome: "corrida" },
 		]);
 	});
+	it("la cadencia se cuenta desde el inicio de la pasada: el tick siguiente, a la cadencia justa, le toca aunque la pasada anterior haya terminado después", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.rows.push(prendido("t1", { cadence_minutes: 5 }));
+		store.add("acc-1");
+		let t = NOW.getTime();
+		const clock = () => new Date(t);
+		const tarda: WorkflowImpl = {
+			runItem: async () => {
+				t += 50;
+				return { ok: true };
+			},
+		};
+		const impls = { "refresh-fichas": tarda };
+
+		expect(await dispatch(store, { impls, now: clock })).toMatchObject([
+			{ outcome: "corrida" },
+		]);
+		expect(store.rows[0].lastRunAt).toBe(NOW.toISOString());
+
+		// 5 minutos y 10 ms desde el inicio, 40 ms antes de 5 minutos desde el fin.
+		store.add("acc-2");
+		t = NOW.getTime() + 5 * 60_000 + 10;
+		expect(await dispatch(store, { impls, now: clock })).toMatchObject([
+			{ outcome: "corrida", result: { claimed: 1 } },
+		]);
+	});
 });
