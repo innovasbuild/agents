@@ -237,6 +237,12 @@ export async function runWorkflowPass(
 		if (!item) break;
 		counts.claimed++;
 
+		// Ítem terminado ok en este intento: se resuelve acá adentro, y recién
+		// después (fuera del try de runItem) se intenta encolar el downstream.
+		// Si eso último tira, el ítem ya cerró done y no debe revivir.
+		let downstreamHash: string | undefined;
+		let terminoOk = false;
+
 		try {
 			const outcome = await deps.impl.runItem(item, ctx);
 			if (outcome.ok) {
@@ -246,19 +252,8 @@ export async function runWorkflowPass(
 					runId,
 				});
 				counts.ok++;
-				for (const next of downstreamOf(info.produces)) {
-					if (!enabled.has(next)) continue;
-					await enqueue(
-						{
-							tenantId,
-							workflow: next,
-							subjectType: WORKFLOWS[next].subjectType,
-							subjectId: item.subjectId,
-							inputHash: outcome.downstreamHash ?? item.inputHash,
-						},
-						{ store },
-					);
-				}
+				terminoOk = true;
+				downstreamHash = outcome.downstreamHash;
 			} else {
 				await store.finishItem(item.id, {
 					status: "refused",
@@ -283,10 +278,33 @@ export async function runWorkflowPass(
 				});
 			}
 		}
+
+		if (terminoOk) {
+			for (const next of downstreamOf(info.produces)) {
+				if (!enabled.has(next)) continue;
+				try {
+					await enqueue(
+						{
+							tenantId,
+							workflow: next,
+							subjectType: WORKFLOWS[next].subjectType,
+							subjectId: item.subjectId,
+							inputHash: downstreamHash ?? item.inputHash,
+						},
+						{ store },
+					);
+				} catch (error) {
+					// El ítem de origen ya cerró done: un fallo acá pierde la arista
+					// downstream, nunca el trabajo ya hecho. No se toca su estado.
+					console.error(
+						`[runner] no se pudo encolar ${next} tras ${input.workflow}/${item.subjectId}: ${errorText(error)}`,
+					);
+				}
+			}
+		}
 	}
 
-	const cierra =
-		counts.claimed === counts.ok + counts.refused + counts.failed;
+	const cierra = counts.claimed === counts.ok + counts.refused + counts.failed;
 	return close(
 		"ok",
 		stoppedBy,

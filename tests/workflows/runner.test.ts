@@ -1,4 +1,56 @@
 import { describe, expect, it, vi } from "vitest";
+
+// El registry real (Task 10, ya cerrada) solo tiene "refresh-fichas" con un
+// nodo de nivel 1: no alcanza para ejercitar las reglas de nivel 2 y 3, ni un
+// downstream real. Se extiende acá, solo para este archivo de test, con nodos
+// y workflows sintéticos — nunca se toca lib/workflows/registry.ts.
+vi.mock("@/lib/workflows/registry", async (importOriginal) => {
+	const actual =
+		await importOriginal<typeof import("@/lib/workflows/registry")>();
+	const NODES: typeof actual.NODES = {
+		...actual.NODES,
+		"test/nivel-2": { effect: 2, tier: null },
+		"test/nivel-3": { effect: 3, tier: null },
+	};
+	const WORKFLOWS: typeof actual.WORKFLOWS = {
+		...actual.WORKFLOWS,
+		"wf-a": {
+			agent: "test",
+			subjectType: "account",
+			claims: "algo_a",
+			produces: "resultado_a",
+			nodes: ["test/nivel-2", "test/nivel-3"],
+			optionalNodes: [],
+			resources: [],
+			caps: { itemsPerTick: 5, costUsdPerRun: 0 },
+			entry: "seed",
+		},
+		"wf-b": {
+			agent: "test",
+			subjectType: "account",
+			claims: "resultado_a",
+			produces: null,
+			nodes: [],
+			optionalNodes: [],
+			resources: [],
+			caps: { itemsPerTick: 5, costUsdPerRun: 0 },
+			entry: "upstream",
+		},
+	};
+	return {
+		...actual,
+		NODES,
+		WORKFLOWS,
+		isWorkflow: (name: string) => Object.hasOwn(WORKFLOWS, name),
+		downstreamOf: (produces: string | null) =>
+			produces === null
+				? []
+				: Object.entries(WORKFLOWS)
+						.filter(([, wf]) => wf.claims === produces)
+						.map(([name]) => name),
+	};
+});
+
 import type { TenantWorkflowConfig } from "@/lib/workflows/config";
 import {
 	RETRY_DELAYS_MINUTES,
@@ -256,5 +308,137 @@ describe("runWorkflowPass", () => {
 			throw new Error("db caída");
 		};
 		await expect(pass(store, okImpl)).rejects.toThrow("db caída");
+	});
+});
+
+// "wf-a"/"wf-b" y los nodos "test/nivel-2"/"test/nivel-3" solo existen en el
+// mock de arriba: el registry real (Task 10) no tiene ni un nodo de nivel 2 o
+// 3 declarado por un workflow, ni un segundo workflow downstream, así que
+// estas tres reglas no eran alcanzables con los datos de producción.
+describe("runWorkflowPass — control de acceso por nivel de efecto y downstream deshabilitado", () => {
+	const wfaConfig: TenantWorkflowConfig = {
+		cadenceMinutes: 60,
+		itemsPerTick: 5,
+		optionalNodes: new Set(),
+		params: {},
+	};
+
+	function runWfA(
+		store: ReturnType<typeof createFakeWorkflowStore>,
+		impl: WorkflowImpl,
+		nodes: Record<string, unknown>,
+	) {
+		return runWorkflowPass(
+			{ tenant, workflow: "wf-a", config: wfaConfig },
+			{ store, impl, nodes, now, clockBudgetMs: 200_000, leaseSeconds: 600 },
+		);
+	}
+
+	it("useNode niega un nodo de nivel 3 aunque el workflow lo declare", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1", "wf-a");
+		const nivel3 = vi.fn();
+
+		const result = await runWfA(
+			store,
+			{
+				runItem: async (_item, ctx) => {
+					await ctx.useNode("test/nivel-3");
+					return { ok: true };
+				},
+			},
+			{ "test/nivel-3": nivel3 },
+		);
+
+		expect(nivel3).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ ok: 0, failed: 1 });
+		expect(store.items[0].status).toBe("pending");
+		expect(store.items[0].lastError).toContain("nivel 3");
+	});
+
+	it("useNode niega un nodo de nivel 2 cuando la política del tenant no es auto", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1", "wf-a");
+		// nodePolicy por defecto del store falso es "always", no "auto".
+		const nivel2 = vi.fn();
+
+		const result = await runWfA(
+			store,
+			{
+				runItem: async (_item, ctx) => {
+					await ctx.useNode("test/nivel-2");
+					return { ok: true };
+				},
+			},
+			{ "test/nivel-2": nivel2 },
+		);
+
+		expect(nivel2).not.toHaveBeenCalled();
+		expect(result).toMatchObject({ ok: 0, failed: 1 });
+		expect(store.items[0].status).toBe("pending");
+		expect(store.items[0].lastError).toContain("nivel 2");
+	});
+
+	it("useNode entrega un nodo de nivel 2 cuando la política del tenant es auto", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1", "wf-a");
+		store.policies.set("test/nivel-2", "auto");
+		const nivel2 = vi.fn();
+
+		const result = await runWfA(
+			store,
+			{
+				runItem: async (_item, ctx) => {
+					const node = await ctx.useNode<typeof nivel2>("test/nivel-2");
+					node();
+					return { ok: true };
+				},
+			},
+			{ "test/nivel-2": nivel2 },
+		);
+
+		expect(nivel2).toHaveBeenCalled();
+		expect(result).toMatchObject({ ok: 1, failed: 0 });
+		expect(store.items[0].status).toBe("done");
+	});
+
+	it("no encola para un workflow downstream que no está habilitado para el tenant", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1", "wf-a");
+		// store.enabled solo trae "refresh-fichas" por default: "wf-b" (el
+		// downstream de "wf-a" en el mock) no está habilitado.
+		const insertSpy = vi.spyOn(store, "insertWorkItem");
+
+		const result = await runWfA(
+			store,
+			{ runItem: async () => ({ ok: true }) },
+			{},
+		);
+
+		expect(result).toMatchObject({ ok: 1 });
+		expect(insertSpy).not.toHaveBeenCalled();
+		expect(store.items).toHaveLength(1);
+		expect(store.items.some((i) => i.workflow === "wf-b")).toBe(false);
+	});
+
+	it("un fallo al encolar el downstream no revive el ítem que ya cerró done", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1", "wf-a");
+		store.enabled.add("wf-b"); // ahora sí está habilitado: se intenta encolar.
+		store.insertWorkItem = async () => {
+			throw new Error("db caída al encolar downstream");
+		};
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await runWfA(
+			store,
+			{ runItem: async () => ({ ok: true }) },
+			{},
+		);
+
+		expect(result).toMatchObject({ claimed: 1, ok: 1, failed: 0 });
+		expect(store.items[0].status).toBe("done");
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("wf-b"));
+		errorSpy.mockRestore();
 	});
 });
