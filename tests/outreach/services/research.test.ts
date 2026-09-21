@@ -19,6 +19,14 @@ const ficha: Ficha = {
 	gap_declarado: null,
 	gap_demostrable: null,
 	hechos: [{ hecho: "Abrió planta", url: "https://acme.test/n", fecha: null }],
+	dolores: [
+		{
+			dolor: "Coordinar pedidos entre plantas",
+			por_que_a_ellos: "Abrió una planta nueva",
+			beneficio: "Menos pedidos demorados",
+			evidencia: "https://acme.test/n",
+		},
+	],
 	creditos_usados: 1,
 };
 
@@ -54,6 +62,25 @@ describe("prepareResearch", () => {
 			kind: "done",
 			result: { ok: true, cached: true, domain: "acme.test" },
 		});
+	});
+
+	it("una ficha vigente con hechos y sin dolores es de antes de los dolores: se vuelve a investigar", async () => {
+		const store = createFakeStore();
+		store.accounts.push({
+			id: "a1",
+			tenantId: TENANT,
+			domain: "acme.test",
+			name: "Acme",
+			ficha: { ...ficha, dolores: [] },
+			researchedAt: "2026-09-01T00:00:00Z",
+			expiresAt: "2026-11-30T00:00:00Z",
+		});
+		expect(
+			await prepareResearch(
+				{ tenantId: TENANT, domain: "acme.test", name: null },
+				{ store, now },
+			),
+		).toMatchObject({ kind: "research", domain: "acme.test" });
 	});
 
 	it("con ficha vencida o sin ficha pide investigar con un mensaje que nombra el dominio", async () => {

@@ -8,7 +8,7 @@ import {
 	parseOutreachConfig,
 } from "./config";
 import type { OutreachEventInsert } from "./events";
-import type { Ficha } from "./ficha";
+import { type Ficha, fichaSchema } from "./ficha";
 import type { GateResult } from "./gate";
 import {
 	isNoResponse,
@@ -350,7 +350,9 @@ const toAccount = (r: Row): AccountRow => ({
 	tenantId: r.tenant_id as string,
 	domain: r.domain as string,
 	name: r.name as string,
-	ficha: r.ficha as Ficha,
+	// El parse completa `dolores` en fichas guardadas antes de que existiera;
+	// una ficha que no parsea (la `{}` de una cuenta descubierta) pasa tal cual.
+	ficha: fichaSchema.safeParse(r.ficha).data ?? (r.ficha as Ficha),
 	researchedAt: r.researched_at as string,
 	expiresAt: r.expires_at as string,
 });
