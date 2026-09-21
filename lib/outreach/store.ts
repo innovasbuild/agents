@@ -56,6 +56,7 @@ export interface ContactRow {
 	accountId: string | null;
 	name: string | null;
 	company: string | null;
+	title: string | null;
 	email: string | null;
 	linkedinSlug: string | null;
 	crmId: string | null;
@@ -341,7 +342,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -356,6 +357,7 @@ const toContact = (r: Row): ContactRow => ({
 	accountId: (r.account_id as string | null) ?? null,
 	name: (r.name as string | null) ?? null,
 	company: (r.company as string | null) ?? null,
+	title: (r.title as string | null) ?? null,
 	email: (r.email as string | null) ?? null,
 	linkedinSlug: (r.linkedin_slug as string | null) ?? null,
 	crmId: (r.crm_id as string | null) ?? null,
