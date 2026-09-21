@@ -3745,7 +3745,7 @@ Se detalla tarea por tarea al cerrar E2, con el dato de S2 en la mano. Lo que qu
 - `input_hash` de `refresh-fichas` = `${domain}:${expiresAt}` de la ficha que se reemplaza (spec §6.3).
 - El `actor_user_id` del evento `investigado` que escribe `saveResearch` es `null` cuando corre desatendido: `saveResearch` hoy exige `userId: string`, hay que aflojarlo a `string | null`.
 - El modelo sale de `tenant.config.models.researcher`, igual que en la tool.
-- `clockBudgetMs` y `leaseSeconds` salen del resultado de S2. Punto de partida: 200 000 ms y 600 s. El lease tiene que ser más largo que el timeout de la función.
+- `clockBudgetMs: 200_000` y `leaseSeconds: 600` — confirmados por el spike S2 (spec §13): el timeout real de función en Vercel es 300 s, así que el presupuesto deja 100 s de margen y el lease dobla el techo. No son punto de partida, son el valor a usar.
 - El dispatcher **no** toma lock global (spec §6.5): el lease da exclusión por ítem.
 - El dispatcher abre su propia pasada por cada `(tenant, workflow)`; no hay fila de `runs` para el tick en sí.
 
