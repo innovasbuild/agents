@@ -21,14 +21,16 @@ export type ResearchNode = (input: {
 	name: string | null;
 }) => Promise<ResearchResult>;
 
-/** Spec §6.3: dominio + vencimiento de la ficha que se reemplaza. Una ficha
+/** Spec §6.3: cuenta + vencimiento de la ficha que se reemplaza. Una ficha
  * refrescada vence en otra fecha, así que su próximo vencimiento es una huella
- * nueva. */
+ * nueva. Va por id y no por dominio porque una cuenta es un dominio por
+ * tenant, y `accounts.domain` admite hasta 253 caracteres: pegado al
+ * vencimiento puede superar el check de 200 de `work_items.input_hash`. */
 export function refreshInputHash(account: {
-	domain: string;
+	id: string;
 	expiresAt: string;
 }): string {
-	return `${account.domain}:${account.expiresAt}`;
+	return `${account.id}:${account.expiresAt}`;
 }
 
 export function createRefreshFichas(deps: {

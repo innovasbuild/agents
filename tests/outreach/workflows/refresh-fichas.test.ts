@@ -95,22 +95,22 @@ describe("refresh-fichas", () => {
 		expect(seeded).toEqual([
 			{
 				subjectId: "acc-vieja.test",
-				inputHash: "vieja.test:2026-08-01T12:00:00.000Z",
+				inputHash: "acc-vieja.test:2026-08-01T12:00:00.000Z",
 			},
 			{
 				subjectId: "acc-nueva.test",
-				inputHash: "nueva.test:2026-09-20T12:00:00.000Z",
+				inputHash: "acc-nueva.test:2026-09-20T12:00:00.000Z",
 			},
 		]);
 	});
 
-	it("la huella es dominio y vencimiento de la ficha que se reemplaza", () => {
+	it("la huella es la cuenta y el vencimiento de la ficha que se reemplaza", () => {
 		expect(
 			refreshInputHash({
-				domain: "acme.test",
+				id: "acc-acme.test",
 				expiresAt: "2026-08-01T12:00:00Z",
 			}),
-		).toBe("acme.test:2026-08-01T12:00:00Z");
+		).toBe("acc-acme.test:2026-08-01T12:00:00Z");
 	});
 
 	it("investiga la cuenta con el tenant y la pasada del runner", async () => {

@@ -163,15 +163,26 @@ export async function runWorkflowPass(
 
 		if (deps.impl.seed) {
 			for (const seeded of await deps.impl.seed(tenantId, startedAt)) {
-				await enqueue(
-					{
-						tenantId,
-						workflow: input.workflow,
-						subjectType: info.subjectType,
-						...seeded,
-					},
-					{ store },
-				);
+				// Un sujeto no puede tumbar la siembra entera: si insertWorkItem
+				// tira (p. ej. una huella que viola un check de la tabla), se loguea
+				// y se sigue con el resto. Sin esto, un sujeto envenenado deja el
+				// workflow del tenant trabado para siempre (vuelve primero en cada
+				// pasada y la corta antes de sembrar a los demás).
+				try {
+					await enqueue(
+						{
+							tenantId,
+							workflow: input.workflow,
+							subjectType: info.subjectType,
+							...seeded,
+						},
+						{ store },
+					);
+				} catch (error) {
+					console.error(
+						`[runner] no se pudo sembrar ${input.workflow}/${seeded.subjectId}: ${errorText(error)}`,
+					);
+				}
 			}
 		}
 
