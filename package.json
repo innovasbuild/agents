@@ -22,7 +22,8 @@
 		"brain:import": "node --env-file=.env.local scripts/brain-import.mts",
 		"outreach:config": "node --env-file=.env.local scripts/outreach-config.mts",
 		"executors:set": "node --env-file=.env.local scripts/executors-set.mts",
-		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts"
+		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts",
+		"jev:probe": "node --env-file=.env.local scripts/jev-probe.mts"
 	},
 	"dependencies": {
 		"@supabase/ssr": "^0.12.7",
@@ -47,6 +48,7 @@
 		"@types/node": "^24.13.4",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
+		"microsandbox": "^0.5.10",
 		"shadcn": "^4.21.0",
 		"tailwindcss": "^4",
 		"typescript": "^5",
