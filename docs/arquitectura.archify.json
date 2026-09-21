@@ -1,0 +1,301 @@
+{
+	"schema_version": 1,
+	"diagram_type": "architecture",
+	"meta": {
+		"title": "Plataforma de agentes de INNOV.AS",
+		"quality_profile": "showcase",
+		"repository": {
+			"url": "git@github-innov:innovasbuild/agents.git",
+			"link_mode": "local-only",
+			"revision": "7ac307e68350588c4e0e511f2421a1c605631a90"
+		},
+		"viewBox": [1380, 660],
+		"views": [
+			{
+				"id": "camino-del-toque",
+				"label": "Camino del toque",
+				"focus": ["ejecutores", "dashboard", "canal", "agente", "supabase"],
+				"note": "El ejecutor pide un toque, el agente lo encola y la cola vuelve sola al tablero."
+			},
+			{
+				"id": "identidad",
+				"label": "Identidad y credenciales",
+				"focus": ["canal", "agente", "connect", "gmail"],
+				"note": "La sesión de Supabase define el tenant; Connect guarda los tokens que el modelo no ve."
+			},
+			{
+				"id": "servicios",
+				"label": "Servicios del tenant",
+				"focus": ["agente", "connect", "hubspot", "leads", "gmail"],
+				"note": "Cada capacidad es una conexión que se arma en session.started según el tenant."
+			}
+		]
+	},
+	"components": [
+		{
+			"id": "ejecutores",
+			"type": "external",
+			"label": "Ejecutores",
+			"sublabel": "INNOV.AS y su cliente",
+			"tag": "navegador",
+			"pos": [40, 270],
+			"size": [150, 88]
+		},
+		{
+			"id": "dashboard",
+			"type": "frontend",
+			"label": "Dashboard",
+			"sublabel": "chat, cola, pipeline y tableros",
+			"brand": "next-js",
+			"tag": "app/[tenant]",
+			"pos": [240, 270],
+			"size": [195, 88],
+			"sources": [
+				{
+					"path": "app/[tenant]/layout.tsx",
+					"label": "rutas por tenant"
+				}
+			]
+		},
+		{
+			"id": "canal",
+			"type": "security",
+			"label": "Canal eve",
+			"sublabel": "sesión Supabase → principal",
+			"tag": "channels/eve.ts",
+			"pos": [485, 270],
+			"size": [175, 88],
+			"sources": [
+				{
+					"path": "agents/outreach/channels/eve.ts",
+					"label": "auth del canal"
+				}
+			]
+		},
+		{
+			"id": "agente",
+			"type": "backend",
+			"label": "Agente outreach",
+			"sublabel": "un agente para todos los tenants",
+			"tag": "agents/outreach",
+			"pos": [710, 270],
+			"size": [190, 88],
+			"sources": [
+				{
+					"path": "agents/outreach/agent.ts",
+					"label": "defineAgent"
+				},
+				{
+					"path": "agents/outreach/tools/send_email.ts",
+					"label": "tool con approval"
+				}
+			]
+		},
+		{
+			"id": "gateway",
+			"type": "cloud",
+			"label": "Vercel AI Gateway",
+			"sublabel": "el modelo se elige por tenant",
+			"brand": "vercel",
+			"tag": "sin deploy",
+			"pos": [710, 60],
+			"size": [190, 88],
+			"sources": [
+				{
+					"path": "lib/agents/model.ts",
+					"label": "resolveModelForTenant"
+				}
+			]
+		},
+		{
+			"id": "connect",
+			"type": "security",
+			"label": "Vercel Connect",
+			"sublabel": "custodia OAuth y API keys",
+			"brand": "vercel",
+			"pos": [950, 270],
+			"size": [165, 88],
+			"sources": [
+				{
+					"path": "lib/connectors/auth.ts",
+					"label": "tenantScopedConnect"
+				}
+			]
+		},
+		{
+			"id": "supabase",
+			"type": "database",
+			"label": "Supabase",
+			"sublabel": "Postgres · Auth · RLS · Realtime",
+			"brand": "supabase",
+			"tag": "events · contacts · queue_items",
+			"pos": [235, 480],
+			"size": [205, 105],
+			"sources": [
+				{
+					"path": "supabase/migrations/20260914224230_outreach_core.sql",
+					"label": "esquema y RLS"
+				}
+			]
+		},
+		{
+			"id": "hubspot",
+			"type": "external",
+			"label": "HubSpot",
+			"sublabel": "MCP remoto, solo lectura",
+			"brand": "hubspot",
+			"tag": "CRM del tenant",
+			"pos": [1175, 60],
+			"size": [165, 88]
+		},
+		{
+			"id": "leads",
+			"type": "external",
+			"label": "ColdIQ · Places",
+			"sublabel": "prospectos, emails y señales",
+			"tag": "consume créditos",
+			"pos": [1175, 270],
+			"size": [165, 88]
+		},
+		{
+			"id": "gmail",
+			"type": "external",
+			"label": "Gmail del ejecutor",
+			"sublabel": "sale de la casilla real",
+			"pos": [1175, 470],
+			"size": [165, 88]
+		}
+	],
+	"boundaries": [
+		{
+			"kind": "region",
+			"label": "Vercel · un solo deploy",
+			"wraps": ["dashboard", "canal", "agente", "gateway", "connect"],
+			"pad": 30
+		}
+	],
+	"connections": [
+		{
+			"id": "gente-al-tablero",
+			"from": "ejecutores",
+			"to": "dashboard",
+			"label": "chatea y aprueba",
+			"variant": "emphasis",
+			"labelDy": -58
+		},
+		{
+			"id": "tablero-al-canal",
+			"from": "dashboard",
+			"to": "canal",
+			"label": "/eve/agents/outreach",
+			"labelDy": -58
+		},
+		{
+			"id": "canal-al-agente",
+			"from": "canal",
+			"to": "agente",
+			"label": "tenant y rol del principal",
+			"variant": "security",
+			"labelDy": -58
+		},
+		{
+			"id": "agente-al-modelo",
+			"from": "agente",
+			"to": "gateway",
+			"label": "modelo resuelto en session.started",
+			"fromSide": "top",
+			"toSide": "bottom"
+		},
+		{
+			"id": "agente-a-la-base",
+			"from": "agente",
+			"to": "supabase",
+			"label": "encola el toque y appendea events",
+			"fromSide": "bottom",
+			"toSide": "right"
+		},
+		{
+			"id": "tablero-lee",
+			"from": "dashboard",
+			"to": "supabase",
+			"label": "lee con RLS por tenant",
+			"fromSide": "bottom",
+			"toSide": "top",
+			"labelDx": 50,
+			"labelDy": 80
+		},
+		{
+			"id": "realtime",
+			"from": "supabase",
+			"to": "dashboard",
+			"label": "Realtime: la cola aparece sola",
+			"variant": "dashed",
+			"fromSide": "top",
+			"toSide": "bottom",
+			"labelDx": -110
+		},
+		{
+			"id": "agente-pide-token",
+			"from": "agente",
+			"to": "connect",
+			"label": "pide el token",
+			"variant": "security",
+			"labelDy": -58
+		},
+		{
+			"id": "connect-crm",
+			"from": "connect",
+			"to": "hubspot",
+			"label": "OAuth del tenant",
+			"fromSide": "top",
+			"toSide": "left",
+			"via": [[1032.5, 104]]
+		},
+		{
+			"id": "connect-leads",
+			"from": "connect",
+			"to": "leads",
+			"label": "API key del tenant",
+			"labelDy": -58,
+			"labelDx": 30
+		},
+		{
+			"id": "connect-gmail",
+			"from": "connect",
+			"to": "gmail",
+			"label": "OAuth del ejecutor",
+			"fromSide": "bottom",
+			"toSide": "left",
+			"via": [[1032.5, 514]]
+		}
+	],
+	"cards": [
+		{
+			"dot": "cyan",
+			"title": "Un agente, N tenants",
+			"items": [
+				"agents/outreach es uno solo: el tenant se resuelve en session.started",
+				"Modelo, instrucciones y conexiones salen de defineDynamic, no del código",
+				"Un tenant nuevo es una fila en tenants más su canon en el brain"
+			]
+		},
+		{
+			"dot": "emerald",
+			"title": "Nada sale sin aprobación",
+			"items": [
+				"send_email lleva approval: always(): la sesión eve espera al ejecutor",
+				"crm_upsert_contact lleva approval: once() por sesión",
+				"research_account arma la ficha de páginas públicas y la guarda 90 días"
+			]
+		},
+		{
+			"dot": "violet",
+			"title": "La base y las credenciales",
+			"items": [
+				"events es append-only; contacts y queue_items son estado derivado",
+				"RLS por tenant_id vía memberships, con platform_admin por encima",
+				"Connect guarda los grants: el agente recibe la conexión ya autenticada"
+			]
+		}
+	]
+}
