@@ -108,4 +108,16 @@ describe("registry", () => {
 		expect(downstreamOf(null)).toEqual([]);
 		expect(downstreamOf("etiqueta-que-nadie-reclama")).toEqual([]);
 	});
+
+	it("un workflow con tope de costo por pasada mide model_usd, que es lo que ese tope mira", () => {
+		// El runner corta la pasada con usage_sum(..., "model_usd", ..., runId): un
+		// tope en USD sobre un workflow que no gasta modelo nunca dispararía.
+		const culpables = Object.entries(WORKFLOWS)
+			.filter(
+				([, wf]) =>
+					wf.caps.costUsdPerRun > 0 && !wf.resources.includes("model_usd"),
+			)
+			.map(([name]) => name);
+		expect(culpables).toEqual([]);
+	});
 });
