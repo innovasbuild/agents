@@ -3722,7 +3722,7 @@ git commit -m "feat: WorkflowStore sobre Supabase y prueba de reclamo concurrent
 
 # Entrega 3 · Primer workflow — alcance e interfaces
 
-Se detalla tarea por tarea al cerrar E2, con el dato de S2 en la mano. Lo que queda fijado:
+**Detallada tarea por tarea en `docs/superpowers/plans/2026-09-21-etapa-12-e3-refresh-fichas.md` (Tasks 15 a 23).** Ese plan manda: donde difiere de lo que sigue (por ejemplo, el reloj es del tick y no de la pasada, y el sembrador pregunta a una función SQL), la versión detallada es la vigente. Lo que quedó fijado al cerrar la E2:
 
 **Archivos**
 
