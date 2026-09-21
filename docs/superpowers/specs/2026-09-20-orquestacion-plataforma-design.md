@@ -42,6 +42,24 @@ Dejar en producción los rieles de orquestación, probados con un workflow real 
 9. `docs/02-orquestacion.md` y las reglas de `CLAUDE.md` (§12) están mergeadas.
 10. `npm test`, `npm run typecheck` y `npm run db:test` en verde.
 
+**Cierre contra producción (2026-09-21, E3, PR #37).** Criterios 1 a 8 y 10 cumplidos; el 9 es la E4.
+
+| # | Evidencia |
+|---|---|
+| 1 | `rivara.com.ar` (innovas) refrescada sola a las 13:26 UTC, vigente hasta el 2026-12-20. Pasada `c69008cb-1ab5-4ba5-8bff-f95a9f67ff83` |
+| 2 | Esa pasada: `items_claimed 1 = ok 1 + refused 0 + failed 0` |
+| 3 | Asiento `outreach/research` de USD 0,0125 con el `run_id` de la pasada y `source: gateway`; `runs.cost_usd = 0.0125` |
+| 4 | Con tope 0: pasadas `budget_exhausted` desde `9b227c79-dbeb-4b08-abf6-dc3c15476c78` (12:40 UTC), sin tocar ítems. Al subir a USD 3, la siguiente procesó el ítem |
+| 5 | Con un modelo inexistente, el ítem 2 falló tres veces (reintento a los 5 y a los 30 minutos) y quedó `failed` con `Model 'anthropic/no-existe' not found`. La mitad "no frena al resto" la prueba `tests/workflows/runner.test.ts` (decisión 9 del plan de la E3) |
+| 6 | `npm run test:it:workflows` 7/7 contra Postgres real: dos reclamos simultáneos nunca entregan el mismo ítem (decisión 8 del plan de la E3) |
+| 7 | Sin filas en `tenant_workflows`, a más de 10 minutos del deploy no había ninguna pasada de workflow |
+| 8 | Tests del registry rotos a propósito en la E2 (Task 10) y reforzados en la E3 (Task 18) |
+| 10 | Verde sobre el merge de #37: 924 tests, typecheck limpio, 149 pgTAP |
+
+Config de régimen para innovas: cadencia 60, 5 ítems por tick, `model_usd` USD 3 por día. Cron `dispatch` registrado en el deploy de producción con `*/5 * * * *`.
+
+Visto en producción y pendiente: `last_run_at` se marca al terminar la pasada, así que con cadencia igual al tick se saltea un tick de cada dos, y una cadencia de 60 corre cada 60 a 65 minutos. Se arregla contando la cadencia desde el inicio de la pasada.
+
 ### 2.1 Entregas
 
 Cada una deja algo que sirve aunque la siguiente se demore.
