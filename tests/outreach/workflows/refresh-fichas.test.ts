@@ -30,6 +30,7 @@ const ficha: Ficha = {
 	gap_declarado: null,
 	gap_demostrable: null,
 	hechos: [{ hecho: "Abrió planta", url: "https://acme.test/n", fecha: null }],
+	dolores: [],
 	creditos_usados: 0,
 };
 

@@ -11,7 +11,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { attachSpend, createStepSpend } from "../../workflows/usage";
-import { fichaSchema } from "../ficha";
+import { fichaResearchSchema } from "../ficha";
 import type { WebPageResult } from "../web-page";
 import { RESEARCH_MAX_PAGES } from "./research-run";
 
@@ -75,7 +75,7 @@ export async function generateResearch(
 					},
 				}),
 			},
-			output: Output.object({ schema: fichaSchema }),
+			output: Output.object({ schema: fichaResearchSchema }),
 			stopWhen: stepCountIs(RESEARCH_MAX_PAGES + 2),
 			maxOutputTokens: 4_000,
 			abortSignal: deps.abortSignal,

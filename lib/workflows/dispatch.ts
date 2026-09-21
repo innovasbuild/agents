@@ -180,6 +180,7 @@ export async function runDispatch(deps: {
 						failed: 0,
 						finishedAt: now,
 					});
+					// Inicio y fin son el mismo instante: vale igual que en el runner.
 					await deps.store.touchLastRun(tenant.id, row.workflow, now);
 					outcomes.push({
 						...base,

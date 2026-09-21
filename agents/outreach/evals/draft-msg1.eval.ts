@@ -17,7 +17,7 @@ export default defineEval({
 		t.notCalledTool("queue_touch");
 		t.notCalledTool("send_email");
 		t.judge.autoevals.closedQA(
-			"La respuesta muestra un borrador de email en español rioplatense cuya primera línea después del saludo menciona que la empresa abrió una segunda planta en Rafaela, sin rayas ni signos de apertura.",
+			"La respuesta muestra un borrador de email en español rioplatense que plantea lo que una empresa como Acme Eval puede ganar y enumera dolores concretos de su operación, como coordinar pedidos entre plantas, cada uno con su beneficio. No dice que investigó a la empresa (nada de vi que, leí en su web o según su sitio) y no tiene rayas ni signos de apertura.",
 		);
 	},
 });

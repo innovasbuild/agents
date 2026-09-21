@@ -4,7 +4,7 @@ import { outreachEvent } from "../events";
 import {
 	type Ficha,
 	fichaExpiresAt,
-	fichaSchema,
+	fichaResearchSchema,
 	isFichaVigente,
 	sanitizeFicha,
 } from "../ficha";
@@ -37,6 +37,7 @@ export function researchMessage(domain: string, name: string | null): string {
 	return [
 		`Investigá la empresa del dominio ${domain}${name ? ` (${name})` : ""}.`,
 		"Completá la ficha: qué produce y vende, cómo gana plata, qué compra, qué se le rompe si crece, qué dice de sí misma (gap declarado) y qué podés probar con fuentes (gap demostrable).",
+		"Después, los dolores: los problemas concretos de su operación, por qué le pesan más a esta empresa que a otras y qué gana si se resuelven.",
 		"Cada hecho lleva la URL exacta de donde sale. Sin URL, no es un hecho: dejalo afuera.",
 		`Leé la web con leer_pagina empezando por https://${domain}, y no pases de ${RESEARCH_MAX_PAGES} páginas.`,
 	].join("\n");
@@ -59,7 +60,15 @@ export async function prepareResearch(
 			),
 		};
 	const account = await deps.store.findAccount(input.tenantId, domain);
-	if (account && isFichaVigente(new Date(account.expiresAt), deps.now())) {
+	// Una ficha con hechos y sin dolores se guardó antes de que existieran: la
+	// redacción escribe desde los dolores, así que se vuelve a investigar.
+	const sinDolores =
+		account?.ficha.hechos.length && account.ficha.dolores.length === 0;
+	if (
+		account &&
+		!sinDolores &&
+		isFichaVigente(new Date(account.expiresAt), deps.now())
+	) {
 		return {
 			kind: "done",
 			result: {
@@ -89,7 +98,7 @@ export async function saveResearch(
 	},
 	deps: ResearchDeps,
 ): Promise<ResearchResult> {
-	const parsed = fichaSchema.safeParse(input.raw);
+	const parsed = fichaResearchSchema.safeParse(input.raw);
 	if (!parsed.success)
 		return refuse(
 			"ficha_invalida",
