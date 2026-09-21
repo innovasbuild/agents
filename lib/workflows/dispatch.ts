@@ -7,6 +7,7 @@ import {
 	DEFAULT_CADENCE_MINUTES,
 	isDue,
 	parseTenantWorkflowConfig,
+	type TenantWorkflowConfig,
 } from "./config";
 import { isWorkflow, WORKFLOWS } from "./registry";
 import {
@@ -25,6 +26,9 @@ export const ITEM_TIMEOUT_MS = 75_000;
 /** Más largo que el timeout de la función: un ítem no vence mientras quien lo
  * tomó sigue vivo, y una pasada `running` más vieja que esto está muerta. */
 export const LEASE_SECONDS = 600;
+/** Con menos que esto no vale la pena abrir una pasada: se perdería un turno
+ * entero de cadencia sin procesar nada. Mejor dejarla para el próximo tick. */
+export const MIN_PASS_MS = 10_000;
 
 export interface DispatchStore extends RunnerStore {
 	listEnabled(
@@ -55,6 +59,22 @@ export interface DispatchOutcome {
 		| "error";
 	result?: PassResult;
 	error?: string;
+}
+
+type EnabledRow = {
+	workflow: string;
+	config: unknown;
+	lastRunAt: string | null;
+};
+
+/** Una fila a la que le toca correr, ya validada, esperando su turno en el
+ * reparto del reloj de la fase 2. */
+interface Candidate {
+	tenant: DispatchTenant;
+	row: EnabledRow;
+	config: TenantWorkflowConfig;
+	/** Desempate estable: el orden en que la fase 1 la encontró. */
+	order: number;
 }
 
 function errorText(error: unknown): string {
@@ -94,85 +114,14 @@ export async function runDispatch(deps: {
 	// Si esto tira, tira el tick: sin tenants no hay nada que hacer.
 	const tenants = await deps.listTenants();
 
-	const one = async (
-		tenant: DispatchTenant,
-		row: { workflow: string; config: unknown; lastRunAt: string | null },
-	): Promise<DispatchOutcome> => {
-		const base = { tenant: tenant.slug, workflow: row.workflow };
-		try {
-			if (!isWorkflow(row.workflow)) {
-				console.warn(
-					`dispatch: ${tenant.slug} tiene prendido "${row.workflow}", que no está en el registry`,
-				);
-				return { ...base, outcome: "desconocido" };
-			}
-			const info = WORKFLOWS[row.workflow];
-			if (info.agent !== deps.agent)
-				return { ...base, outcome: "de_otro_agente" };
-			if (!Object.hasOwn(deps.impls, row.workflow)) {
-				console.warn(
-					`dispatch: ${row.workflow} está en el registry pero este dispatcher no tiene su implementación`,
-				);
-				return { ...base, outcome: "sin_implementacion" };
-			}
-
-			const now = deps.now();
-			const parsed = parseTenantWorkflowConfig(row.workflow, row.config);
-			if (!parsed.ok) {
-				// Sin cadencia propia, se usa la default: si no, una config rota
-				// deja una pasada failed cada 5 minutos.
-				if (!isDue(row.lastRunAt, DEFAULT_CADENCE_MINUTES, now))
-					return { ...base, outcome: "no_toca" };
-				const runId = await deps.store.openRun({
-					tenantId: tenant.id,
-					agent: info.agent,
-					workflow: row.workflow,
-					startedAt: now,
-				});
-				await deps.store.closeRun(runId, {
-					status: "failed",
-					error: parsed.message,
-					claimed: 0,
-					ok: 0,
-					refused: 0,
-					failed: 0,
-					finishedAt: now,
-				});
-				await deps.store.touchLastRun(tenant.id, row.workflow, now);
-				return { ...base, outcome: "config_invalida", error: parsed.message };
-			}
-			if (!isDue(row.lastRunAt, parsed.config.cadenceMinutes, now))
-				return { ...base, outcome: "no_toca" };
-
-			// El reloj es del tick: cada pasada recibe lo que queda. Sin resto, le
-			// toca en el próximo tick (last_run_at no se toca).
-			const remaining = tickBudgetMs - (now.getTime() - tickStart.getTime());
-			if (remaining <= 0) return { ...base, outcome: "sin_tiempo" };
-
-			const result = await runWorkflowPass(
-				{
-					tenant: { id: tenant.id, timezone: tenant.timezone },
-					workflow: row.workflow,
-					config: parsed.config,
-				},
-				{
-					store: deps.store,
-					impl: deps.impls[row.workflow],
-					nodes: deps.nodes,
-					now: deps.now,
-					clockBudgetMs: remaining,
-					leaseSeconds,
-				},
-			);
-			return { ...base, outcome: "corrida", result };
-		} catch (error) {
-			// El runner ya cerró su pasada como failed antes de tirar.
-			return { ...base, outcome: "error", error: errorText(error) };
-		}
-	};
-
+	// Fase 1: clasifica cada fila prendida. Lo que no tiene turno (desconocido,
+	// de otro agente, sin implementación, config inválida, no le toca por
+	// cadencia) se resuelve acá mismo. Lo que sí tiene turno se junta en
+	// `candidates` para que la fase 2 reparta el reloj del tick por antigüedad.
+	const candidates: Candidate[] = [];
+	let order = 0;
 	for (const tenant of tenants) {
-		let rows: { workflow: string; config: unknown; lastRunAt: string | null }[];
+		let rows: EnabledRow[];
 		try {
 			rows = await deps.store.listEnabled(tenant.id);
 		} catch (error) {
@@ -184,7 +133,129 @@ export async function runDispatch(deps: {
 			});
 			continue;
 		}
-		for (const row of rows) outcomes.push(await one(tenant, row));
+		for (const row of rows) {
+			const base = { tenant: tenant.slug, workflow: row.workflow };
+			try {
+				if (!isWorkflow(row.workflow)) {
+					console.warn(
+						`dispatch: ${tenant.slug} tiene prendido "${row.workflow}", que no está en el registry`,
+					);
+					outcomes.push({ ...base, outcome: "desconocido" });
+					continue;
+				}
+				const info = WORKFLOWS[row.workflow];
+				if (info.agent !== deps.agent) {
+					outcomes.push({ ...base, outcome: "de_otro_agente" });
+					continue;
+				}
+				if (!Object.hasOwn(deps.impls, row.workflow)) {
+					console.warn(
+						`dispatch: ${row.workflow} está en el registry pero este dispatcher no tiene su implementación`,
+					);
+					outcomes.push({ ...base, outcome: "sin_implementacion" });
+					continue;
+				}
+
+				const now = deps.now();
+				const parsed = parseTenantWorkflowConfig(row.workflow, row.config);
+				if (!parsed.ok) {
+					// Sin cadencia propia, se usa la default: si no, una config rota
+					// deja una pasada failed cada 5 minutos.
+					if (!isDue(row.lastRunAt, DEFAULT_CADENCE_MINUTES, now)) {
+						outcomes.push({ ...base, outcome: "no_toca" });
+						continue;
+					}
+					const runId = await deps.store.openRun({
+						tenantId: tenant.id,
+						agent: info.agent,
+						workflow: row.workflow,
+						startedAt: now,
+					});
+					await deps.store.closeRun(runId, {
+						status: "failed",
+						error: parsed.message,
+						claimed: 0,
+						ok: 0,
+						refused: 0,
+						failed: 0,
+						finishedAt: now,
+					});
+					await deps.store.touchLastRun(tenant.id, row.workflow, now);
+					outcomes.push({
+						...base,
+						outcome: "config_invalida",
+						error: parsed.message,
+					});
+					continue;
+				}
+				if (!isDue(row.lastRunAt, parsed.config.cadenceMinutes, now)) {
+					outcomes.push({ ...base, outcome: "no_toca" });
+					continue;
+				}
+
+				candidates.push({
+					tenant,
+					row,
+					config: parsed.config,
+					order: order++,
+				});
+			} catch (error) {
+				outcomes.push({ ...base, outcome: "error", error: errorText(error) });
+			}
+		}
 	}
+
+	// Fase 2: al que hace más tiempo que no corre le toca antes (nunca corrió,
+	// lastRunAt null, es el más atrasado de todos). Así, cuando hay más trabajo
+	// del que entra en un tick, no son siempre los primeros de listTenants los
+	// que se comen el presupuesto: con el tiempo le toca a todos. Orden
+	// estable: a igual lastRunAt, gana el orden en que apareció en la fase 1.
+	candidates.sort((a, b) => {
+		const ta = a.row.lastRunAt
+			? new Date(a.row.lastRunAt).getTime()
+			: Number.NEGATIVE_INFINITY;
+		const tb = b.row.lastRunAt
+			? new Date(b.row.lastRunAt).getTime()
+			: Number.NEGATIVE_INFINITY;
+		if (ta !== tb) return ta - tb;
+		return a.order - b.order;
+	});
+
+	for (const candidate of candidates) {
+		const { tenant, row, config } = candidate;
+		const base = { tenant: tenant.slug, workflow: row.workflow };
+		try {
+			const now = deps.now();
+			// El reloj es del tick: cada pasada recibe lo que queda. Con menos de
+			// MIN_PASS_MS no vale la pena abrir la pasada (Minor 1): le toca en el
+			// próximo tick, sin tocar last_run_at.
+			const remaining = tickBudgetMs - (now.getTime() - tickStart.getTime());
+			if (remaining < MIN_PASS_MS) {
+				outcomes.push({ ...base, outcome: "sin_tiempo" });
+				continue;
+			}
+
+			const result = await runWorkflowPass(
+				{
+					tenant: { id: tenant.id, timezone: tenant.timezone },
+					workflow: row.workflow,
+					config,
+				},
+				{
+					store: deps.store,
+					impl: deps.impls[row.workflow],
+					nodes: deps.nodes,
+					now: deps.now,
+					clockBudgetMs: remaining,
+					leaseSeconds,
+				},
+			);
+			outcomes.push({ ...base, outcome: "corrida", result });
+		} catch (error) {
+			// El runner ya cerró su pasada como failed antes de tirar.
+			outcomes.push({ ...base, outcome: "error", error: errorText(error) });
+		}
+	}
+
 	return outcomes;
 }

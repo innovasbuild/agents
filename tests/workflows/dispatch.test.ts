@@ -4,6 +4,7 @@ import {
 	FUNCTION_TIMEOUT_MS,
 	ITEM_TIMEOUT_MS,
 	LEASE_SECONDS,
+	MIN_PASS_MS,
 	runDispatch,
 	TICK_BUDGET_MS,
 } from "@/lib/workflows/dispatch";
@@ -19,6 +20,7 @@ const uno: DispatchTenant = {
 	timezone: "America/Argentina/Buenos_Aires",
 };
 const dos: DispatchTenant = { ...uno, id: "t2", slug: "dos" };
+const tres: DispatchTenant = { ...uno, id: "t3", slug: "tres" };
 
 function dispatch(
 	store: ReturnType<typeof createFakeWorkflowStore>,
@@ -225,5 +227,126 @@ describe("runDispatch", () => {
 				now,
 			}),
 		).rejects.toThrow("db caída");
+	});
+
+	it("corre primero al más atrasado (null antes que cualquier fecha), y deja sin tiempo a los demás", async () => {
+		const store = createFakeWorkflowStore(now);
+		const tresHorasAntes = new Date(
+			NOW.getTime() - 3 * 60 * 60_000,
+		).toISOString();
+		const dosHorasAntes = new Date(
+			NOW.getTime() - 2 * 60 * 60_000,
+		).toISOString();
+		store.rows.push(
+			prendido("t1", {}, tresHorasAntes),
+			prendido("t2", {}, dosHorasAntes),
+			prendido("t3", {}, null),
+		);
+		store.add("acc-1");
+		store.add("acc-2").tenantId = "t2";
+		store.add("acc-3").tenantId = "t3";
+		let t = NOW.getTime();
+		const clock = () => new Date(t);
+		const lento: WorkflowImpl = {
+			runItem: async () => {
+				t += TICK_BUDGET_MS;
+				return { ok: true };
+			},
+		};
+
+		const outcomes = await dispatch(store, {
+			tenants: [uno, dos, tres],
+			impls: { "refresh-fichas": lento },
+			now: clock,
+		});
+
+		expect(outcomes).toMatchObject([
+			{ tenant: "tres", outcome: "corrida" },
+			{ tenant: "uno", outcome: "sin_tiempo" },
+			{ tenant: "dos", outcome: "sin_tiempo" },
+		]);
+	});
+
+	it("a lo largo de varios ticks con presupuesto para una sola pasada, ningún tenant queda afuera", async () => {
+		let t = NOW.getTime();
+		const clock = () => new Date(t);
+		const store = createFakeWorkflowStore(clock);
+		store.rows.push(
+			prendido("t1", { cadence_minutes: 5 }),
+			prendido("t2", { cadence_minutes: 5 }),
+			prendido("t3", { cadence_minutes: 5 }),
+		);
+		store.add("acc-1");
+		store.add("acc-2").tenantId = "t2";
+		store.add("acc-3").tenantId = "t3";
+		const lento: WorkflowImpl = {
+			runItem: async () => {
+				t += TICK_BUDGET_MS;
+				return { ok: true };
+			},
+		};
+		const tenants = [uno, dos, tres];
+
+		const corridas = new Set<string>();
+		for (let tick = 0; tick < 3; tick++) {
+			const outcomes = await runDispatch({
+				agent: "outreach",
+				store,
+				listTenants: async () => tenants,
+				impls: { "refresh-fichas": lento },
+				nodes: {},
+				now: clock,
+			});
+			for (const o of outcomes) {
+				if (o.outcome === "corrida") corridas.add(o.tenant);
+			}
+			// Entre tick y tick pasa tiempo de sobra para que venza la cadencia.
+			t += 6 * 60_000;
+		}
+
+		expect(corridas).toEqual(new Set(["uno", "dos", "tres"]));
+	});
+
+	it("con menos de MIN_PASS_MS de resto no abre pasada: sin_tiempo, sin fila en runs ni tocar last_run_at", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.rows.push(prendido("t1"));
+		store.add("acc-1");
+
+		const outcomes = await runDispatch({
+			agent: "outreach",
+			store,
+			listTenants: async () => [uno],
+			impls: { "refresh-fichas": okImpl },
+			nodes: {},
+			now,
+			tickBudgetMs: MIN_PASS_MS - 1,
+		});
+
+		expect(outcomes).toMatchObject([{ outcome: "sin_tiempo" }]);
+		expect(store.runs).toEqual([]);
+		expect(store.rows[0].lastRunAt).toBeNull();
+	});
+
+	it("una pasada que explota en el seed no frena el tick: la siguiente corre igual", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.rows.push(prendido("t1"), prendido("t2"));
+		store.add("acc-2").tenantId = "t2";
+		const explota: WorkflowImpl = {
+			seed: async (tenantId) => {
+				if (tenantId === "t1") throw new Error("seed roto");
+				return [];
+			},
+			runItem: async () => ({ ok: true }),
+		};
+
+		const outcomes = await dispatch(store, {
+			tenants: [uno, dos],
+			impls: { "refresh-fichas": explota },
+		});
+
+		expect(outcomes).toMatchObject([
+			{ tenant: "uno", outcome: "error", error: "seed roto" },
+			{ tenant: "dos", outcome: "corrida" },
+		]);
 	});
 });
