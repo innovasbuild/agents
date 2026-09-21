@@ -46,6 +46,12 @@ describe("workflowAlertLines", () => {
 		expect(lines.join(" ")).toContain("no cierra");
 	});
 
+	it("pluraliza el verbo de las pasadas que no cierran la cuenta", () => {
+		expect(workflowAlertLines({ ...sano, unbalancedRuns: 2 })[0]).toContain(
+			"2 pasadas de workflows cerraron",
+		);
+	});
+
 	it("nombra los workflows prendidos que no corrieron", () => {
 		expect(
 			workflowAlertLines({ ...sano, silent: ["refresh-fichas"] })[0],

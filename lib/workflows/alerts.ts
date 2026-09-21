@@ -38,7 +38,9 @@ export function workflowAlertLines(health: WorkflowHealth): string[] {
 		);
 	if (health.unbalancedRuns > 0)
 		lines.push(
-			`${health.unbalancedRuns === 1 ? "1 pasada" : `${health.unbalancedRuns} pasadas`} de workflows cerró con una cuenta que no cierra: es un bug de la plataforma, avisá a quien la administra.`,
+			health.unbalancedRuns === 1
+				? "1 pasada de workflows cerró con una cuenta que no cierra: es un bug de la plataforma, avisá a quien la administra."
+				: `${health.unbalancedRuns} pasadas de workflows cerraron con una cuenta que no cierra: es un bug de la plataforma, avisá a quien la administra.`,
 		);
 	if (health.silent.length > 0)
 		lines.push(
