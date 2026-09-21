@@ -29,13 +29,13 @@ export default defineTool({
 	async execute(input, ctx) {
 		const caller = callerFromSession(ctx.session);
 		const admin = createAdminClient();
-		// `turn.id` es el mismo que hooks/runs.ts guarda en runs.eve_turn_id.
-		const runId = await resolveRunId(
-			admin,
-			ctx.session.id,
-			ctx.session.turn.id,
-		);
 		try {
+			// `turn.id` es el mismo que hooks/runs.ts guarda en runs.eve_turn_id.
+			const runId = await resolveRunId(
+				admin,
+				ctx.session.id,
+				ctx.session.turn.id,
+			);
 			return await researchAccount(
 				{
 					tenantId: caller.tenantId,
