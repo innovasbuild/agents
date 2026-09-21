@@ -71,7 +71,7 @@ export interface ContactRow {
 	nextStepAt: string | null;
 	repliedAt: string | null;
 	gmailThreadId: string | null;
-	source: "csv" | "chat";
+	source: "csv" | "chat" | "apollo";
 }
 
 export type NewContact = Pick<
@@ -274,6 +274,41 @@ export interface OutreachStore {
 	/** Eventos `oportunidad_frenada` desde `since` (resumen de sesión:
 	 * Task 11). */
 	countStalled(tenantId: string, since: Date): Promise<number>;
+	/** Focos activos del tenant, para el sembrador de target-search. */
+	listActiveFocuses(tenantId: string): Promise<FocusRow[]>;
+	loadFocus(tenantId: string, id: string): Promise<FocusRow | null>;
+	updateFocus(
+		tenantId: string,
+		id: string,
+		patch: Partial<
+			Pick<FocusRow, "status" | "accountsFound" | "contactsFound">
+		>,
+	): Promise<void>;
+	/** Cuenta descubierta: no pisa la ficha de research si ya existe. */
+	upsertDiscoveredAccount(row: {
+		tenantId: string;
+		domain: string;
+		name: string;
+		firmographics: Record<string, unknown>;
+		externalIds: Record<string, unknown>;
+	}): Promise<{ id: string }>;
+	/** "duplicado" si ese contact_key ya existe en el tenant. */
+	insertDiscoveredContact(row: {
+		tenantId: string;
+		contactKey: string;
+		accountId: string | null;
+		ownerUserId: string;
+		searchFocusId: string;
+		name: string;
+		company: string;
+		title: string | null;
+		linkedinSlug: string | null;
+		segment: string;
+		vector: string;
+		hook: string;
+		idioma: string;
+		externalIds: Record<string, unknown>;
+	}): Promise<{ id: string } | "duplicado">;
 }
 
 export interface PendingReply {
@@ -284,10 +319,29 @@ export interface PendingReply {
 	occurredAt: string;
 }
 
+export interface FocusRow {
+	id: string;
+	tenantId: string;
+	createdBy: string;
+	name: string;
+	criteria: Record<string, unknown>;
+	vector: string;
+	segment: string;
+	hook: string;
+	idioma: string;
+	maxAccounts: number;
+	maxContacts: number;
+	status: "activo" | "agotado" | "cancelado";
+	accountsFound: number;
+	contactsFound: number;
+}
+
 const CONTACT_COLUMNS =
 	"id, tenant_id, contact_key, account_id, name, company, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
+const FOCUS_COLUMNS =
+	"id, tenant_id, created_by, name, criteria, vector, segment, hook, idioma, max_accounts, max_contacts, status, accounts_found, contacts_found";
 
 type Row = Record<string, unknown>;
 
@@ -356,6 +410,32 @@ const toAccount = (r: Row): AccountRow => ({
 	researchedAt: r.researched_at as string,
 	expiresAt: r.expires_at as string,
 });
+
+const toFocus = (r: Row): FocusRow => ({
+	id: r.id as string,
+	tenantId: r.tenant_id as string,
+	createdBy: r.created_by as string,
+	name: r.name as string,
+	criteria: r.criteria as Record<string, unknown>,
+	vector: r.vector as string,
+	segment: r.segment as string,
+	hook: r.hook as string,
+	idioma: r.idioma as string,
+	maxAccounts: r.max_accounts as number,
+	maxContacts: r.max_contacts as number,
+	status: r.status as FocusRow["status"],
+	accountsFound: r.accounts_found as number,
+	contactsFound: r.contacts_found as number,
+});
+
+const FOCUS_PATCH_COLUMNS: Record<
+	keyof Pick<FocusRow, "status" | "accountsFound" | "contactsFound">,
+	string
+> = {
+	status: "status",
+	accountsFound: "accounts_found",
+	contactsFound: "contacts_found",
+};
 
 const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	accountId: "account_id",
@@ -898,6 +978,101 @@ export function createSupabaseOutreachStore(
 				.gte("created_at", since.toISOString());
 			if (error) fail("contar oportunidades frenadas", error);
 			return (data ?? []).length;
+		},
+
+		async listActiveFocuses(tenantId) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("status", "activo");
+			if (error) fail("listar focos activos", error);
+			return (data ?? []).map(toFocus);
+		},
+
+		async loadFocus(tenantId, id) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.maybeSingle();
+			if (error) fail("leer el foco", error);
+			return data ? toFocus(data) : null;
+		},
+
+		async updateFocus(tenantId, id, patch) {
+			const { error } = await client
+				.from("search_focuses")
+				.update({
+					...toColumns(patch, FOCUS_PATCH_COLUMNS),
+					updated_at: new Date().toISOString(),
+				})
+				.eq("tenant_id", tenantId)
+				.eq("id", id);
+			if (error) fail("actualizar el foco", error);
+		},
+
+		async upsertDiscoveredAccount(row) {
+			// Un upsert manda el mismo payload al insert y al "do update set" del
+			// conflicto: si `ficha`/`expires_at` van en el payload, un upsert sobre
+			// una cuenta existente los pisaría. Por eso se resuelve antes si la
+			// cuenta ya existe, y esas dos columnas solo entran al payload cuando
+			// es alta nueva.
+			const { data: existing, error: existingError } = await client
+				.from("accounts")
+				.select("id")
+				.eq("tenant_id", row.tenantId)
+				.eq("domain", row.domain)
+				.maybeSingle();
+			if (existingError) fail("buscar la cuenta descubierta", existingError);
+
+			const payload: Row = {
+				tenant_id: row.tenantId,
+				domain: row.domain,
+				name: row.name,
+				firmographics: row.firmographics,
+				external_ids: row.externalIds,
+			};
+			if (!existing) {
+				payload.ficha = {};
+				payload.expires_at = new Date().toISOString();
+			}
+
+			const { data, error } = await client
+				.from("accounts")
+				.upsert(payload, { onConflict: "tenant_id,domain" })
+				.select("id")
+				.single();
+			if (error || !data) fail("guardar la cuenta descubierta", error);
+			return { id: data.id as string };
+		},
+
+		async insertDiscoveredContact(row) {
+			const { data, error } = await client
+				.from("contacts")
+				.insert({
+					tenant_id: row.tenantId,
+					contact_key: row.contactKey,
+					account_id: row.accountId,
+					owner_user_id: row.ownerUserId,
+					search_focus_id: row.searchFocusId,
+					name: row.name,
+					company: row.company,
+					title: row.title,
+					linkedin_slug: row.linkedinSlug,
+					segment: row.segment,
+					vector: row.vector,
+					hook: row.hook,
+					idioma: row.idioma,
+					external_ids: row.externalIds,
+					source: "apollo",
+				})
+				.select("id")
+				.single();
+			if (error?.code === "23505") return "duplicado";
+			if (error || !data) fail("crear el contacto descubierto", error);
+			return { id: data.id as string };
 		},
 	};
 }

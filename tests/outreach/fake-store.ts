@@ -1,11 +1,13 @@
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { parseOutreachConfig } from "@/lib/outreach/config";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
+import type { Ficha } from "@/lib/outreach/ficha";
 import { isNoResponse } from "@/lib/outreach/stage";
 import type {
 	AccountRow,
 	ContactRow,
 	ExecutorRow,
+	FocusRow,
 	NewContact,
 	NewQueueItem,
 	OutreachStore,
@@ -35,6 +37,7 @@ export interface FakeStore extends OutreachStore {
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
 	events: OutreachEventInsert[];
+	focuses: FocusRow[];
 	contactSeed(): ContactRow;
 }
 
@@ -136,6 +139,7 @@ export function createFakeStore(): FakeStore {
 		accounts: [],
 		queue: [],
 		events: [],
+		focuses: [],
 
 		async loadExecutor(tenantId, userId) {
 			return (
@@ -458,6 +462,81 @@ export function createFakeStore(): FakeStore {
 				count++;
 			}
 			return count;
+		},
+
+		async listActiveFocuses(tenantId) {
+			return store.focuses.filter(
+				(f) => f.tenantId === tenantId && f.status === "activo",
+			);
+		},
+
+		async loadFocus(tenantId, id) {
+			return (
+				store.focuses.find((f) => f.tenantId === tenantId && f.id === id) ??
+				null
+			);
+		},
+
+		async updateFocus(tenantId, id, patch) {
+			const focus = store.focuses.find(
+				(f) => f.tenantId === tenantId && f.id === id,
+			);
+			if (!focus) throw new Error(`foco ${id} inexistente`);
+			Object.assign(
+				focus,
+				Object.fromEntries(
+					Object.entries(patch).filter(([, v]) => v !== undefined),
+				),
+			);
+		},
+
+		async upsertDiscoveredAccount(row) {
+			// Igual que la store real: una cuenta existente no pierde su ficha ni
+			// su expires_at, solo se refrescan los firmográficos.
+			const existing = store.accounts.find(
+				(a) => a.tenantId === row.tenantId && a.domain === row.domain,
+			);
+			if (existing) {
+				existing.name = row.name;
+				return { id: existing.id };
+			}
+			const now = new Date().toISOString();
+			const account: AccountRow = {
+				id: nextId("account"),
+				tenantId: row.tenantId,
+				domain: row.domain,
+				name: row.name,
+				ficha: {} as Ficha,
+				researchedAt: now,
+				expiresAt: now,
+			};
+			store.accounts.push(account);
+			return { id: account.id };
+		},
+
+		async insertDiscoveredContact(row) {
+			const existing = store.contacts.find(
+				(c) => c.tenantId === row.tenantId && c.contactKey === row.contactKey,
+			);
+			if (existing) return "duplicado";
+			const contact = contactRow({
+				id: nextId("contact"),
+				tenantId: row.tenantId,
+				contactKey: row.contactKey,
+				accountId: row.accountId,
+				name: row.name,
+				company: row.company,
+				email: null,
+				linkedinSlug: row.linkedinSlug,
+				ownerUserId: row.ownerUserId,
+				segment: row.segment,
+				vector: row.vector,
+				hook: row.hook,
+				idioma: row.idioma,
+				source: "apollo",
+			});
+			store.contacts.push(contact);
+			return { id: contact.id };
 		},
 
 		contactSeed(): ContactRow {
