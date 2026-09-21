@@ -10,7 +10,12 @@ import {
 } from "../ficha";
 import { type Refusal, refuse } from "../result";
 import type { OutreachStore } from "../store";
-import { RESEARCH_MAX_PAGES } from "./research-run";
+import type { WebPageResult } from "../web-page";
+import {
+	RESEARCH_MAX_PAGES,
+	type ResearchRunDeps,
+	runResearch,
+} from "./research-run";
 
 export type ResearchResult =
 	| Refusal
@@ -75,7 +80,13 @@ export async function prepareResearch(
 }
 
 export async function saveResearch(
-	input: { tenantId: string; userId: string; domain: string; raw: unknown },
+	input: {
+		tenantId: string;
+		/** null cuando corre desatendido (un workflow): el evento queda sin actor. */
+		userId: string | null;
+		domain: string;
+		raw: unknown;
+	},
 	deps: ResearchDeps,
 ): Promise<ResearchResult> {
 	const parsed = fichaSchema.safeParse(input.raw);
@@ -125,4 +136,58 @@ export async function saveResearch(
 		ficha: account.ficha,
 		expiresAt: account.expiresAt,
 	};
+}
+
+export interface ResearchAccountDeps extends ResearchDeps {
+	readPage: (url: string) => Promise<WebPageResult>;
+	generate: ResearchRunDeps["generate"];
+}
+
+/**
+ * El nodo `outreach/research` entero: ficha vigente → la devuelve; si no,
+ * investiga con el modelo del tenant y guarda. Una falla del modelo o de la red
+ * tira: es infraestructura, y el que llama decide (la tool la convierte en
+ * negativa citable, el runner la reintenta). Un resultado de negocio, como
+ * `sin_ancla`, vuelve como rechazo.
+ */
+export async function researchAccount(
+	input: {
+		tenantId: string;
+		userId: string | null;
+		domain: string;
+		name: string | null;
+	},
+	deps: ResearchAccountDeps,
+): Promise<ResearchResult> {
+	const prepared = await prepareResearch(
+		{ tenantId: input.tenantId, domain: input.domain, name: input.name },
+		deps,
+	);
+	if (prepared.kind === "done") return prepared.result;
+
+	const tenant = await deps.store.loadTenantOutreach(input.tenantId);
+	if (!tenant)
+		return refuse(
+			"outreach_no_habilitado",
+			"este tenant no tiene el agente de outreach habilitado",
+		);
+
+	const output = await runResearch(
+		{
+			domain: prepared.domain,
+			name: input.name,
+			model: tenant.config.models.researcher,
+			message: prepared.message,
+		},
+		deps,
+	);
+	return saveResearch(
+		{
+			tenantId: input.tenantId,
+			userId: input.userId,
+			domain: prepared.domain,
+			raw: output,
+		},
+		deps,
+	);
 }

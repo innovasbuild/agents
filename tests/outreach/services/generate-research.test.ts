@@ -2,7 +2,7 @@
 // Verifica el cableado (tool leer_pagina, salida estructurada, tope de pasos) y
 // qué ve el modelo de cada lectura.
 import { describe, expect, it } from "vitest";
-import { generateResearch } from "@/agents/outreach/tools/research_account";
+import { generateResearch } from "@/lib/outreach/services/generate-research";
 import type { WebPageResult } from "@/lib/outreach/web-page";
 
 type LeerPagina = {
