@@ -4,8 +4,9 @@
 // Sin esto, ese fallo del modelo terminaba en excepción en vez de consumir un
 // intento del gate. Se prueba con `generateText` inyectado: no llama al modelo.
 import { NoObjectGeneratedError } from "ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { generateDraft } from "@/lib/outreach/services/generate-draft";
+import { metered } from "@/lib/workflows/usage";
 
 const responseStub = {
 	id: "r1",
@@ -111,5 +112,66 @@ describe("generateDraft", () => {
 		});
 
 		expect(result.providerMetadata).toBe(providerMetadata);
+	});
+
+	describe("con metered en la puerta", () => {
+		const base = {
+			tenantId: "t1",
+			runId: null,
+			workflow: null,
+			node: "outreach/draft",
+		};
+		const wrap = (
+			generateText: never,
+			record: Parameters<typeof metered>[1]["record"],
+		) =>
+			metered(
+				(model: string, system: string, prompt: string) =>
+					generateDraft(model, system, prompt, { generateText }),
+				{ model: (model) => model, record, base },
+			);
+
+		it("una llamada que tira después de cerrar un paso deja su asiento y relanza", async () => {
+			const boom = new Error("gateway caído");
+			const generateText = (async (options: {
+				onStepEnd: (step: unknown) => void;
+			}) => {
+				options.onStepEnd({
+					usage: usageStub,
+					providerMetadata: { gateway: { cost: "0.02" } },
+				});
+				throw boom;
+			}) as never;
+			const record = vi.fn(async () => {});
+
+			await expect(
+				wrap(generateText, record)("anthropic/claude-opus-5", "s", "p"),
+			).rejects.toBe(boom);
+			expect(record).toHaveBeenCalledWith({
+				...base,
+				resource: "model_usd",
+				amount: 0.02,
+				unit: "usd",
+				meta: {
+					model: "anthropic/claude-opus-5",
+					source: "gateway",
+					inputTokens: 10,
+					outputTokens: 5,
+					failed: true,
+				},
+			});
+		});
+
+		it("si tira sin haber cerrado ningún paso, no hay consumo informado: no asienta", async () => {
+			const generateText = (async () => {
+				throw new Error("abort");
+			}) as never;
+			const record = vi.fn(async () => {});
+
+			await expect(
+				wrap(generateText, record)("anthropic/claude-opus-5", "s", "p"),
+			).rejects.toThrow("abort");
+			expect(record).not.toHaveBeenCalled();
+		});
 	});
 });

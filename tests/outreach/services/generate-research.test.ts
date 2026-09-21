@@ -1,10 +1,12 @@
 // generateResearch se prueba con `generateText` inyectado: no llama al modelo.
 // Verifica el cableado (tool leer_pagina, salida estructurada, tope de pasos) y
 // qué ve el modelo de cada lectura.
-import { NoOutputGeneratedError } from "ai";
-import { describe, expect, it } from "vitest";
+import { NoOutputGeneratedError, generateText as realGenerateText } from "ai";
+import { MockLanguageModelV4 } from "ai/test";
+import { describe, expect, it, vi } from "vitest";
 import { generateResearch } from "@/lib/outreach/services/generate-research";
 import type { WebPageResult } from "@/lib/outreach/web-page";
+import { metered } from "@/lib/workflows/usage";
 
 type LeerPagina = {
 	execute: (input: { url: string }, options: unknown) => Promise<unknown>;
@@ -65,14 +67,26 @@ describe("generateResearch", () => {
 		]);
 	});
 
-	it("devuelve usage y providerMetadata para que la puerta asiente el consumo", async () => {
-		const usage = { inputTokens: 100, outputTokens: 20 };
-		const providerMetadata = { gateway: { cost: "0.002" } };
-		const generateText = (async () => ({
-			output: { name: "Acme" },
-			usage,
-			providerMetadata,
-		})) as never;
+	it("devuelve el consumo sumado de todos los pasos, no el del último", async () => {
+		// En ai@7 result.providerMetadata es el del último paso: con dos lecturas,
+		// el costo del gateway del primer paso se perdía.
+		const generateText = (async (options: {
+			onStepEnd: (step: unknown) => void;
+		}) => {
+			options.onStepEnd({
+				usage: { inputTokens: 100, outputTokens: 20 },
+				providerMetadata: { gateway: { cost: "0.002" } },
+			});
+			options.onStepEnd({
+				usage: { inputTokens: 300, outputTokens: 50 },
+				providerMetadata: { gateway: { cost: "0.005" } },
+			});
+			return {
+				output: { name: "Acme" },
+				usage: { inputTokens: 300, outputTokens: 50 },
+				providerMetadata: { gateway: { cost: "0.005" } },
+			};
+		}) as never;
 
 		const result = await generateResearch(
 			{
@@ -88,8 +102,12 @@ describe("generateResearch", () => {
 			{ generateText },
 		);
 
-		expect(result.usage).toBe(usage);
-		expect(result.providerMetadata).toBe(providerMetadata);
+		expect(result.usage).toEqual({ inputTokens: 400, outputTokens: 70 });
+		expect(
+			Number(
+				(result.providerMetadata as { gateway: { cost: string } }).gateway.cost,
+			),
+		).toBeCloseTo(0.007);
 	});
 
 	it("si el modelo termina sin salida, devuelve output undefined pero conserva usage", async () => {
@@ -99,13 +117,18 @@ describe("generateResearch", () => {
 		// necesita que la promesa resuelva igual para poder asentar ese consumo.
 		const usage = { inputTokens: 40, outputTokens: 0 };
 		const providerMetadata = { gateway: { cost: "0.0004" } };
-		const generateText = (async () => ({
-			get output() {
-				throw new NoOutputGeneratedError();
-			},
-			usage,
-			providerMetadata,
-		})) as never;
+		const generateText = (async (options: {
+			onStepEnd: (step: unknown) => void;
+		}) => {
+			options.onStepEnd({ usage, providerMetadata });
+			return {
+				get output() {
+					throw new NoOutputGeneratedError();
+				},
+				usage,
+				providerMetadata,
+			};
+		}) as never;
 
 		const result = await generateResearch(
 			{
@@ -122,8 +145,8 @@ describe("generateResearch", () => {
 		);
 
 		expect(result.output).toBeUndefined();
-		expect(result.usage).toBe(usage);
-		expect(result.providerMetadata).toBe(providerMetadata);
+		expect(result.usage).toEqual(usage);
+		expect(result.providerMetadata).toEqual(providerMetadata);
 	});
 
 	it("cualquier otro error al leer output se relanza", async () => {
@@ -150,5 +173,105 @@ describe("generateResearch", () => {
 				{ generateText },
 			),
 		).rejects.toThrow("otro error, no de output");
+	});
+
+	it("si el abort corta un paso, los pasos ya cerrados quedan asentados y el error se relanza", async () => {
+		// generateText real de ai@7 con un modelo falso: el primer paso pide
+		// leer_pagina y cierra con su consumo; el segundo se queda colgado hasta
+		// que el AbortSignal (el ITEM_TIMEOUT_MS de dispatch) lo corta.
+		const controller = new AbortController();
+		const step = (n: number) => ({
+			inputTokens: {
+				total: n,
+				noCache: n,
+				cacheRead: undefined,
+				cacheWrite: undefined,
+			},
+			outputTokens: { total: 20, text: 20, reasoning: undefined },
+		});
+		let calls = 0;
+		const model = new MockLanguageModelV4({
+			doGenerate: async (options) => {
+				calls++;
+				if (calls === 1) {
+					return {
+						content: [
+							{
+								type: "tool-call",
+								toolCallId: "c1",
+								toolName: "leer_pagina",
+								input: JSON.stringify({ url: "https://acme.test/" }),
+							},
+						],
+						finishReason: { unified: "tool-calls", raw: undefined },
+						usage: step(1_000),
+						providerMetadata: { gateway: { cost: "0.004" } },
+						warnings: [],
+					};
+				}
+				setTimeout(() => controller.abort(new Error("timeout del ítem")), 5);
+				return new Promise((_, reject) =>
+					options.abortSignal?.addEventListener("abort", () =>
+						reject(options.abortSignal?.reason),
+					),
+				);
+			},
+		});
+		const generateText = ((options: Record<string, unknown>) =>
+			realGenerateText({ ...options, model } as never)) as never;
+		const record = vi.fn(async () => {});
+		const generate = metered(
+			(args: Parameters<typeof generateResearch>[0]) =>
+				generateResearch(args, {
+					generateText,
+					abortSignal: controller.signal,
+				}),
+			{
+				model: (args) => args.model,
+				record,
+				base: {
+					tenantId: "t1",
+					runId: "r1",
+					workflow: "refresh-fichas",
+					node: "outreach/research",
+				},
+			},
+		);
+
+		await expect(
+			generate({
+				model: "anthropic/claude-haiku-4.5",
+				system: "s",
+				prompt: "p",
+				readPage: async (url) => ({
+					ok: true,
+					page: {
+						url,
+						status: 200,
+						title: "Acme",
+						text: "Envases",
+						truncated: false,
+					},
+				}),
+			}),
+		).rejects.toThrow("timeout del ítem");
+
+		expect(calls).toBe(2);
+		expect(record).toHaveBeenCalledOnce();
+		expect(record).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tenantId: "t1",
+				node: "outreach/research",
+				resource: "model_usd",
+				amount: 0.004,
+				meta: {
+					model: "anthropic/claude-haiku-4.5",
+					source: "gateway",
+					inputTokens: 1_000,
+					outputTokens: 20,
+					failed: true,
+				},
+			}),
+		);
 	});
 });

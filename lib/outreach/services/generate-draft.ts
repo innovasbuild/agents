@@ -2,6 +2,7 @@
 // importaba también el schedule de follow-ups: un nodo escondido en una puerta
 // (spec orquestación §9.4). Imports relativos: lo usan módulos de eve.
 import { type generateText, NoObjectGeneratedError, Output } from "ai";
+import { attachSpend, createStepSpend } from "../../workflows/usage";
 import { draftOutputSchema } from "../prompt";
 
 /**
@@ -17,7 +18,10 @@ import { draftOutputSchema } from "../prompt";
  * Cualquier otro error se relanza.
  *
  * `usage` y `providerMetadata` viajan para que la puerta asiente el consumo
- * con `metered`: un intento fallido también se pagó.
+ * con `metered`: un intento fallido también se pagó. Si tira por otra cosa
+ * (abort, error del proveedor) después de cerrar algún paso, ese consumo va
+ * colgado del error con `attachSpend` y `metered` lo asienta antes de que se
+ * relance.
  */
 export async function generateDraft(
 	model: string,
@@ -25,6 +29,7 @@ export async function generateDraft(
 	prompt: string,
 	deps: { generateText: typeof generateText; abortSignal?: AbortSignal },
 ): Promise<{ output: unknown; usage: unknown; providerMetadata: unknown }> {
+	const steps = createStepSpend();
 	try {
 		const result = await deps.generateText({
 			model,
@@ -34,6 +39,7 @@ export async function generateDraft(
 			maxRetries: 1,
 			abortSignal: deps.abortSignal,
 			output: Output.object({ schema: draftOutputSchema }),
+			onStepEnd: steps.onStepEnd,
 		});
 		return {
 			output: result.output,
@@ -56,6 +62,6 @@ export async function generateDraft(
 				providerMetadata: undefined,
 			};
 		}
-		throw error;
+		throw attachSpend(error, steps.spend());
 	}
 }
