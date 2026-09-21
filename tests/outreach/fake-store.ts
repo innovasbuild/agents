@@ -195,6 +195,32 @@ export function createFakeStore(): FakeStore {
 			store.accounts.push(account);
 			return account;
 		},
+		async findAccountById(tenantId, id) {
+			return (
+				store.accounts.find((a) => a.tenantId === tenantId && a.id === id) ??
+				null
+			);
+		},
+		// No modela work_items: devuelve todas las vencidas. La exclusión de lo ya
+		// encolado la prueban 15_refresh_fichas_candidates.test.sql y el test de
+		// integración de tests/workflows/store.it.test.ts.
+		async listAccountsToRefresh(tenantId, now, limit) {
+			return store.accounts
+				.filter(
+					(a) =>
+						a.tenantId === tenantId &&
+						new Date(a.expiresAt).getTime() <= now.getTime(),
+				)
+				.sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))
+				.slice(0, limit)
+				.map(({ id, domain, name, researchedAt, expiresAt }) => ({
+					id,
+					domain,
+					name,
+					researchedAt,
+					expiresAt,
+				}));
+		},
 		async insertQueueItem(row: NewQueueItem) {
 			const live = store.queue.some(
 				(q) =>

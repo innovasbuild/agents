@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isLocalSupabaseUrl } from "@/lib/agents/eval-auth";
+import { createSupabaseOutreachStore } from "@/lib/outreach/store";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseWorkflowStore } from "@/lib/workflows/store";
 
@@ -95,5 +96,53 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 			items_ok: 2,
 			items_refused: 1,
 		});
+	});
+
+	it("listAccountsToRefresh trae una vencida hasta que refresh-fichas la encola", async () => {
+		const outreach = createSupabaseOutreachStore(admin);
+		const { data: account, error } = await admin
+			.from("accounts")
+			.insert({
+				tenant_id: TENANT,
+				domain: "vencida.test",
+				name: "Vencida",
+				ficha: {},
+				researched_at: new Date(Date.now() - 100 * 86_400_000).toISOString(),
+				expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+			})
+			.select("id")
+			.single();
+		if (error) throw new Error(error.message);
+
+		const antes = await outreach.listAccountsToRefresh(TENANT, new Date(), 10);
+		expect(antes).toEqual([
+			expect.objectContaining({
+				id: account.id,
+				domain: "vencida.test",
+				name: "Vencida",
+			}),
+		]);
+
+		await store.insertWorkItem({
+			tenantId: TENANT,
+			workflow: "refresh-fichas",
+			subjectType: "account",
+			subjectId: account.id,
+			inputHash: `vencida.test:${antes[0].expiresAt}`,
+		});
+		expect(
+			await outreach.listAccountsToRefresh(TENANT, new Date(), 10),
+		).toEqual([]);
+
+		expect(await outreach.findAccountById(TENANT, account.id)).toMatchObject({
+			domain: "vencida.test",
+			name: "Vencida",
+		});
+		expect(
+			await outreach.findAccountById(
+				TENANT,
+				"cccccccc-0000-0000-0000-0000000000ff",
+			),
+		).toBeNull();
 	});
 });
