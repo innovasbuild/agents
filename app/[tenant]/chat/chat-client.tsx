@@ -4,7 +4,7 @@ import type { EveMessage } from "eve/client";
 import { useEveAgent } from "eve/react";
 import { EllipsisIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { Fragment, useMemo, useState, useTransition } from "react";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
-import { thinkingLabel } from "@/lib/agents/running-tool";
+import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
 import {
 	createConversation,
 	deleteConversation,
@@ -36,13 +36,6 @@ interface Thread {
 	model: string | null;
 	eve_session_id: string | null;
 	last_message_at: string;
-}
-
-interface SendEmailInput {
-	queueItemId?: string;
-	to?: string;
-	subject?: string;
-	body?: string;
 }
 
 export function ChatClient({
@@ -418,37 +411,12 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 							</legend>
 							<p className="whitespace-pre-wrap">{request.prompt}</p>
 						</>
-					) : request.toolName === "send_email" ? (
-						<>
-							<legend className="px-1 font-medium text-sm">
-								Aprobación pendiente: enviar email
-							</legend>
-							{(() => {
-								const emailInput = request.input as SendEmailInput;
-								return (
-									<>
-										<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-											<dt className="text-muted-foreground">Para</dt>
-											<dd>{emailInput.to ?? "(sin destinatario)"}</dd>
-											<dt className="text-muted-foreground">Asunto</dt>
-											<dd>{emailInput.subject ?? "(sin asunto)"}</dd>
-										</dl>
-										<p className="whitespace-pre-wrap rounded-md border bg-background p-3">
-											<span className="sr-only">Cuerpo: </span>
-											{emailInput.body ?? "(sin cuerpo)"}
-										</p>
-									</>
-								);
-							})()}
-						</>
 					) : (
 						<>
 							<legend className="px-1 font-medium text-sm">
-								Aprobación pendiente: {request.toolName}
+								Aprobación pendiente: {runningToolLabel(request.toolName)}
 							</legend>
-							<pre className="overflow-x-auto whitespace-pre-wrap rounded-md border bg-background p-3 font-mono text-xs">
-								{JSON.stringify(request.input, null, 2)}
-							</pre>
+							<ApprovalPayload input={request.input} />
 						</>
 					)}
 					<div className="flex flex-wrap gap-2 pt-1">
@@ -526,6 +494,90 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				</Button>
 			</form>
 		</section>
+	);
+}
+
+// Etiquetas en castellano para campos de payloads de aprobación. Un campo sin
+// entrada acá se muestra con su nombre humanizado (camelCase → "Camel case"),
+// nunca con el identificador técnico crudo.
+const APPROVAL_FIELD_LABELS: Record<string, string> = {
+	to: "Para",
+	subject: "Asunto",
+	body: "Cuerpo",
+	contactKey: "Contacto",
+	stage: "Etapa",
+	note: "Nota",
+	slug: "Página",
+	title: "Título",
+	category: "Categoría",
+	status: "Estado",
+	tags: "Tags",
+	reason: "Motivo",
+	baseRevision: "Revisión base",
+	queueItemId: "Pieza de la cola",
+};
+
+function approvalFieldLabel(key: string): string {
+	if (Object.hasOwn(APPROVAL_FIELD_LABELS, key)) {
+		return APPROVAL_FIELD_LABELS[key];
+	}
+	const spaced = key.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+	return spaced.charAt(0).toUpperCase() + spaced.slice(1).toLowerCase();
+}
+
+// Texto largo o con saltos de línea (un mail, un párrafo) no entra en una
+// fila de dl sin volverse ilegible: va en su propio bloque en vez de la lista
+// corta de campos.
+function isLongTextValue(value: unknown): value is string {
+	return (
+		typeof value === "string" && (value.length > 120 || value.includes("\n"))
+	);
+}
+
+function formatApprovalValue(value: unknown): string {
+	if (value === null || value === undefined || value === "") return "—";
+	if (typeof value === "boolean") return value ? "Sí" : "No";
+	if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "—";
+	if (typeof value === "object") return JSON.stringify(value);
+	return String(value);
+}
+
+/**
+ * Payload de una tarjeta de aprobación en campos legibles, no JSON crudo. Los
+ * campos cortos van en una lista clave/valor; el texto largo (cuerpo de un
+ * mail, contenido del brain) en su propio bloque debajo.
+ */
+function ApprovalPayload({ input }: { input: Record<string, unknown> }) {
+	const entries = Object.entries(input);
+	if (entries.length === 0) return null;
+
+	const shortFields = entries.filter(([, value]) => !isLongTextValue(value));
+	const longFields = entries.filter(([, value]) => isLongTextValue(value));
+
+	return (
+		<>
+			{shortFields.length > 0 ? (
+				<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+					{shortFields.map(([key, value]) => (
+						<Fragment key={key}>
+							<dt className="text-muted-foreground">
+								{approvalFieldLabel(key)}
+							</dt>
+							<dd>{formatApprovalValue(value)}</dd>
+						</Fragment>
+					))}
+				</dl>
+			) : null}
+			{longFields.map(([key, value]) => (
+				<p
+					className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm"
+					key={key}
+				>
+					<span className="sr-only">{approvalFieldLabel(key)}: </span>
+					{value as string}
+				</p>
+			))}
+		</>
 	);
 }
 
