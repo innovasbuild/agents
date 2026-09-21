@@ -1,6 +1,6 @@
 // Registro de consumo (spec orquestación §5.1 punto 9 y §7.2). Imports
 // relativos: lo importan tools y schedules de eve, que no resuelven "@/".
-import { modelCostUsd } from "./pricing";
+import { gatewayCost, modelCostUsd, tokens } from "./pricing";
 
 export interface UsageEntry {
 	tenantId: string;
@@ -61,11 +61,89 @@ export async function resolveRunId(
 	return (data as { id: string } | null)?.id ?? null;
 }
 
+/** Lo que consumió una llamada al modelo, en la forma que lee `modelCostUsd`. */
+export interface ModelSpend {
+	usage: unknown;
+	providerMetadata: unknown;
+}
+
+// Symbol.for y no Symbol(): sobrevive a que este módulo se cargue dos veces
+// (eve y Next empaquetan por separado).
+const SPEND_ON_ERROR = Symbol.for("innovas.usage.spend");
+
+/**
+ * Cuelga del error lo que la llamada ya había consumido antes de tirar, para
+ * que `metered` lo asiente igual. Devuelve el mismo error, así el servicio
+ * hace `throw attachSpend(error, spend)` y quien lo ataja ve lo de siempre.
+ * Sin consumo, o si el error no admite propiedades, lo deja como está.
+ */
+export function attachSpend(error: unknown, spend: ModelSpend | null): unknown {
+	if (!spend) return error;
+	if (typeof error !== "object" || error === null) return error;
+	if (!Object.isExtensible(error)) return error;
+	// No enumerable: no aparece en logs ni en JSON.stringify del error.
+	Object.defineProperty(error, SPEND_ON_ERROR, {
+		value: spend,
+		configurable: true,
+	});
+	return error;
+}
+
+function spendFromError(error: unknown): ModelSpend | null {
+	if (typeof error !== "object" || error === null) return null;
+	return (
+		((error as Record<symbol, unknown>)[SPEND_ON_ERROR] as ModelSpend) ?? null
+	);
+}
+
+/**
+ * Acumula el consumo paso a paso: `onStepEnd` va tal cual a `generateText`
+ * (ai@7 lo llama al cerrar cada paso, con su `usage` y su `providerMetadata`).
+ * `spend()` da el total de los pasos cerrados, o null si no cerró ninguno.
+ * El costo del gateway se suma solo si lo informaron todos los pasos: con uno
+ * que falte sería un costo parcial, y la tabla (que sobreestima) es más segura.
+ * Un paso cortado a la mitad por un abort no llega acá: ese consumo no lo
+ * informa nadie.
+ */
+export function createStepSpend(): {
+	onStepEnd: (step: { usage: unknown; providerMetadata: unknown }) => void;
+	spend: () => ModelSpend | null;
+} {
+	let steps = 0;
+	let inputTokens = 0;
+	let outputTokens = 0;
+	let gatewayUsd: number | null = 0;
+	return {
+		onStepEnd(step) {
+			steps++;
+			inputTokens += tokens(step.usage, "inputTokens");
+			outputTokens += tokens(step.usage, "outputTokens");
+			const cost = gatewayCost(step.providerMetadata);
+			gatewayUsd =
+				gatewayUsd === null || cost === null ? null : gatewayUsd + cost;
+		},
+		spend() {
+			if (steps === 0) return null;
+			return {
+				usage: { inputTokens, outputTokens },
+				providerMetadata:
+					gatewayUsd === null
+						? undefined
+						: { gateway: { cost: String(gatewayUsd) } },
+			};
+		},
+	};
+}
+
 /**
  * Envuelve una función `generate` para que cada llamada al modelo deje su
  * asiento. Se aplica en la puerta (tool, schedule, runner), así los servicios
  * no conocen el libro de consumo. tests/workflows/model-calls.test.ts obliga
  * a que todo archivo que importa `generateText` lo use.
+ *
+ * Si la llamada tira, asienta lo que el servicio haya colgado del error con
+ * `attachSpend` (tokens ya pagados que el tope y el presupuesto tienen que
+ * ver) y relanza el mismo error: el runner lo necesita para reintentar.
  */
 export function metered<
 	A extends unknown[],
@@ -78,13 +156,15 @@ export function metered<
 		base: Pick<UsageEntry, "tenantId" | "runId" | "workflow" | "node">;
 	},
 ): (...args: A) => Promise<R> {
-	return async (...args) => {
-		const result = await fn(...args);
-		const model = opts.model(...args);
+	const book = async (
+		model: string,
+		spend: { usage?: unknown; providerMetadata?: unknown },
+		extra: Record<string, unknown>,
+	) => {
 		const cost = modelCostUsd({
 			model,
-			usage: result.usage,
-			providerMetadata: result.providerMetadata,
+			usage: spend.usage,
+			providerMetadata: spend.providerMetadata,
 		});
 		await opts.record({
 			...opts.base,
@@ -96,8 +176,27 @@ export function metered<
 				source: cost.source,
 				inputTokens: cost.inputTokens,
 				outputTokens: cost.outputTokens,
+				...extra,
 			},
 		});
+	};
+	return async (...args) => {
+		let result: R;
+		try {
+			result = await fn(...args);
+		} catch (error) {
+			const spend = spendFromError(error);
+			if (spend) {
+				// Asentar no puede tapar el error original.
+				try {
+					await book(opts.model(...args), spend, { failed: true });
+				} catch (recordError) {
+					console.error("usage_entries:", recordError);
+				}
+			}
+			throw error;
+		}
+		await book(opts.model(...args), result, {});
 		return result;
 	};
 }
