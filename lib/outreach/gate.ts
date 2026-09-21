@@ -181,6 +181,12 @@ const FORMULAS: Array<{ pattern: RegExp; fix: string }> = [
 			/justo lo que|es exactamente lo que|no es casualidad que|en un mundo donde|lo que realmente importa/g,
 		fix: "decir el hecho sin validarlo",
 	},
+	// Recitar la investigación: el mensaje se escribe como quien ya conoce el negocio.
+	{
+		pattern:
+			/\bvi que\b|\blei (en|que)\b|segun (su|tu) (sitio|web|pagina)|\bnote que\b|me llamo la atencion|estuve (viendo|mirando|leyendo)|investigando (sobre|a)\b/g,
+		fix: "decir el hecho al pasar, sin contar que lo investigamos",
+	},
 ];
 
 const AFFIRMATIVE: Array<{ pattern: RegExp; fix: string }> = [

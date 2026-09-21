@@ -43,7 +43,7 @@ export async function resetEvalTenant(): Promise<void> {
 const PASSING_BODY = [
 	"Hola,",
 	"",
-	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
+	"Una empresa como Acme, con dos plantas en Rafaela, sabe que el costo de coordinar pedidos entre ellas crece más rápido que la facturación.",
 	"",
 	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
 	"",

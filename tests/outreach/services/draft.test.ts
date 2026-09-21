@@ -74,6 +74,7 @@ function seeded() {
 					fecha: null,
 				},
 			],
+			dolores: [],
 			creditos_usados: 0,
 		},
 		researchedAt: "2026-09-01T00:00:00Z",
@@ -129,7 +130,7 @@ describe("draftMessage", () => {
 	it("aplica los vetos del canon", async () => {
 		const store = seeded();
 		const rules = parseGateBlocks(
-			"```gate\nveto: segunda planta\n```",
+			"```gate\nveto: dos plantas\n```",
 			"comercial/gate",
 		);
 		const result = await draftMessage(

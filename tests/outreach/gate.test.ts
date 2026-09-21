@@ -6,7 +6,7 @@ const SUBJECT = "Crecer sin sumar gente al back office";
 const BODY = [
 	"Hola Laura,",
 	"",
-	"Vi que Metalúrgica Sur sumó una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
+	"Una empresa como Metalúrgica Sur, con dos plantas en Rafaela, sabe que el costo de coordinar pedidos entre ellas crece más rápido que la facturación.",
 	"",
 	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
 	"",
@@ -69,6 +69,20 @@ describe("runGate", () => {
 		expect(
 			kinds({ body: `${BODY}\nNo es casualidad que te escriba.` }),
 		).toEqual(["formula"]);
+	});
+
+	it("veta recitar la investigación: se escribe como quien ya conoce el negocio", () => {
+		for (const line of [
+			"Vi que abrieron una planta nueva.",
+			"Leí en su web que exportan a Japón.",
+			"Según su sitio, tienen 79 silos.",
+			"Noté que están creciendo.",
+			"Me llamó la atención su planta orgánica.",
+			"Estuve viendo su página.",
+			"Investigando sobre Rivara encontré esto.",
+		]) {
+			expect(kinds({ body: `${BODY}\n${line}` })).toEqual(["formula"]);
+		}
 	});
 
 	it("las construcciones por negación avisan pero no bloquean", () => {

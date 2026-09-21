@@ -77,6 +77,7 @@ function accountRow() {
 			hechos: [
 				{ hecho: "Abrió planta", url: "https://acme.test/n", fecha: null },
 			],
+			dolores: [],
 			creditos_usados: 0,
 		},
 		researchedAt: "2026-09-01T00:00:00Z",
