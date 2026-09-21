@@ -228,7 +228,18 @@ export function createSupabaseWorkflowStore(
 				.lt("started_at", before.toISOString())
 				.select("id");
 			must(error, "closeAbandonedRuns");
-			return ((data as Row[] | null) ?? []).length;
+			const closed = (data as Row[] | null) ?? [];
+			// Igual que closeRun: sin esto la fila queda con status failed pero sin
+			// cost_usd, aunque tenga consumo asentado en usage_entries. Un error acá
+			// se loguea y no tira: la pasada ya cerró, no hay nada que reintentar.
+			for (const row of closed) {
+				const { error: costError } = await admin.rpc("set_run_cost", {
+					p_run: row.id,
+				});
+				if (costError)
+					console.error("closeAbandonedRuns (costo):", costError.message);
+			}
+			return closed.length;
 		},
 
 		async workflowHealth(tenantId, since) {

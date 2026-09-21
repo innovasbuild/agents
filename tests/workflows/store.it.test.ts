@@ -146,7 +146,7 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 		).toBeNull();
 	});
 
-	it("closeAbandonedRuns cierra como failed solo las pasadas viejas", async () => {
+	it("closeAbandonedRuns cierra como failed solo las pasadas viejas, y les deja el costo", async () => {
 		const vieja = await store.openRun({
 			tenantId: TENANT,
 			agent: "outreach",
@@ -159,6 +159,19 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 			workflow: "refresh-fichas",
 			startedAt: new Date(),
 		});
+		// Gasto ya asentado antes de que la pasada quede abandonada: closeRun
+		// llama a set_run_cost para volcarlo a runs.cost_usd, y closeAbandonedRuns
+		// tiene que hacer lo mismo o la fila queda con gasto real pero sin costo.
+		const { error: usageError } = await admin.from("usage_entries").insert({
+			tenant_id: TENANT,
+			run_id: vieja,
+			workflow: "refresh-fichas",
+			node: "outreach/research",
+			resource: "model_usd",
+			amount: 0.1234,
+			unit: "usd",
+		});
+		if (usageError) throw new Error(usageError.message);
 
 		const cerradas = await store.closeAbandonedRuns(
 			new Date(Date.now() - 10 * 60_000),
@@ -168,12 +181,13 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 		expect(cerradas).toBeGreaterThanOrEqual(1);
 		const { data } = await admin
 			.from("runs")
-			.select("id, status, error, finished_at")
+			.select("id, status, error, finished_at, cost_usd")
 			.in("id", [vieja, reciente]);
 		const byId = new Map((data ?? []).map((r) => [r.id, r]));
 		expect(byId.get(vieja)).toMatchObject({ status: "failed" });
 		expect(byId.get(vieja)?.error).toContain("abandonada");
 		expect(byId.get(vieja)?.finished_at).not.toBeNull();
+		expect(Number(byId.get(vieja)?.cost_usd)).toBeCloseTo(0.1234, 4);
 		expect(byId.get(reciente)).toMatchObject({ status: "running" });
 	});
 
