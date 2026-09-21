@@ -261,7 +261,7 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 9 · Observabilidad por cliente | ⬜ no arrancada — conviene después de la 12 | — |
 | 10 · Agentes inbound y handoff | ⬜ no arrancada | — |
 | 11 · Brain por MCP | ⬜ no arrancada | #25 (spec) |
-| 12 · Modelo de orquestación | 📝 spec y plan listos, sin implementar | #29 |
+| 12 · Modelo de orquestación | ✅ hecho — `refresh-fichas` en producción para `innovas`; la ley en `docs/02-orquestacion.md` | #29, #32, #35, #36, #37, #39 y el de la E4 |
 | 13 · Pipeline de GTM | 📝 spec y plan listos, sin implementar | #30 |
 | 14 · Subida de eve | ⬜ no arrancada | — |
 | 15 · Propuesta comercial | ⬜ no arrancada | — |
