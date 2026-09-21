@@ -38,7 +38,13 @@ export default defineSchedule({
 		const outreach = createSupabaseOutreachStore(admin);
 		const record = createUsageRecorder(admin);
 
-		const research: ResearchNode = ({ tenantId, runId, domain, name }) => {
+		const research: ResearchNode = ({
+			tenantId,
+			runId,
+			workflow,
+			domain,
+			name,
+		}) => {
 			// Un solo tope por ítem para las dos cosas que puede tardar: la llamada
 			// al modelo y cualquier lectura de página en curso. El SDK solo chequea
 			// el abort entre steps, así que sin sumar esta señal al fetch de
@@ -72,7 +78,7 @@ export default defineSchedule({
 							base: {
 								tenantId,
 								runId,
-								workflow: "refresh-fichas",
+								workflow,
 								node: "outreach/research",
 							},
 						},

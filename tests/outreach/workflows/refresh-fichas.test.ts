@@ -127,6 +127,7 @@ describe("refresh-fichas", () => {
 		expect(research).toHaveBeenCalledWith({
 			tenantId: TENANT,
 			runId: "run-1",
+			workflow: "refresh-fichas",
 			domain: "acme.test",
 			name: "acme",
 		});

@@ -41,8 +41,16 @@ describe("schedule dispatch", () => {
 		expect(SOURCE).toMatch(/AbortSignal\.any\(/);
 	});
 
-	it("asienta el consumo en la pasada del runner, con el nombre del workflow", () => {
-		expect(SOURCE).toMatch(/workflow:\s*"refresh-fichas"/);
+	it("asienta el consumo con el workflow que le pasa el nodo, no uno fijo", () => {
+		// El nodo lo puede llamar cualquier workflow que lo declare (Task 12):
+		// asentar "refresh-fichas" a mano dejaría mal el consumo de cualquier
+		// otro. Tiene que salir del input que arma el runner, no de un string
+		// en el fuente.
+		expect(SOURCE).not.toMatch(/workflow:\s*"refresh-fichas"/);
+		expect(SOURCE).toMatch(
+			/const research: ResearchNode = \(\{[^)]*\bworkflow\b[^)]*\}\)/,
+		);
+		expect(SOURCE).toMatch(/base:\s*\{[^}]*\bworkflow,[^}]*\}/);
 		expect(SOURCE).toMatch(/node:\s*"outreach\/research"/);
 	});
 });

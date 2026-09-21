@@ -17,6 +17,7 @@ export const SEED_LIMIT = 50;
 export type ResearchNode = (input: {
 	tenantId: string;
 	runId: string;
+	workflow: string;
 	domain: string;
 	name: string | null;
 }) => Promise<ResearchResult>;
@@ -64,6 +65,7 @@ export function createRefreshFichas(deps: {
 			const result = await research({
 				tenantId: ctx.tenantId,
 				runId: ctx.runId,
+				workflow: ctx.workflow,
 				domain: account.domain,
 				name: account.name,
 			});
