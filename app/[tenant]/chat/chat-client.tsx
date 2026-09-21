@@ -652,7 +652,7 @@ interface DraftMessageOutput {
 	ancla?: { hecho: string; fuente: string };
 }
 
-// contactKey llega como "em:rivara@rivara.com.ar" (o "li:..."/"h:..."): para
+// contactKey llega como "em:laura@acme.test" (o "li:..."/"h:..."): para
 // mostrar "Para" solo tiene sentido pelar el prefijo del email.
 function emailFromContactKey(contactKey: unknown): string | null {
 	if (typeof contactKey !== "string") return null;
