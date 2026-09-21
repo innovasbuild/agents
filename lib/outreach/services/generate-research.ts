@@ -2,7 +2,13 @@
 // escondido en una puerta (spec orquestación §9.4). `generateText` se importa
 // como tipo: lo inyecta quien llama, y quien lo inyecta asienta el consumo.
 // Imports relativos: lo usan módulos de eve.
-import { type generateText, Output, stepCountIs, tool } from "ai";
+import {
+	type generateText,
+	NoOutputGeneratedError,
+	Output,
+	stepCountIs,
+	tool,
+} from "ai";
 import { z } from "zod";
 import { fichaSchema } from "../ficha";
 import type { WebPageResult } from "../web-page";
@@ -28,6 +34,12 @@ export async function generateResearch(
 	usage: unknown;
 	providerMetadata: unknown;
 }> {
+	// result.output es un getter (ai@7): si el modelo terminó sin salida
+	// estructurada tira NoOutputGeneratedError recién acá, después de que ya se
+	// gastaron tokens. Si dejáramos que se propague, `metered` (que envuelve
+	// esta función en la puerta) nunca llega a asentar ese consumo. Se
+	// devuelve output: undefined en su lugar: saveResearch lo rechaza como
+	// ficha_invalida, que es negocio y no se reintenta.
 	let pagesRead = 0;
 	const result = await deps.generateText({
 		model: args.model,
@@ -58,8 +70,15 @@ export async function generateResearch(
 		maxOutputTokens: 4_000,
 		abortSignal: deps.abortSignal,
 	});
+	let output: unknown;
+	try {
+		output = result.output;
+	} catch (error) {
+		if (!NoOutputGeneratedError.isInstance(error)) throw error;
+		output = undefined;
+	}
 	return {
-		output: result.output,
+		output,
 		pagesRead,
 		usage: result.usage,
 		providerMetadata: result.providerMetadata,
