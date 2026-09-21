@@ -26,6 +26,8 @@ export const SERVICES_EXCLUIDOS: Record<string, string> = {
 	"outreach/executor":
 		"helper que resuelve el ejecutor y valida atribución; no es un trabajo por sí mismo",
 	"outreach/research-run":
+		"arma la investigación del nodo outreach/research (prompt y tope de páginas); se registra junto con él",
+	"outreach/generate-research":
 		"la llamada al modelo del nodo outreach/research; se registra junto con él",
 	"outreach/generate-draft":
 		"la llamada al modelo del nodo outreach/draft; se registra junto con él",

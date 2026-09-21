@@ -4,6 +4,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isLocalSupabaseUrl } from "@/lib/agents/eval-auth";
+import { createSupabaseOutreachStore } from "@/lib/outreach/store";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseWorkflowStore } from "@/lib/workflows/store";
 
@@ -94,6 +95,133 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 			items_claimed: 3,
 			items_ok: 2,
 			items_refused: 1,
+		});
+	});
+
+	it("listAccountsToRefresh trae una vencida hasta que refresh-fichas la encola", async () => {
+		const outreach = createSupabaseOutreachStore(admin);
+		const { data: account, error } = await admin
+			.from("accounts")
+			.insert({
+				tenant_id: TENANT,
+				domain: "vencida.test",
+				name: "Vencida",
+				ficha: {},
+				researched_at: new Date(Date.now() - 100 * 86_400_000).toISOString(),
+				expires_at: new Date(Date.now() - 10 * 86_400_000).toISOString(),
+			})
+			.select("id")
+			.single();
+		if (error) throw new Error(error.message);
+
+		const antes = await outreach.listAccountsToRefresh(TENANT, new Date(), 10);
+		expect(antes).toEqual([
+			expect.objectContaining({
+				id: account.id,
+				domain: "vencida.test",
+				name: "Vencida",
+			}),
+		]);
+
+		await store.insertWorkItem({
+			tenantId: TENANT,
+			workflow: "refresh-fichas",
+			subjectType: "account",
+			subjectId: account.id,
+			inputHash: `vencida.test:${antes[0].expiresAt}`,
+		});
+		expect(
+			await outreach.listAccountsToRefresh(TENANT, new Date(), 10),
+		).toEqual([]);
+
+		expect(await outreach.findAccountById(TENANT, account.id)).toMatchObject({
+			domain: "vencida.test",
+			name: "Vencida",
+		});
+		expect(
+			await outreach.findAccountById(
+				TENANT,
+				"cccccccc-0000-0000-0000-0000000000ff",
+			),
+		).toBeNull();
+	});
+
+	it("closeAbandonedRuns cierra como failed solo las pasadas viejas, y les deja el costo", async () => {
+		const vieja = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(Date.now() - 20 * 60_000),
+		});
+		const reciente = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(),
+		});
+		// Gasto ya asentado antes de que la pasada quede abandonada: closeRun
+		// llama a set_run_cost para volcarlo a runs.cost_usd, y closeAbandonedRuns
+		// tiene que hacer lo mismo o la fila queda con gasto real pero sin costo.
+		const { error: usageError } = await admin.from("usage_entries").insert({
+			tenant_id: TENANT,
+			run_id: vieja,
+			workflow: "refresh-fichas",
+			node: "outreach/research",
+			resource: "model_usd",
+			amount: 0.1234,
+			unit: "usd",
+		});
+		if (usageError) throw new Error(usageError.message);
+
+		const cerradas = await store.closeAbandonedRuns(
+			new Date(Date.now() - 10 * 60_000),
+			new Date(),
+		);
+
+		expect(cerradas).toBeGreaterThanOrEqual(1);
+		const { data } = await admin
+			.from("runs")
+			.select("id, status, error, finished_at, cost_usd")
+			.in("id", [vieja, reciente]);
+		const byId = new Map((data ?? []).map((r) => [r.id, r]));
+		expect(byId.get(vieja)).toMatchObject({ status: "failed" });
+		expect(byId.get(vieja)?.error).toContain("abandonada");
+		expect(byId.get(vieja)?.finished_at).not.toBeNull();
+		expect(Number(byId.get(vieja)?.cost_usd)).toBeCloseTo(0.1234, 4);
+		expect(byId.get(reciente)).toMatchObject({ status: "running" });
+	});
+
+	it("workflowHealth junta los avisos del tenant", async () => {
+		const since = new Date(Date.now() - 60_000);
+		const agotada = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(),
+		});
+		await store.closeRun(agotada, {
+			status: "budget_exhausted",
+			error: "model_usd: gastado 0 de 0",
+			claimed: 0,
+			ok: 0,
+			refused: 0,
+			failed: 0,
+			finishedAt: new Date(),
+		});
+		const { error } = await admin.from("tenant_workflows").insert({
+			tenant_id: TENANT,
+			workflow: "refresh-fichas",
+			enabled: true,
+			created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+		});
+		if (error) throw new Error(error.message);
+
+		expect(await store.workflowHealth(TENANT, since)).toEqual({
+			budgetExhausted: ["refresh-fichas"],
+			failedRuns: 0,
+			unbalancedRuns: 0,
+			failedItems: 0,
+			silent: ["refresh-fichas"],
 		});
 	});
 });

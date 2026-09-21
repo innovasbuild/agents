@@ -263,6 +263,32 @@ describe("runWorkflowPass", () => {
 		expect(result.claimed).toBe(2);
 	});
 
+	it("un sujeto que no se puede sembrar no tumba la siembra entera", async () => {
+		const store = createFakeWorkflowStore(now);
+		const seed = vi.fn(async () => [
+			{ subjectId: "acc-envenenada", inputHash: "h-mala" },
+			{ subjectId: "acc-sana", inputHash: "h-buena" },
+		]);
+		store.insertWorkItem = async (row) => {
+			if (row.subjectId === "acc-envenenada") {
+				throw new Error("input_hash viola el check de largo");
+			}
+			store.add(row.subjectId, row.workflow, row.inputHash);
+			return "inserted";
+		};
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await pass(store, { ...okImpl, seed });
+
+		expect(errorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("acc-envenenada"),
+		);
+		expect(store.items).toHaveLength(1);
+		expect(store.items[0].subjectId).toBe("acc-sana");
+		expect(result).toMatchObject({ claimed: 1, ok: 1 });
+		errorSpy.mockRestore();
+	});
+
 	it("useNode entrega un nodo que el workflow declara", async () => {
 		const store = createFakeWorkflowStore(now);
 		store.add("acc-1");

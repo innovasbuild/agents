@@ -8,9 +8,17 @@ export interface FakeItem extends WorkItem {
 	resultReason: string | null;
 }
 
+export interface FakeWorkflowRow {
+	tenantId: string;
+	workflow: string;
+	config: unknown;
+	lastRunAt: string | null;
+}
+
 export interface FakeWorkflowStore extends RunnerStore {
 	items: FakeItem[];
 	runs: Array<Record<string, unknown>>;
+	rows: FakeWorkflowRow[];
 	spent: Map<string, number>;
 	limits: Map<string, number>;
 	runSpent: number;
@@ -18,6 +26,10 @@ export interface FakeWorkflowStore extends RunnerStore {
 	policies: Map<string, "always" | "once" | "auto">;
 	lastRun: Date | null;
 	add(subjectId: string, workflow?: string, inputHash?: string): FakeItem;
+	listEnabled(
+		tenantId: string,
+	): Promise<{ workflow: string; config: unknown; lastRunAt: string | null }[]>;
+	closeAbandonedRuns(before: Date, at: Date): Promise<number>;
 }
 
 export function createFakeWorkflowStore(now: () => Date): FakeWorkflowStore {
@@ -25,6 +37,7 @@ export function createFakeWorkflowStore(now: () => Date): FakeWorkflowStore {
 	const store: FakeWorkflowStore = {
 		items: [],
 		runs: [],
+		rows: [],
 		spent: new Map(),
 		limits: new Map([["model_usd", 100]]),
 		runSpent: 0,
@@ -116,8 +129,40 @@ export function createFakeWorkflowStore(now: () => Date): FakeWorkflowStore {
 			item.status = "failed";
 			item.lastError = patch.lastError;
 		},
-		async touchLastRun(_tenantId, _workflow, at) {
+		async touchLastRun(tenantId, workflow, at) {
 			store.lastRun = at;
+			for (const row of store.rows) {
+				if (row.tenantId === tenantId && row.workflow === workflow)
+					row.lastRunAt = at.toISOString();
+			}
+		},
+		async listEnabled(tenantId) {
+			return store.rows
+				.filter((row) => row.tenantId === tenantId)
+				.map(({ workflow, config, lastRunAt }) => ({
+					workflow,
+					config,
+					lastRunAt,
+				}));
+		},
+		// Una pasada abierta y nunca cerrada es una fila sin `status` (openRun no
+		// lo pone; closeRun sí).
+		async closeAbandonedRuns(before, at) {
+			let closed = 0;
+			for (const run of store.runs) {
+				if (
+					run.status === undefined &&
+					(run.startedAt as Date).getTime() < before.getTime()
+				) {
+					Object.assign(run, {
+						status: "failed",
+						error: "corrida abandonada: la función murió sin cerrarla",
+						finishedAt: at,
+					});
+					closed++;
+				}
+			}
+			return closed;
 		},
 		async enabledWorkflows() {
 			return store.enabled;

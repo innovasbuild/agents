@@ -219,4 +219,28 @@ describe("sessionSummary", () => {
 		expect(texto).toMatch(/1 oportunidad frenada/);
 		expect(texto).not.toMatch(/1 oportunidades/);
 	});
+
+	it("suma los avisos de los workflows del tenant", async () => {
+		const text = await sessionSummary(base, {
+			store: createFakeStore(),
+			now,
+			brainConnected,
+			workflowAlerts: async () => [
+				"Workflows frenados por presupuesto en las últimas 24 h: refresh-fichas.",
+			],
+		});
+		expect(text).toContain("frenados por presupuesto");
+	});
+
+	it("si los avisos de workflows fallan, el resumen sale igual", async () => {
+		const text = await sessionSummary(base, {
+			store: createFakeStore(),
+			now,
+			brainConnected,
+			workflowAlerts: async () => {
+				throw new Error("db caída");
+			},
+		});
+		expect(text).toContain("ejecutor `ana`");
+	});
 });

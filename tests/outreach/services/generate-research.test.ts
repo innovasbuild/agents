@@ -1,8 +1,9 @@
 // generateResearch se prueba con `generateText` inyectado: no llama al modelo.
 // Verifica el cableado (tool leer_pagina, salida estructurada, tope de pasos) y
 // qué ve el modelo de cada lectura.
+import { NoOutputGeneratedError } from "ai";
 import { describe, expect, it } from "vitest";
-import { generateResearch } from "@/agents/outreach/tools/research_account";
+import { generateResearch } from "@/lib/outreach/services/generate-research";
 import type { WebPageResult } from "@/lib/outreach/web-page";
 
 type LeerPagina = {
@@ -89,5 +90,65 @@ describe("generateResearch", () => {
 
 		expect(result.usage).toBe(usage);
 		expect(result.providerMetadata).toBe(providerMetadata);
+	});
+
+	it("si el modelo termina sin salida, devuelve output undefined pero conserva usage", async () => {
+		// result.output es un getter en ai@7: cuando el modelo no generó salida
+		// estructurada, leerlo tira NoOutputGeneratedError recién ahí, después de
+		// haber gastado tokens. metered (la puerta que envuelve generateResearch)
+		// necesita que la promesa resuelva igual para poder asentar ese consumo.
+		const usage = { inputTokens: 40, outputTokens: 0 };
+		const providerMetadata = { gateway: { cost: "0.0004" } };
+		const generateText = (async () => ({
+			get output() {
+				throw new NoOutputGeneratedError();
+			},
+			usage,
+			providerMetadata,
+		})) as never;
+
+		const result = await generateResearch(
+			{
+				model: "m",
+				system: "s",
+				prompt: "p",
+				readPage: async () => ({
+					ok: false as const,
+					reason: "x",
+					message: "x",
+				}),
+			},
+			{ generateText },
+		);
+
+		expect(result.output).toBeUndefined();
+		expect(result.usage).toBe(usage);
+		expect(result.providerMetadata).toBe(providerMetadata);
+	});
+
+	it("cualquier otro error al leer output se relanza", async () => {
+		const generateText = (async () => ({
+			get output() {
+				throw new Error("otro error, no de output");
+			},
+			usage: {},
+			providerMetadata: {},
+		})) as never;
+
+		await expect(
+			generateResearch(
+				{
+					model: "m",
+					system: "s",
+					prompt: "p",
+					readPage: async () => ({
+						ok: false as const,
+						reason: "x",
+						message: "x",
+					}),
+				},
+				{ generateText },
+			),
+		).rejects.toThrow("otro error, no de output");
 	});
 });
