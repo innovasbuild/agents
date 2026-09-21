@@ -395,7 +395,7 @@ Agregada el 2026-09-20. Una persona define un foco de búsqueda y el sistema des
 
 **Depende de:** Etapa 12 **implementada** (no alcanza con su spec).
 
-- [ ] **E1 · Descubrimiento:** `LeadsAdapter` con Apollo (dos llaves, fallback), `search_focuses`, workflow `target-search`.
+- [x] **E1 · Descubrimiento (código):** `LeadsAdapter` con Apollo (dos llaves, fallback), `search_focuses`, workflow `target-search`, cableado al dispatcher. Tasks 1-9 mergeadas, revisadas y en verde. **Falta la Task 10 (cierre contra producción): a propósito, en pausa.** Mati no quiere pagar Apollo todavía; mientras tanto sigue operando con ColdIQ y carga por CSV. Cuando decida conectar Apollo: cargar las dos llaves en Vercel Connect (`vercel connect create apollo --connection-method api-key --name innovas-apollo-<persona>`, no está en el catálogo de servicios así que usa el método genérico), crear el binding del tenant, aplicar la migración pendiente `20260922100000_upsert_discovered_account.sql` (con confirmación explícita, no `db push` a ciegas — ver `.superpowers/sdd/2026-09-20-etapa-13-pipeline-gtm/progress.md`), presupuesto chico y foco de prueba.
 - [ ] **E2 · Calificación:** workflow `icp-scoring` con Jev, niveles del ICP en la config del tenant, tres carriles por confianza, evals con 20 casos etiquetados a mano.
 - [ ] **E3 · Enrichment y pieza:** revelado de email con promoción de `contact_key`, `verify-fact`, `draft-queue` con cupo diario.
 - [ ] **E4 · Pantallas:** `/focos` con el embudo y la bandeja "para revisar", columna de puntaje en `/contactos`.
