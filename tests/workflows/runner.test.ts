@@ -36,6 +36,20 @@ vi.mock("@/lib/workflows/registry", async (importOriginal) => {
 			caps: { itemsPerTick: 5, costUsdPerRun: 0 },
 			entry: "upstream",
 		},
+		// "refresh-fichas" (real) produce "ficha_vigente"; este doble solo existe
+		// para ejercitar el downstream de varios sujetos (Task 5, spec etapa 13
+		// §4.1): un foco deja N contactos.
+		"icp-scoring": {
+			agent: "test",
+			subjectType: "contact",
+			claims: "ficha_vigente",
+			produces: null,
+			nodes: [],
+			optionalNodes: [],
+			resources: [],
+			caps: { itemsPerTick: 5, costUsdPerRun: 0 },
+			entry: "upstream",
+		},
 	};
 	return {
 		...actual,
@@ -353,6 +367,39 @@ describe("runWorkflowPass", () => {
 			error: "no se pudo leer enabledWorkflows",
 		});
 	});
+
+	it("un ítem puede dejar varios ítems aguas abajo", async () => {
+		// Un foco deja N contactos: la arista de esta etapa es 1 a N.
+		const store = createFakeWorkflowStore(now);
+		store.add("foco-1");
+		store.enabled.add("icp-scoring");
+
+		await pass(store, {
+			runItem: async () => ({
+				ok: true,
+				downstream: [
+					{ subjectId: "contacto-1", inputHash: "h-icp" },
+					{ subjectId: "contacto-2", inputHash: "h-icp" },
+				],
+			}),
+		});
+
+		const encolados = store.items.filter((i) => i.workflow === "icp-scoring");
+		expect(encolados.map((i) => i.subjectId).sort()).toEqual([
+			"contacto-1",
+			"contacto-2",
+		]);
+	});
+
+	it("sin downstream no encola nada aguas abajo", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.enabled.add("icp-scoring");
+
+		await pass(store, { runItem: async () => ({ ok: true }) });
+
+		expect(store.items.filter((i) => i.workflow === "icp-scoring")).toHaveLength(0);
+	});
 });
 
 // "wf-a"/"wf-b" y los nodos "test/nivel-2"/"test/nivel-3" solo existen en el
@@ -476,7 +523,12 @@ describe("runWorkflowPass — control de acceso por nivel de efecto y downstream
 
 		const result = await runWfA(
 			store,
-			{ runItem: async () => ({ ok: true }) },
+			{
+				runItem: async (item) => ({
+					ok: true,
+					downstream: [{ subjectId: item.subjectId, inputHash: item.inputHash }],
+				}),
+			},
 			{},
 		);
 

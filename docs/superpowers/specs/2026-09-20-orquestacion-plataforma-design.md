@@ -409,6 +409,16 @@ Los parámetros propios de un workflow no llevan schema en el registry: `parseTe
 
 `lib/workflows/runner.ts`: función pura con dependencias inyectadas (`store`, `now`, `budget`, mapa de implementaciones de nodo). Implementa §5.2 y §6.5 pasos 3 a 7. El schedule `dispatch.ts` es una puerta fina que le arma las dependencias reales.
 
+Lo que devuelve procesar un ítem:
+
+```ts
+type ItemOutcome =
+	| { ok: true; downstream?: Array<{ subjectId: string; inputHash: string }> }
+	| { ok: false; reason: string; message: string };
+```
+
+Un ítem puede dejar varios sujetos aguas abajo (enmienda de la Etapa 13 §15, punto 6). `downstream` es la lista de sujetos que este ítem deja para el workflow de abajo: suele ser el mismo sujeto (1 a 1), pero una búsqueda de target deja N contactos a partir de un foco (spec etapa 13 §4.1). Sin `downstream`, el ítem no deja nada aguas abajo, aunque haya un workflow habilitado que reclame lo que este produce.
+
 ### 9.3 Tests que hacen cumplir
 
 Mismo patrón que `tests/agents/running-tool.test.ts`: comparan contra el disco y fallan hasta que alguien decide.

@@ -39,7 +39,14 @@ export interface WorkItem {
 	attempts: number;
 }
 
-/** Lo que devuelve procesar un ítem. Una excepción es infraestructura caída y se reintenta. */
+/**
+ * Lo que devuelve procesar un ítem. Una excepción es infraestructura caída y
+ * se reintenta.
+ *
+ * `downstream` es la lista de sujetos que este ítem deja para el workflow de
+ * abajo. Suele ser el mismo sujeto (1 a 1), pero una búsqueda de target deja
+ * N contactos a partir de un foco (spec etapa 13 §4.1).
+ */
 export type ItemOutcome =
-	| { ok: true; downstreamHash?: string }
+	| { ok: true; downstream?: Array<{ subjectId: string; inputHash: string }> }
 	| { ok: false; reason: string; message: string };
