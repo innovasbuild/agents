@@ -12,6 +12,7 @@
 		"typecheck": "next typegen && tsc --noEmit",
 		"test": "vitest run",
 		"test:it": "OUTREACH_IT=1 node --env-file=.env.eval ./node_modules/vitest/vitest.mjs run tests/outreach/store.it.test.ts",
+		"test:it:workflows": "WORKFLOWS_IT=1 node --env-file=.env.eval ./node_modules/vitest/vitest.mjs run tests/workflows/store.it.test.ts",
 		"lint:fix": "biome check --write .",
 		"db:start": "npx supabase start",
 		"db:stop": "npx supabase stop",
@@ -22,6 +23,7 @@
 		"brain:import": "node --env-file=.env.local scripts/brain-import.mts",
 		"outreach:config": "node --env-file=.env.local scripts/outreach-config.mts",
 		"executors:set": "node --env-file=.env.local scripts/executors-set.mts",
+		"workflows:set": "node --env-file=.env.local scripts/workflows-set.mts",
 		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts",
 		"jev:probe": "node --env-file=.env.local scripts/jev-probe.mts"
 	},

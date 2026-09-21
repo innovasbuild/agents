@@ -8,7 +8,7 @@ import {
 	parseOutreachConfig,
 } from "./config";
 import type { OutreachEventInsert } from "./events";
-import type { Ficha } from "./ficha";
+import { type Ficha, fichaSchema } from "./ficha";
 import type { GateResult } from "./gate";
 import {
 	isNoResponse,
@@ -119,6 +119,15 @@ export interface AccountRow {
 	expiresAt: string;
 }
 
+/** Lo que el sembrador de refresh-fichas necesita de una cuenta: sin la ficha. */
+export interface RefreshCandidate {
+	id: string;
+	domain: string;
+	name: string;
+	researchedAt: string;
+	expiresAt: string;
+}
+
 export interface QueueItemRow {
 	id: string;
 	tenantId: string;
@@ -207,6 +216,15 @@ export interface OutreachStore {
 	): Promise<ContactRow>;
 	findAccount(tenantId: string, domain: string): Promise<AccountRow | null>;
 	upsertAccount(row: Omit<AccountRow, "id">): Promise<AccountRow>;
+	findAccountById(tenantId: string, id: string): Promise<AccountRow | null>;
+	/** Cuentas vencidas a `now` que refresh-fichas todavía no encoló desde su
+	 * último research (función refresh_fichas_candidates), de la más vieja a la
+	 * más nueva. */
+	listAccountsToRefresh(
+		tenantId: string,
+		now: Date,
+		limit: number,
+	): Promise<RefreshCandidate[]>;
 	/** "pieza_viva" si la persona ya tiene una pieza pending o approved. */
 	insertQueueItem(row: NewQueueItem): Promise<QueueItemRow | "pieza_viva">;
 	getQueueItem(tenantId: string, id: string): Promise<QueueItemRow | null>;
@@ -332,7 +350,9 @@ const toAccount = (r: Row): AccountRow => ({
 	tenantId: r.tenant_id as string,
 	domain: r.domain as string,
 	name: r.name as string,
-	ficha: r.ficha as Ficha,
+	// El parse completa `dolores` en fichas guardadas antes de que existiera;
+	// una ficha que no parsea (la `{}` de una cuenta descubierta) pasa tal cual.
+	ficha: fichaSchema.safeParse(r.ficha).data ?? (r.ficha as Ficha),
 	researchedAt: r.researched_at as string,
 	expiresAt: r.expires_at as string,
 });
@@ -532,6 +552,33 @@ export function createSupabaseOutreachStore(
 				.single();
 			if (error || !data) fail("guardar la cuenta", error);
 			return toAccount(data);
+		},
+
+		async findAccountById(tenantId, id) {
+			const { data, error } = await client
+				.from("accounts")
+				.select("id, tenant_id, domain, name, ficha, researched_at, expires_at")
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.maybeSingle();
+			if (error) fail("leer la cuenta", error);
+			return data ? toAccount(data) : null;
+		},
+
+		async listAccountsToRefresh(tenantId, now, limit) {
+			const { data, error } = await client.rpc("refresh_fichas_candidates", {
+				p_tenant: tenantId,
+				p_now: now.toISOString(),
+				p_limit: limit,
+			});
+			if (error) fail("listar cuentas para refrescar", error);
+			return ((data ?? []) as Row[]).map((r) => ({
+				id: r.id as string,
+				domain: r.domain as string,
+				name: r.name as string,
+				researchedAt: r.researched_at as string,
+				expiresAt: r.expires_at as string,
+			}));
 		},
 
 		async insertQueueItem(row) {

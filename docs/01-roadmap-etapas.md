@@ -363,7 +363,7 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 
 ---
 
-## Etapa 12 · Modelo de orquestación — `[ ]`
+## Etapa 12 · Modelo de orquestación — `[x]`
 
 **Modelo Claude Code:** Fable 5.1 para la spec (hecha). Sesión nueva con Sonnet 5, effort `high`, para la implementación.
 **Modelo runtime:** el de cada nodo por tier (`barato` → Haiku 4.5, `medio` → Sonnet 5, `fuerte` → Opus 5).
@@ -373,11 +373,13 @@ Agregada el 2026-09-20. Las reglas para que todo lo que se construya después (w
 
 **Depende de:** Etapa 5.
 
-- [ ] **E1 · Medición:** `usage_entries`, los nodos que ya llaman al modelo asientan, `runs.cost_usd` se escribe por primera vez.
-- [ ] **E2 · Rieles:** `work_items` y reclamo con lease, `enqueue()`, registry con tests que obligan, runner, `tenant_workflows`, `tenant_budgets`.
-- [ ] **E3 · Primer workflow:** `refresh-fichas` y el dispatcher, contra producción.
-- [ ] **E4 · La ley:** `docs/02-orquestacion.md` y el bloque de reglas en `CLAUDE.md`, que se mergea con el código y no antes.
-- [ ] `/ship` + `/context-save`.
+- [x] **E1 · Medición:** `usage_entries`, los nodos que ya llaman al modelo asientan, `runs.cost_usd` se escribe por primera vez. PR #32.
+- [x] **E2 · Rieles:** `work_items` y reclamo con lease, `enqueue()`, registry con tests que obligan, runner, `tenant_workflows`, `tenant_budgets`. PR #35.
+- [x] **E3 · Primer workflow:** `refresh-fichas` y el dispatcher, contra producción. Plan `docs/superpowers/plans/2026-09-21-etapa-12-e3-refresh-fichas.md`, PR #37; cierre contra producción el 2026-09-21, PR #39 (spec §2).
+- [x] **E4 · La ley:** `docs/02-orquestacion.md` y el bloque de reglas en `CLAUDE.md`, que se mergea con el código y no antes.
+- [x] `/ship` + `/context-save`.
+
+**En producción:** `refresh-fichas` prendido para `innovas` (cadencia 60, 5 ítems por tick, `model_usd` USD 3 por día). Deuda anotada: asentar el consumo cuando la llamada al modelo se corta o tira adentro de `generateText`, y hilar la señal de abort por `lib/` para que la tool del chat también corte las lecturas en curso.
 
 **Terminado cuando:** una ficha vencida se refresca sola en producción, con su fila en `runs` (la cuenta cierra) y sus asientos en `usage_entries`; con el presupuesto en cero corta como `budget_exhausted` sin perder ítems; y los tests del registry fallan cuando se los rompe a propósito.
 

@@ -17,7 +17,10 @@ export interface ModelCost {
 	outputTokens: number;
 }
 
-function tokens(usage: unknown, key: "inputTokens" | "outputTokens"): number {
+export function tokens(
+	usage: unknown,
+	key: "inputTokens" | "outputTokens",
+): number {
 	if (typeof usage !== "object" || usage === null) return 0;
 	const value = (usage as Record<string, unknown>)[key];
 	return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -25,7 +28,7 @@ function tokens(usage: unknown, key: "inputTokens" | "outputTokens"): number {
 		: 0;
 }
 
-function gatewayCost(providerMetadata: unknown): number | null {
+export function gatewayCost(providerMetadata: unknown): number | null {
 	if (typeof providerMetadata !== "object" || providerMetadata === null)
 		return null;
 	const gateway = (providerMetadata as Record<string, unknown>).gateway;

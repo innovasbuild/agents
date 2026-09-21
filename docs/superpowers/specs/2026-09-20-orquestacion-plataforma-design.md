@@ -42,6 +42,24 @@ Dejar en producción los rieles de orquestación, probados con un workflow real 
 9. `docs/02-orquestacion.md` y las reglas de `CLAUDE.md` (§12) están mergeadas.
 10. `npm test`, `npm run typecheck` y `npm run db:test` en verde.
 
+**Cierre contra producción (2026-09-21, E3, PR #37).** Criterios 1 a 8 y 10 cumplidos; el 9 es la E4.
+
+| # | Evidencia |
+|---|---|
+| 1 | `rivara.com.ar` (innovas) refrescada sola a las 13:26 UTC, vigente hasta el 2026-12-20. Pasada `c69008cb-1ab5-4ba5-8bff-f95a9f67ff83` |
+| 2 | Esa pasada: `items_claimed 1 = ok 1 + refused 0 + failed 0` |
+| 3 | Asiento `outreach/research` de USD 0,0125 con el `run_id` de la pasada y `source: gateway`; `runs.cost_usd = 0.0125` |
+| 4 | Con tope 0: pasadas `budget_exhausted` desde `9b227c79-dbeb-4b08-abf6-dc3c15476c78` (12:40 UTC), sin tocar ítems. Al subir a USD 3, la siguiente procesó el ítem |
+| 5 | Con un modelo inexistente, el ítem 2 falló tres veces (reintento a los 5 y a los 30 minutos) y quedó `failed` con `Model 'anthropic/no-existe' not found`. La mitad "no frena al resto" la prueba `tests/workflows/runner.test.ts` (decisión 9 del plan de la E3) |
+| 6 | `npm run test:it:workflows` 7/7 contra Postgres real: dos reclamos simultáneos nunca entregan el mismo ítem (decisión 8 del plan de la E3) |
+| 7 | Sin filas en `tenant_workflows`, a más de 10 minutos del deploy no había ninguna pasada de workflow |
+| 8 | Tests del registry rotos a propósito en la E2 (Task 10) y reforzados en la E3 (Task 18) |
+| 10 | Verde sobre el merge de #37: 924 tests, typecheck limpio, 149 pgTAP |
+
+Config de régimen para innovas: cadencia 60, 5 ítems por tick, `model_usd` USD 3 por día. Cron `dispatch` registrado en el deploy de producción con `*/5 * * * *`.
+
+Visto en producción y pendiente: `last_run_at` se marca al terminar la pasada, así que con cadencia igual al tick se saltea un tick de cada dos, y una cadencia de 60 corre cada 60 a 65 minutos. Se arregla contando la cadencia desde el inicio de la pasada.
+
 ### 2.1 Entregas
 
 Cada una deja algo que sirve aunque la siguiente se demore.
@@ -494,12 +512,14 @@ Bloque para `CLAUDE.md`. **Se mergea junto con la implementación**, no antes (D
 
 Se suma una pregunta a la revisión de cada PR, junto a la del kickoff §9: *"¿qué nivel de efecto tiene cada nodo nuevo, y está en el registry?"*
 
+**Aplicado el 2026-09-21 (E4)** en `CLAUDE.md` y en `docs/02-orquestacion.md`, con un desvío: el adaptador `lib/workflows/approval-policy.ts` de §7.3, que haría que el `approval` de una tool del chat lea la política del tenant, no se construyó. Hoy la política `always | once | auto` la leen solo los workflows (`nodePolicy` en `lib/workflows/store.ts`), y en el chat toda tool de nivel 2 o 3 lleva `approval` explícito. La línea del bloque se ajustó a eso. Se construye cuando algún tenant necesite nivel 2 sin aprobación desde el chat.
+
 ## 13. Spikes
 
 | # | Pregunta | Bloquea a | Si da que no |
 |---|---|---|---|
 | S1 | ¿El AI Gateway devuelve el costo por llamada en los metadatos de la respuesta de `ai` 7? | `usage_entries` | **Resultado (2026-09-20): sí.** `providerMetadata.gateway.cost` viene como **string** (`"0.000033"` para 13 tokens de entrada y 4 de salida con Haiku 4.5), junto a `marketCost`, `gatewayCost` e `inferenceCost`. Coincide al centavo con la tabla de precios ($1/M entrada, $5/M salida). El Gateway es la fuente primaria; la tabla de `lib/workflows/pricing.ts` queda de respaldo, con el test que falla si un modelo en uso no tiene precio |
-| S2 | ¿Un handler de schedule aguanta ~200 s de trabajo útil por tick en producción? | Dispatcher | Bajar `itemsPerTick` y subir la frecuencia. Dato a sacar del `morning-sweep` en producción |
+| S2 | ¿Un handler de schedule aguanta ~200 s de trabajo útil por tick en producción? | Dispatcher | **Resultado (2026-09-21): sí, con margen.** El timeout real de función configurado en Vercel (proyecto `agents`, Settings → Functions) es **300 s**. Los valores de referencia del plan (`clockBudgetMs: 200_000`, `leaseSeconds: 600`) quedan confirmados tal cual: 200 s de presupuesto deja 100 s (33%) de margen contra el techo de 300 s, y el lease de 600 s dobla ese techo, así que ningún ítem puede vencer mientras la función que lo tomó todavía está corriendo. No hizo falta el dato de `morning-sweep` en producción (ese schedule además no cierra su propia fila de `runs` hoy, así que no habría podido medirse desde ahí sin arreglarlo primero) |
 | S3 | ¿`defineWorkflowTool` con `ctx.ask` corre en `agents/outreach/` sobre eve vigente? | Solo la Etapa 15 | La propuesta comercial se hace como agente conversacional común, sin workflow tool |
 
 S1 es la primera tarea de la implementación. S3 es parte de la Etapa 14.

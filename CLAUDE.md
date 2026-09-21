@@ -6,13 +6,27 @@ Si falta: STOP y pedir instalación.
 - Etapas en docs/innovas-agents-kickoff.md. Una sesión por etapa; /context-save al cerrar.
 - Antes de escribir código de eve, leer node_modules/eve/docs/README.md y la guía del slot que tocás.
 - Antes de tocar SQL, cargar supabase-postgres-best-practices. Toda tabla lleva tenant_id y RLS.
-- Toda tool con efecto externo lleva `approval` explícito.
 - events es append-only. Nunca UPDATE/DELETE.
 - Nada específico de un tenant en código. Va a tenants/<slug>/ o a la base.
 - Español rioplatense en UI, instrucciones y skills. Código e identificadores en inglés.
 - Tool nueva en `agents/outreach/tools/`: va también su etiqueta en castellano en `TOOL_LABELS` (`lib/agents/running-tool.ts`), que es lo que muestra el indicador de actividad del chat, o entra en `TOOLS_SIN_ETIQUETA` si a propósito no se nombra en pantalla. `tests/agents/running-tool.test.ts` compara la lista contra el disco y falla hasta que alguien decida cuál de las dos.
 - Comandos: npm run dev · npm run typecheck · npm test · npm run lint:fix
 - Base: npm run db:start · npm run db:reset · npm run db:test · npm run db:types (necesitan Docker abierto)
+
+## Orquestación (leer docs/02-orquestacion.md antes de crear un nodo, workflow o agente)
+- Se sube un escalón (llamada al modelo → nodo → workflow → agente) solo cuando el anterior no alcanza.
+- Workflows y agentes por capacidad, nunca por cliente. La diferencia entre tenants es una fila y su brain.
+- Nodo = servicio puro en lib/<dominio>/services/: un trabajo, salida con schema, tenant desde el caller.
+  Va registrado en lib/workflows/registry.ts con nivel de efecto (0-3) y tier. El test falla si falta.
+- En el chat, toda tool de nivel 2 o 3 lleva `approval` explícito. Un workflow desatendido nunca llama a un
+  nodo de nivel 3 (deja una pieza pending) y uno de nivel 2 solo con política `auto` del tenant.
+- En un workflow itera el código, nunca el modelo. Un ítem que falla no frena al resto.
+  Se cuenta lo que entró contra lo que salió.
+- Las aristas se crean solo con enqueue(). Sin triggers.
+- Todo nodo que gasta deja su asiento en usage_entries: la puerta envuelve generate con metered().
+- Un verificador recibe el dato y la evidencia, nunca el razonamiento de quien lo produjo.
+- Ningún nodo escribe canon:*, presupuestos ni interruptores de autonomía. Eso lo hace una persona.
+- Un workflow está terminado cuando su primera corrida real aparece en runs en producción.
 
 ## CRM de INNOV.AS (HubSpot, portal 51464889)
 

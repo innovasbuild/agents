@@ -26,6 +26,14 @@ const input = {
 				fecha: "2026-03-01",
 			},
 		],
+		dolores: [
+			{
+				dolor: "Seguimiento de pedidos entre plantas",
+				por_que_a_ellos: "Suma una planta en Rafaela",
+				beneficio: "Menos pedidos demorados",
+				evidencia: "https://acme.test/n",
+			},
+		],
 		creditos_usados: 0,
 	},
 	canon: [
@@ -81,10 +89,38 @@ describe("buildDraftPrompt", () => {
 			"Industria mediana",
 			"Frases cortas",
 			"quedo a disposicion",
+			"Seguimiento de pedidos entre plantas",
+			"Suma una planta en Rafaela",
+			"Menos pedidos demorados",
 		]) {
 			expect(result.prompt).toContain(fragment);
 		}
 		expect(result.prompt).not.toContain("Cuatro partes cortas");
+	});
+
+	it("system pide escribir desde los dolores y sin recitar la investigación", () => {
+		const { system } = buildDraftPrompt(input);
+		for (const fragment of [
+			"una empresa como",
+			"sistemas que:",
+			"lista con guiones",
+			"dolores de la ficha",
+			"sin validarlo",
+			"vi que",
+		]) {
+			expect(system).toContain(fragment);
+		}
+		expect(system).not.toContain(
+			"La primera línea después del saludo usa el hecho del ancla",
+		);
+	});
+
+	it("una ficha sin dolores (guardada antes del cambio) arma el prompt igual", () => {
+		const result = buildDraftPrompt({
+			...input,
+			ficha: { ...input.ficha, dolores: [] },
+		});
+		expect(result.prompt).toContain("(sin dolores en la ficha)");
 	});
 
 	it("corta páginas largas del canon para no inflar el prompt", () => {

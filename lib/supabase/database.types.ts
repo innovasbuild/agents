@@ -710,11 +710,16 @@ export type Database = {
           eve_turn_id: string | null
           finished_at: string | null
           id: string
+          items_claimed: number | null
+          items_failed: number | null
+          items_ok: number | null
+          items_refused: number | null
           schedule_key: string | null
           started_at: string
           status: Database["public"]["Enums"]["run_status"]
           tenant_id: string
           trigger: Database["public"]["Enums"]["run_trigger"]
+          workflow: string | null
         }
         Insert: {
           agent: string
@@ -725,11 +730,16 @@ export type Database = {
           eve_turn_id?: string | null
           finished_at?: string | null
           id?: string
+          items_claimed?: number | null
+          items_failed?: number | null
+          items_ok?: number | null
+          items_refused?: number | null
           schedule_key?: string | null
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           tenant_id: string
           trigger: Database["public"]["Enums"]["run_trigger"]
+          workflow?: string | null
         }
         Update: {
           agent?: string
@@ -740,11 +750,16 @@ export type Database = {
           eve_turn_id?: string | null
           finished_at?: string | null
           id?: string
+          items_claimed?: number | null
+          items_failed?: number | null
+          items_ok?: number | null
+          items_refused?: number | null
           schedule_key?: string | null
           started_at?: string
           status?: Database["public"]["Enums"]["run_status"]
           tenant_id?: string
           trigger?: Database["public"]["Enums"]["run_trigger"]
+          workflow?: string | null
         }
         Relationships: [
           {
@@ -801,6 +816,38 @@ export type Database = {
           },
         ]
       }
+      tenant_budgets: {
+        Row: {
+          daily_limit: number
+          resource: string
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          daily_limit: number
+          resource: string
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          daily_limit?: number
+          resource?: string
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_budgets_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_connections: {
         Row: {
           capability: Database["public"]["Enums"]["connector_capability"]
@@ -838,6 +885,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tenant_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_workflows: {
+        Row: {
+          config: Json
+          created_at: string
+          enabled: boolean
+          last_run_at: string | null
+          tenant_id: string
+          workflow: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          last_run_at?: string | null
+          tenant_id: string
+          workflow: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          enabled?: boolean
+          last_run_at?: string | null
+          tenant_id?: string
+          workflow?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_workflows_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -938,6 +1020,75 @@ export type Database = {
           },
         ]
       }
+      work_items: {
+        Row: {
+          attempts: number
+          created_at: string
+          id: number
+          input_hash: string
+          last_error: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          result_reason: string | null
+          run_id: string | null
+          status: Database["public"]["Enums"]["work_item_status"]
+          subject_id: string
+          subject_type: string
+          tenant_id: string
+          updated_at: string
+          workflow: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          id?: never
+          input_hash: string
+          last_error?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          result_reason?: string | null
+          run_id?: string | null
+          status?: Database["public"]["Enums"]["work_item_status"]
+          subject_id: string
+          subject_type: string
+          tenant_id: string
+          updated_at?: string
+          workflow: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          id?: never
+          input_hash?: string
+          last_error?: string | null
+          lease_until?: string | null
+          next_attempt_at?: string
+          result_reason?: string | null
+          run_id?: string | null
+          status?: Database["public"]["Enums"]["work_item_status"]
+          subject_id?: string
+          subject_type?: string
+          tenant_id?: string
+          updated_at?: string
+          workflow?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_items_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_items_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -988,6 +1139,37 @@ export type Database = {
           page_slug: string
         }[]
       }
+      claim_work_items: {
+        Args: {
+          p_lease_seconds: number
+          p_limit: number
+          p_tenant: string
+          p_workflow: string
+        }
+        Returns: {
+          attempts: number
+          created_at: string
+          id: number
+          input_hash: string
+          last_error: string | null
+          lease_until: string | null
+          next_attempt_at: string
+          result_reason: string | null
+          run_id: string | null
+          status: Database["public"]["Enums"]["work_item_status"]
+          subject_id: string
+          subject_type: string
+          tenant_id: string
+          updated_at: string
+          workflow: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "work_items"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       f_unaccent: { Args: { value: string }; Returns: string }
       has_tenant_role: {
         Args: {
@@ -998,8 +1180,27 @@ export type Database = {
       }
       is_member_of: { Args: { tenant: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
+      refresh_fichas_candidates: {
+        Args: { p_limit: number; p_now: string; p_tenant: string }
+        Returns: {
+          domain: string
+          expires_at: string
+          id: string
+          name: string
+          researched_at: string
+        }[]
+      }
       run_cost_usd: { Args: { p_run: string }; Returns: number }
       set_run_cost: { Args: { p_run: string }; Returns: number }
+      usage_sum: {
+        Args: {
+          p_resource: string
+          p_run?: string
+          p_since: string
+          p_tenant: string
+        }
+        Returns: number
+      }
     }
     Enums: {
       brain_author_kind: "user" | "agent" | "import"
@@ -1026,9 +1227,10 @@ export type Database = {
         | "sent"
         | "failed"
         | "expired"
-      run_status: "running" | "ok" | "failed" | "cancelled"
+      run_status: "running" | "ok" | "failed" | "cancelled" | "budget_exhausted"
       run_trigger: "chat" | "schedule" | "mcp" | "webhook"
       tenant_role: "platform_admin" | "tenant_admin" | "tenant_member"
+      work_item_status: "pending" | "running" | "done" | "refused" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1185,9 +1387,10 @@ export const Constants = {
         "failed",
         "expired",
       ],
-      run_status: ["running", "ok", "failed", "cancelled"],
+      run_status: ["running", "ok", "failed", "cancelled", "budget_exhausted"],
       run_trigger: ["chat", "schedule", "mcp", "webhook"],
       tenant_role: ["platform_admin", "tenant_admin", "tenant_member"],
+      work_item_status: ["pending", "running", "done", "refused", "failed"],
     },
   },
 } as const

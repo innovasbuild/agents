@@ -46,7 +46,7 @@ values
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'comercial/gate', 'Vetos de eval', 'comercial', '{canon:gate}',
    E'# Vetos del tenant\n\n```gate\nveto: clientes ... (banco mundial|bid|fao)\nveto_literal: sinergia total\n```'),
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'marketing/voz-eval', 'Voz del ejecutor eval', 'marketing', '{canon:voz,executor:eval}',
-   E'# Voz\n\nTuteo rioplatense, frases cortas, sin adjetivos de venta. Firma: Eval.\n\n## Par 1\n\nBorrador: Quería contarte que ayudamos a empresas a crecer.\nEnviado: Vi que abrieron una segunda planta. Cuando la operación crece así, coordinar cuesta más que vender.\nPor qué: arrancar por el dato de ellos, no por nosotros.\n\n```gate\nmax_chars: email=900\n```')
+   E'# Voz\n\nTuteo rioplatense, frases cortas, sin adjetivos de venta. Firma: Eval.\n\n## Par 1\n\nBorrador: Quería contarte que ayudamos a empresas a crecer.\nEnviado: Una empresa con dos plantas sabe que coordinar entre ellas cuesta más que vender.\nPor qué: arrancar por el negocio de ellos, no por nosotros, y sin contar que lo investigamos.\n\n```gate\nmax_chars: email=900\n```')
 on conflict do nothing;
 
 insert into public.config_values (tenant_id, kind, value, label, meta)
@@ -60,7 +60,7 @@ on conflict (tenant_id, kind, value) do nothing;
 
 insert into public.accounts (id, tenant_id, domain, name, ficha, researched_at, expires_at)
 values ('e7a1e7a1-0000-0000-0000-0000000000a1', 'e7a1e7a1-0000-0000-0000-0000000000aa', 'acme-eval.test', 'Acme Eval',
-  '{"name": "Acme Eval", "domain": "acme-eval.test", "produce": "Envases plásticos para alimentos", "gana": "Venta a supermercados regionales", "compra": null, "rompe_si_crece": "La coordinación de pedidos entre dos plantas", "gap_declarado": "Dicen tener procesos ordenados", "gap_demostrable": "Publican búsquedas de administrativos para pedidos", "hechos": [{"hecho": "Abrió una segunda planta en Rafaela en 2026", "url": "https://acme-eval.test/noticias/rafaela", "fecha": "2026-03-01"}], "creditos_usados": 0}',
+  '{"name": "Acme Eval", "domain": "acme-eval.test", "produce": "Envases plásticos para alimentos", "gana": "Venta a supermercados regionales", "compra": null, "rompe_si_crece": "La coordinación de pedidos entre dos plantas", "gap_declarado": "Dicen tener procesos ordenados", "gap_demostrable": "Publican búsquedas de administrativos para pedidos", "hechos": [{"hecho": "Abrió una segunda planta en Rafaela en 2026", "url": "https://acme-eval.test/noticias/rafaela", "fecha": "2026-03-01"}], "dolores": [{"dolor": "Coordinar pedidos entre las dos plantas", "por_que_a_ellos": "Con la planta de Rafaela, cada pedido de supermercado puede salir de dos lugares", "beneficio": "Menos pedidos demorados sin sumar administrativos", "evidencia": "https://acme-eval.test/noticias/rafaela"}, {"dolor": "Seguimiento de reposición con cada supermercado", "por_que_a_ellos": "Vende a varias cadenas regionales con reposiciones propias", "beneficio": "Menos quiebres de stock en góndola", "evidencia": null}, {"dolor": "Carga manual de pedidos", "por_que_a_ellos": "Buscan administrativos para pedidos", "beneficio": "El equipo actual absorbe más volumen", "evidencia": null}], "creditos_usados": 0}',
   now(), now() + interval '90 days')
 on conflict (tenant_id, domain) do nothing;
 

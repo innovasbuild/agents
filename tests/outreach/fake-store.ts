@@ -20,7 +20,7 @@ import type {
 export const PASSING_BODY = [
 	"Hola Laura,",
 	"",
-	"Vi que Acme abrió una segunda planta en Rafaela este año. Cuando la operación crece así, el costo de coordinar crece más rápido que la facturación.",
+	"Una empresa como Acme, con dos plantas en Rafaela, sabe que el costo de coordinar pedidos entre ellas crece más rápido que la facturación.",
 	"",
 	"Armamos con equipos como el tuyo un tablero que ordena pedidos y compras sin sumar gente al back office.",
 	"",
@@ -194,6 +194,32 @@ export function createFakeStore(): FakeStore {
 			const account = { ...row, id: nextId("account") };
 			store.accounts.push(account);
 			return account;
+		},
+		async findAccountById(tenantId, id) {
+			return (
+				store.accounts.find((a) => a.tenantId === tenantId && a.id === id) ??
+				null
+			);
+		},
+		// No modela work_items: devuelve todas las vencidas. La exclusión de lo ya
+		// encolado la prueban 15_refresh_fichas_candidates.test.sql y el test de
+		// integración de tests/workflows/store.it.test.ts.
+		async listAccountsToRefresh(tenantId, now, limit) {
+			return store.accounts
+				.filter(
+					(a) =>
+						a.tenantId === tenantId &&
+						new Date(a.expiresAt).getTime() <= now.getTime(),
+				)
+				.sort((a, b) => a.expiresAt.localeCompare(b.expiresAt))
+				.slice(0, limit)
+				.map(({ id, domain, name, researchedAt, expiresAt }) => ({
+					id,
+					domain,
+					name,
+					researchedAt,
+					expiresAt,
+				}));
 		},
 		async insertQueueItem(row: NewQueueItem) {
 			const live = store.queue.some(

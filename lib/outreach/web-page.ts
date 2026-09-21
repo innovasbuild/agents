@@ -3,6 +3,7 @@
 // links de páginas): esto es un borde de seguridad contra SSRF. Solo http(s)
 // a puertos estándar, sin credenciales, y todo host tiene que resolver a IPs
 // públicas antes de cada request, redirecciones incluidas.
+import { lookup } from "node:dns/promises";
 import { isIPv4, isIPv6 } from "node:net";
 
 export interface WebPage {
@@ -308,4 +309,10 @@ export function htmlToText(html: string): {
 		title: title || null,
 		text: collapseWhitespace(decodeEntities(text)),
 	};
+}
+
+/** DNS real para `fetchPublicPage`. Los tests inyectan otra. */
+export async function resolveHost(hostname: string): Promise<string[]> {
+	const addresses = await lookup(hostname, { all: true, verbatim: true });
+	return addresses.map((a) => a.address);
 }

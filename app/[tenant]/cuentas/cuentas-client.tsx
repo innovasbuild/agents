@@ -107,6 +107,26 @@ function Ficha({ row }: { row: AccountRow }) {
 
 	return (
 		<dl className="flex flex-col gap-3 border-t bg-muted/30 px-4 py-3 text-sm">
+			{ficha.dolores.length > 0 ? (
+				<div>
+					<dt className="text-muted-foreground text-xs">Dolores</dt>
+					<dd>
+						<ul className="mt-1 flex flex-col gap-2">
+							{ficha.dolores.map((dolor) => (
+								<li key={dolor.dolor}>
+									<p className="font-medium">{dolor.dolor}</p>
+									<p className="text-muted-foreground">
+										Por qué a ellos: {dolor.por_que_a_ellos}
+									</p>
+									<p className="text-muted-foreground">
+										Qué ganan: {dolor.beneficio}
+									</p>
+								</li>
+							))}
+						</ul>
+					</dd>
+				</div>
+			) : null}
 			{CAMPOS_FICHA.map(({ key, label }) =>
 				ficha[key] ? (
 					<div key={key}>
