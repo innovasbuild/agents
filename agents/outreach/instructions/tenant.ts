@@ -4,6 +4,11 @@ import { brainForTenant } from "../../../lib/outreach/canon";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { sessionSummary } from "../../../lib/outreach/summary";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import {
+	ALERT_WINDOW_MS,
+	workflowAlertLines,
+} from "../../../lib/workflows/alerts";
+import { createSupabaseWorkflowStore } from "../../../lib/workflows/store";
 
 function attribute(value: unknown): string {
 	return typeof value === "string" ? value : "";
@@ -37,6 +42,13 @@ export default defineDynamic({
 						now: () => new Date(),
 						brainConnected: async () =>
 							(await brainForTenant(tenantId)) !== null,
+						workflowAlerts: async () =>
+							workflowAlertLines(
+								await createSupabaseWorkflowStore(admin).workflowHealth(
+									tenantId,
+									new Date(Date.now() - ALERT_WINDOW_MS),
+								),
+							),
 					},
 				);
 				return defineInstructions({ content });

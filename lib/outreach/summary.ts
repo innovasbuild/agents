@@ -20,6 +20,9 @@ export async function sessionSummary(
 		 * al abrir el caso más común de "canon ausente"; el de brain conectado
 		 * pero sin páginas `canon:*` lo sigue avisando la negativa de la tool. */
 		brainConnected: () => Promise<boolean>;
+		/** Avisos de workflows del tenant (spec orquestación §10.4). Opcional y
+		 * con falla abierta, igual que el brain: el resumen es contexto. */
+		workflowAlerts?: () => Promise<string[]>;
 	},
 ): Promise<string> {
 	const header = `Trabajás para ${input.tenantName} (tenant \`${input.tenantSlug}\`). Todo lo que hagas es en nombre de ese cliente y con sus datos.`;
@@ -31,21 +34,28 @@ export async function sessionSummary(
 		return `${header}\n\nQuien habla en esta sesión no es ejecutor de outreach en este tenant: puede consultar, pero no cargar contactos, encolar ni enviar. Si lo pide, explicáselo.`;
 	}
 	const last24h = new Date(deps.now().getTime() - 24 * 60 * 60 * 1000);
-	const [sent, items, brain, recentReplies, stalled] = await Promise.all([
-		deps.store.countSent(input.tenantId, {
-			since: dayStart(tenant.config.timezone, deps.now()),
-			executorUserId: input.userId,
-		}),
-		// "approved" son piezas trabadas entre el claim de send_email y el envío
-		// (spec: mismo criterio que listQueue en services/queue.ts): sin esto el
-		// único estado que necesita revisión manual queda invisible en el resumen.
-		deps.store.listQueue(input.tenantId, input.userId, ["pending", "approved"]),
-		// Falla abierta: el aviso es contexto, el cupo y la cola no. Si la consulta
-		// de conexiones se cae, el resumen sale igual sin el aviso.
-		deps.brainConnected().catch(() => true),
-		deps.store.countRecentReplies(input.tenantId, last24h),
-		deps.store.countStalled(input.tenantId, last24h),
-	]);
+	const [sent, items, brain, recentReplies, stalled, alerts] =
+		await Promise.all([
+			deps.store.countSent(input.tenantId, {
+				since: dayStart(tenant.config.timezone, deps.now()),
+				executorUserId: input.userId,
+			}),
+			// "approved" son piezas trabadas entre el claim de send_email y el envío
+			// (spec: mismo criterio que listQueue en services/queue.ts): sin esto el
+			// único estado que necesita revisión manual queda invisible en el resumen.
+			deps.store.listQueue(input.tenantId, input.userId, [
+				"pending",
+				"approved",
+			]),
+			// Falla abierta: el aviso es contexto, el cupo y la cola no. Si la consulta
+			// de conexiones se cae, el resumen sale igual sin el aviso.
+			deps.brainConnected().catch(() => true),
+			deps.store.countRecentReplies(input.tenantId, last24h),
+			deps.store.countStalled(input.tenantId, last24h),
+			deps.workflowAlerts
+				? deps.workflowAlerts().catch((): string[] => [])
+				: Promise.resolve<string[]>([]),
+		]);
 	const pending = items.filter((item) => item.status === "pending");
 	const trabadas = items.filter((item) => item.status === "approved");
 	const remaining = Math.max(executor.dailyQuota - sent.count, 0);
@@ -84,6 +94,7 @@ export async function sessionSummary(
 		stalled > 0
 			? `Se frenaron ${stalledPhrase} en las últimas 24 h por falta de respuesta.`
 			: "",
+		...alerts,
 	]
 		.filter(Boolean)
 		.join("\n");

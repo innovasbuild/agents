@@ -1,6 +1,7 @@
 // WorkflowStore sobre Supabase, con el cliente admin (las tablas de
 // orquestación no aceptan escritura de authenticated). Imports relativos.
 
+import type { WorkflowHealth } from "./alerts";
 import type { RunnerStore } from "./runner";
 import type { WorkItem } from "./types";
 import type { AdminLike } from "./usage";
@@ -34,6 +35,7 @@ export function createSupabaseWorkflowStore(
 ): RunnerStore & {
 	listEnabled(tenantId: string): Promise<EnabledWorkflowRow[]>;
 	closeAbandonedRuns(before: Date, at: Date): Promise<number>;
+	workflowHealth(tenantId: string, since: Date): Promise<WorkflowHealth>;
 } {
 	return {
 		async insertWorkItem(row) {
@@ -227,6 +229,58 @@ export function createSupabaseWorkflowStore(
 				.select("id");
 			must(error, "closeAbandonedRuns");
 			return ((data as Row[] | null) ?? []).length;
+		},
+
+		async workflowHealth(tenantId, since) {
+			const sinceIso = since.toISOString();
+			const [runs, items, enabled] = await Promise.all([
+				admin
+					.from("runs")
+					.select("workflow, status, error")
+					.eq("tenant_id", tenantId)
+					.not("workflow", "is", null)
+					.gte("started_at", sinceIso)
+					.in("status", ["budget_exhausted", "failed", "ok"]),
+				admin
+					.from("work_items")
+					.select("id", { count: "exact", head: true })
+					.eq("tenant_id", tenantId)
+					.eq("status", "failed")
+					.gte("updated_at", sinceIso),
+				admin
+					.from("tenant_workflows")
+					.select("workflow, last_run_at, created_at")
+					.eq("tenant_id", tenantId)
+					.eq("enabled", true),
+			]);
+			must(runs.error, "workflowHealth (runs)");
+			must(items.error, "workflowHealth (work_items)");
+			must(enabled.error, "workflowHealth (tenant_workflows)");
+			const runRows = (runs.data as Row[] | null) ?? [];
+			return {
+				budgetExhausted: [
+					...new Set(
+						runRows
+							.filter((r) => r.status === "budget_exhausted")
+							.map((r) => r.workflow as string),
+					),
+				],
+				failedRuns: runRows.filter((r) => r.status === "failed").length,
+				unbalancedRuns: runRows.filter(
+					(r) => r.status === "ok" && r.error !== null,
+				).length,
+				failedItems: items.count ?? 0,
+				// Fechas comparadas como fechas: PostgREST y toISOString no escriben
+				// igual la zona horaria.
+				silent: ((enabled.data as Row[] | null) ?? [])
+					.filter(
+						(r) =>
+							new Date(
+								(r.last_run_at as string | null) ?? (r.created_at as string),
+							).getTime() < since.getTime(),
+					)
+					.map((r) => r.workflow as string),
+			};
 		},
 	};
 }

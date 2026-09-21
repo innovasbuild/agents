@@ -176,4 +176,38 @@ describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
 		expect(byId.get(vieja)?.finished_at).not.toBeNull();
 		expect(byId.get(reciente)).toMatchObject({ status: "running" });
 	});
+
+	it("workflowHealth junta los avisos del tenant", async () => {
+		const since = new Date(Date.now() - 60_000);
+		const agotada = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(),
+		});
+		await store.closeRun(agotada, {
+			status: "budget_exhausted",
+			error: "model_usd: gastado 0 de 0",
+			claimed: 0,
+			ok: 0,
+			refused: 0,
+			failed: 0,
+			finishedAt: new Date(),
+		});
+		const { error } = await admin.from("tenant_workflows").insert({
+			tenant_id: TENANT,
+			workflow: "refresh-fichas",
+			enabled: true,
+			created_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+		});
+		if (error) throw new Error(error.message);
+
+		expect(await store.workflowHealth(TENANT, since)).toEqual({
+			budgetExhausted: ["refresh-fichas"],
+			failedRuns: 0,
+			unbalancedRuns: 0,
+			failedItems: 0,
+			silent: ["refresh-fichas"],
+		});
+	});
 });
