@@ -38,23 +38,34 @@ export default defineSchedule({
 		const outreach = createSupabaseOutreachStore(admin);
 		const record = createUsageRecorder(admin);
 
-		const research: ResearchNode = ({ tenantId, runId, domain, name }) =>
-			researchAccount(
+		const research: ResearchNode = ({ tenantId, runId, domain, name }) => {
+			// Un solo tope por ítem para las dos cosas que puede tardar: la llamada
+			// al modelo y cualquier lectura de página en curso. El SDK solo chequea
+			// el abort entre steps, así que sin sumar esta señal al fetch de
+			// fetchPublicPage una lectura ya arrancada podía seguir hasta su propio
+			// timeout interno (~10s por hop, con redirecciones) y el ítem entero
+			// pasar los ITEM_TIMEOUT_MS. El runner igual mira el reloj antes de
+			// reclamar, no durante un ítem: este tope es la única red debajo.
+			const signal = AbortSignal.timeout(ITEM_TIMEOUT_MS);
+			return researchAccount(
 				{ tenantId, userId: null, domain, name },
 				{
 					store: outreach,
 					now: () => new Date(),
 					readPage: (url) =>
-						fetchPublicPage(url, { fetchImpl: fetch, resolveHost }),
+						fetchPublicPage(url, {
+							resolveHost,
+							fetchImpl: (input, init) =>
+								fetch(input, {
+									...init,
+									signal: init?.signal
+										? AbortSignal.any([init.signal, signal])
+										: signal,
+								}),
+						}),
 					generate: metered(
 						(args: Parameters<typeof generateResearch>[0]) =>
-							generateResearch(args, {
-								generateText,
-								// El runner mira el reloj antes de reclamar, no durante un
-								// ítem: sin este tope, un research lento al final del tick
-								// pasa el timeout de la función.
-								abortSignal: AbortSignal.timeout(ITEM_TIMEOUT_MS),
-							}),
+							generateResearch(args, { generateText, abortSignal: signal }),
 						{
 							model: (args) => args.model,
 							record,
@@ -68,23 +79,38 @@ export default defineSchedule({
 					),
 				},
 			);
+		};
 
 		const outcomes = await runDispatch({
 			agent: AGENT,
 			store: createSupabaseWorkflowStore(admin),
 			async listTenants() {
+				// En paralelo: este tiempo sale del presupuesto del tick, y cada
+				// carga es independiente. allSettled conserva el orden de salida de
+				// listActiveTenants (no el de resolución) y aísla el fallo de un
+				// tenant sin frenar a los demás, igual que el for secuencial de antes.
+				const active = await outreach.listActiveTenants();
+				const loaded = await Promise.allSettled(
+					active.map((tenant) => outreach.loadTenantOutreach(tenant.id)),
+				);
 				const tenants: DispatchTenant[] = [];
-				for (const tenant of await outreach.listActiveTenants()) {
-					try {
-						// Sin el agente de outreach habilitado no hay workflows de
-						// outreach que correr para ese tenant.
-						const loaded = await outreach.loadTenantOutreach(tenant.id);
-						if (loaded)
-							tenants.push({ ...tenant, timezone: loaded.config.timezone });
-					} catch (error) {
-						console.error(`dispatch: no pude cargar ${tenant.slug}:`, error);
+				loaded.forEach((settled, i) => {
+					const tenant = active[i];
+					if (settled.status === "rejected") {
+						console.error(
+							`dispatch: no pude cargar ${tenant.slug}:`,
+							settled.reason,
+						);
+						return;
 					}
-				}
+					// Sin el agente de outreach habilitado no hay workflows de outreach
+					// que correr para ese tenant.
+					if (settled.value)
+						tenants.push({
+							...tenant,
+							timezone: settled.value.config.timezone,
+						});
+				});
 				return tenants;
 			},
 			impls: { "refresh-fichas": createRefreshFichas({ store: outreach }) },

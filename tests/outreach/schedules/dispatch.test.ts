@@ -33,6 +33,14 @@ describe("schedule dispatch", () => {
 		expect(SOURCE).toMatch(/AbortSignal\.timeout\(ITEM_TIMEOUT_MS\)/);
 	});
 
+	it("el mismo tope por ítem también corta una lectura de página en curso", () => {
+		// Sin esto, una lectura ya arrancada seguía hasta su propio timeout
+		// interno (~10s por hop) y el ítem podía pasar los ITEM_TIMEOUT_MS: el
+		// tope tiene que llegar también al fetchImpl de fetchPublicPage, no solo
+		// a generateText.
+		expect(SOURCE).toMatch(/AbortSignal\.any\(/);
+	});
+
 	it("asienta el consumo en la pasada del runner, con el nombre del workflow", () => {
 		expect(SOURCE).toMatch(/workflow:\s*"refresh-fichas"/);
 		expect(SOURCE).toMatch(/node:\s*"outreach\/research"/);
