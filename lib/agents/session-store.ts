@@ -69,7 +69,7 @@ export async function openRun(input: OpenRunInput): Promise<void> {
 
 export async function closeRun(input: CloseRunInput): Promise<void> {
 	const admin = createAdminClient();
-	const { error } = await admin
+	const { data, error } = await admin
 		.from("runs")
 		.update({
 			status: input.status,
@@ -77,6 +77,18 @@ export async function closeRun(input: CloseRunInput): Promise<void> {
 			finished_at: new Date().toISOString(),
 		})
 		.eq("eve_session_id", input.sessionId)
-		.eq("eve_turn_id", input.turnId);
-	if (error) console.error("closeRun:", error.message);
+		.eq("eve_turn_id", input.turnId)
+		.select("id")
+		.maybeSingle();
+	if (error) {
+		console.error("closeRun:", error.message);
+		return;
+	}
+	if (!data) return;
+	// El total sale del libro de consumo (spec orquestación §7.2). Si falla, la
+	// corrida queda cerrada igual y el costo se puede recalcular después.
+	const { error: costError } = await admin.rpc("set_run_cost", {
+		p_run: data.id,
+	});
+	if (costError) console.error("closeRun (costo):", costError.message);
 }

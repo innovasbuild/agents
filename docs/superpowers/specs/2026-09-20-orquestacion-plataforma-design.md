@@ -498,7 +498,7 @@ Se suma una pregunta a la revisión de cada PR, junto a la del kickoff §9: *"¿
 
 | # | Pregunta | Bloquea a | Si da que no |
 |---|---|---|---|
-| S1 | ¿El AI Gateway devuelve el costo por llamada en los metadatos de la respuesta de `ai` 7? | `usage_entries` | Tabla de precios por modelo en `lib/workflows/pricing.ts`, con test que falle si un modelo en uso no tiene precio |
+| S1 | ¿El AI Gateway devuelve el costo por llamada en los metadatos de la respuesta de `ai` 7? | `usage_entries` | **Resultado (2026-09-20): sí.** `providerMetadata.gateway.cost` viene como **string** (`"0.000033"` para 13 tokens de entrada y 4 de salida con Haiku 4.5), junto a `marketCost`, `gatewayCost` e `inferenceCost`. Coincide al centavo con la tabla de precios ($1/M entrada, $5/M salida). El Gateway es la fuente primaria; la tabla de `lib/workflows/pricing.ts` queda de respaldo, con el test que falla si un modelo en uso no tiene precio |
 | S2 | ¿Un handler de schedule aguanta ~200 s de trabajo útil por tick en producción? | Dispatcher | Bajar `itemsPerTick` y subir la frecuencia. Dato a sacar del `morning-sweep` en producción |
 | S3 | ¿`defineWorkflowTool` con `ctx.ask` corre en `agents/outreach/` sobre eve vigente? | Solo la Etapa 15 | La propuesta comercial se hace como agente conversacional común, sin workflow tool |
 

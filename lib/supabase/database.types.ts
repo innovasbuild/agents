@@ -884,6 +884,60 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          id: number
+          meta: Json
+          node: string
+          resource: string
+          run_id: string | null
+          tenant_id: string
+          unit: string
+          workflow: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: never
+          meta?: Json
+          node: string
+          resource: string
+          run_id?: string | null
+          tenant_id: string
+          unit: string
+          workflow?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: never
+          meta?: Json
+          node?: string
+          resource?: string
+          run_id?: string | null
+          tenant_id?: string
+          unit?: string
+          workflow?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usage_entries_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "usage_entries_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -945,6 +999,7 @@ export type Database = {
       is_member_of: { Args: { tenant: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       run_cost_usd: { Args: { p_run: string }; Returns: number }
+      set_run_cost: { Args: { p_run: string }; Returns: number }
     }
     Enums: {
       brain_author_kind: "user" | "agent" | "import"
@@ -1136,4 +1191,3 @@ export const Constants = {
     },
   },
 } as const
-

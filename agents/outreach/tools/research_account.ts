@@ -20,6 +20,11 @@ import {
 	type WebPageResult,
 } from "../../../lib/outreach/web-page";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import {
+	createUsageRecorder,
+	metered,
+	resolveRunId,
+} from "../../../lib/workflows/usage";
 
 /**
  * Llamada real al modelo: `leer_pagina` como única tool y la ficha como salida
@@ -34,7 +39,12 @@ export async function generateResearch(
 		readPage: (url: string) => Promise<WebPageResult>;
 	},
 	deps: { generateText: typeof generateText; abortSignal?: AbortSignal },
-): Promise<{ output: unknown; pagesRead: number }> {
+): Promise<{
+	output: unknown;
+	pagesRead: number;
+	usage: unknown;
+	providerMetadata: unknown;
+}> {
 	let pagesRead = 0;
 	const result = await deps.generateText({
 		model: args.model,
@@ -65,7 +75,12 @@ export async function generateResearch(
 		maxOutputTokens: 4_000,
 		abortSignal: deps.abortSignal,
 	});
-	return { output: result.output, pagesRead };
+	return {
+		output: result.output,
+		pagesRead,
+		usage: result.usage,
+		providerMetadata: result.providerMetadata,
+	};
 }
 
 async function resolveHost(hostname: string): Promise<string[]> {
@@ -83,7 +98,8 @@ export default defineTool({
 	}),
 	async execute(input, ctx) {
 		const caller = callerFromSession(ctx.session);
-		const store = createSupabaseOutreachStore(createAdminClient());
+		const admin = createAdminClient();
+		const store = createSupabaseOutreachStore(admin);
 		const now = () => new Date();
 		const prepared = await prepareResearch(
 			{
@@ -104,6 +120,12 @@ export default defineTool({
 
 		let output: unknown;
 		try {
+			// `turn.id` es el mismo que hooks/runs.ts guarda en runs.eve_turn_id.
+			const runId = await resolveRunId(
+				admin,
+				ctx.session.id,
+				ctx.session.turn.id,
+			);
 			output = await runResearch(
 				{
 					domain: prepared.domain,
@@ -114,11 +136,23 @@ export default defineTool({
 				{
 					readPage: (url) =>
 						fetchPublicPage(url, { fetchImpl: fetch, resolveHost }),
-					generate: (args) =>
-						generateResearch(args, {
-							generateText,
-							abortSignal: ctx.abortSignal,
-						}),
+					generate: metered(
+						(args: Parameters<typeof generateResearch>[0]) =>
+							generateResearch(args, {
+								generateText,
+								abortSignal: ctx.abortSignal,
+							}),
+						{
+							model: (args) => args.model,
+							record: createUsageRecorder(admin),
+							base: {
+								tenantId: caller.tenantId,
+								runId,
+								workflow: null,
+								node: "outreach/research",
+							},
+						},
+					),
 				},
 			);
 		} catch (error) {
