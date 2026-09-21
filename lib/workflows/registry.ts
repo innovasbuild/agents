@@ -33,6 +33,8 @@ export const SERVICES_EXCLUIDOS: Record<string, string> = {
 		"la llamada al modelo del nodo outreach/research; se registra junto con él",
 	"outreach/generate-draft":
 		"la llamada al modelo del nodo outreach/draft; se registra junto con él",
+	"outreach/evaluate":
+		"la llamada a Jev que va a usar outreach/icp-score (workflow icp-scoring, aún sin construir); se registra junto con él",
 };
 
 export const WORKFLOWS: Record<string, WorkflowInfo> = {

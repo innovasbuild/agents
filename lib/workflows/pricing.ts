@@ -8,6 +8,8 @@ export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
 	"anthropic/claude-sonnet-5": { input: 2, output: 10 },
 	"anthropic/claude-opus-5": { input: 5, output: 25 },
 	"anthropic/claude-fable-5.1": { input: 10, output: 50 },
+	// Modelo de evaluación: la salida no se cobra por token.
+	"typesafe-ai/jev": { input: 0.04, output: 0 },
 };
 
 export interface ModelCost {
