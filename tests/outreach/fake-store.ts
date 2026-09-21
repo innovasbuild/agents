@@ -498,6 +498,8 @@ export function createFakeStore(): FakeStore {
 			);
 			if (existing) {
 				existing.name = row.name;
+				existing.firmographics = row.firmographics;
+				existing.externalIds = row.externalIds;
 				return { id: existing.id };
 			}
 			const now = new Date().toISOString();
@@ -509,6 +511,8 @@ export function createFakeStore(): FakeStore {
 				ficha: {} as Ficha,
 				researchedAt: now,
 				expiresAt: now,
+				firmographics: row.firmographics,
+				externalIds: row.externalIds,
 			};
 			store.accounts.push(account);
 			return { id: account.id };

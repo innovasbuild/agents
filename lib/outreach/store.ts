@@ -117,6 +117,10 @@ export interface AccountRow {
 	ficha: Ficha;
 	researchedAt: string;
 	expiresAt: string;
+	/** Firmográficos de Apollo (spec etapa 13 §6). Ausentes en las lecturas de
+	 * research; el fake de tests los usa para espejar upsertDiscoveredAccount. */
+	firmographics?: Record<string, unknown>;
+	externalIds?: Record<string, unknown>;
 }
 
 /** Lo que el sembrador de refresh-fichas necesita de una cuenta: sin la ficha. */
@@ -1014,38 +1018,20 @@ export function createSupabaseOutreachStore(
 		},
 
 		async upsertDiscoveredAccount(row) {
-			// Un upsert manda el mismo payload al insert y al "do update set" del
-			// conflicto: si `ficha`/`expires_at` van en el payload, un upsert sobre
-			// una cuenta existente los pisaría. Por eso se resuelve antes si la
-			// cuenta ya existe, y esas dos columnas solo entran al payload cuando
-			// es alta nueva.
-			const { data: existing, error: existingError } = await client
-				.from("accounts")
-				.select("id")
-				.eq("tenant_id", row.tenantId)
-				.eq("domain", row.domain)
-				.maybeSingle();
-			if (existingError) fail("buscar la cuenta descubierta", existingError);
-
-			const payload: Row = {
-				tenant_id: row.tenantId,
-				domain: row.domain,
-				name: row.name,
-				firmographics: row.firmographics,
-				external_ids: row.externalIds,
-			};
-			if (!existing) {
-				payload.ficha = {};
-				payload.expires_at = new Date().toISOString();
-			}
-
-			const { data, error } = await client
-				.from("accounts")
-				.upsert(payload, { onConflict: "tenant_id,domain" })
-				.select("id")
-				.single();
+			// Un select-de-existencia seguido de un upsert deja una ventana TOCTOU:
+			// `research_account` (tool de chat sin lease) puede crear la cuenta con
+			// research real justo en el medio, y el upsert de descubrimiento la
+			// pisaría con `ficha: {}`. La función atómica resuelve todo en una sola
+			// sentencia: `ficha`/`expires_at` solo se tocan en el insert.
+			const { data, error } = await client.rpc("upsert_discovered_account", {
+				p_tenant_id: row.tenantId,
+				p_domain: row.domain,
+				p_name: row.name,
+				p_firmographics: row.firmographics,
+				p_external_ids: row.externalIds,
+			});
 			if (error || !data) fail("guardar la cuenta descubierta", error);
-			return { id: data.id as string };
+			return { id: data as string };
 		},
 
 		async insertDiscoveredContact(row) {
