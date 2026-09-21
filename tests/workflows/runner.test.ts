@@ -398,7 +398,9 @@ describe("runWorkflowPass", () => {
 
 		await pass(store, { runItem: async () => ({ ok: true }) });
 
-		expect(store.items.filter((i) => i.workflow === "icp-scoring")).toHaveLength(0);
+		expect(
+			store.items.filter((i) => i.workflow === "icp-scoring"),
+		).toHaveLength(0);
 	});
 });
 
@@ -526,7 +528,9 @@ describe("runWorkflowPass — control de acceso por nivel de efecto y downstream
 			{
 				runItem: async (item) => ({
 					ok: true,
-					downstream: [{ subjectId: item.subjectId, inputHash: item.inputHash }],
+					downstream: [
+						{ subjectId: item.subjectId, inputHash: item.inputHash },
+					],
 				}),
 			},
 			{},
