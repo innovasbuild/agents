@@ -56,6 +56,10 @@ export type DraftResult =
 			hook: string;
 			vector: string;
 			idioma: string;
+			/** Etiquetas legibles de hook/vector/idioma, para mostrar en vez del slug. */
+			hookLabel: string;
+			vectorLabel: string;
+			idiomaLabel: string;
 			ancla: { hecho: string; fuente: string };
 			gate: GateResult;
 			attempts: number;
@@ -191,7 +195,15 @@ export async function draftMessage(
 			rules: canon.rules,
 		});
 		if (gate.status === "ok")
-			return { ok: true, ...draft, gate, attempts: attempt };
+			return {
+				ok: true,
+				...draft,
+				hookLabel: tenant.labels.hook[draft.hook] ?? draft.hook,
+				vectorLabel: tenant.labels.vector[draft.vector] ?? draft.vector,
+				idiomaLabel: tenant.labels.idioma[draft.idioma] ?? draft.idioma,
+				gate,
+				attempts: attempt,
+			};
 		violations = [
 			...gate.violations,
 			...gate.notes.map((note) => ({
