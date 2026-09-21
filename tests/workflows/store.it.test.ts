@@ -1,0 +1,100 @@
+// Integración contra la Supabase local (npm run db:start). No corre en
+// `npm test`: se dispara con `npm run test:it:workflows`. Es la prueba del
+// criterio de cierre 6 de la spec: dos pasadas a la vez no procesan lo mismo.
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createSupabaseWorkflowStore } from "@/lib/workflows/store";
+
+const enabled = process.env.WORKFLOWS_IT === "1";
+const TENANT = "aaaaaaaa-0000-0000-0000-0000000000f1";
+
+describe.skipIf(!enabled)("WorkflowStore contra Postgres", () => {
+	// vitest ejecuta el cuerpo de un describe salteado: el cliente se crea en
+	// beforeAll para que `npm test` sin variables de Supabase no tire.
+	let admin: SupabaseClient;
+	let store: ReturnType<typeof createSupabaseWorkflowStore>;
+
+	beforeAll(async () => {
+		admin = createClient(
+			process.env.NEXT_PUBLIC_SUPABASE_URL ?? "",
+			process.env.SUPABASE_SERVICE_ROLE_KEY ?? "",
+			{ auth: { persistSession: false } },
+		);
+		store = createSupabaseWorkflowStore(admin);
+		await admin.from("tenants").delete().eq("id", TENANT);
+		const { error } = await admin
+			.from("tenants")
+			.insert({ id: TENANT, slug: "it-workflows", display_name: "IT" });
+		if (error) throw new Error(error.message);
+	});
+
+	afterAll(async () => {
+		await admin.from("tenants").delete().eq("id", TENANT);
+	});
+
+	it("insertWorkItem deduplica por huella", async () => {
+		const row = {
+			tenantId: TENANT,
+			workflow: "refresh-fichas",
+			subjectType: "account",
+			subjectId: "cccccccc-0000-0000-0000-000000000001",
+			inputHash: "h1",
+		};
+		expect(await store.insertWorkItem(row)).toBe("inserted");
+		expect(await store.insertWorkItem(row)).toBe("ya_visto");
+	});
+
+	it("dos reclamos simultáneos nunca entregan el mismo ítem", async () => {
+		for (let i = 2; i <= 9; i++) {
+			await store.insertWorkItem({
+				tenantId: TENANT,
+				workflow: "refresh-fichas",
+				subjectType: "account",
+				subjectId: `cccccccc-0000-0000-0000-00000000000${i}`,
+				inputHash: "h1",
+			});
+		}
+		const [a, b] = await Promise.all([
+			store.claim(TENANT, "refresh-fichas", 5, 60),
+			store.claim(TENANT, "refresh-fichas", 5, 60),
+		]);
+		const ids = [...a, ...b].map((item) => item.id);
+		expect(new Set(ids).size).toBe(ids.length);
+		expect(ids.length).toBe(9);
+	});
+
+	it("sin presupuesto cargado el límite es cero", async () => {
+		expect(await store.dailyLimit(TENANT, "model_usd")).toBe(0);
+	});
+
+	it("abre y cierra una corrida con sus conteos", async () => {
+		const runId = await store.openRun({
+			tenantId: TENANT,
+			agent: "outreach",
+			workflow: "refresh-fichas",
+			startedAt: new Date(),
+		});
+		await store.closeRun(runId, {
+			status: "ok",
+			error: null,
+			claimed: 3,
+			ok: 2,
+			refused: 1,
+			failed: 0,
+			finishedAt: new Date(),
+		});
+		const { data } = await admin
+			.from("runs")
+			.select("workflow, status, items_claimed, items_ok, items_refused")
+			.eq("id", runId)
+			.single();
+		expect(data).toEqual({
+			workflow: "refresh-fichas",
+			status: "ok",
+			items_claimed: 3,
+			items_ok: 2,
+			items_refused: 1,
+		});
+	});
+});
