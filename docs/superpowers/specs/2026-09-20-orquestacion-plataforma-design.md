@@ -512,6 +512,8 @@ Bloque para `CLAUDE.md`. **Se mergea junto con la implementación**, no antes (D
 
 Se suma una pregunta a la revisión de cada PR, junto a la del kickoff §9: *"¿qué nivel de efecto tiene cada nodo nuevo, y está en el registry?"*
 
+**Aplicado el 2026-09-21 (E4)** en `CLAUDE.md` y en `docs/02-orquestacion.md`, con un desvío: el adaptador `lib/workflows/approval-policy.ts` de §7.3, que haría que el `approval` de una tool del chat lea la política del tenant, no se construyó. Hoy la política `always | once | auto` la leen solo los workflows (`nodePolicy` en `lib/workflows/store.ts`), y en el chat toda tool de nivel 2 o 3 lleva `approval` explícito. La línea del bloque se ajustó a eso. Se construye cuando algún tenant necesite nivel 2 sin aprobación desde el chat.
+
 ## 13. Spikes
 
 | # | Pregunta | Bloquea a | Si da que no |
