@@ -37,6 +37,10 @@ export interface FakeStore extends OutreachStore {
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
 	events: OutreachEventInsert[];
+	/** Forma mínima de una pieza, solo para que hasContactBeenTouched pueda
+	 * chequear "¿este contacto ya tiene una pieza?" sin tener que armar un
+	 * QueueItemRow completo en cada test. */
+	queueItems: { tenantId: string; contactKey: string }[];
 	focuses: FocusRow[];
 	contactSeed(): ContactRow;
 }
@@ -131,6 +135,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		gmailThreadId: null,
 		source: "csv",
 		icp: null,
+		externalIds: {},
 		...overrides,
 	};
 }
@@ -161,6 +166,7 @@ export function createFakeStore(): FakeStore {
 		accounts: [],
 		queue: [],
 		events: [],
+		queueItems: [],
 		focuses: [],
 
 		async loadExecutor(tenantId, userId) {
@@ -574,9 +580,53 @@ export function createFakeStore(): FakeStore {
 				hook: row.hook,
 				idioma: row.idioma,
 				source: "apollo",
+				externalIds: row.externalIds,
 			});
 			store.contacts.push(contact);
 			return { id: contact.id };
+		},
+
+		async hasContactBeenTouched(tenantId, contactKey) {
+			// Los eventos reales llegan con las columnas snake_case de
+			// OutreachEventInsert, pero algunos tests arman el objeto a mano
+			// (`as never`) con las claves del dominio (tenantId/contactKey): se
+			// chequean las dos formas para no depender de cuál usó el test.
+			const touchedByEvent = store.events.some((e) => {
+				const row = e as unknown as {
+					tenant_id?: string;
+					tenantId?: string;
+					contact_key?: string;
+					contactKey?: string;
+				};
+				return (
+					(row.tenant_id ?? row.tenantId) === tenantId &&
+					(row.contact_key ?? row.contactKey) === contactKey
+				);
+			});
+			if (touchedByEvent) return true;
+			return store.queueItems.some(
+				(q) => q.tenantId === tenantId && q.contactKey === contactKey,
+			);
+		},
+
+		async promoteContactKey(tenantId, id, patch) {
+			const contact = store.contacts.find(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.id === id &&
+					c.contactKey === patch.oldKey,
+			);
+			if (!contact) return "carrera_perdida";
+			const conflict = store.contacts.some(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.id !== id &&
+					c.contactKey === patch.newKey,
+			);
+			if (conflict) return "duplicado";
+			contact.contactKey = patch.newKey;
+			contact.email = patch.email;
+			return "promovido";
 		},
 
 		contactSeed(): ContactRow {

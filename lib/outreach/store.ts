@@ -91,6 +91,9 @@ export interface ContactRow {
 	gmailThreadId: string | null;
 	source: "csv" | "chat" | "apollo";
 	icp: ContactIcp | null;
+	/** IDs del proveedor de origen (Apollo, etc.), `{}` si no vino de uno. Lo
+	 * usa reveal-email para saber a quién pedirle el email. */
+	externalIds: Record<string, unknown>;
 }
 
 export type NewContact = Pick<
@@ -340,6 +343,18 @@ export interface OutreachStore {
 		idioma: string;
 		externalIds: Record<string, unknown>;
 	}): Promise<{ id: string } | "duplicado">;
+	/** El invariante que hace segura la promoción (§6.3): un contacto con
+	 * eventos o piezas ya tiene su clave congelada. */
+	hasContactBeenTouched(tenantId: string, contactKey: string): Promise<boolean>;
+	/** UPDATE optimista guardado por la clave vieja: si otra promoción ganó la
+	 * carrera, `oldKey` ya no matchea y da 0 filas, no un 23505 — por eso
+	 * ADEMÁS se chequea el 23505 de la clave nueva, que es el caso real de
+	 * "esa persona ya existía". */
+	promoteContactKey(
+		tenantId: string,
+		id: string,
+		patch: { oldKey: string; newKey: string; email: string },
+	): Promise<"promovido" | "duplicado" | "carrera_perdida">;
 }
 
 export interface PendingReply {
@@ -368,7 +383,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -408,6 +423,7 @@ const toContact = (r: Row): ContactRow => ({
 		Object.keys(r.icp as object).length > 0
 			? (r.icp as ContactIcp)
 			: null,
+	externalIds: (r.external_ids as Record<string, unknown> | null) ?? {},
 });
 
 const toQueueItem = (r: Row): QueueItemRow => ({
@@ -1123,6 +1139,40 @@ export function createSupabaseOutreachStore(
 			if (error?.code === "23505") return "duplicado";
 			if (error || !data) fail("crear el contacto descubierto", error);
 			return { id: data.id as string };
+		},
+
+		async hasContactBeenTouched(tenantId, contactKey) {
+			const [events, queueItems] = await Promise.all([
+				client
+					.from("events")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+				client
+					.from("queue_items")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+			]);
+			if (events.error) fail("chequear eventos del contacto", events.error);
+			if (queueItems.error) fail("chequear piezas del contacto", queueItems.error);
+			return (events.count ?? 0) > 0 || (queueItems.count ?? 0) > 0;
+		},
+
+		async promoteContactKey(tenantId, id, patch) {
+			const { data, error } = await client
+				.from("contacts")
+				.update({ contact_key: patch.newKey, email: patch.email })
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.eq("contact_key", patch.oldKey)
+				.select("id")
+				.maybeSingle();
+			if (error) {
+				if (error.code === "23505") return "duplicado";
+				fail("promover la clave del contacto", error);
+			}
+			return data ? "promovido" : "carrera_perdida";
 		},
 	};
 }

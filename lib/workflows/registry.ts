@@ -25,6 +25,8 @@ export const NODES: Record<string, NodeInfo> = {
 	// Tres preguntas a Jev sobre lo que la búsqueda ya trajo gratis. Modelo fijo:
 	// no elige entre el tier variable de `models`.
 	"outreach/icp-score": { effect: 1, tier: null, model: "typesafe-ai/jev" },
+	// Gasta un crédito de Apollo por cabeza, igual que target-search.
+	"outreach/reveal-email": { effect: 1, tier: null },
 };
 
 export const SERVICES_EXCLUIDOS: Record<string, string> = {
