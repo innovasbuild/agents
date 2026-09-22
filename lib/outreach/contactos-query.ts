@@ -21,6 +21,8 @@ export interface ContactRow {
 	ownerUserId: string | null;
 	ownerSlug: string | null;
 	accountDomain: string | null;
+	icpLane: string | null;
+	icpScore: number | null;
 }
 
 export interface ContactFilters {
@@ -28,6 +30,7 @@ export interface ContactFilters {
 	ejecutor: string | null;
 	vector: string | null;
 	hook: string | null;
+	lane: string | null;
 	q: string | null;
 }
 
@@ -46,6 +49,9 @@ export function toContactRows(raw: readonly unknown[]): ContactRow[] {
 		const row = entry as Record<string, unknown>;
 		const owner = first(row.executors as { slug?: unknown } | null);
 		const account = first(row.accounts as { domain?: unknown } | null);
+		const icp = row.icp as
+			| { lane?: string; encaje_empresa?: { score?: number } }
+			| null;
 		return {
 			id: str(row.id),
 			contactKey: str(row.contact_key),
@@ -61,6 +67,11 @@ export function toContactRows(raw: readonly unknown[]): ContactRow[] {
 			ownerUserId: nullableStr(row.owner_user_id),
 			ownerSlug: nullableStr(owner?.slug),
 			accountDomain: nullableStr(account?.domain),
+			icpLane: icp?.lane ?? null,
+			icpScore:
+				typeof icp?.encaje_empresa?.score === "number"
+					? icp.encaje_empresa.score
+					: null,
 		};
 	});
 }
@@ -96,6 +107,7 @@ export function parseContactFilters(params: URLSearchParams): ContactFilters {
 		ejecutor: clean(params.get("ejecutor"), SLUG_RE),
 		vector: clean(params.get("vector"), VALUE_RE),
 		hook: clean(params.get("hook"), VALUE_RE),
+		lane: clean(params.get("lane"), VALUE_RE),
 		q: q === "" ? null : q.slice(0, MAX_QUERY_LENGTH),
 	};
 }

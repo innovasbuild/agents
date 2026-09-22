@@ -18,6 +18,20 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 const fecha = (value: string | null) =>
 	value ? new Date(value).toLocaleDateString("es-AR") : "—";
 
+// Mismos tres carriles de decideIcp (lib/outreach/icp.ts). Colores tomados de
+// los tokens ya definidos en globals.css, no uno nuevo por pantalla.
+const LANE_LABELS: Record<string, string> = {
+	calificado: "Calificado",
+	para_revisar: "Para revisar",
+	descartado: "Descartado",
+};
+
+const LANE_BADGE_CLASSES: Record<string, string> = {
+	calificado: "bg-success/10 text-success",
+	para_revisar: "bg-warn/10 text-warn",
+	descartado: "bg-muted text-muted-foreground",
+};
+
 export function ContactosClient({
 	slug,
 	filters,
@@ -43,6 +57,7 @@ export function ContactosClient({
 				ejecutor: filters.ejecutor,
 				vector: filters.vector,
 				hook: filters.hook,
+				lane: filters.lane,
 				q: filters.q,
 			};
 			current[key] = value;
@@ -68,6 +83,7 @@ export function ContactosClient({
 		filters.ejecutor ||
 		filters.vector ||
 		filters.hook ||
+		filters.lane ||
 		filters.q;
 
 	return (
@@ -97,6 +113,18 @@ export function ContactosClient({
 					{OUTREACH_STAGES.map((stage) => (
 						<option key={stage} value={stage}>
 							{STAGE_LABELS[stage]}
+						</option>
+					))}
+				</select>
+				<select
+					className="h-11 rounded-md border bg-background px-3 text-sm sm:max-w-xs"
+					value={filters.lane ?? ""}
+					onChange={(event) => setFilter("lane", event.target.value || null)}
+				>
+					<option value="">Todos los carriles</option>
+					{Object.entries(LANE_LABELS).map(([lane, label]) => (
+						<option key={lane} value={lane}>
+							{label}
 						</option>
 					))}
 				</select>
@@ -161,6 +189,16 @@ function ContactCard({ row }: { row: ContactRow }) {
 					<p className="text-xs">
 						{STAGE_LABELS[row.stage as keyof typeof STAGE_LABELS] ?? row.stage}
 					</p>
+					{row.icpLane ? (
+						<span
+							className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${
+								LANE_BADGE_CLASSES[row.icpLane] ?? "bg-muted text-muted-foreground"
+							}`}
+						>
+							{LANE_LABELS[row.icpLane] ?? row.icpLane}
+							{row.icpScore !== null ? ` · ${row.icpScore}` : ""}
+						</span>
+					) : null}
 					<p className="text-muted-foreground text-xs tabular-nums">
 						{row.touches} {row.touches === 1 ? "toque" : "toques"} ·{" "}
 						{fecha(row.lastTouchAt)}

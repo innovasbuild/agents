@@ -58,6 +58,26 @@ describe("toContactRows", () => {
 
 		expect(row.touches).toBe(0);
 	});
+
+	it("trae el carril y el puntaje del ICP", () => {
+		const rows = toContactRows([
+			{
+				id: "1",
+				contact_key: "em:a@b.test",
+				stage: "a_contactar",
+				touches: 0,
+				icp: { lane: "calificado", encaje_empresa: { score: 1.8 } },
+			},
+		]);
+		expect(rows[0]).toMatchObject({ icpLane: "calificado", icpScore: 1.8 });
+	});
+
+	it("un contacto sin calificar trae ambos en null", () => {
+		const rows = toContactRows([
+			{ id: "1", contact_key: "em:a@b.test", stage: "a_contactar", touches: 0, icp: null },
+		]);
+		expect(rows[0]).toMatchObject({ icpLane: null, icpScore: null });
+	});
 });
 
 describe("parseContactFilters", () => {
@@ -67,8 +87,14 @@ describe("parseContactFilters", () => {
 			ejecutor: null,
 			vector: null,
 			hook: null,
+			lane: null,
 			q: null,
 		});
+	});
+
+	it("parsea el filtro de carril desde la URL", () => {
+		const filters = parseContactFilters(new URLSearchParams("lane=calificado"));
+		expect(filters.lane).toBe("calificado");
 	});
 
 	it("toma la etapa que viene del link del embudo", () => {
