@@ -8,7 +8,7 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 
 1. Leé el canon: `brain_search` con tag `canon:icp`, `canon:hooks` y `canon:mensajes`, y `brain_read` de lo que haga falta. La voz del ejecutor la aplica `draft_message`.
 2. Elegí el marco: segmento y vector del contacto; hook por defecto del vector salvo que la ficha pida otro (decí por qué). Un hook por mensaje.
-3. `draft_message` redacta desde los dolores de la ficha: lo que una empresa como la suya puede ganar, de 3 a 5 dolores concretos con su beneficio, qué hacemos en una frase y un pedido concreto. Lo que sabemos de la empresa va al pasar, sin validarlo: nunca "vi que" ni "leí en su web".
+3. `draft_message` redacta desde los dolores de la ficha, con la voz del ejecutor: su página de voz define estructura, largo y registro. Sin voz cargada usa el formato por defecto: lo que una empresa como la suya puede ganar, de 3 a 5 dolores concretos con su beneficio, qué hacemos en una frase y un pedido concreto. Lo que sabemos de la empresa va al pasar, sin validarlo: nunca "vi que" ni "leí en su web".
 4. Si `draft_message` devuelve `reason: "gate"`, no reescribas vos por fuera: contale al ejecutor qué violación quedó y pedile el cambio; con el texto nuevo, `queue_touch` vuelve a correr el gate.
 5. Para editar a pedido del ejecutor, cambiá solo lo que pidió y usá `update_queue_item`; el gate vuelve a correr.
 
