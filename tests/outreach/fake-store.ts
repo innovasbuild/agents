@@ -362,13 +362,23 @@ export function createFakeStore(): FakeStore {
 		},
 
 		async listContactsReadyToDraft(tenantId) {
+			const liveContactIds = new Set(
+				store.queue
+					.filter(
+						(q) =>
+							q.tenantId === tenantId &&
+							(q.status === "pending" || q.status === "approved"),
+					)
+					.map((q) => q.contactId),
+			);
 			return store.contacts
 				.filter(
 					(c) =>
 						c.tenantId === tenantId &&
 						c.email !== null &&
 						c.icp?.lane === "calificado" &&
-						c.firstTouchAt === null,
+						c.firstTouchAt === null &&
+						!liveContactIds.has(c.id),
 				)
 				.map((c) => ({ contactId: c.id, contactKey: c.contactKey }));
 		},

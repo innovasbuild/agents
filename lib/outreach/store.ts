@@ -287,7 +287,8 @@ export interface OutreachStore {
 		executorUserId: string,
 		since: Date,
 	): Promise<number>;
-	/** Contactos `contacto_listo` (email revelado, sin pieza viva) elegibles
+	/** Contactos `contacto_listo` (email revelado, calificado, sin primer
+	 * toque todavía y sin una pieza pending/approved ya encolada) elegibles
 	 * para draft-queue hoy: el sembrador de reintento diario (D17). */
 	listContactsReadyToDraft(
 		tenantId: string,
@@ -863,10 +864,15 @@ export function createSupabaseOutreachStore(
 		},
 
 		async listContactsReadyToDraft(tenantId, _now) {
-			// "listo": email revelado, calificado, sin pieza viva (pending/approved/sent)
-			// y sin evento de rechazo previo por cupo en las últimas 20 horas —
-			// eso último lo filtra el input_hash con fecha, no esta query: acá
-			// alcanza con "no tiene ya una pieza".
+			// "listo": email revelado, calificado, todavía sin primer toque
+			// (first_touch_at solo se estampa en el envío real, send.ts, nunca al
+			// encolar) y, sumado acá, sin una pieza pending/approved ya esperando
+			// el click humano en /cola — dos consultas y filtrado en memoria, como
+			// funnelForFocus (Task 22), en vez de un join: sin eso, mientras la
+			// pieza espera sus hasta 7 días (queue_items.expires_at) el seed()
+			// diario la re-sembraba y gastaba un draftMessage + un verifyFact real
+			// por gusto, antes de que insertQueueItem la frenara igual con
+			// "pieza_viva".
 			const { data, error } = await client
 				.from("contacts")
 				.select("id, contact_key, email")
@@ -875,10 +881,25 @@ export function createSupabaseOutreachStore(
 				.eq("icp->>lane", "calificado")
 				.is("first_touch_at", null);
 			if (error) fail("listar contactos listos para redactar", error);
-			return (data ?? []).map((r) => ({
-				contactId: r.id as string,
-				contactKey: r.contact_key as string,
-			}));
+			const candidates = data ?? [];
+			if (candidates.length === 0) return [];
+
+			const { data: live, error: liveError } = await client
+				.from("queue_items")
+				.select("contact_id")
+				.eq("tenant_id", tenantId)
+				.in("status", ["pending", "approved"]);
+			if (liveError) fail("listar piezas vivas", liveError);
+			const liveContactIds = new Set(
+				(live ?? []).map((r) => r.contact_id as string),
+			);
+
+			return candidates
+				.filter((r) => !liveContactIds.has(r.id as string))
+				.map((r) => ({
+					contactId: r.id as string,
+					contactKey: r.contact_key as string,
+				}));
 		},
 
 		async insertEvents(rows) {
