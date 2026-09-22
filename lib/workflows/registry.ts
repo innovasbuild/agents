@@ -76,6 +76,17 @@ export const WORKFLOWS: Record<string, WorkflowInfo> = {
 		caps: { itemsPerTick: 20, costUsdPerRun: 0.5 },
 		entry: "upstream",
 	},
+	"contact-enrichment": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_calificado",
+		produces: "contacto_listo",
+		nodes: ["outreach/reveal-email", "outreach/research"],
+		optionalNodes: [],
+		resources: ["apollo_credits", "model_usd"],
+		caps: { itemsPerTick: 10, costUsdPerRun: 0.3 },
+		entry: "upstream",
+	},
 };
 
 export function isWorkflow(name: string): boolean {

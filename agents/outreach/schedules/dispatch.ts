@@ -13,14 +13,17 @@ import { defineSchedule } from "eve/schedules";
 import { apiKeyValues } from "../../../lib/connectors/auth";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 import { createApolloAdapter } from "../../../lib/connectors/leads/apollo-adapter";
+import { isFichaVigente } from "../../../lib/outreach/ficha";
 import { refuse } from "../../../lib/outreach/result";
 import { runEvaluation } from "../../../lib/outreach/services/evaluate";
 import { generateResearch } from "../../../lib/outreach/services/generate-research";
 import { scoreContact } from "../../../lib/outreach/services/icp-score";
 import { researchAccount } from "../../../lib/outreach/services/research";
+import { revealContactEmail } from "../../../lib/outreach/services/reveal-email";
 import { searchTargetsPage } from "../../../lib/outreach/services/target-search";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { fetchPublicPage, resolveHost } from "../../../lib/outreach/web-page";
+import { createContactEnrichmentWorkflow } from "../../../lib/outreach/workflows/contact-enrichment";
 import {
 	createIcpScoringWorkflow,
 	type IcpScoreNode,
@@ -176,6 +179,97 @@ export default defineSchedule({
 				}),
 		});
 
+		// Mismo motivo que targetSearchTenantId más arriba: reveal y ensureFicha
+		// (ContactEnrichmentDeps) solo reciben el contactId, no el tenant — el
+		// runner nunca corre dos pasadas ni dos ítems a la vez, así que esta
+		// variable, fijada al entrar a runItem, ya está resuelta cuando esas
+		// funciones la leen.
+		let contactEnrichmentCtx: { tenantId: string; runId: string } | null =
+			null;
+
+		const contactEnrichmentImpl = createContactEnrichmentWorkflow({
+			async reveal(contactId) {
+				const { tenantId } = contactEnrichmentCtx as {
+					tenantId: string;
+					runId: string;
+				};
+				const bindings = await loadTenantBindings(tenantId);
+				const binding = bindings.find(
+					(b) => b.capability === "leads" && b.provider === "apollo",
+				);
+				const connectorUids =
+					(binding?.config.connectorUids as string[] | undefined) ?? [];
+				if (connectorUids.length === 0) {
+					return refuse(
+						"sin_binding_apollo",
+						"el tenant no tiene Apollo conectado",
+					);
+				}
+				const keys = await apiKeyValues(connectorUids);
+				return revealContactEmail(
+					{ tenantId, contactId },
+					{ store: outreach, leads: createApolloAdapter(keys) },
+				);
+			},
+			async ensureFicha(contactId) {
+				const { tenantId, runId } = contactEnrichmentCtx as {
+					tenantId: string;
+					runId: string;
+				};
+				const contact = await outreach.findContactById(tenantId, contactId);
+				if (!contact?.accountId) {
+					return refuse(
+						"sin_cuenta",
+						`el contacto ${contactId} no tiene cuenta asociada`,
+					);
+				}
+				const account = await outreach.findAccountById(
+					tenantId,
+					contact.accountId,
+				);
+				if (!account?.domain) {
+					return refuse(
+						"sin_cuenta",
+						`la cuenta del contacto ${contactId} no tiene dominio`,
+					);
+				}
+				if (isFichaVigente(new Date(account.expiresAt), new Date())) {
+					return { ok: true };
+				}
+				const result = await research({
+					tenantId,
+					runId,
+					workflow: "contact-enrichment",
+					domain: account.domain,
+					name: account.name,
+				});
+				return result.ok
+					? { ok: true }
+					: { ok: false, reason: result.reason, message: result.message };
+			},
+			recordCredits: (credits, runId) =>
+				record({
+					tenantId: (contactEnrichmentCtx as { tenantId: string }).tenantId,
+					runId,
+					workflow: "contact-enrichment",
+					node: "outreach/reveal-email",
+					resource: "apollo_credits",
+					amount: credits,
+					unit: "credits",
+					meta: {},
+				}),
+		});
+
+		const contactEnrichment = {
+			async runItem(
+				item: Parameters<typeof contactEnrichmentImpl.runItem>[0],
+				ctx: Parameters<typeof contactEnrichmentImpl.runItem>[1],
+			) {
+				contactEnrichmentCtx = { tenantId: ctx.tenantId, runId: ctx.runId };
+				return contactEnrichmentImpl.runItem(item, ctx);
+			},
+		};
+
 		const outcomes = await runDispatch({
 			agent: AGENT,
 			store: createSupabaseWorkflowStore(admin),
@@ -212,6 +306,7 @@ export default defineSchedule({
 				"refresh-fichas": createRefreshFichas({ store: outreach }),
 				"target-search": targetSearch,
 				"icp-scoring": createIcpScoringWorkflow(),
+				"contact-enrichment": contactEnrichment,
 			},
 			nodes: {
 				"outreach/research": research,
