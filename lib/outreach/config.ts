@@ -45,6 +45,17 @@ export const outreachConfigSchema = z.object({
 		})
 		.partial()
 		.default({}),
+	// Los niveles del score del ICP (spec etapa 13 §7.2). `revision` entra en
+	// el input_hash del scoring: tocarla recalifica a todos.
+	icp: z
+		.object({
+			revision: z.string().min(1).max(40),
+			encaje_empresa: z.array(z.string().min(10).max(400)).min(2).max(10),
+			rol_decisor: z.array(z.string().min(10).max(400)).min(2).max(10),
+			excluir: z.string().min(10).max(400),
+		})
+		.nullable()
+		.default(null),
 });
 
 export type OutreachConfig = Omit<

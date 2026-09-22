@@ -29,6 +29,7 @@ describe("parseOutreachConfig", () => {
 			timezone: "America/Argentina/Buenos_Aires",
 			bcc: null,
 			deal: null,
+			icp: null,
 			models: {
 				...DEFAULT_OUTREACH_MODELS,
 				classify: "anthropic/claude-sonnet-5",
@@ -43,6 +44,33 @@ describe("parseOutreachConfig", () => {
 	});
 	it("los idiomas soportados coinciden con los del gate", () => {
 		expect([...SUPPORTED_IDIOMAS]).toEqual([...GATE_IDIOMAS]);
+	});
+	it("acepta los niveles del ICP y exige entre 2 y 10 por dimensión", () => {
+		const config = parseOutreachConfig({
+			icp: {
+				revision: "2026-09-22",
+				encaje_empresa: ["no entra todavía", "podría encajar", "encaja bien"],
+				rol_decisor: ["sin relación", "influye algo", "decide todo"],
+				excluir: "Es competidora, ya cliente, o proveedora",
+			},
+		});
+		expect(config.icp?.revision).toBe("2026-09-22");
+		expect(config.icp?.encaje_empresa).toHaveLength(3);
+	});
+	it("un solo nivel no es una escala: se rechaza", () => {
+		expect(() =>
+			parseOutreachConfig({
+				icp: {
+					revision: "r1",
+					encaje_empresa: ["uno"],
+					rol_decisor: ["a", "b"],
+					excluir: "x",
+				},
+			}),
+		).toThrow();
+	});
+	it("sin bloque icp, la config sigue siendo válida y el scoring no corre", () => {
+		expect(parseOutreachConfig({}).icp).toBeNull();
 	});
 });
 
