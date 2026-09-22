@@ -12,7 +12,7 @@
 
 ## Alcance de este documento
 
-La spec parte la etapa en cuatro entregas. Este plan detalla **E1 (descubrimiento) y E2 (calificación)** tarea por tarea, con código. **E3 y E4 quedan con alcance e interfaces fijados** al final, y se detallan al cerrar E2 — E3 depende de lo que E1 y E2 dejen construido, y de los topes reales que salgan del spike S5.
+La spec parte la etapa en cuatro entregas. Este plan detalla las **cuatro**, tarea por tarea, con código. E1 (descubrimiento) y E2 (calificación) están **implementadas, revisadas y mergeadas** (Tasks 1-16); E3 (enrichment y pieza) y E4 (pantallas) se agregaron el 2026-09-22, después de cerrar E2, y están **planificadas pero sin implementar** — su "Investigación previa" documenta lo que se leyó del código real antes de escribirlas. Las Tasks 10, 16 y el cierre de E3/E4 contra producción (Tasks 21 y 26) están en pausa: Mati decidió no conectar Apollo por ahora (ver `docs/01-roadmap-etapas.md`), así que E3/E4 se pueden implementar y revisar en código, pero no cerrar contra datos reales hasta que se retome.
 
 ## Global Constraints
 
@@ -3066,34 +3066,1417 @@ git commit -m "chore: baja del spike de Jev"
 
 ---
 
-# Entrega 3 · Enrichment y pieza — alcance e interfaces
+# Entrega 3 · Enrichment y pieza
 
-Se detalla al cerrar E2. Lo que queda fijado:
+## Investigación previa (orquestador, 2026-09-22)
+
+Antes de detallar tareas, se leyó el código real que estas tareas consumen — la spec fija el contrato, pero varias piezas ya existentes cambian cómo se implementa:
+
+1. **`draftMessage`/`queueTouch` (`lib/outreach/services/draft.ts`, `queue.ts`) son las tools del chat**, ya construidas en la Etapa 3. Toman un `Caller` (`{tenantId, userId, role, email}`) y hacen todo lo que `draft-queue` necesita: cargan canon, redactan, corren el gate, chequean claim contra el CRM, arman el ancla y encolan. Ninguna de las dos lee `caller.role` ni `caller.email` en ningún punto de su lógica (confirmado leyendo los dos archivos completos) — solo `caller.tenantId` y `caller.userId`. Por eso `draft-queue` **reusa estas dos funciones tal cual**, con un `Caller` sintético (`{tenantId, userId: contact.ownerUserId, role: "tenant_member", email: ""}`), en vez de reimplementar redacción, gate y claim para el camino desatendido. Es el mismo patrón que ya usa `refresh-fichas` con `research` (Etapa 12 E3), pero acá no hace falta ni una función intermedia: las tools del chat sirven derecho.
+2. **`ItemOutcome` no tiene una tercera opción para "todavía no, reintentá más tarde sin gastar un intento."** Un `{ok:false}` es terminal (nunca se reintenta, confirmado en la review de la Task 15 contra `runner.ts`); una excepción se reintenta con backoff de minutos y a los 3 intentos queda `failed` para siempre. Ninguna de las dos sirve para "el ejecutor ya llegó a su cupo de hoy, probá mañana." **Decisión (D17):** `draft-queue.input_hash` lleva la fecha (`<contactId>:<kind>:<YYYY-MM-DD>`, zona horaria del tenant). Si el cupo está agotado, el ítem de HOY se refusa (`cupo_agotado`, terminal para esa fecha) y el workflow suma un `seed()` propio que, en cada pasada, vuelve a sembrar con la fecha de HOY a todo contacto `contacto_listo` que todavía no tiene una pieza viva ni un intento de hoy. Mismo patrón que ya usan `refresh-fichas`/`target-search` (repreguntar elegibilidad en cada pasada), aplicado a un caso donde además hace falta la fecha en la huella. `contact-enrichment` sigue encolando el primer intento por `downstream` (camino rápido); el `seed()` es la red que atrapa a los que un día se quedaron sin cupo.
+3. **No hace falta ninguna migración para esta entrega.** `contacts.email`, `contacts.contact_key` y el índice único `(tenant_id, contact_key)` ya existen (Etapa 3); `events`/`queue_items` ya se consultan por `contact_key`; `executors.daily_quota` ya existe. Todo el trabajo es TypeScript.
+4. **`ContactPatch` no admite tocar `contactKey` ni `email`** (son polvorientos a propósito: cualquier cambio de identidad pasa por un método dedicado, no por el patch genérico). La promoción de clave necesita su propio método de store con `UPDATE ... WHERE contact_key = <vieja>` (optimista) para no pisar una promoción concurrente, capturando `23505` como `"duplicado"` — mismo patrón que `insertDiscoveredContact` (Task 6).
+
+## Mapa de archivos
+
+| Archivo | Responsabilidad | Entrega |
+|---|---|---|
+| `lib/outreach/services/reveal-email.ts` | Nodo `leads/reveal-email`: revela, promueve la clave, refusa `duplicado`/`contacto_ya_tocado` | E3 |
+| `lib/outreach/workflows/contact-enrichment.ts` | Revela el email y asegura la ficha con `outreach/research` | E3 |
+| `lib/outreach/services/verify-fact.ts` | Nodo `outreach/verify-fact`: pregunta `boolean` a Jev sobre el ancla | E3 |
+| `lib/outreach/workflows/draft-queue.ts` | Redacta (reusa `draftMessage`), verifica el ancla, encola (reusa `queueTouch`). Cupo diario con `seed()` de reintento | E3 |
+| `lib/outreach/store.ts` (modificar) | `promoteContactKey`, `hasContactBeenTouched`, `countQueuedToday`, `listContactsReadyToDraft` | E3 |
+| `lib/outreach/focus-query.ts` | Lecturas de foco + embudo para `/focos` | E4 |
+| `app/[tenant]/focos/actions.ts` | Crear foco, calificar/descartar a mano | E4 |
+| `app/[tenant]/focos/page.tsx` + `focos-client.tsx` | Pantalla `/focos` | E4 |
+| `app/[tenant]/focos/[id]/revisar/page.tsx` + client | Bandeja de baja confianza | E4 |
+| `lib/outreach/contactos-query.ts` (modificar) | Columna y filtro de puntaje ICP | E4 |
+
+---
+
+### Task 17: Promoción de `contact_key` y el nodo `leads/reveal-email`
+
+**Files:**
+- Modify: `lib/outreach/store.ts` (`promoteContactKey`, `hasContactBeenTouched`)
+- Create: `lib/outreach/services/reveal-email.ts`
+- Test: `tests/outreach/services/reveal-email.test.ts`
+- Modify: `tests/outreach/fake-store.ts`
+
+**Interfaces:**
+- Consumes: `LeadsAdapter.revealEmail` (Task 2), `contactKey`/`normalizeEmail` (`lib/outreach/contact-key.ts`).
+- Produces:
+  - En `OutreachStore`: `promoteContactKey(tenantId, id, {oldKey, newKey, email}): Promise<"promovido" | "duplicado">`, `hasContactBeenTouched(tenantId, contactKey): Promise<boolean>`.
+  - `revealContactEmail(input: {tenantId, contactId}, deps): Promise<Refusal | {ok: true; email: string; creditsUsed: number}>`.
+
+- [ ] **Step 1: Test que falla**
+
+```ts
+// tests/outreach/services/reveal-email.test.ts
+import { describe, expect, it } from "vitest";
+import { revealContactEmail } from "@/lib/outreach/services/reveal-email";
+import { createFakeStore, contactRow, TENANT } from "../fake-store";
+
+function deps(store = createFakeStore(), email: string | null = "laura@acme.test") {
+	return {
+		store,
+		leads: {
+			searchOrganizations: async () => ({ organizations: [], hasMore: false, creditsUsed: 0 }),
+			searchPeople: async () => ({ people: [], hasMore: false, creditsUsed: 0 }),
+			revealEmail: async () => ({ email, creditsUsed: 1 }),
+		},
+	};
+}
+
+describe("revealContactEmail", () => {
+	it("revela el email y promueve la clave a em:<email>", async () => {
+		const store = createFakeStore();
+		store.contacts.push({
+			...contactRow(),
+			id: "c1",
+			contactKey: "li:laura-gomez",
+			externalIds: { apollo: "p1" },
+		} as never);
+
+		const result = await revealContactEmail({ tenantId: TENANT, contactId: "c1" }, deps(store));
+
+		expect(result).toMatchObject({ ok: true, email: "laura@acme.test", creditsUsed: 1 });
+		expect(store.contacts[0].contactKey).toBe("em:laura@acme.test");
+		expect(store.contacts[0].email).toBe("laura@acme.test");
+	});
+
+	it("Apollo sin email para esa persona: refusa sin gastar la clave", async () => {
+		const store = createFakeStore();
+		store.contacts.push({ ...contactRow(), id: "c1", externalIds: { apollo: "p1" } } as never);
+
+		const result = await revealContactEmail({ tenantId: TENANT, contactId: "c1" }, deps(store, null));
+
+		expect(result).toMatchObject({ ok: false, reason: "sin_email" });
+		expect(store.contacts[0].contactKey).not.toMatch(/^em:/);
+	});
+
+	it("la clave promovida ya existe: duplicado, no se fusiona", async () => {
+		const store = createFakeStore();
+		store.contacts.push(
+			{ ...contactRow(), id: "existente", contactKey: "em:laura@acme.test" } as never,
+			{ ...contactRow(), id: "c1", contactKey: "li:laura-gomez", externalIds: { apollo: "p1" } } as never,
+		);
+
+		const result = await revealContactEmail({ tenantId: TENANT, contactId: "c1" }, deps(store));
+
+		expect(result).toMatchObject({ ok: false, reason: "duplicado" });
+	});
+
+	it("un contacto ya tocado (con evento o pieza) no promueve: la clave ya está congelada", async () => {
+		const store = createFakeStore();
+		store.contacts.push({ ...contactRow(), id: "c1", contactKey: "li:laura-gomez", externalIds: { apollo: "p1" } } as never);
+		store.events.push({ tenantId: TENANT, contactKey: "li:laura-gomez", type: "encolado" } as never);
+
+		const result = await revealContactEmail({ tenantId: TENANT, contactId: "c1" }, deps(store));
+
+		expect(result).toMatchObject({ ok: false, reason: "contacto_ya_tocado" });
+	});
+
+	it("un contacto sin externalIds.apollo no se puede revelar", async () => {
+		const store = createFakeStore();
+		store.contacts.push({ ...contactRow(), id: "c1", externalIds: {} } as never);
+
+		const result = await revealContactEmail({ tenantId: TENANT, contactId: "c1" }, deps(store));
+
+		expect(result).toMatchObject({ ok: false, reason: "sin_origen_apollo" });
+	});
+});
+```
+
+- [ ] **Step 2: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/services/reveal-email.test.ts`
+Esperado: FALLA con módulo inexistente.
+
+- [ ] **Step 3: Sumar los métodos al store**
+
+En `lib/outreach/store.ts`, interfaz `OutreachStore`:
+
+```ts
+	/** El invariante que hace segura la promoción (§6.3): un contacto con
+	 * eventos o piezas ya tiene su clave congelada. */
+	hasContactBeenTouched(tenantId: string, contactKey: string): Promise<boolean>;
+	/** UPDATE optimista guardado por la clave vieja: si otra promoción ganó la
+	 * carrera, `oldKey` ya no matchea y da 0 filas, no un 23505 — por eso
+	 * ADEMÁS se chequea el 23505 de la clave nueva, que es el caso real de
+	 * "esa persona ya existía". */
+	promoteContactKey(
+		tenantId: string,
+		id: string,
+		patch: { oldKey: string; newKey: string; email: string },
+	): Promise<"promovido" | "duplicado" | "carrera_perdida">;
+```
+
+Implementación real:
+
+```ts
+		async hasContactBeenTouched(tenantId, contactKey) {
+			const [events, queueItems] = await Promise.all([
+				client
+					.from("events")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+				client
+					.from("queue_items")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+			]);
+			if (events.error) fail("chequear eventos del contacto", events.error);
+			if (queueItems.error) fail("chequear piezas del contacto", queueItems.error);
+			return (events.count ?? 0) > 0 || (queueItems.count ?? 0) > 0;
+		},
+
+		async promoteContactKey(tenantId, id, patch) {
+			const { data, error } = await client
+				.from("contacts")
+				.update({ contact_key: patch.newKey, email: patch.email })
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.eq("contact_key", patch.oldKey)
+				.select("id")
+				.maybeSingle();
+			if (error) {
+				if (error.code === "23505") return "duplicado";
+				fail("promover la clave del contacto", error);
+			}
+			return data ? "promovido" : "carrera_perdida";
+		},
+```
+
+Agregá las mismas dos implementaciones al `FakeStore` de `tests/outreach/fake-store.ts`: `hasContactBeenTouched` revisa `store.events`/`store.queueItems` en memoria (si `queueItems` no existe todavía como array del fake, agregalo, vacío por default); `promoteContactKey` busca el contacto por `id` y `contactKey === oldKey`, si otro contacto ya tiene `newKey` devuelve `"duplicado"`, si no lo encuentra por `oldKey` devuelve `"carrera_perdida"`, si no hay conflicto lo actualiza y devuelve `"promovido"`.
+
+- [ ] **Step 4: Implementar el nodo**
+
+```ts
+// lib/outreach/services/reveal-email.ts
+// Nodo leads/reveal-email (spec etapa 13 §5.2 y §6.3): revela el email y en
+// la MISMA operación promueve la clave del contacto a em:<email>. No hay
+// transacción explícita porque no hace falta: promoteContactKey es un solo
+// UPDATE atómico, y si algo falla después (nada falla después) no queda a
+// medio camino.
+import { contactKey, normalizeEmail } from "../contact-key";
+import type { LeadsAdapter } from "../../connectors/leads/adapter";
+import { type Refusal, refuse } from "../result";
+import type { OutreachStore } from "../store";
+
+export interface RevealEmailDeps {
+	store: OutreachStore;
+	leads: LeadsAdapter;
+}
+
+export type RevealEmailResult =
+	| Refusal
+	| { ok: true; email: string; creditsUsed: number };
+
+export async function revealContactEmail(
+	input: { tenantId: string; contactId: string },
+	deps: RevealEmailDeps,
+): Promise<RevealEmailResult> {
+	const contact = await deps.store.findContactById(input.tenantId, input.contactId);
+	if (!contact) {
+		return refuse("contacto_inexistente", `no existe el contacto ${input.contactId}`);
+	}
+	const apolloId = (contact.externalIds as { apollo?: string } | undefined)?.apollo;
+	if (!apolloId) {
+		return refuse(
+			"sin_origen_apollo",
+			"este contacto no vino de Apollo: no hay a quién pedirle el email",
+		);
+	}
+	if (await deps.store.hasContactBeenTouched(input.tenantId, contact.contactKey)) {
+		return refuse(
+			"contacto_ya_tocado",
+			"este contacto ya tiene eventos o piezas: su clave ya está congelada",
+		);
+	}
+
+	const revealed = await deps.leads.revealEmail(apolloId);
+	if (!revealed.email) {
+		return refuse("sin_email", "Apollo no tiene (o no revela) el email de esta persona");
+	}
+	const email = normalizeEmail(revealed.email);
+	if (!email) {
+		return refuse("email_invalido", `Apollo devolvió un email con forma inválida`);
+	}
+	const newKey = contactKey({ email });
+
+	const promoted = await deps.store.promoteContactKey(input.tenantId, contact.id, {
+		oldKey: contact.contactKey,
+		newKey,
+		email,
+	});
+	if (promoted === "duplicado") {
+		return refuse(
+			"duplicado",
+			`ya existe un contacto con la clave ${newKey}: esta persona ya estaba en la base`,
+		);
+	}
+	if (promoted === "carrera_perdida") {
+		// Otro proceso ya promovió esta clave entre el read y el write: no hay
+		// nada más para hacer, el contacto ya tiene su email.
+		return refuse(
+			"ya_promovido",
+			"la clave de este contacto ya se promovió en otra corrida",
+		);
+	}
+
+	return { ok: true, email, creditsUsed: revealed.creditsUsed };
+}
+```
+
+- [ ] **Step 5: Correr y ver pasar**
+
+Run: `npm run typecheck && npm test`
+Esperado: verde (5 tests del Step 1).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/outreach/store.ts lib/outreach/services/reveal-email.ts tests/outreach/services/reveal-email.test.ts tests/outreach/fake-store.ts
+git commit -m "feat: promoción de contact_key y nodo de revelado de email"
+```
+
+---
+
+### Task 18: El workflow `contact-enrichment`
+
+**Files:**
+- Create: `lib/outreach/workflows/contact-enrichment.ts`
+- Modify: `lib/workflows/registry.ts`
+- Modify: `agents/outreach/schedules/dispatch.ts`
+- Test: `tests/outreach/workflows/contact-enrichment.test.ts`
+
+**Interfaces:**
+- Consumes: `revealContactEmail` (Task 17), `researchAccount` (Etapa 12, ya existe, `lib/outreach/services/research.ts`), `upsertAccount` (ya existe).
+- Produces: `createContactEnrichmentWorkflow(deps): WorkflowImpl`. Registry: nodo `leads/reveal-email` (efecto 1) + reuso de `outreach/research` (ya registrado); workflow `contact-enrichment` (`claims: "contacto_calificado"`, `produces: "contacto_listo"`, `resources: ["apollo_credits", "model_usd"]`, `entry: "upstream"`).
+
+**Decisión ya fijada (spec §4.1):** `input_hash = contactId` pelado. Revelar un email es irrepetible: si el ítem ya corrió (con cualquier resultado terminal), no hay "reintentar" con otra huella — un refusal de negocio (`duplicado`, `contacto_ya_tocado`) es definitivo, y una excepción de infraestructura sí se reintenta con la MISMA huella (eso ya lo maneja el runner sin cambios).
+
+- [ ] **Step 1: Test que falla**
+
+```ts
+// tests/outreach/workflows/contact-enrichment.test.ts
+import { describe, expect, it, vi } from "vitest";
+import { createContactEnrichmentWorkflow } from "@/lib/outreach/workflows/contact-enrichment";
+
+const ctx = {
+	tenantId: "t1",
+	runId: "run-1",
+	workflow: "contact-enrichment",
+	optionalNodes: new Set<string>(),
+	useNode: async () => undefined,
+};
+
+const item = {
+	id: 1,
+	tenantId: "t1",
+	workflow: "contact-enrichment",
+	subjectType: "contact",
+	subjectId: "c1",
+	inputHash: "c1",
+	attempts: 1,
+};
+
+describe("workflow contact-enrichment", () => {
+	it("revela el email, asegura la ficha, y deja downstream para draft-queue", async () => {
+		const ensureFicha = vi.fn(async () => ({ ok: true as const }));
+		const workflow = createContactEnrichmentWorkflow({
+			reveal: async () => ({ ok: true, email: "laura@acme.test", creditsUsed: 1 }),
+			ensureFicha,
+			recordCredits: async () => {},
+		});
+
+		const outcome = await workflow.runItem(item, ctx);
+
+		expect(outcome).toMatchObject({
+			ok: true,
+			downstream: [{ subjectId: "c1", inputHash: expect.stringMatching(/^c1:msg1:\d{4}-\d{2}-\d{2}$/) }],
+		});
+		expect(ensureFicha).toHaveBeenCalledWith("c1");
+	});
+
+	it("un revelado refusado no asegura la ficha ni deja downstream", async () => {
+		const ensureFicha = vi.fn(async () => ({ ok: true as const }));
+		const workflow = createContactEnrichmentWorkflow({
+			reveal: async () => ({ ok: false, reason: "sin_email", message: "x" }),
+			ensureFicha,
+			recordCredits: async () => {},
+		});
+
+		const outcome = await workflow.runItem(item, ctx);
+
+		expect(outcome).toMatchObject({ ok: false, reason: "sin_email" });
+		expect(ensureFicha).not.toHaveBeenCalled();
+	});
+
+	it("asienta créditos de Apollo aunque el research falle (el email ya se gastó)", async () => {
+		const recordCredits = vi.fn(async () => {});
+		const workflow = createContactEnrichmentWorkflow({
+			reveal: async () => ({ ok: true, email: "laura@acme.test", creditsUsed: 1 }),
+			ensureFicha: async () => ({ ok: false, reason: "sin_hechos", message: "x" }),
+			recordCredits,
+		});
+
+		const outcome = await workflow.runItem(item, ctx);
+
+		expect(recordCredits).toHaveBeenCalledWith(1, "run-1");
+		// Sin ficha no hay ancla: no se puede redactar. El contacto queda
+		// revelado (no se pierde el email) pero no avanza a draft-queue.
+		expect(outcome).toMatchObject({ ok: true });
+		expect((outcome as { downstream?: unknown[] }).downstream ?? []).toHaveLength(0);
+	});
+});
+```
+
+- [ ] **Step 2: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/workflows/contact-enrichment.test.ts`
+Esperado: FALLA con módulo inexistente.
+
+- [ ] **Step 3: Implementar el workflow**
+
+```ts
+// lib/outreach/workflows/contact-enrichment.ts
+// Workflow contact-enrichment (spec etapa 13 §4.1 y §5.2): revela el email y
+// asegura que la cuenta tenga ficha de research antes de dejarla lista para
+// redactar. Sin sembrador: llegan por enqueue() desde icp-scoring.
+import type { ItemOutcome, WorkItem } from "../../workflows/types";
+import type { PassContext, WorkflowImpl } from "../../workflows/runner";
+import { isRefusal } from "../result";
+import type { RevealEmailResult } from "../services/reveal-email";
+
+/** Fecha del tenant en YYYY-MM-DD: entra en la huella de draft-queue (D17,
+ * cupo diario) para que un reintento de mañana sea un ítem nuevo. */
+function todayHash(contactId: string): string {
+	const iso = new Date().toISOString().slice(0, 10);
+	return `${contactId}:msg1:${iso}`;
+}
+
+export interface ContactEnrichmentDeps {
+	reveal: (contactId: string) => Promise<RevealEmailResult>;
+	/** Asegura la ficha vigente de la cuenta (research si hace falta). Reusa
+	 * el nodo outreach/research existente por dentro, en el cableado real. */
+	ensureFicha: (contactId: string) => Promise<{ ok: true } | { ok: false; reason: string; message: string }>;
+	recordCredits: (credits: number, runId: string) => Promise<void>;
+}
+
+export function createContactEnrichmentWorkflow(
+	deps: ContactEnrichmentDeps,
+): WorkflowImpl {
+	return {
+		async runItem(item: WorkItem, ctx: PassContext): Promise<ItemOutcome> {
+			const revealed = await deps.reveal(item.subjectId);
+			if (!isRefusal(revealed) && revealed.creditsUsed > 0) {
+				await deps.recordCredits(revealed.creditsUsed, ctx.runId);
+			}
+			if (isRefusal(revealed)) return revealed;
+
+			const ficha = await deps.ensureFicha(item.subjectId);
+			if (!ficha.ok) {
+				// El email ya se reveló y se guardó (revealContactEmail ya
+				// promovió la clave): no se pierde. Sin ficha no hay ancla, así
+				// que no avanza a draft-queue todavía. Un research posterior
+				// (chat o el sembrador que corresponda) lo destraba.
+				return { ok: true };
+			}
+
+			return { ok: true, downstream: [{ subjectId: item.subjectId, inputHash: todayHash(item.subjectId) }] };
+		},
+	};
+}
+```
+
+- [ ] **Step 4: Registrar y cablear**
+
+En `lib/workflows/registry.ts`, sumar a `NODES`:
+
+```ts
+	"leads/reveal-email": { effect: 1, tier: null },
+```
+
+Y a `WORKFLOWS`:
+
+```ts
+	"contact-enrichment": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_calificado",
+		produces: "contacto_listo",
+		nodes: ["leads/reveal-email", "outreach/research"],
+		optionalNodes: [],
+		resources: ["apollo_credits", "model_usd"],
+		caps: { itemsPerTick: 10, costUsdPerRun: 0.3 },
+		entry: "upstream",
+	},
+```
+
+En `agents/outreach/schedules/dispatch.ts`, sumar `"contact-enrichment": contactEnrichment` al mapa de `impls`, siguiendo el mismo patrón que `target-search` (Task 9) para resolver el `LeadsAdapter` del tenant de forma lazy dentro de `reveal`, y reusando la función `research`/`ResearchNode` que ya existe en ese archivo para `ensureFicha` (armá `ensureFicha` como: buscar el contacto, buscar/asegurar su `account` con `findAccount`/`upsertAccount` por dominio si hace falta, chequear `isFichaVigente`, y si no está vigente llamar al mismo `research(...)` que usa `refresh-fichas`, con el dominio de la cuenta del contacto). Si el contacto no tiene cuenta asociada (`accountId` null) o la cuenta no tiene dominio, `ensureFicha` devuelve `{ok:false, reason:"sin_cuenta"}`.
+
+- [ ] **Step 5: Correr y ver pasar**
+
+Run: `npm run typecheck && npm test`
+Esperado: verde, incluidos los tests del registry.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/outreach/workflows/contact-enrichment.ts lib/workflows/registry.ts agents/outreach/schedules/dispatch.ts tests/outreach/workflows/contact-enrichment.test.ts
+git commit -m "feat: workflow de enrichment de contactos"
+```
+
+---
+
+### Task 19: El nodo `outreach/verify-fact`
+
+**Files:**
+- Create: `lib/outreach/services/verify-fact.ts`
+- Test: `tests/outreach/services/verify-fact.test.ts`
+- Modify: `lib/workflows/registry.ts`
+
+**Interfaces:**
+- Consumes: `runEvaluation`, `readNoul` (Task 12) — `verify-fact` usa el mismo `readNoul` que `icp-score`, con la misma corrección `boolean`/`probability`.
+- Produces: `verifyFact(input, deps): Promise<{ verified: boolean; confidence: number }>`. Registry: nodo `outreach/verify-fact` (efecto 1, `model: "typesafe-ai/jev"`).
+
+**Decisión ya fijada (spec §5.2):** corre sobre el hecho que `draft_message` eligió como ancla (`{hecho, fuente}`), releyendo el texto de `fuente` — no sobre la ficha entera. Sin texto de la fuente (la página no se pudo releer), se trata como no verificado, nunca como verificado a ciegas.
+
+- [ ] **Step 1: Test que falla**
+
+```ts
+// tests/outreach/services/verify-fact.test.ts
+import { describe, expect, it } from "vitest";
+import { verifyFact } from "@/lib/outreach/services/verify-fact";
+
+function deps(answer: unknown) {
+	return {
+		evaluate: async () => ({
+			answers: { verificado: answer },
+			usage: { inputTokens: 300, outputTokens: 10 },
+			providerMetadata: {},
+		}),
+		readPage: async () => "Acme abrió una segunda planta en Rosario este año, según su propio comunicado.",
+	};
+}
+
+describe("verifyFact", () => {
+	it("un hecho que la fuente respalda queda verificado", async () => {
+		const result = await verifyFact(
+			{ hecho: "Acme abrió una segunda planta", fuente: "https://acme.test/news" },
+			deps({ type: "boolean", probability: 0.92 }),
+		);
+		expect(result).toEqual({ verified: true, confidence: 0.92 });
+	});
+
+	it("un hecho que la fuente no respalda queda sin verificar", async () => {
+		const result = await verifyFact(
+			{ hecho: "Acme cotiza en bolsa", fuente: "https://acme.test/news" },
+			deps({ type: "boolean", probability: 0.1 }),
+		);
+		expect(result).toEqual({ verified: false, confidence: 0.1 });
+	});
+
+	it("sin poder releer la fuente, no verificado — nunca a ciegas", async () => {
+		const result = await verifyFact(
+			{ hecho: "Acme abrió una planta", fuente: "https://acme.test/news" },
+			{ ...deps({ type: "boolean", probability: 0.9 }), readPage: async () => null },
+		);
+		expect(result).toEqual({ verified: false, confidence: 0 });
+	});
+
+	it("una respuesta con forma inesperada no verifica", async () => {
+		const result = await verifyFact(
+			{ hecho: "x", fuente: "https://acme.test/news" },
+			deps({ type: "score", score: 1 }),
+		);
+		expect(result).toEqual({ verified: false, confidence: 0 });
+	});
+});
+```
+
+- [ ] **Step 2: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/services/verify-fact.test.ts`
+Esperado: FALLA con módulo inexistente.
+
+- [ ] **Step 3: Implementar**
+
+```ts
+// lib/outreach/services/verify-fact.ts
+// Nodo outreach/verify-fact (spec etapa 13 §5.2): una pregunta boolean a Jev
+// sobre si el texto de la fuente respalda el hecho que draft_message citó
+// como ancla. Corre después de draft_message, sobre su ancla — nunca sobre
+// la ficha entera (verificar lo que nunca sale es pagar de más).
+import { readNoul } from "./evaluate";
+
+export const JEV_MODEL = "typesafe-ai/jev";
+
+export interface VerifyFactDeps {
+	evaluate: (args: {
+		model: string;
+		state: unknown;
+		questions: Record<string, unknown>;
+	}) => Promise<{ answers: Record<string, unknown>; usage: unknown; providerMetadata: unknown }>;
+	/** Relee la fuente citada; null si no se pudo (offline, 404, bloqueada). */
+	readPage: (url: string) => Promise<string | null>;
+}
+
+export async function verifyFact(
+	ancla: { hecho: string; fuente: string },
+	deps: VerifyFactDeps,
+): Promise<{ verified: boolean; confidence: number }> {
+	const texto = await deps.readPage(ancla.fuente);
+	if (!texto) return { verified: false, confidence: 0 };
+
+	const { answers } = await deps.evaluate({
+		model: JEV_MODEL,
+		state: { hecho: ancla.hecho, texto_de_la_fuente: texto.slice(0, 4000) },
+		questions: {
+			verificado: {
+				type: "boolean",
+				instructions: "¿El texto de la fuente respalda, de forma directa, el hecho descrito?",
+			},
+		},
+	});
+	const noul = readNoul(answers, "verificado");
+	if (!noul) return { verified: false, confidence: 0 };
+	return { verified: noul.probability >= 0.5, confidence: noul.probability };
+}
+```
+
+- [ ] **Step 4: Registrar**
+
+En `lib/workflows/registry.ts`, sumar a `NODES`:
+
+```ts
+	"outreach/verify-fact": { effect: 1, tier: null, model: "typesafe-ai/jev" },
+```
+
+(Se registra como nodo suelto acá; lo consume el workflow `draft-queue` de la Task 20, que lo suma a su lista de `nodes`.)
+
+- [ ] **Step 5: Correr y ver pasar**
+
+Run: `npm run typecheck && npm test`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lib/outreach/services/verify-fact.ts lib/workflows/registry.ts tests/outreach/services/verify-fact.test.ts
+git commit -m "feat: nodo de verificación del ancla contra su fuente"
+```
+
+---
+
+### Task 20: Cupo diario y el workflow `draft-queue`
+
+**Files:**
+- Modify: `lib/outreach/store.ts` (`countQueuedToday`, `listContactsReadyToDraft`)
+- Create: `lib/outreach/workflows/draft-queue.ts`
+- Modify: `lib/workflows/registry.ts`
+- Modify: `agents/outreach/schedules/dispatch.ts`
+- Test: `tests/outreach/workflows/draft-queue.test.ts`
+
+**Interfaces:**
+- Consumes: `draftMessage`, `queueTouch` (Etapa 3, ya existen, `lib/outreach/services/draft.ts` y `queue.ts`), `verifyFact` (Task 19), `Caller` (`lib/outreach/session.ts`).
+- Produces:
+  - En `OutreachStore`: `countQueuedToday(tenantId, executorUserId, since): Promise<number>`, `listContactsReadyToDraft(tenantId, now): Promise<{contactId: string; contactKey: string}[]>`.
+  - `createDraftQueueWorkflow(deps): WorkflowImpl` con `seed` y `runItem`.
+  - Registry: workflow `draft-queue` (`claims: "contacto_listo"`, `produces: null`, `nodes: ["outreach/draft", "outreach/verify-fact", "outreach/queue"]`, `entry: "upstream"`).
+
+**Decisión D17 (ya justificada en la investigación previa de esta entrega):** `input_hash = <contactId>:msg1:<YYYY-MM-DD>` (zona horaria del tenant). El cupo se chequea ANTES de redactar (evita gastar el modelo en algo que no se va a poder encolar hoy); si está agotado, `{ok:false, reason:"cupo_agotado"}` (terminal para la huella de HOY). El propio `seed()` de este workflow vuelve a sembrar mañana a los contactos que quedaron `contacto_listo` sin una pieza viva.
+
+- [ ] **Step 1: Sumar los métodos al store**
+
+En `lib/outreach/store.ts`:
+
+```ts
+	/** Piezas de HOY (cualquier estado, no solo `sent`: lo que importa acá es
+	 * cuánto se le SUMÓ a la cola hoy, no cuánto salió) encoladas por este
+	 * ejecutor. Gatea draft-queue, no el envío (eso ya lo hace countSent). */
+	countQueuedToday(tenantId: string, executorUserId: string, since: Date): Promise<number>;
+	/** Contactos `contacto_listo` (email revelado, sin pieza viva) elegibles
+	 * para draft-queue hoy: el sembrador de reintento diario (D17). */
+	listContactsReadyToDraft(tenantId: string, now: Date): Promise<{ contactId: string; contactKey: string }[]>;
+```
+
+Implementación real, siguiendo el patrón de `countSent`:
+
+```ts
+		async countQueuedToday(tenantId, executorUserId, since) {
+			const { count, error } = await client
+				.from("queue_items")
+				.select("id", { head: true, count: "exact" })
+				.eq("tenant_id", tenantId)
+				.eq("executor_user_id", executorUserId)
+				.gte("created_at", since.toISOString());
+			if (error) fail("contar piezas encoladas hoy", error);
+			return count ?? 0;
+		},
+
+		async listContactsReadyToDraft(tenantId, now) {
+			// "listo": email revelado, calificado, sin pieza viva (pending/approved/sent)
+			// y sin evento de rechazo previo por cupo en las últimas 20 horas —
+			// eso último lo filtra el input_hash con fecha, no esta query: acá
+			// alcanza con "no tiene ya una pieza".
+			const { data, error } = await client
+				.from("contacts")
+				.select("id, contact_key, email")
+				.eq("tenant_id", tenantId)
+				.not("email", "is", null)
+				.eq("icp->>lane", "calificado")
+				.is("first_touch_at", null);
+			if (error) fail("listar contactos listos para redactar", error);
+			return (data ?? []).map((r) => ({
+				contactId: r.id as string,
+				contactKey: r.contact_key as string,
+			}));
+		},
+```
+
+Sumá las mismas implementaciones al `FakeStore`.
+
+- [ ] **Step 2: Test que falla**
+
+```ts
+// tests/outreach/workflows/draft-queue.test.ts
+import { describe, expect, it, vi } from "vitest";
+import { createDraftQueueWorkflow } from "@/lib/outreach/workflows/draft-queue";
+
+const ctx = {
+	tenantId: "t1",
+	runId: "run-1",
+	workflow: "draft-queue",
+	optionalNodes: new Set<string>(),
+	useNode: async () => undefined,
+};
+
+function item(hash: string) {
+	return {
+		id: 1,
+		tenantId: "t1",
+		workflow: "draft-queue",
+		subjectType: "contact",
+		subjectId: "c1",
+		inputHash: hash,
+		attempts: 1,
+	};
+}
+
+describe("workflow draft-queue", () => {
+	it("con cupo disponible, redacta, verifica y encola", async () => {
+		const queue = vi.fn(async () => ({ ok: true as const, queueItemId: "q1" }));
+		const workflow = createDraftQueueWorkflow({
+			ownerOf: async () => "exec-1",
+			quotaFor: async () => 5,
+			queuedToday: async () => 2,
+			draft: async () => ({
+				ok: true,
+				subject: "s",
+				body: "b",
+				ancla: { hecho: "h", fuente: "https://acme.test" },
+			}),
+			verify: async () => ({ verified: true, confidence: 0.9 }),
+			queue,
+		});
+
+		const outcome = await workflow.runItem(item("c1:msg1:2026-09-22"), ctx);
+
+		expect(outcome).toMatchObject({ ok: true });
+		expect(queue).toHaveBeenCalled();
+	});
+
+	it("sin cupo hoy, refusa sin llamar a draftMessage", async () => {
+		const draft = vi.fn();
+		const workflow = createDraftQueueWorkflow({
+			ownerOf: async () => "exec-1",
+			quotaFor: async () => 5,
+			queuedToday: async () => 5,
+			draft,
+			verify: async () => ({ verified: true, confidence: 0.9 }),
+			queue: async () => ({ ok: true, queueItemId: "q1" }),
+		});
+
+		const outcome = await workflow.runItem(item("c1:msg1:2026-09-22"), ctx);
+
+		expect(outcome).toMatchObject({ ok: false, reason: "cupo_agotado" });
+		expect(draft).not.toHaveBeenCalled();
+	});
+
+	it("un ancla que no verifica no se encola", async () => {
+		const queue = vi.fn();
+		const workflow = createDraftQueueWorkflow({
+			ownerOf: async () => "exec-1",
+			quotaFor: async () => 5,
+			queuedToday: async () => 0,
+			draft: async () => ({
+				ok: true,
+				subject: "s",
+				body: "b",
+				ancla: { hecho: "h", fuente: "https://acme.test" },
+			}),
+			verify: async () => ({ verified: false, confidence: 0.2 }),
+			queue,
+		});
+
+		const outcome = await workflow.runItem(item("c1:msg1:2026-09-22"), ctx);
+
+		expect(outcome).toMatchObject({ ok: false, reason: "ancla_no_verificada" });
+		expect(queue).not.toHaveBeenCalled();
+	});
+
+	it("un refusal de draftMessage se propaga tal cual", async () => {
+		const workflow = createDraftQueueWorkflow({
+			ownerOf: async () => "exec-1",
+			quotaFor: async () => 5,
+			queuedToday: async () => 0,
+			draft: async () => ({ ok: false, reason: "falta_research", message: "x" }),
+			verify: async () => ({ verified: true, confidence: 1 }),
+			queue: async () => ({ ok: true, queueItemId: "q1" }),
+		});
+
+		const outcome = await workflow.runItem(item("c1:msg1:2026-09-22"), ctx);
+
+		expect(outcome).toMatchObject({ ok: false, reason: "falta_research" });
+	});
+
+	it("el sembrador siembra con la fecha de hoy a los contactos listos", async () => {
+		const now = new Date("2026-09-22T15:00:00Z");
+		const workflow = createDraftQueueWorkflow({
+			ownerOf: async () => "exec-1",
+			quotaFor: async () => 5,
+			queuedToday: async () => 0,
+			listReady: async () => [{ contactId: "c1", contactKey: "em:laura@acme.test" }],
+			draft: async () => ({ ok: false, reason: "x", message: "x" }),
+			verify: async () => ({ verified: true, confidence: 1 }),
+			queue: async () => ({ ok: true, queueItemId: "q1" }),
+		});
+
+		const seeded = await workflow.seed?.("t1", now);
+
+		expect(seeded).toEqual([{ subjectId: "c1", inputHash: "c1:msg1:2026-09-22" }]);
+	});
+});
+```
+
+- [ ] **Step 3: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/workflows/draft-queue.test.ts`
+Esperado: FALLA con módulo inexistente.
+
+- [ ] **Step 4: Implementar el workflow**
+
+```ts
+// lib/outreach/workflows/draft-queue.ts
+// Workflow draft-queue (spec etapa 13 §4.1 y D17 de esta entrega): redacta,
+// verifica el ancla, encola. El cupo diario del ejecutor (executors.daily_quota)
+// se chequea ANTES de redactar. Sin cupo, el ítem de HOY se refusa
+// (terminal para esa fecha) y el propio seed() vuelve a sembrar mañana.
+import type { ItemOutcome, WorkItem } from "../../workflows/types";
+import type { PassContext, WorkflowImpl } from "../../workflows/runner";
+import { isRefusal, refuse } from "../result";
+
+function todayIso(now: Date): string {
+	return now.toISOString().slice(0, 10);
+}
+
+function parseHash(inputHash: string): { contactId: string; date: string } {
+	const [contactId, , date] = inputHash.split(":");
+	return { contactId, date: date ?? todayIso(new Date()) };
+}
+
+export interface DraftQueueDeps {
+	/** `contacts.owner_user_id` de este contacto. */
+	ownerOf: (contactId: string) => Promise<string | null>;
+	/** `executors.daily_quota` de ese ejecutor. */
+	quotaFor: (executorUserId: string) => Promise<number>;
+	/** Piezas ya encoladas hoy por ese ejecutor (desde la medianoche del tenant). */
+	queuedToday: (executorUserId: string) => Promise<number>;
+	/** Contactos `contacto_listo` sin pieza viva, para el sembrador diario. */
+	listReady?: () => Promise<{ contactId: string; contactKey: string }[]>;
+	draft: (contactId: string) => Promise<
+		| { ok: true; subject: string; body: string; ancla: { hecho: string; fuente: string } }
+		| { ok: false; reason: string; message: string }
+	>;
+	verify: (ancla: { hecho: string; fuente: string }) => Promise<{ verified: boolean; confidence: number }>;
+	queue: (
+		contactId: string,
+		draft: { subject: string; body: string; ancla: { hecho: string; fuente: string } },
+	) => Promise<{ ok: true; queueItemId: string } | { ok: false; reason: string; message: string }>;
+}
+
+export function createDraftQueueWorkflow(deps: DraftQueueDeps): WorkflowImpl {
+	return {
+		...(deps.listReady
+			? {
+					async seed(_tenantId: string, now: Date) {
+						const ready = await deps.listReady?.() ?? [];
+						const date = todayIso(now);
+						return ready.map((c) => ({
+							subjectId: c.contactId,
+							inputHash: `${c.contactId}:msg1:${date}`,
+						}));
+					},
+				}
+			: {}),
+
+		async runItem(item: WorkItem, _ctx: PassContext): Promise<ItemOutcome> {
+			const { contactId } = parseHash(item.inputHash);
+
+			const ownerUserId = await deps.ownerOf(contactId);
+			if (!ownerUserId) {
+				return refuse("sin_dueno", "este contacto no tiene ejecutor asignado");
+			}
+			const [quota, queuedToday] = await Promise.all([
+				deps.quotaFor(ownerUserId),
+				deps.queuedToday(ownerUserId),
+			]);
+			if (queuedToday >= quota) {
+				return refuse(
+					"cupo_agotado",
+					`el ejecutor ya encoló ${queuedToday} piezas hoy (cupo ${quota}): se reintenta mañana`,
+				);
+			}
+
+			const drafted = await deps.draft(contactId);
+			if (isRefusal(drafted)) return drafted;
+
+			const verified = await deps.verify(drafted.ancla);
+			if (!verified.verified) {
+				return refuse(
+					"ancla_no_verificada",
+					`la fuente no respalda el hecho citado (confianza ${verified.confidence.toFixed(2)})`,
+				);
+			}
+
+			const queued = await deps.queue(contactId, drafted);
+			if (isRefusal(queued)) return queued;
+
+			return { ok: true };
+		},
+	};
+}
+```
+
+- [ ] **Step 5: Cablear al dispatcher**
+
+En `agents/outreach/schedules/dispatch.ts`, sumar `"draft-queue": draftQueue`, armando:
+
+- `draft`: un `Caller` sintético `{tenantId, userId: ownerUserId, role: "tenant_member", email: ""}` (confirmado en la investigación previa: `draftMessage`/`queueTouch` no leen `role`/`email`) pasado a `draftMessage({caller, contactKey, kind: "msg1"}, ...)`, con las mismas `DraftDeps` (`loadCanon`, `generate` envuelto en `metered`) que ya arma `agents/outreach/tools/draft_message.ts` para la tool del chat — leé ese archivo y reusá exactamente esas deps, no las reconstruyas.
+- `verify`: `verifyFact` con `readPage` = el mismo `fetchPublicPage`/`resolveHost` que usa `research` (ya cableado en este mismo `dispatch.ts` para `refresh-fichas`), y `evaluate` envuelto en `metered` (nodo `outreach/verify-fact`, recurso `model_usd`).
+- `queue`: `queueTouch({caller, contactKey, kind: "msg1", ...draft}, ...)`, con las mismas `QueueDeps` que ya arma `agents/outreach/tools/queue_touch.ts` para la tool del chat.
+- `ownerOf`/`quotaFor`/`queuedToday`/`listReady`: contra `outreach` (`createSupabaseOutreachStore`), con `dayStart(tenant.config.timezone, now)` (ya existe en `lib/outreach/time.ts`) para el corte de "hoy".
+
+`outreach/draft` (efecto 1, tier `fuerte`) y `outreach/queue` (efecto 0) ya están en `NODES`: no hace falta re-registrarlos, solo sumarlos al array `nodes` del workflow nuevo.
+
+En `lib/workflows/registry.ts`, sumar a `WORKFLOWS`:
+
+```ts
+	"draft-queue": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_listo",
+		produces: null,
+		nodes: ["outreach/draft", "outreach/verify-fact", "outreach/queue"],
+		optionalNodes: [],
+		resources: ["model_usd"],
+		caps: { itemsPerTick: 15, costUsdPerRun: 0.3 },
+		entry: "upstream",
+	},
+```
+
+`outreach/draft` y `outreach/queue` ya están en `NODES` de una etapa anterior — confirmalo antes de sumarlos de nuevo (si no existen con esos nombres exactos, agregalos con el nivel que corresponda, mirando cómo están registrados los nodos del chat existentes).
+
+- [ ] **Step 6: Anotar la enmienda D17 en la spec**
+
+En `docs/superpowers/specs/2026-09-20-etapa-13-pipeline-gtm-design.md`, §4.1 (la tabla de `input_hash`), corregir la fila de `draft-queue` de `<contactId>:<kind>` a `<contactId>:<kind>:<fecha>`, con una nota: *"Enmienda (E3, Task 20): lleva la fecha porque `ItemOutcome` no admite un tercer resultado ('todavía no, reintentá mañana') sin gastar un intento ni marcar el ítem como terminado para siempre. El workflow suma su propio `seed()` para resembrar diariamente a los `contacto_listo` sin pieza."*
+
+- [ ] **Step 7: Correr y ver pasar**
+
+Run: `npm run typecheck && npm test`
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add lib/outreach/store.ts lib/outreach/workflows/draft-queue.ts lib/workflows/registry.ts agents/outreach/schedules/dispatch.ts tests/outreach/workflows/draft-queue.test.ts tests/outreach/fake-store.ts docs/superpowers/specs/2026-09-20-etapa-13-pipeline-gtm-design.md
+git commit -m "feat: cupo diario y workflow de redacción y cola"
+```
+
+---
+
+### Task 21: Cierre de E3 contra producción
+
+Igual que la Task 10 (E1): **requiere que Apollo esté conectado** (Task 10) y que haya contactos `calificado` reales. Con Apollo en pausa, esta tarea queda anotada, no ejecutada, hasta que se retome la Task 10.
+
+- [ ] **Step 1:** con al menos un contacto `calificado` real, esperar el cron y verificar en producción:
+
+```sql
+select count(*) filter (where email is not null) as revelados
+from public.contacts where tenant_id = '<innovas>' and icp->>'lane' = 'calificado';
+
+select status, count(*) from public.queue_items where tenant_id = '<innovas>' group by 1;
+
+select sum(amount) from public.usage_entries
+where workflow = 'contact-enrichment' and resource = 'apollo_credits';
+```
+
+Esperado: revelados = contactos calificados; al menos una pieza `pending` en la cola; créditos de `apollo_credits` gastados en `contact-enrichment` = tantos como contactos calificados, **nunca** más que eso (criterio 3 de la spec, §2).
+
+- [ ] **Step 2:** aprobar una pieza real desde `/cola` y confirmar que sale con su atribución completa en HubSpot (criterio 5 de la spec).
+
+**E3 cerrada cuando ambos pasos confirman en producción.**
+
+---
+
+# Entrega 4 · Pantallas
+
+## Investigación previa (orquestador, 2026-09-22)
+
+- El patrón de server actions de `/cola` (`app/[tenant]/cola/actions.ts`) es el molde: `webSession(slug)` para la identidad real (nunca de un argumento del cliente), zod en el borde, `revalidatePath` al final. `/focos` y su bandeja lo siguen igual.
+- `/contactos` ya separa la query en `lib/outreach/contactos-query.ts` (`ContactRow`, `ContactFilters`, `toContactRows`, `parseContactFilters`) del `page.tsx` que arma la consulta a Supabase con el cliente del usuario (RLS decide qué se ve). Extender esa columna es un cambio quirúrgico ahí, no una pantalla nueva.
+- `search_focuses` ya tiene `listActiveFocuses`, `loadFocus`, `updateFocus` (Task 6). Falta una lectura para la LISTA completa (no solo activos) con sus contadores para el embudo, y la escritura de creación (hoy solo existe por CLI, `scripts/outreach-focus.mts`, que esta entrega reemplaza).
+- No hace falta ninguna migración: `search_focuses.accounts_found`/`contacts_found` ya existen: el embudo se arma contando `accounts`/`contacts`/`work_items` por `search_focus_id`, más `queue_items` por `contact_key` de esos contactos.
+
+## Mapa de archivos
 
 | Archivo | Responsabilidad |
 |---|---|
-| `lib/outreach/services/reveal-email.ts` | Nodo `leads/reveal-email`: revela, promueve la clave (§6.3), refusa `duplicado` y `contacto_ya_tocado` |
-| `lib/outreach/workflows/contact-enrichment.ts` | Revela el email y asegura la ficha de la cuenta con el nodo `outreach/research` que ya existe |
-| `lib/outreach/services/verify-fact.ts` | Nodo `outreach/verify-fact`: una pregunta `noul` a Jev sobre el hecho que eligió `draft_message` |
-| `lib/outreach/workflows/draft-queue.ts` | Redacta, verifica el ancla, encola. Respeta `executors.daily_quota` |
+| `lib/outreach/focus-query.ts` | Tipos y parsers de foco para las pantallas, espejo de `contactos-query.ts` |
+| `lib/outreach/store.ts` (modificar) | `listFocuses` (todos, no solo activos), `insertFocus`, `funnelForFocus` |
+| `app/[tenant]/focos/actions.ts` | `createFocus`, `qualifyContact`, `discardContact` |
+| `app/[tenant]/focos/page.tsx` + `focos-client.tsx` | Formulario + lista + embudo |
+| `app/[tenant]/focos/[id]/revisar/page.tsx` + client | Bandeja de baja confianza |
+| `lib/outreach/contactos-query.ts` (modificar) | Columna y filtro de puntaje ICP |
 
-**Decisiones ya tomadas:**
+---
 
-- La promoción de clave va en el nodo de revelado, no en el workflow: es una sola transacción con el revelado.
-- `draft-queue` corta por cupo del ejecutor, no por tope del workflow: el cupo es por persona y ya existe en `executors.daily_quota`.
-- Un contacto que queda sin cupo no falla: queda `contacto_listo` y lo toma la pasada de mañana.
-- `verify-fact` corre **después** de `draft_message` y sobre su ancla, no sobre la ficha entera.
-- El `input_hash` de `contact-enrichment` es el `contactId` pelado: revelar un email es irrepetible.
+### Task 22: Lecturas y escrituras para `/focos`
 
-# Entrega 4 · Pantallas — alcance
+**Files:**
+- Create: `lib/outreach/focus-query.ts`
+- Modify: `lib/outreach/store.ts` (`listFocuses`, `insertFocus`, `funnelForFocus`)
+- Create: `app/[tenant]/focos/actions.ts`
+- Test: `tests/outreach/focus-query.test.ts`
 
-| Pantalla | Qué |
-|---|---|
-| `/focos` (nueva) | Formulario de foco (filtros + atribución + topes), lista con contadores, embudo por foco |
-| `/focos/<id>/revisar` | La bandeja de baja confianza: puntaje, confianza, razones, y dos botones (calificar / descartar) |
-| `/contactos` (crece) | Columna de puntaje ICP y su filtro |
+**Interfaces:**
+- Consumes: `parseTargetCriteria` (Task 6), `enqueue` (Etapa 12), `webSession`/`webStoreDeps` (`lib/outreach/web-session.ts`, `web-context.ts`).
+- Produces:
+  - `parseFocusForm(raw: unknown): {name, criteria, vector, segment, hook, idioma, maxAccounts, maxContacts}` (zod, mismas reglas que `scripts/outreach-focus-args.ts` + `targetCriteriaSchema`).
+  - En `OutreachStore`: `listFocuses(tenantId): Promise<FocusRow[]>` (todos, cualquier `status`), `insertFocus(row): Promise<FocusRow>`, `funnelForFocus(tenantId, focusId): Promise<FocusFunnel>`.
+  - `interface FocusFunnel { descubiertos: number; calificados: number; descartados: number; paraRevisar: number; enriquecidos: number; encolados: number; enviados: number }`.
+  - Server actions: `createFocus`, `qualifyContact`, `discardContact`.
 
-Las server actions siguen el patrón de `/cola`: zod en el borde, `caller` de la sesión, nunca del cliente. Calificar a mano encola el enrichment con `enqueue()`; descartar cierra el contacto con su razón. El formulario reemplaza a `scripts/outreach-focus.mts`, que se borra en esa entrega.
+- [ ] **Step 1: Test que falla (parser)**
+
+```ts
+// tests/outreach/focus-query.test.ts
+import { describe, expect, it } from "vitest";
+import { parseFocusForm } from "@/lib/outreach/focus-query";
+
+describe("parseFocusForm", () => {
+	it("acepta un foco completo", () => {
+		const parsed = parseFocusForm({
+			name: "Envases GBA",
+			criteria: { employeeRanges: ["50,200"], locations: ["Buenos Aires, Argentina"] },
+			vector: "v1",
+			segment: "s1",
+			hook: "h1",
+			idioma: "es_ar",
+			maxAccounts: "20",
+			maxContacts: "60",
+		});
+		expect(parsed).toMatchObject({ name: "Envases GBA", maxAccounts: 20, maxContacts: 60 });
+	});
+
+	it("rechaza topes en cero o negativos", () => {
+		expect(() =>
+			parseFocusForm({
+				name: "x",
+				criteria: { employeeRanges: ["1,10"] },
+				vector: "v1",
+				segment: "s1",
+				hook: "h1",
+				idioma: "es_ar",
+				maxAccounts: "0",
+				maxContacts: "10",
+			}),
+		).toThrow();
+	});
+
+	it("rechaza un criterio vacío (el mismo chequeo de targetCriteriaSchema)", () => {
+		expect(() =>
+			parseFocusForm({
+				name: "x",
+				criteria: {},
+				vector: "v1",
+				segment: "s1",
+				hook: "h1",
+				idioma: "es_ar",
+				maxAccounts: "10",
+				maxContacts: "10",
+			}),
+		).toThrow();
+	});
+});
+```
+
+- [ ] **Step 2: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/focus-query.test.ts`
+Esperado: FALLA con módulo inexistente.
+
+- [ ] **Step 3: Implementar `focus-query.ts`**
+
+```ts
+// lib/outreach/focus-query.ts
+// Parser del formulario de /focos (spec etapa 13 §9.2), espejo de
+// contactos-query.ts. Reusa targetCriteriaSchema (Task 6): un foco desde la
+// pantalla tiene el mismo criterio que uno creado por CLI.
+import { z } from "zod";
+import { targetCriteriaSchema } from "./focus";
+
+const numeric = z.coerce.number().int().positive();
+
+export const focusFormSchema = z.object({
+	name: z.string().trim().min(1).max(200),
+	criteria: targetCriteriaSchema,
+	vector: z.string().min(1).max(80),
+	segment: z.string().min(1).max(80),
+	hook: z.string().min(1).max(80),
+	idioma: z.string().min(1).max(20),
+	maxAccounts: numeric,
+	maxContacts: numeric,
+});
+
+export type FocusForm = z.infer<typeof focusFormSchema>;
+
+export function parseFocusForm(raw: unknown): FocusForm {
+	return focusFormSchema.parse(raw);
+}
+```
+
+- [ ] **Step 4: Sumar los métodos al store**
+
+En `lib/outreach/store.ts`:
+
+```ts
+	/** Todos los focos del tenant, cualquier status (para /focos, a diferencia
+	 * de listActiveFocuses que usa el sembrador de target-search). */
+	listFocuses(tenantId: string): Promise<FocusRow[]>;
+	insertFocus(row: Omit<FocusRow, "id" | "accountsFound" | "contactsFound" | "status">): Promise<FocusRow>;
+	funnelForFocus(tenantId: string, focusId: string): Promise<{
+		descubiertos: number;
+		calificados: number;
+		descartados: number;
+		paraRevisar: number;
+		enriquecidos: number;
+		encolados: number;
+		enviados: number;
+	}>;
+```
+
+`listFocuses` es `findAccountById`-simple: `select` de las columnas de `search_focuses` sin filtro de `status`, ordenado por `created_at desc`. `insertFocus` es un `insert` directo devolviendo la fila (sin upsert: dos focos con el mismo nombre son focos distintos).
+
+`funnelForFocus` cuenta sobre `contacts` (descubiertos, calificados, descartados, para_revisar, enriquecidos) y sobre `queue_items` (encolados, enviados) — el estado real de una pieza vive en `queue_items.status` (`pending | approved | sent | rejected | expired`, confirmado en `QueueItemRow`), no se infiere de `contacts.stage`:
+
+```ts
+		async funnelForFocus(tenantId, focusId) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key, icp, email")
+				.eq("tenant_id", tenantId)
+				.eq("search_focus_id", focusId);
+			if (contactsError) fail("armar el embudo del foco", contactsError);
+			const rows = contacts ?? [];
+			const lane = (r: Row) => (r.icp as { lane?: string } | null)?.lane ?? null;
+			const keys = rows.map((r) => r.contact_key as string);
+
+			const { data: queueItems, error: queueError } = keys.length
+				? await client
+						.from("queue_items")
+						.select("status")
+						.eq("tenant_id", tenantId)
+						.in("contact_key", keys)
+				: { data: [] as { status: string }[], error: null };
+			if (queueError) fail("armar el embudo del foco", queueError);
+
+			return {
+				descubiertos: rows.length,
+				calificados: rows.filter((r) => lane(r) === "calificado").length,
+				descartados: rows.filter((r) => lane(r) === "descartado").length,
+				paraRevisar: rows.filter((r) => lane(r) === "para_revisar").length,
+				enriquecidos: rows.filter((r) => r.email !== null).length,
+				encolados: (queueItems ?? []).length,
+				enviados: (queueItems ?? []).filter((q) => q.status === "sent").length,
+			};
+		},
+```
+
+Sumá las tres implementaciones al `FakeStore` (el embudo en memoria, filtrando `store.contacts`/`store.queueItems` igual que arriba).
+
+- [ ] **Step 5: Server actions**
+
+```ts
+// app/[tenant]/focos/actions.ts
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+import { enqueue } from "@/lib/workflows/enqueue";
+import { parseFocusForm } from "@/lib/outreach/focus-query";
+import { webSession } from "@/lib/outreach/web-session";
+import { webStoreDeps } from "@/lib/outreach/web-context";
+import { createSupabaseWorkflowStore } from "@/lib/workflows/store";
+import { createServerSupabase } from "@/lib/supabase/server";
+
+const slugSchema = z.string().regex(/^[a-z0-9-]{1,63}$/);
+const idSchema = z.uuid();
+const reasonSchema = z.string().trim().min(1).max(500);
+
+export type FocoResult = { ok: true } | { ok: false; message: string };
+
+export async function createFocus(slug: string, form: unknown): Promise<FocoResult> {
+	if (!slugSchema.safeParse(slug).success) return { ok: false, message: "Cliente inválido." };
+	const session = await webSession(slug);
+	if (!session) return { ok: false, message: "Volvé a entrar: no hay sesión." };
+
+	let parsed: ReturnType<typeof parseFocusForm>;
+	try {
+		parsed = parseFocusForm(form);
+	} catch {
+		return { ok: false, message: "Revisá los campos del foco." };
+	}
+
+	const executor = await webStoreDeps().store.loadExecutor(
+		session.caller.tenantId,
+		session.caller.userId,
+	);
+	if (!executor?.slug) {
+		return { ok: false, message: "No sos ejecutor de outreach en este cliente." };
+	}
+
+	await webStoreDeps().store.insertFocus({
+		tenantId: session.caller.tenantId,
+		createdBy: session.caller.userId,
+		...parsed,
+	});
+	revalidatePath(`/${slug}/focos`);
+	return { ok: true };
+}
+
+/** Calificar a mano un contacto "para revisar": encola el enrichment
+ * directo (spec §9.2 — no vuelve a pasar por icp-scoring, ese ítem ya
+ * quedó `done`; el humano ya decidió el carril). */
+export async function qualifyContact(slug: string, contactId: string): Promise<FocoResult> {
+	if (!slugSchema.safeParse(slug).success || !idSchema.safeParse(contactId).success) {
+		return { ok: false, message: "Pedido inválido." };
+	}
+	const session = await webSession(slug);
+	if (!session) return { ok: false, message: "Volvé a entrar: no hay sesión." };
+
+	const result = await enqueue(
+		{
+			tenantId: session.caller.tenantId,
+			workflow: "contact-enrichment",
+			subjectType: "contact",
+			subjectId: contactId,
+			inputHash: contactId,
+		},
+		{ store: createSupabaseWorkflowStore(await createServerSupabase()) },
+	);
+	if (!result.enqueued && result.reason !== "ya_visto") {
+		return { ok: false, message: "No se pudo encolar el enrichment." };
+	}
+	revalidatePath(`/${slug}/focos`);
+	return { ok: true };
+}
+
+export async function discardContact(slug: string, contactId: string, reason: string): Promise<FocoResult> {
+	if (!slugSchema.safeParse(slug).success || !idSchema.safeParse(contactId).success) {
+		return { ok: false, message: "Pedido inválido." };
+	}
+	const parsedReason = reasonSchema.safeParse(reason);
+	if (!parsedReason.success) return { ok: false, message: "Escribí por qué lo descartás." };
+	const session = await webSession(slug);
+	if (!session) return { ok: false, message: "Volvé a entrar: no hay sesión." };
+
+	const contact = await webStoreDeps().store.findContactById(session.caller.tenantId, contactId);
+	if (!contact) return { ok: false, message: "No encuentro ese contacto." };
+	await webStoreDeps().store.updateContactIcp(session.caller.tenantId, contactId, {
+		...(contact.icp ?? { encaje_empresa: null, rol_decisor: null, excluir: null, model: "", revision: "" }),
+		lane: "descartado",
+		reason: `manual: ${parsedReason.data}`,
+		judged_at: new Date().toISOString(),
+	});
+	revalidatePath(`/${slug}/focos`);
+	return { ok: true };
+}
+```
+
+Ajustá `createSupabaseWorkflowStore(await createServerSupabase())` si la firma real de esa función (`lib/workflows/store.ts`) espera un cliente admin en vez del cliente de sesión del usuario — mirala antes de asumir. Si `enqueue` necesita el cliente admin (probable, porque `work_items` no tiene policy de insert para `authenticated`), usá `createAdminClient()` (`lib/supabase/admin.ts`) ahí en vez del cliente de sesión.
+
+- [ ] **Step 6: Correr y ver pasar**
+
+Run: `npm run typecheck && npm test`
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add lib/outreach/focus-query.ts lib/outreach/store.ts app/\[tenant\]/focos/actions.ts tests/outreach/focus-query.test.ts tests/outreach/fake-store.ts
+git commit -m "feat: lecturas y escrituras de /focos"
+```
+
+---
+
+### Task 23: La pantalla `/focos`
+
+**Files:**
+- Create: `app/[tenant]/focos/page.tsx`
+- Create: `app/[tenant]/focos/focos-client.tsx`
+
+**Interfaces:**
+- Consumes: `listFocuses`, `funnelForFocus` (Task 22), `createFocus` (Task 22).
+
+- [ ] **Step 1: `page.tsx` (server component)**
+
+Sigue el patrón de `app/[tenant]/contactos/page.tsx`: `resolveTenantAccess(slug)` → `notFound()` si no hay acceso; lee `listFocuses(tenant.id)` y, para cada foco, `funnelForFocus(tenant.id, foco.id)` (en paralelo con `Promise.all`); lee las listas cerradas del tenant (`vector`, `segment`, `hook`, `idioma` de `config_values`) para poblar los `<select>` del formulario, con la misma consulta que ya usa `/settings` o donde se cargan hoy esas listas para otra pantalla — reusar esa función, no reimplementarla. Pasa todo a `FocosClient`.
+
+- [ ] **Step 2: `focos-client.tsx` (client component)**
+
+Formulario de creación (nombre, criterio en JSON de un textarea simple con validación al enviar — un formulario de filtros más rico es una iteración futura, no bloquea esta entrega), llamando a `createFocus` con `useTransition`. Lista de focos con su `status`, `accounts_found`/`contacts_found`, y el embudo como texto simple (`descubiertos → calificados → enriquecidos → encolados → enviados`, con `descartados`/`para_revisar` aparte) — sin gráfico, una tabla o lista de números alcanza para esta entrega. Cada foco con `status: activo` y `paraRevisar > 0` linkea a `/focos/<id>/revisar`.
+
+- [ ] **Step 3: Verificar**
+
+`/qa` en desktop y mobile: crear un foco, ver que aparece en la lista con contadores en cero, y que un foco con `paraRevisar > 0` (sembralo a mano en la base local si hace falta) muestra el link a la bandeja.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add app/\[tenant\]/focos/page.tsx app/\[tenant\]/focos/focos-client.tsx
+git commit -m "feat: pantalla /focos"
+```
+
+---
+
+### Task 24: La bandeja `/focos/<id>/revisar`
+
+**Files:**
+- Create: `app/[tenant]/focos/[id]/revisar/page.tsx`
+- Create: `app/[tenant]/focos/[id]/revisar/revisar-client.tsx`
+
+**Interfaces:**
+- Consumes: `qualifyContact`, `discardContact` (Task 22).
+
+- [ ] **Step 1: `page.tsx`**
+
+Lee los contactos de ese foco con `icp->>'lane' = 'para_revisar'`: `select id, name, company, title, icp from contacts where tenant_id = ? and search_focus_id = ? and icp->>'lane' = 'para_revisar'`, con el cliente de sesión (RLS decide). Si el foco no existe o no es de este tenant, `notFound()`.
+
+- [ ] **Step 2: `revisar-client.tsx`**
+
+Una fila por contacto: nombre, empresa, cargo, puntaje de `encaje_empresa`/`rol_decisor` (`icp.encaje_empresa.score`/`icp.rol_decisor.score`), confianza mínima, y la `reason` que dejó `decideIcp` (`confianza_baja`, típicamente). Dos botones por fila: **Calificar** (llama `qualifyContact`, saca la fila de la lista en éxito) y **Descartar** (pide un motivo corto en un input inline, llama `discardContact`). `useTransition` + `revalidatePath` ya lo maneja la action; el cliente solo necesita optimistic removal de la fila o un refresh de router.
+
+- [ ] **Step 3: Verificar y commit**
+
+`/qa`, luego:
+
+```bash
+git add "app/[tenant]/focos/[id]/revisar/page.tsx" "app/[tenant]/focos/[id]/revisar/revisar-client.tsx"
+git commit -m "feat: bandeja de revisión de baja confianza"
+```
+
+---
+
+### Task 25: Columna de puntaje en `/contactos`
+
+**Files:**
+- Modify: `lib/outreach/contactos-query.ts`
+- Modify: `app/[tenant]/contactos/page.tsx`
+- Modify: `app/[tenant]/contactos/contactos-client.tsx`
+- Test: `tests/outreach/contactos-query.test.ts` (extender el existente)
+
+**Interfaces:**
+- Produces: `ContactRow.icpLane: string | null`, `ContactRow.icpScore: number | null`; `ContactFilters.lane: string | null`.
+
+- [ ] **Step 1: Test que falla**
+
+Sumar al describe existente de `tests/outreach/contactos-query.test.ts`:
+
+```ts
+	it("trae el carril y el puntaje del ICP", () => {
+		const rows = toContactRows([
+			{ id: "1", contact_key: "em:a@b.test", stage: "a_contactar", touches: 0,
+			  icp: { lane: "calificado", encaje_empresa: { score: 1.8 } } },
+		]);
+		expect(rows[0]).toMatchObject({ icpLane: "calificado", icpScore: 1.8 });
+	});
+
+	it("un contacto sin calificar trae ambos en null", () => {
+		const rows = toContactRows([{ id: "1", contact_key: "em:a@b.test", stage: "a_contactar", touches: 0, icp: null }]);
+		expect(rows[0]).toMatchObject({ icpLane: null, icpScore: null });
+	});
+
+	it("parsea el filtro de carril desde la URL", () => {
+		const filters = parseContactFilters(new URLSearchParams("lane=calificado"));
+		expect(filters.lane).toBe("calificado");
+	});
+```
+
+- [ ] **Step 2: Correr y ver fallar**
+
+Run: `npx vitest run tests/outreach/contactos-query.test.ts`
+
+- [ ] **Step 3: Implementar**
+
+En `ContactRow`, sumar `icpLane: string | null; icpScore: number | null`. En `toContactRows`:
+
+```ts
+			const icp = row.icp as { lane?: string; encaje_empresa?: { score?: number } } | null;
+			// ...
+			icpLane: icp?.lane ?? null,
+			icpScore: typeof icp?.encaje_empresa?.score === "number" ? icp.encaje_empresa.score : null,
+```
+
+En `ContactFilters`, sumar `lane: string | null`; en `parseContactFilters`:
+
+```ts
+		lane: clean(params.get("lane"), VALUE_RE),
+```
+
+En `app/[tenant]/contactos/page.tsx`: sumar `icp` a la lista de columnas del `select`, y si `filters.lane` está presente, `query = query.eq("icp->>lane", filters.lane)`.
+
+En `contactos-client.tsx`: sumar la columna de puntaje (mostrar `icpLane` con su color/badge — reusar el patrón de badges que ya tenga la tabla para `stage`) y su filtro en la barra de filtros existente, mismo patrón que `etapa`/`vector`/`hook`.
+
+- [ ] **Step 4: Verde y commit**
+
+```bash
+npm run typecheck && npm test
+git add lib/outreach/contactos-query.ts "app/[tenant]/contactos/page.tsx" "app/[tenant]/contactos/contactos-client.tsx" tests/outreach/contactos-query.test.ts
+git commit -m "feat: columna y filtro de puntaje ICP en /contactos"
+```
+
+---
+
+### Task 26: Borrar el script de CLI y cerrar E4
+
+- [ ] **Step 1:** `scripts/outreach-focus.mts` y `scripts/outreach-focus-args.ts` quedan reemplazados por `/focos`. Antes de borrarlos, confirmar que ningún test los importa (`tests/scripts/outreach-focus-args.test.ts` también se borra).
+
+```bash
+git rm scripts/outreach-focus.mts scripts/outreach-focus-args.ts tests/scripts/outreach-focus-args.test.ts
+```
+
+- [ ] **Step 2:** sacar `outreach:focus` de `package.json`.
+
+- [ ] **Step 3:** correr `npm run typecheck && npm test` en verde, commitear:
+
+```bash
+git add package.json
+git commit -m "chore: /focos reemplaza al script de CLI"
+```
+
+**E4 cerrada cuando**, contra producción con Apollo conectado (depende de la Task 10): un foco creado desde `/focos` descubre contactos reales, la bandeja de revisión muestra los de baja confianza, y calificar/descartar a mano mueve al contacto (criterio 8 de la spec, §2). Sin Apollo, E4 queda implementada y revisada pero sin verificar contra datos reales — mismo estado que E1/E2/E3.
 
 ---
 
@@ -3118,12 +4501,40 @@ Las server actions siguen el patrón de `/cola`: zod en el borde, `caller` de la
 | §11 evals con veredicto humano | 16 |
 | §8.4 `apollo_credits` en presupuestos | 10 |
 
-**Lo que este plan NO cubre y está en E3/E4:** §6.3 promoción de la clave, `verify-fact`, el cupo en `draft-queue`, y las tres pantallas. Todos con alcance fijado arriba.
-
-**Desvíos respecto de la spec, para corregir en la spec al ejecutar:**
+**Desvíos respecto de la spec, para corregir en la spec al ejecutar (E1/E2):**
 
 1. El nodo se llama `outreach/target-search`, no `leads/search-targets`: la clave del registry sale de la ruta del archivo (`lib/outreach/services/`), y el servicio vive en el dominio de outreach porque usa su store, su `contact_key` y sus guards. La capacidad `leads` sigue siendo del adapter.
 2. `NodeInfo` suma `model?: string` (ya previsto como enmienda §15 punto 1, pero conviene hacerlo en la Task 15 y no antes).
 3. El test del registry de la Etapa 12 exige `costUsdPerRun > 0` a todo workflow con nodos de efecto ≥ 1. `target-search` no gasta tokens: la condición correcta es "declara al menos un recurso". Se ajusta en la Task 8.
 
-**Consistencia de tipos:** `TargetCriteria` es el mismo tipo en el adapter, en `focus.ts` y en el nodo. `FocusRow` es el mismo en el store, el nodo y el workflow. `JevScore`/`JevNoul` son los mismos en `evaluate.ts`, `icp.ts` e `icp-score.ts`. `ItemOutcome.downstream` tiene la misma forma en `types.ts`, el runner y los dos workflows.
+**Consistencia de tipos (E1/E2):** `TargetCriteria` es el mismo tipo en el adapter, en `focus.ts` y en el nodo. `FocusRow` es el mismo en el store, el nodo y el workflow. `JevScore`/`JevNoul` son los mismos en `evaluate.ts`, `icp.ts` e `icp-score.ts`. `ItemOutcome.downstream` tiene la misma forma en `types.ts`, el runner y los dos workflows.
+
+## Auto-revisión de E3/E4 (Tasks 17-26, agregadas el 2026-09-22)
+
+Escrito después de leer el código real de `draft.ts`, `queue.ts`, `executor.ts`, `contactos-query.ts`, `web-session.ts`/`web-context.ts`, `runner.ts` y `enqueue.ts` — no solo la spec. Ver la sección "Investigación previa" al inicio de cada entrega para el detalle de cada hallazgo.
+
+**Cobertura de la spec (E3 y E4):**
+
+| Spec | Task |
+|---|---|
+| §5.2 nodo `leads/reveal-email` · §6.3 promoción de la clave | 17 |
+| §4.1 workflow `contact-enrichment` | 18 |
+| §5.2 nodo `outreach/verify-fact` | 19 |
+| §4.1 workflow `draft-queue` · cupo diario | 20 |
+| §2 criterios 3, 4, 5 contra producción | 21 |
+| §9.2 `/focos` (crear, listar, embudo) | 22, 23 |
+| §9.2 bandeja "para revisar" · calificar/descartar a mano | 22, 24 |
+| §9.3 `/contactos` crece | 25 |
+| §9.2 el formulario reemplaza al script de CLI | 26 |
+| §2 criterio 8 contra producción | 26 |
+
+**Desvíos respecto de la spec, para corregir en la spec al ejecutar (E3/E4):**
+
+1. **D17 (nueva):** el `input_hash` de `draft-queue` no es `<contactId>:<kind>` como decía la spec original (§4.1), sino `<contactId>:<kind>:<YYYY-MM-DD>`. Motivo: `ItemOutcome` no tiene una tercera opción entre "hecho" (`ok:true`) y "terminal" (`ok:false`) — no hay forma de decir "todavía no, probá mañana" sin la fecha en la huella. `draft-queue` suma un `seed()` propio (algo que la spec no preveía: lo marcaba solo `entry: "upstream"`) para resembrar diariamente a los `contacto_listo` que quedaron sin pieza. Ningún cambio a `ItemOutcome`/al runner: se resuelve entero adentro del workflow.
+2. `draft-queue` reusa `draftMessage`/`queueTouch` (las tools del chat de la Etapa 3) con un `Caller` sintético, en vez de nodos nuevos que reimplementen redacción y gate — la spec no lo prohibía, pero tampoco lo decía; es la aplicación directa del patrón que Etapa 12 E3 ya usó para `research`/`refresh-fichas`.
+3. `contact-enrichment.runItem`, cuando el revelado sale bien pero `ensureFicha` falla, devuelve `{ok:true}` sin `downstream` (no `{ok:false}`): el email ya se gastó y se guardó, no hay nada que reintentar ahí — perderlo sería gastar un crédito por nada. El contacto queda revelado, esperando que un research posterior destrabe la ficha.
+4. `funnelForFocus` cuenta "encolados"/"enviados" contra `queue_items.status`, no contra `contacts.stage` (la spec no especifica la fuente): es la fuente de verdad más directa y ya existe.
+
+**Consistencia de tipos (E3/E4):** `RevealEmailResult`/`Refusal` en `reveal-email.ts` y `contact-enrichment.ts` son el mismo shape que usan todos los nodos anteriores (`result.ts`). `ContactIcp` en `discardContact` (Task 22) es el mismo tipo que `updateContactIcp` ya exige (Task 15) — descartar a mano escribe con la misma forma que descarta Jev, solo cambia `reason` con el prefijo `manual:`. `FocusForm` (Task 22) reusa `targetCriteriaSchema` (Task 6) tal cual, sin duplicar las reglas de `TargetCriteria`.
+
+**Placeholder scan:** sin "TBD"/"más adelante"/handlers vagos. Las dos indicaciones de "ajustá si difiere de lo real" (Task 18 Step 4, sobre cómo arma `ensureFicha`; Task 23 Step 1, sobre dónde se cargan hoy las listas cerradas para un formulario) son guía para adaptarse a código que el implementador tiene que leer primero, no huecos sin contenido — mismo criterio que usaron las Tasks 1-16 ya ejecutadas y revisadas.

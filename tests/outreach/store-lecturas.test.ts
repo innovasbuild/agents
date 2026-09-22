@@ -570,4 +570,55 @@ describe("lecturas de los schedules en el fake store", () => {
 
 		expect(count).toBe(0);
 	});
+
+	// Hallazgo de la review de Task 20: first_touch_at solo se estampa en el
+	// envío real (send.ts), nunca al encolar (queueTouch no lo toca). Sin este
+	// chequeo contra queue_items, el seed() diario re-sembraba (y regastaba
+	// draftMessage + verifyFact) a un contacto cuya pieza seguía pending o
+	// approved esperando el click humano en /cola.
+	it("listContactsReadyToDraft excluye a quien ya tiene una pieza pending esperando en la cola", async () => {
+		const store = createFakeStore();
+		const calificado = (contactKey: string) => ({
+			...store.contactSeed(),
+			contactKey,
+			icp: {
+				encaje_empresa: null,
+				rol_decisor: null,
+				excluir: null,
+				lane: "calificado" as const,
+				reason: "test",
+				model: "test",
+				revision: "2026-09-01",
+				judged_at: "2026-09-01T00:00:00Z",
+			},
+		});
+		const conPieza = calificado("em:con_pieza@test.com");
+		const sinPieza = calificado("em:sin_pieza@test.com");
+		store.contacts.push(conPieza, sinPieza);
+		await store.insertQueueItem({
+			tenantId: TENANT,
+			contactId: conPieza.id,
+			contactKey: conPieza.contactKey,
+			executorUserId: USER,
+			kind: "msg1",
+			toEmail: "con_pieza@test.com",
+			subject: "Asunto",
+			body: "Cuerpo",
+			hook: "h1",
+			vector: "v1",
+			idioma: "es_ar",
+			ancla: { hecho: "Abrió planta", fuente: "https://acme.test/n" },
+			draftOriginal: { subject: "Asunto", body: "Cuerpo" },
+			gateResult: { status: "ok", violations: [], warnings: [], notes: [] },
+			replyToMessageId: null,
+			gmailThreadId: null,
+		});
+
+		const rows = await store.listContactsReadyToDraft(
+			TENANT,
+			new Date("2026-09-19T12:00:00Z"),
+		);
+
+		expect(rows.map((r) => r.contactKey)).toEqual(["em:sin_pieza@test.com"]);
+	});
 });

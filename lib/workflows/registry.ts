@@ -25,6 +25,11 @@ export const NODES: Record<string, NodeInfo> = {
 	// Tres preguntas a Jev sobre lo que la búsqueda ya trajo gratis. Modelo fijo:
 	// no elige entre el tier variable de `models`.
 	"outreach/icp-score": { effect: 1, tier: null, model: "typesafe-ai/jev" },
+	// Gasta un crédito de Apollo por cabeza, igual que target-search.
+	"outreach/reveal-email": { effect: 1, tier: null },
+	// Relee la fuente que draft_message citó como ancla y le pregunta a Jev si
+	// la respalda. Nodo suelto: lo consume el workflow draft-queue (Task 20).
+	"outreach/verify-fact": { effect: 1, tier: null, model: "typesafe-ai/jev" },
 };
 
 export const SERVICES_EXCLUIDOS: Record<string, string> = {
@@ -72,6 +77,28 @@ export const WORKFLOWS: Record<string, WorkflowInfo> = {
 		optionalNodes: [],
 		resources: ["model_usd"],
 		caps: { itemsPerTick: 20, costUsdPerRun: 0.5 },
+		entry: "upstream",
+	},
+	"contact-enrichment": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_calificado",
+		produces: "contacto_listo",
+		nodes: ["outreach/reveal-email", "outreach/research"],
+		optionalNodes: [],
+		resources: ["apollo_credits", "model_usd"],
+		caps: { itemsPerTick: 10, costUsdPerRun: 0.3 },
+		entry: "upstream",
+	},
+	"draft-queue": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_listo",
+		produces: null,
+		nodes: ["outreach/draft", "outreach/verify-fact", "outreach/queue"],
+		optionalNodes: [],
+		resources: ["model_usd"],
+		caps: { itemsPerTick: 15, costUsdPerRun: 0.3 },
 		entry: "upstream",
 	},
 };

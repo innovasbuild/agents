@@ -36,7 +36,7 @@ export default async function ContactosPage({
 	// filtra el embed y deja la fila padre, así que sin el inner el filtro no
 	// sacaría a nadie de la lista. Con el inner siempre, en cambio,
 	// desaparecerían los contactos que todavía no tienen dueño.
-	const columns = `id, contact_key, name, company, email, stage, touches, last_touch_at, next_step_at, vector, hook, owner_user_id, ${
+	const columns = `id, contact_key, name, company, email, stage, touches, last_touch_at, next_step_at, vector, hook, owner_user_id, icp, ${
 		filters.ejecutor ? "executors!inner(slug)" : "executors(slug)"
 	}, accounts(domain)`;
 
@@ -50,6 +50,7 @@ export default async function ContactosPage({
 	if (filters.etapa) query = query.eq("stage", filters.etapa);
 	if (filters.vector) query = query.eq("vector", filters.vector);
 	if (filters.hook) query = query.eq("hook", filters.hook);
+	if (filters.lane) query = query.eq("icp->>lane", filters.lane);
 	if (filters.q) {
 		// ilikePattern saca los caracteres con los que se podría reescribir el
 		// or(): sin eso, una coma en la búsqueda cambia la consulta entera.

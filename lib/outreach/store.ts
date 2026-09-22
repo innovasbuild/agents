@@ -91,6 +91,9 @@ export interface ContactRow {
 	gmailThreadId: string | null;
 	source: "csv" | "chat" | "apollo";
 	icp: ContactIcp | null;
+	/** IDs del proveedor de origen (Apollo, etc.), `{}` si no vino de uno. Lo
+	 * usa reveal-email para saber a quién pedirle el email. */
+	externalIds: Record<string, unknown>;
 }
 
 export type NewContact = Pick<
@@ -276,6 +279,21 @@ export interface OutreachStore {
 		tenantId: string,
 		filter: SentFilter,
 	): Promise<{ count: number; lastSentAt: Date | null }>;
+	/** Piezas de HOY (cualquier estado, no solo `sent`: lo que importa acá es
+	 * cuánto se le SUMÓ a la cola hoy, no cuánto salió) encoladas por este
+	 * ejecutor. Gatea draft-queue, no el envío (eso ya lo hace countSent). */
+	countQueuedToday(
+		tenantId: string,
+		executorUserId: string,
+		since: Date,
+	): Promise<number>;
+	/** Contactos `contacto_listo` (email revelado, calificado, sin primer
+	 * toque todavía y sin una pieza pending/approved ya encolada) elegibles
+	 * para draft-queue hoy: el sembrador de reintento diario (D17). */
+	listContactsReadyToDraft(
+		tenantId: string,
+		now: Date,
+	): Promise<{ contactId: string; contactKey: string }[]>;
 	/** Un insert descartado por el dedup (0 filas) o un 23505 cuentan como ya registrado. */
 	insertEvents(rows: readonly OutreachEventInsert[]): Promise<void>;
 	/** Tenants activos del sistema. */
@@ -340,6 +358,35 @@ export interface OutreachStore {
 		idioma: string;
 		externalIds: Record<string, unknown>;
 	}): Promise<{ id: string } | "duplicado">;
+	/** El invariante que hace segura la promoción (§6.3): un contacto con
+	 * eventos o piezas ya tiene su clave congelada. */
+	hasContactBeenTouched(tenantId: string, contactKey: string): Promise<boolean>;
+	/** UPDATE optimista guardado por la clave vieja: si otra promoción ganó la
+	 * carrera, `oldKey` ya no matchea y da 0 filas, no un 23505 — por eso
+	 * ADEMÁS se chequea el 23505 de la clave nueva, que es el caso real de
+	 * "esa persona ya existía". */
+	promoteContactKey(
+		tenantId: string,
+		id: string,
+		patch: { oldKey: string; newKey: string; email: string },
+	): Promise<"promovido" | "duplicado" | "carrera_perdida">;
+	/** Todos los focos del tenant, cualquier status (para /focos, a diferencia
+	 * de listActiveFocuses que usa el sembrador de target-search). */
+	listFocuses(tenantId: string): Promise<FocusRow[]>;
+	insertFocus(
+		row: Omit<FocusRow, "id" | "accountsFound" | "contactsFound" | "status">,
+	): Promise<FocusRow>;
+	funnelForFocus(tenantId: string, focusId: string): Promise<FocusFunnel>;
+}
+
+export interface FocusFunnel {
+	descubiertos: number;
+	calificados: number;
+	descartados: number;
+	paraRevisar: number;
+	enriquecidos: number;
+	encolados: number;
+	enviados: number;
 }
 
 export interface PendingReply {
@@ -368,7 +415,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -408,6 +455,7 @@ const toContact = (r: Row): ContactRow => ({
 		Object.keys(r.icp as object).length > 0
 			? (r.icp as ContactIcp)
 			: null,
+	externalIds: (r.external_ids as Record<string, unknown> | null) ?? {},
 });
 
 const toQueueItem = (r: Row): QueueItemRow => ({
@@ -821,6 +869,56 @@ export function createSupabaseOutreachStore(
 			};
 		},
 
+		async countQueuedToday(tenantId, executorUserId, since) {
+			const { count, error } = await client
+				.from("queue_items")
+				.select("id", { head: true, count: "exact" })
+				.eq("tenant_id", tenantId)
+				.eq("executor_user_id", executorUserId)
+				.gte("created_at", since.toISOString());
+			if (error) fail("contar piezas encoladas hoy", error);
+			return count ?? 0;
+		},
+
+		async listContactsReadyToDraft(tenantId, _now) {
+			// "listo": email revelado, calificado, todavía sin primer toque
+			// (first_touch_at solo se estampa en el envío real, send.ts, nunca al
+			// encolar) y, sumado acá, sin una pieza pending/approved ya esperando
+			// el click humano en /cola — dos consultas y filtrado en memoria, como
+			// funnelForFocus (Task 22), en vez de un join: sin eso, mientras la
+			// pieza espera sus hasta 7 días (queue_items.expires_at) el seed()
+			// diario la re-sembraba y gastaba un draftMessage + un verifyFact real
+			// por gusto, antes de que insertQueueItem la frenara igual con
+			// "pieza_viva".
+			const { data, error } = await client
+				.from("contacts")
+				.select("id, contact_key, email")
+				.eq("tenant_id", tenantId)
+				.not("email", "is", null)
+				.eq("icp->>lane", "calificado")
+				.is("first_touch_at", null);
+			if (error) fail("listar contactos listos para redactar", error);
+			const candidates = data ?? [];
+			if (candidates.length === 0) return [];
+
+			const { data: live, error: liveError } = await client
+				.from("queue_items")
+				.select("contact_id")
+				.eq("tenant_id", tenantId)
+				.in("status", ["pending", "approved"]);
+			if (liveError) fail("listar piezas vivas", liveError);
+			const liveContactIds = new Set(
+				(live ?? []).map((r) => r.contact_id as string),
+			);
+
+			return candidates
+				.filter((r) => !liveContactIds.has(r.id as string))
+				.map((r) => ({
+					contactId: r.id as string,
+					contactKey: r.contact_key as string,
+				}));
+		},
+
 		async insertEvents(rows) {
 			for (const row of rows) {
 				const { error } = await client.from("events").insert(row);
@@ -1123,6 +1221,102 @@ export function createSupabaseOutreachStore(
 			if (error?.code === "23505") return "duplicado";
 			if (error || !data) fail("crear el contacto descubierto", error);
 			return { id: data.id as string };
+		},
+
+		async hasContactBeenTouched(tenantId, contactKey) {
+			const [events, queueItems] = await Promise.all([
+				client
+					.from("events")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+				client
+					.from("queue_items")
+					.select("id", { head: true, count: "exact" })
+					.eq("tenant_id", tenantId)
+					.eq("contact_key", contactKey),
+			]);
+			if (events.error) fail("chequear eventos del contacto", events.error);
+			if (queueItems.error) fail("chequear piezas del contacto", queueItems.error);
+			return (events.count ?? 0) > 0 || (queueItems.count ?? 0) > 0;
+		},
+
+		async promoteContactKey(tenantId, id, patch) {
+			const { data, error } = await client
+				.from("contacts")
+				.update({ contact_key: patch.newKey, email: patch.email })
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.eq("contact_key", patch.oldKey)
+				.select("id")
+				.maybeSingle();
+			if (error) {
+				if (error.code === "23505") return "duplicado";
+				fail("promover la clave del contacto", error);
+			}
+			return data ? "promovido" : "carrera_perdida";
+		},
+
+		async listFocuses(tenantId) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.order("created_at", { ascending: false });
+			if (error) fail("listar los focos", error);
+			return (data ?? []).map(toFocus);
+		},
+
+		async insertFocus(row) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.insert({
+					tenant_id: row.tenantId,
+					created_by: row.createdBy,
+					name: row.name,
+					criteria: row.criteria,
+					vector: row.vector,
+					segment: row.segment,
+					hook: row.hook,
+					idioma: row.idioma,
+					max_accounts: row.maxAccounts,
+					max_contacts: row.maxContacts,
+				})
+				.select(FOCUS_COLUMNS)
+				.single();
+			if (error || !data) fail("crear el foco", error);
+			return toFocus(data);
+		},
+
+		async funnelForFocus(tenantId, focusId) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key, icp, email")
+				.eq("tenant_id", tenantId)
+				.eq("search_focus_id", focusId);
+			if (contactsError) fail("armar el embudo del foco", contactsError);
+			const rows = contacts ?? [];
+			const lane = (r: Row) => (r.icp as { lane?: string } | null)?.lane ?? null;
+			const keys = rows.map((r) => r.contact_key as string);
+
+			const { data: queueItems, error: queueError } = keys.length
+				? await client
+						.from("queue_items")
+						.select("status")
+						.eq("tenant_id", tenantId)
+						.in("contact_key", keys)
+				: { data: [] as { status: string }[], error: null };
+			if (queueError) fail("armar el embudo del foco", queueError);
+
+			return {
+				descubiertos: rows.length,
+				calificados: rows.filter((r) => lane(r) === "calificado").length,
+				descartados: rows.filter((r) => lane(r) === "descartado").length,
+				paraRevisar: rows.filter((r) => lane(r) === "para_revisar").length,
+				enriquecidos: rows.filter((r) => r.email !== null).length,
+				encolados: (queueItems ?? []).length,
+				enviados: (queueItems ?? []).filter((q) => q.status === "sent").length,
+			};
 		},
 	};
 }

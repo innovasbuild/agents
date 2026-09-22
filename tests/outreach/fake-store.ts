@@ -37,6 +37,10 @@ export interface FakeStore extends OutreachStore {
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
 	events: OutreachEventInsert[];
+	/** Forma mínima de una pieza, solo para que hasContactBeenTouched pueda
+	 * chequear "¿este contacto ya tiene una pieza?" sin tener que armar un
+	 * QueueItemRow completo en cada test. */
+	queueItems: { tenantId: string; contactKey: string }[];
 	focuses: FocusRow[];
 	contactSeed(): ContactRow;
 }
@@ -131,6 +135,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		gmailThreadId: null,
 		source: "csv",
 		icp: null,
+		externalIds: {},
 		...overrides,
 	};
 }
@@ -142,6 +147,11 @@ export function createFakeStore(): FakeStore {
 	// orden cronológico entre eventos del mismo contacto.
 	let eventSeq = 0;
 	const eventCreatedAt = new WeakMap<OutreachEventInsert, string>();
+	// La base real guarda contacts.search_focus_id, pero ContactRow no lo
+	// expone (la store real lo usa solo para filtrar, no lo mapea de vuelta).
+	// Se sintetiza acá para que funnelForFocus pueda agrupar los contactos
+	// falsos insertados por insertDiscoveredContact por foco de origen.
+	const contactFocusId = new WeakMap<ContactRow, string>();
 
 	const store: FakeStore = {
 		executors: [
@@ -161,6 +171,7 @@ export function createFakeStore(): FakeStore {
 		accounts: [],
 		queue: [],
 		events: [],
+		queueItems: [],
 		focuses: [],
 
 		async loadExecutor(tenantId, userId) {
@@ -344,6 +355,37 @@ export function createFakeStore(): FakeStore {
 				);
 			}
 			store.events.push(...rows);
+		},
+
+		async countQueuedToday(tenantId, executorUserId, since) {
+			return store.queue.filter(
+				(q) =>
+					q.tenantId === tenantId &&
+					q.executorUserId === executorUserId &&
+					new Date(q.createdAt) >= since,
+			).length;
+		},
+
+		async listContactsReadyToDraft(tenantId) {
+			const liveContactIds = new Set(
+				store.queue
+					.filter(
+						(q) =>
+							q.tenantId === tenantId &&
+							(q.status === "pending" || q.status === "approved"),
+					)
+					.map((q) => q.contactId),
+			);
+			return store.contacts
+				.filter(
+					(c) =>
+						c.tenantId === tenantId &&
+						c.email !== null &&
+						c.icp?.lane === "calificado" &&
+						c.firstTouchAt === null &&
+						!liveContactIds.has(c.id),
+				)
+				.map((c) => ({ contactId: c.id, contactKey: c.contactKey }));
 		},
 
 		async listActiveTenants() {
@@ -574,9 +616,92 @@ export function createFakeStore(): FakeStore {
 				hook: row.hook,
 				idioma: row.idioma,
 				source: "apollo",
+				externalIds: row.externalIds,
 			});
+			contactFocusId.set(contact, row.searchFocusId);
 			store.contacts.push(contact);
 			return { id: contact.id };
+		},
+
+		async hasContactBeenTouched(tenantId, contactKey) {
+			// Los eventos reales llegan con las columnas snake_case de
+			// OutreachEventInsert, pero algunos tests arman el objeto a mano
+			// (`as never`) con las claves del dominio (tenantId/contactKey): se
+			// chequean las dos formas para no depender de cuál usó el test.
+			const touchedByEvent = store.events.some((e) => {
+				const row = e as unknown as {
+					tenant_id?: string;
+					tenantId?: string;
+					contact_key?: string;
+					contactKey?: string;
+				};
+				return (
+					(row.tenant_id ?? row.tenantId) === tenantId &&
+					(row.contact_key ?? row.contactKey) === contactKey
+				);
+			});
+			if (touchedByEvent) return true;
+			return store.queueItems.some(
+				(q) => q.tenantId === tenantId && q.contactKey === contactKey,
+			);
+		},
+
+		async promoteContactKey(tenantId, id, patch) {
+			const contact = store.contacts.find(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.id === id &&
+					c.contactKey === patch.oldKey,
+			);
+			if (!contact) return "carrera_perdida";
+			const conflict = store.contacts.some(
+				(c) =>
+					c.tenantId === tenantId &&
+					c.id !== id &&
+					c.contactKey === patch.newKey,
+			);
+			if (conflict) return "duplicado";
+			contact.contactKey = patch.newKey;
+			contact.email = patch.email;
+			return "promovido";
+		},
+
+		async listFocuses(tenantId) {
+			// Orden desc por created_at, igual que la store real: acá no hay
+			// columna, así que el orden de inserción (más nuevo al final) se
+			// invierte.
+			return [...store.focuses].filter((f) => f.tenantId === tenantId).reverse();
+		},
+
+		async insertFocus(row) {
+			const focus: FocusRow = {
+				...row,
+				id: nextId("focus"),
+				status: "activo",
+				accountsFound: 0,
+				contactsFound: 0,
+			};
+			store.focuses.push(focus);
+			return focus;
+		},
+
+		async funnelForFocus(tenantId, focusId) {
+			const rows = store.contacts.filter(
+				(c) => c.tenantId === tenantId && contactFocusId.get(c) === focusId,
+			);
+			const keys = new Set(rows.map((c) => c.contactKey));
+			const queueItems = store.queue.filter(
+				(q) => q.tenantId === tenantId && keys.has(q.contactKey),
+			);
+			return {
+				descubiertos: rows.length,
+				calificados: rows.filter((c) => c.icp?.lane === "calificado").length,
+				descartados: rows.filter((c) => c.icp?.lane === "descartado").length,
+				paraRevisar: rows.filter((c) => c.icp?.lane === "para_revisar").length,
+				enriquecidos: rows.filter((c) => c.email !== null).length,
+				encolados: queueItems.length,
+				enviados: queueItems.filter((q) => q.status === "sent").length,
+			};
 		},
 
 		contactSeed(): ContactRow {

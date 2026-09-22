@@ -112,7 +112,9 @@ El runner sigue siendo el único que crea aristas aguas abajo; lo que cambia es 
 | `target-search` | `<focoId>:<página>` — cada página de resultados es un ítem propio |
 | `icp-scoring` | `<contactId>:<revisión de los niveles del tenant>` — cambiar los niveles re-califica a todos |
 | `contact-enrichment` | `<contactId>` — revelar un email es irrepetible por definición |
-| `draft-queue` | `<contactId>:<kind>` — una pieza viva por contacto ya lo garantiza el índice único que existe |
+| `draft-queue` | `<contactId>:<kind>:<fecha>` — una pieza viva por contacto ya lo garantiza el índice único que existe |
+
+**Enmienda (E3, Task 20):** lleva la fecha porque `ItemOutcome` no admite un tercer resultado ("todavía no, reintentá mañana") sin gastar un intento ni marcar el ítem como terminado para siempre. El workflow suma su propio `seed()` para resembrar diariamente a los `contacto_listo` sin pieza.
 
 ### 4.2 Nodo opcional previsto (apagado)
 
