@@ -74,7 +74,13 @@ describe("toContactRows", () => {
 
 	it("un contacto sin calificar trae ambos en null", () => {
 		const rows = toContactRows([
-			{ id: "1", contact_key: "em:a@b.test", stage: "a_contactar", touches: 0, icp: null },
+			{
+				id: "1",
+				contact_key: "em:a@b.test",
+				stage: "a_contactar",
+				touches: 0,
+				icp: null,
+			},
 		]);
 		expect(rows[0]).toMatchObject({ icpLane: null, icpScore: null });
 	});

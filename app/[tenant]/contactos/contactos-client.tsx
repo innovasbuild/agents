@@ -192,7 +192,8 @@ function ContactCard({ row }: { row: ContactRow }) {
 					{row.icpLane ? (
 						<span
 							className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs ${
-								LANE_BADGE_CLASSES[row.icpLane] ?? "bg-muted text-muted-foreground"
+								LANE_BADGE_CLASSES[row.icpLane] ??
+								"bg-muted text-muted-foreground"
 							}`}
 						>
 							{LANE_LABELS[row.icpLane] ?? row.icpLane}

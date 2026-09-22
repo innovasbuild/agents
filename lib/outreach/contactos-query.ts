@@ -49,9 +49,10 @@ export function toContactRows(raw: readonly unknown[]): ContactRow[] {
 		const row = entry as Record<string, unknown>;
 		const owner = first(row.executors as { slug?: unknown } | null);
 		const account = first(row.accounts as { domain?: unknown } | null);
-		const icp = row.icp as
-			| { lane?: string; encaje_empresa?: { score?: number } }
-			| null;
+		const icp = row.icp as {
+			lane?: string;
+			encaje_empresa?: { score?: number };
+		} | null;
 		return {
 			id: str(row.id),
 			contactKey: str(row.contact_key),
