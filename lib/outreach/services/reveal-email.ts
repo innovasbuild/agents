@@ -1,4 +1,4 @@
-// Nodo leads/reveal-email (spec etapa 13 §5.2 y §6.3): revela el email y en
+// Nodo outreach/reveal-email (spec etapa 13 §5.2 y §6.3): revela el email y en
 // la MISMA operación promueve la clave del contacto a em:<email>. No hay
 // transacción explícita porque no hace falta: promoteContactKey es un solo
 // UPDATE atómico, y si algo falla después (nada falla después) no queda a
