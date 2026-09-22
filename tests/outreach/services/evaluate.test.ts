@@ -39,24 +39,31 @@ describe("readScore", () => {
 	it("una answer que no está o no es score devuelve null", () => {
 		expect(readScore({}, undefined, "encaje")).toBeNull();
 		expect(
-			readScore({ encaje: { type: "noul", noul: 0.9 } }, undefined, "encaje"),
+			readScore(
+				{ encaje: { type: "boolean", probability: 0.9 } },
+				undefined,
+				"encaje",
+			),
 		).toBeNull();
 	});
 });
 
 describe("readNoul", () => {
-	it("lee la probabilidad, venga como noul o como probability", () => {
+	it("lee la probabilidad de una answer type boolean", () => {
 		expect(
-			readNoul({ excluir: { type: "noul", noul: 0.93 } }, "excluir"),
+			readNoul({ excluir: { type: "boolean", probability: 0.93 } }, "excluir"),
 		).toEqual({
 			probability: 0.93,
 		});
+	});
+
+	it("lee la probabilidad del fallback defensivo `noul` si algún día apareciera", () => {
 		expect(
-			readNoul({ excluir: { type: "noul", probability: 0.4 } }, "excluir"),
+			readNoul({ excluir: { type: "boolean", noul: 0.4 } }, "excluir"),
 		).toEqual({ probability: 0.4 });
 	});
 
 	it("una forma inesperada devuelve null en vez de inventar un número", () => {
-		expect(readNoul({ excluir: { type: "noul" } }, "excluir")).toBeNull();
+		expect(readNoul({ excluir: { type: "boolean" } }, "excluir")).toBeNull();
 	});
 });

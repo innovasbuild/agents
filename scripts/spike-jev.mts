@@ -26,7 +26,7 @@ const result = await evaluate({
 			],
 		},
 		excluir: {
-			type: "noul",
+			type: "boolean",
 			instructions: "¿Es competidora, ya cliente, o proveedora nuestra?",
 		},
 	},

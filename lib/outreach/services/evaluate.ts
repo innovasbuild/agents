@@ -5,10 +5,6 @@
 // inyecta desde afuera vía `deps.evaluate` (igual que `generateDraft` con
 // `generateText`). Por eso este archivo no necesita `metered`: la medición
 // se engancha en la puerta que arma esas deps.
-// @ts-expect-error "ai"@7.0.98 (la instalada en este worktree) todavía no
-// expone `experimental_evaluate` en sus tipos — ver scripts/spike-jev.mts.
-// Cuando la versión instalada lo incluya, este import deja de necesitar el
-// supresor y hay que sacarlo.
 import type { experimental_evaluate as evaluate } from "ai";
 
 export interface JevScore {
@@ -49,6 +45,10 @@ export function readScore(
 	if (typeof answer.score !== "number") return null;
 	return {
 		score: answer.score,
+		// `confidence` no es parte de `EvaluationAnswer` en ai@7.0.108: en la
+		// práctica solo viaja en `providerMetadata.typesafe.confidence` (por id
+		// de pregunta). El chequeo de `answer.confidence` queda como red
+		// defensiva extra y nunca dispara contra el SDK real.
 		// Sin confianza en ningún lado vale 0: se trata como baja y va al carril
 		// humano. Nunca al revés.
 		confidence: numberOr(
@@ -61,8 +61,10 @@ export function readScore(
 
 export function readNoul(answers: Row, key: string): JevNoul | null {
 	const answer = answers[key] as Row | undefined;
-	if (!answer || answer.type !== "noul") return null;
-	const probability = answer.noul ?? answer.probability;
+	if (!answer || answer.type !== "boolean") return null;
+	// El SDK real nunca manda `answer.noul`; el fallback queda como red
+	// defensiva extra.
+	const probability = answer.probability ?? answer.noul;
 	return typeof probability === "number" ? { probability } : null;
 }
 
