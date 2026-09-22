@@ -370,6 +370,23 @@ export interface OutreachStore {
 		id: string,
 		patch: { oldKey: string; newKey: string; email: string },
 	): Promise<"promovido" | "duplicado" | "carrera_perdida">;
+	/** Todos los focos del tenant, cualquier status (para /focos, a diferencia
+	 * de listActiveFocuses que usa el sembrador de target-search). */
+	listFocuses(tenantId: string): Promise<FocusRow[]>;
+	insertFocus(
+		row: Omit<FocusRow, "id" | "accountsFound" | "contactsFound" | "status">,
+	): Promise<FocusRow>;
+	funnelForFocus(tenantId: string, focusId: string): Promise<FocusFunnel>;
+}
+
+export interface FocusFunnel {
+	descubiertos: number;
+	calificados: number;
+	descartados: number;
+	paraRevisar: number;
+	enriquecidos: number;
+	encolados: number;
+	enviados: number;
 }
 
 export interface PendingReply {
@@ -1238,6 +1255,68 @@ export function createSupabaseOutreachStore(
 				fail("promover la clave del contacto", error);
 			}
 			return data ? "promovido" : "carrera_perdida";
+		},
+
+		async listFocuses(tenantId) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.order("created_at", { ascending: false });
+			if (error) fail("listar los focos", error);
+			return (data ?? []).map(toFocus);
+		},
+
+		async insertFocus(row) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.insert({
+					tenant_id: row.tenantId,
+					created_by: row.createdBy,
+					name: row.name,
+					criteria: row.criteria,
+					vector: row.vector,
+					segment: row.segment,
+					hook: row.hook,
+					idioma: row.idioma,
+					max_accounts: row.maxAccounts,
+					max_contacts: row.maxContacts,
+				})
+				.select(FOCUS_COLUMNS)
+				.single();
+			if (error || !data) fail("crear el foco", error);
+			return toFocus(data);
+		},
+
+		async funnelForFocus(tenantId, focusId) {
+			const { data: contacts, error: contactsError } = await client
+				.from("contacts")
+				.select("contact_key, icp, email")
+				.eq("tenant_id", tenantId)
+				.eq("search_focus_id", focusId);
+			if (contactsError) fail("armar el embudo del foco", contactsError);
+			const rows = contacts ?? [];
+			const lane = (r: Row) => (r.icp as { lane?: string } | null)?.lane ?? null;
+			const keys = rows.map((r) => r.contact_key as string);
+
+			const { data: queueItems, error: queueError } = keys.length
+				? await client
+						.from("queue_items")
+						.select("status")
+						.eq("tenant_id", tenantId)
+						.in("contact_key", keys)
+				: { data: [] as { status: string }[], error: null };
+			if (queueError) fail("armar el embudo del foco", queueError);
+
+			return {
+				descubiertos: rows.length,
+				calificados: rows.filter((r) => lane(r) === "calificado").length,
+				descartados: rows.filter((r) => lane(r) === "descartado").length,
+				paraRevisar: rows.filter((r) => lane(r) === "para_revisar").length,
+				enriquecidos: rows.filter((r) => r.email !== null).length,
+				encolados: (queueItems ?? []).length,
+				enviados: (queueItems ?? []).filter((q) => q.status === "sent").length,
+			};
 		},
 	};
 }

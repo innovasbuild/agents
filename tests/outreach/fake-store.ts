@@ -147,6 +147,11 @@ export function createFakeStore(): FakeStore {
 	// orden cronológico entre eventos del mismo contacto.
 	let eventSeq = 0;
 	const eventCreatedAt = new WeakMap<OutreachEventInsert, string>();
+	// La base real guarda contacts.search_focus_id, pero ContactRow no lo
+	// expone (la store real lo usa solo para filtrar, no lo mapea de vuelta).
+	// Se sintetiza acá para que funnelForFocus pueda agrupar los contactos
+	// falsos insertados por insertDiscoveredContact por foco de origen.
+	const contactFocusId = new WeakMap<ContactRow, string>();
 
 	const store: FakeStore = {
 		executors: [
@@ -613,6 +618,7 @@ export function createFakeStore(): FakeStore {
 				source: "apollo",
 				externalIds: row.externalIds,
 			});
+			contactFocusId.set(contact, row.searchFocusId);
 			store.contacts.push(contact);
 			return { id: contact.id };
 		},
@@ -658,6 +664,44 @@ export function createFakeStore(): FakeStore {
 			contact.contactKey = patch.newKey;
 			contact.email = patch.email;
 			return "promovido";
+		},
+
+		async listFocuses(tenantId) {
+			// Orden desc por created_at, igual que la store real: acá no hay
+			// columna, así que el orden de inserción (más nuevo al final) se
+			// invierte.
+			return [...store.focuses].filter((f) => f.tenantId === tenantId).reverse();
+		},
+
+		async insertFocus(row) {
+			const focus: FocusRow = {
+				...row,
+				id: nextId("focus"),
+				status: "activo",
+				accountsFound: 0,
+				contactsFound: 0,
+			};
+			store.focuses.push(focus);
+			return focus;
+		},
+
+		async funnelForFocus(tenantId, focusId) {
+			const rows = store.contacts.filter(
+				(c) => c.tenantId === tenantId && contactFocusId.get(c) === focusId,
+			);
+			const keys = new Set(rows.map((c) => c.contactKey));
+			const queueItems = store.queue.filter(
+				(q) => q.tenantId === tenantId && keys.has(q.contactKey),
+			);
+			return {
+				descubiertos: rows.length,
+				calificados: rows.filter((c) => c.icp?.lane === "calificado").length,
+				descartados: rows.filter((c) => c.icp?.lane === "descartado").length,
+				paraRevisar: rows.filter((c) => c.icp?.lane === "para_revisar").length,
+				enriquecidos: rows.filter((c) => c.email !== null).length,
+				encolados: queueItems.length,
+				enviados: queueItems.filter((q) => q.status === "sent").length,
+			};
 		},
 
 		contactSeed(): ContactRow {
