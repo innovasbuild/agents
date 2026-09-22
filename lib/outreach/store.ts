@@ -279,6 +279,20 @@ export interface OutreachStore {
 		tenantId: string,
 		filter: SentFilter,
 	): Promise<{ count: number; lastSentAt: Date | null }>;
+	/** Piezas de HOY (cualquier estado, no solo `sent`: lo que importa acá es
+	 * cuánto se le SUMÓ a la cola hoy, no cuánto salió) encoladas por este
+	 * ejecutor. Gatea draft-queue, no el envío (eso ya lo hace countSent). */
+	countQueuedToday(
+		tenantId: string,
+		executorUserId: string,
+		since: Date,
+	): Promise<number>;
+	/** Contactos `contacto_listo` (email revelado, sin pieza viva) elegibles
+	 * para draft-queue hoy: el sembrador de reintento diario (D17). */
+	listContactsReadyToDraft(
+		tenantId: string,
+		now: Date,
+	): Promise<{ contactId: string; contactKey: string }[]>;
 	/** Un insert descartado por el dedup (0 filas) o un 23505 cuentan como ya registrado. */
 	insertEvents(rows: readonly OutreachEventInsert[]): Promise<void>;
 	/** Tenants activos del sistema. */
@@ -835,6 +849,36 @@ export function createSupabaseOutreachStore(
 				count: rows.length,
 				lastSentAt: rows[0]?.sent_at ? new Date(rows[0].sent_at) : null,
 			};
+		},
+
+		async countQueuedToday(tenantId, executorUserId, since) {
+			const { count, error } = await client
+				.from("queue_items")
+				.select("id", { head: true, count: "exact" })
+				.eq("tenant_id", tenantId)
+				.eq("executor_user_id", executorUserId)
+				.gte("created_at", since.toISOString());
+			if (error) fail("contar piezas encoladas hoy", error);
+			return count ?? 0;
+		},
+
+		async listContactsReadyToDraft(tenantId, _now) {
+			// "listo": email revelado, calificado, sin pieza viva (pending/approved/sent)
+			// y sin evento de rechazo previo por cupo en las últimas 20 horas —
+			// eso último lo filtra el input_hash con fecha, no esta query: acá
+			// alcanza con "no tiene ya una pieza".
+			const { data, error } = await client
+				.from("contacts")
+				.select("id, contact_key, email")
+				.eq("tenant_id", tenantId)
+				.not("email", "is", null)
+				.eq("icp->>lane", "calificado")
+				.is("first_touch_at", null);
+			if (error) fail("listar contactos listos para redactar", error);
+			return (data ?? []).map((r) => ({
+				contactId: r.id as string,
+				contactKey: r.contact_key as string,
+			}));
 		},
 
 		async insertEvents(rows) {

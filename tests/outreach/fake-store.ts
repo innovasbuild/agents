@@ -352,6 +352,27 @@ export function createFakeStore(): FakeStore {
 			store.events.push(...rows);
 		},
 
+		async countQueuedToday(tenantId, executorUserId, since) {
+			return store.queue.filter(
+				(q) =>
+					q.tenantId === tenantId &&
+					q.executorUserId === executorUserId &&
+					new Date(q.createdAt) >= since,
+			).length;
+		},
+
+		async listContactsReadyToDraft(tenantId) {
+			return store.contacts
+				.filter(
+					(c) =>
+						c.tenantId === tenantId &&
+						c.email !== null &&
+						c.icp?.lane === "calificado" &&
+						c.firstTouchAt === null,
+				)
+				.map((c) => ({ contactId: c.id, contactKey: c.contactKey }));
+		},
+
 		async listActiveTenants() {
 			const tenants: { id: string; slug: string }[] = [];
 			for (const [id] of store.tenants.entries()) {
