@@ -58,13 +58,15 @@ describe("parseOutreachConfig", () => {
 		expect(config.icp?.encaje_empresa).toHaveLength(3);
 	});
 	it("un solo nivel no es una escala: se rechaza", () => {
+		// Solo encaje_empresa viola la cardinalidad (1 nivel); el resto queda
+		// válido para que el throw aísle esa invariante y no el min(10) de string.
 		expect(() =>
 			parseOutreachConfig({
 				icp: {
 					revision: "r1",
-					encaje_empresa: ["uno"],
-					rol_decisor: ["a", "b"],
-					excluir: "x",
+					encaje_empresa: ["nivel único"],
+					rol_decisor: ["sin relación", "influye algo", "decide todo"],
+					excluir: "motivo de exclusión de prueba",
 				},
 			}),
 		).toThrow();
