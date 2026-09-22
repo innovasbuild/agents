@@ -11,6 +11,11 @@ export type ModelTier = "barato" | "medio" | "fuerte";
 export interface NodeInfo {
 	effect: EffectLevel;
 	tier: ModelTier | null;
+	/** Modelo fijo del nodo (enmienda §15 punto 1 de la spec de la Etapa 12,
+	 * anotada en docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md
+	 * §9.1): para un nodo como outreach/icp-score, que siempre llama al mismo
+	 * modelo (Jev) y no elige entre el `tier` variable de `models`. */
+	model?: string;
 }
 
 export interface WorkflowInfo {
@@ -39,7 +44,14 @@ export interface WorkItem {
 	attempts: number;
 }
 
-/** Lo que devuelve procesar un ítem. Una excepción es infraestructura caída y se reintenta. */
+/**
+ * Lo que devuelve procesar un ítem. Una excepción es infraestructura caída y
+ * se reintenta.
+ *
+ * `downstream` es la lista de sujetos que este ítem deja para el workflow de
+ * abajo. Suele ser el mismo sujeto (1 a 1), pero una búsqueda de target deja
+ * N contactos a partir de un foco (spec etapa 13 §4.1).
+ */
 export type ItemOutcome =
-	| { ok: true; downstreamHash?: string }
+	| { ok: true; downstream?: Array<{ subjectId: string; inputHash: string }> }
 	| { ok: false; reason: string; message: string };

@@ -51,7 +51,7 @@ Es la primera implementación real del modelo de orquestación de la Etapa 12. S
 | D5 | **Las dos llaves de Apollo de `innovas` viven en `tenant_connections.config` y el adapter las prueba en orden** | Decisión del usuario: verificación por tenant, y con que una tenga crédito alcanza. `config` ya es jsonb: cero migración. El fallback vive en el adapter, no en los nodos |
 | D6 | **Jev (`typesafe-ai/jev`) por el AI Gateway**, no por la API directa de TypeSafe | El Gateway lo expone como un modelo más, factura por el mismo lado y devuelve el costo en `providerMetadata.gateway.cost` — el mismo campo que la medición de la Etapa 12 ya lee. No hace falta ninguna credencial nueva |
 | D7 | **Un nodo de evaluación fija su modelo; no declara tier** | Los tiers existen porque esos modelos son intercambiables. Jev no lo es: se llama con `evaluate()`, no con `generateText()`. Enmienda a la Etapa 12 (§15) |
-| D8 | **`verify_fact` pasa a Jev** (pregunta `noul`), en vez del tier barato que preveía la Etapa 12 | Es exactamente una pregunta de sí/no con probabilidad calibrada, y a $0,04 por millón de tokens de entrada sale 25 veces menos que Haiku |
+| D8 | **`verify_fact` pasa a Jev** (pregunta `boolean`), en vez del tier barato que preveía la Etapa 12 | Es exactamente una pregunta de sí/no con probabilidad calibrada, y a $0,04 por millón de tokens de entrada sale 25 veces menos que Haiku |
 | D9 | **Los niveles del score se escriben una vez por tenant en `tenants/<slug>/outreach.json`** | La doc de TypeSafe es explícita: los niveles tienen que describir situaciones concretas y sostenerse solos. La página `canon:icp` en prosa no sirve como criterio y **no se toca**: sigue siendo el canon para redactar |
 | D10 | **Los juicios crudos se guardan; la decisión es una función pura sobre ellos** | Recomendación de TypeSafe y del artículo de grafos: política explícita, juicios reusables. Cambiar un umbral re-decide sin volver a pagar un token. Por eso el `input_hash` cubre la evidencia y los niveles, **no** los umbrales |
 | D11 | **Tres carriles por confianza antes que por puntaje**, con media y baja juntas en un solo carril humano | Con el volumen de `innovas` (decenas por día), separar media de baja es ceremonia sin beneficio |
@@ -173,7 +173,7 @@ export interface LeadsAdapter {
 | `leads/search-targets` | 1 | — | Una página de empresas + las personas de esas empresas; crea `accounts` y `contacts` |
 | `leads/reveal-email` | 1 | — | Revela un email y promueve la `contact_key` (§6.3) |
 | `outreach/icp-score` | 1 | `typesafe-ai/jev` | Las tres preguntas de §7 en una request |
-| `outreach/verify-fact` | 1 | `typesafe-ai/jev` | Una pregunta `noul`: ¿el texto de la fuente respalda el hecho? |
+| `outreach/verify-fact` | 1 | `typesafe-ai/jev` | Una pregunta `boolean`: ¿el texto de la fuente respalda el hecho? |
 | `outreach/account-score` | 1 | `typesafe-ai/jev` | Opcional, apagado (§4.2) |
 
 Los nodos que ya existen (`outreach/research`, `outreach/draft`, `outreach/queue`) se reusan sin cambios de contrato.
@@ -224,7 +224,7 @@ Al descubrir no hay email, así que la `contact_key` nace `li:<slug>` (Apollo de
 |---|---|---|
 | `encaje_empresa` | `score` | Qué tan bien la empresa entra en el ICP |
 | `rol_decisor` | `score` | Si la persona está parada donde se decide esto |
-| `excluir` | `noul` | Descalificadores duros: competidor, ya cliente, proveedor |
+| `excluir` | `boolean` | Descalificadores duros: competidor, ya cliente, proveedor |
 
 El estado se arma con campos JSON nombrados, como pide la doc de TypeSafe, y se envía con `providerOptions: { gateway: { zeroDataRetention: true } }`: son datos personales de terceros pasando por un modelo.
 
@@ -385,11 +385,11 @@ Suma la columna de puntaje ICP y su filtro. Nada más: `/metricas` ya existe y l
 
 | # | Pregunta | Bloquea a | Si da que no |
 |---|---|---|---|
-| S1 | ¿`evaluate()` devuelve `confidence` en `providerMetadata.typesafe` o dentro de cada answer? La doc de Vercel y la de TypeSafe difieren | `icp-scoring` | Leer defensivo de los dos lugares, con test que fije la forma observada |
-| S2 | ¿`evaluate()` devuelve `usage` y `providerMetadata.gateway.cost` con la misma forma que `generateText`? | La medición de esta etapa | Parser propio para la respuesta de evaluación, y `MODEL_PRICES` con `typesafe-ai/jev` como respaldo |
-| S3 | ¿Apollo informa créditos consumidos por llamada, o hay que calcularlos por la regla documentada? | `usage_entries` de `apollo_credits` | Se calcula por regla (1/página, 1/email) y se concilia contra el endpoint de uso una vez por día |
-| S4 | ¿Qué devuelve Apollo exactamente cuando se queda sin créditos (status y cuerpo)? | El fallback entre llaves | Se trata cualquier 4xx no-401 con "credit" en el cuerpo como agotamiento, y se ajusta con el caso real |
-| S5 | ¿Cuántos contactos por empresa devuelve la búsqueda de personas con los filtros de cargo del canon, y cuántas páginas hacen falta? | Los topes del foco | Se arranca con topes chicos (5 empresas, 20 contactos) y se sube con datos |
+| S1 | ¿`evaluate()` devuelve `confidence` en `providerMetadata.typesafe` o dentro de cada answer? La doc de Vercel y la de TypeSafe difieren | `icp-scoring` | **Confirmado (2026-09-21, sin correr el spike):** `experimental_evaluate` (ai@7.0.108) devuelve `usage: {inputTokens, outputTokens, totalTokens}` en camelCase. No existe un tipo de pregunta `noul`: el equivalente es `{type: "boolean", probability: number}`. `confidence` no viaja en la answer, solo en `providerMetadata.typesafe.confidence` por id de pregunta (fuente: ai-sdk.dev/docs/ai-sdk-core/evaluation, node_modules/ai/dist/index.d.ts). El script queda corregido para usar `boolean` en vez de `noul`, y sigue sin ejecutarse contra la API real por falta de `AI_GATEWAY_API_KEY` en este worktree. |
+| S2 | ¿`evaluate()` devuelve `usage` y `providerMetadata.gateway.cost` con la misma forma que `generateText`? | La medición de esta etapa | **Confirmado (2026-09-21, sin correr el spike):** `experimental_evaluate` (ai@7.0.108) devuelve `usage: {inputTokens, outputTokens, totalTokens}` en camelCase. No existe un tipo de pregunta `noul`: el equivalente es `{type: "boolean", probability: number}`. `confidence` no viaja en la answer, solo en `providerMetadata.typesafe.confidence` por id de pregunta (fuente: ai-sdk.dev/docs/ai-sdk-core/evaluation, node_modules/ai/dist/index.d.ts). El script queda corregido para usar `boolean` en vez de `noul`, y sigue sin ejecutarse contra la API real por falta de `AI_GATEWAY_API_KEY` en este worktree. |
+| S3 | ¿Apollo informa créditos consumidos por llamada, o hay que calcularlos por la regla documentada? | `usage_entries` de `apollo_credits` | **No verificado (2026-09-21):** no hay `APOLLO_KEY` disponible en este entorno de desarrollo. El script `scripts/spike-apollo.mts` queda listo para correr en cuanto haya una llave real. La Task 2 implementa contra los nombres de campo que asume el plan (`primary_domain`, `estimated_num_employees`, etc.); si difieren de la respuesta real de Apollo, se corrige en la Task 10 (cierre de E1 contra producción), que sí corre con llaves reales de Vercel Connect. |
+| S4 | ¿Qué devuelve Apollo exactamente cuando se queda sin créditos (status y cuerpo)? | El fallback entre llaves | **No verificado (2026-09-21):** no hay `APOLLO_KEY` disponible en este entorno de desarrollo. El script `scripts/spike-apollo.mts` queda listo para correr en cuanto haya una llave real. La Task 2 implementa contra los nombres de campo que asume el plan (`primary_domain`, `estimated_num_employees`, etc.); si difieren de la respuesta real de Apollo, se corrige en la Task 10 (cierre de E1 contra producción), que sí corre con llaves reales de Vercel Connect. |
+| S5 | ¿Cuántos contactos por empresa devuelve la búsqueda de personas con los filtros de cargo del canon, y cuántas páginas hacen falta? | Los topes del foco | **No verificado (2026-09-21):** no hay `APOLLO_KEY` disponible en este entorno de desarrollo. El script `scripts/spike-apollo.mts` queda listo para correr en cuanto haya una llave real. La Task 2 implementa contra los nombres de campo que asume el plan (`primary_domain`, `estimated_num_employees`, etc.); si difieren de la respuesta real de Apollo, se corrige en la Task 10 (cierre de E1 contra producción), que sí corre con llaves reales de Vercel Connect. |
 
 S1 y S2 son la primera tarea de E2; S3, S4 y S5 son de E1.
 
@@ -420,11 +420,12 @@ S1 y S2 son la primera tarea de E2; S3, S4 y S5 son de E1.
 ### A la spec de la Etapa 12 (`2026-09-20-orquestacion-plataforma-design.md`)
 
 1. **§9.1, `NodeInfo`:** suma `model?: string` para nodos que fijan un modelo de evaluación. `tier` queda `null` en esos casos (D7).
-2. **§8.1, `verify_fact`:** pasa de tier barato a `typesafe-ai/jev` con una pregunta `noul` (D8).
+2. **§8.1, `verify_fact`:** pasa de tier barato a `typesafe-ai/jev` con una pregunta `boolean` (D8).
 3. **§9.3, test de llamadas al modelo:** la regla que exige `metered()` en todo archivo que importa `generateText` tiene que cubrir también `evaluate`/`experimental_evaluate`.
 4. **§7.2, `MODEL_PRICES`:** suma `"typesafe-ai/jev": { input: 0.04, output: 0 }` como respaldo del costo informado por el Gateway.
 5. **§14.1, Etapa 13:** "cola por pieza y por lote, con cambio de canal" sale del alcance y vuelve con LinkedIn (D15, D16).
 6. **§9.2 y el tipo `ItemOutcome`:** un ítem puede dejar **varios** ítems aguas abajo, y de otro `subjectType`. `{ ok: true, downstreamHash?: string }` pasa a admitir `{ ok: true, downstream?: Array<{ subjectId: string; inputHash: string }> }`. El runner sigue siendo el único que crea aristas; ahora puede crear más de una (§4.1).
+7. **`tests/workflows/registry.test.ts`, "un workflow con nodos que gastan declara tope de costo y sus recursos":** la condición pasa de exigir `costUsdPerRun > 0` para todo workflow con nodos de efecto ≥ 1, a exigir solo que declare al menos un recurso en `resources`. `costUsdPerRun` es específico del gasto en USD/modelo; un workflow puede gastar otro recurso (como `apollo_credits`) sin gastar modelo.
 
 ### Al roadmap (`docs/01-roadmap-etapas.md`)
 

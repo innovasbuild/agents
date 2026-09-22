@@ -43,7 +43,9 @@ export type Database = {
         Row: {
           domain: string
           expires_at: string
+          external_ids: Json
           ficha: Json
+          firmographics: Json
           id: string
           name: string
           researched_at: string
@@ -52,7 +54,9 @@ export type Database = {
         Insert: {
           domain: string
           expires_at: string
+          external_ids?: Json
           ficha: Json
+          firmographics?: Json
           id?: string
           name: string
           researched_at?: string
@@ -61,7 +65,9 @@ export type Database = {
         Update: {
           domain?: string
           expires_at?: string
+          external_ids?: Json
           ficha?: Json
+          firmographics?: Json
           id?: string
           name?: string
           researched_at?: string
@@ -269,9 +275,11 @@ export type Database = {
           created_at: string
           crm_id: string | null
           email: string | null
+          external_ids: Json
           first_touch_at: string | null
           gmail_thread_id: string | null
           hook: string | null
+          icp: Json
           id: string
           idioma: string | null
           last_touch_at: string | null
@@ -280,10 +288,12 @@ export type Database = {
           next_step_at: string | null
           owner_user_id: string | null
           replied_at: string | null
+          search_focus_id: string | null
           segment: string | null
           source: string
           stage: Database["public"]["Enums"]["outreach_stage"]
           tenant_id: string
+          title: string | null
           touches: number
           updated_at: string
           vector: string | null
@@ -295,9 +305,11 @@ export type Database = {
           created_at?: string
           crm_id?: string | null
           email?: string | null
+          external_ids?: Json
           first_touch_at?: string | null
           gmail_thread_id?: string | null
           hook?: string | null
+          icp?: Json
           id?: string
           idioma?: string | null
           last_touch_at?: string | null
@@ -306,10 +318,12 @@ export type Database = {
           next_step_at?: string | null
           owner_user_id?: string | null
           replied_at?: string | null
+          search_focus_id?: string | null
           segment?: string | null
           source: string
           stage?: Database["public"]["Enums"]["outreach_stage"]
           tenant_id: string
+          title?: string | null
           touches?: number
           updated_at?: string
           vector?: string | null
@@ -321,9 +335,11 @@ export type Database = {
           created_at?: string
           crm_id?: string | null
           email?: string | null
+          external_ids?: Json
           first_touch_at?: string | null
           gmail_thread_id?: string | null
           hook?: string | null
+          icp?: Json
           id?: string
           idioma?: string | null
           last_touch_at?: string | null
@@ -332,10 +348,12 @@ export type Database = {
           next_step_at?: string | null
           owner_user_id?: string | null
           replied_at?: string | null
+          search_focus_id?: string | null
           segment?: string | null
           source?: string
           stage?: Database["public"]["Enums"]["outreach_stage"]
           tenant_id?: string
+          title?: string | null
           touches?: number
           updated_at?: string
           vector?: string | null
@@ -347,6 +365,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "contacts_search_focus_id_fkey"
+            columns: ["search_focus_id"]
+            isOneToOne: false
+            referencedRelation: "search_focuses"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "contacts_tenant_id_fkey"
@@ -771,6 +796,78 @@ export type Database = {
           },
           {
             foreignKeyName: "runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_focuses: {
+        Row: {
+          accounts_found: number
+          contacts_found: number
+          created_at: string
+          created_by: string
+          criteria: Json
+          hook: string
+          id: string
+          idioma: string
+          max_accounts: number
+          max_contacts: number
+          name: string
+          segment: string
+          status: Database["public"]["Enums"]["search_focus_status"]
+          tenant_id: string
+          updated_at: string
+          vector: string
+        }
+        Insert: {
+          accounts_found?: number
+          contacts_found?: number
+          created_at?: string
+          created_by: string
+          criteria?: Json
+          hook: string
+          id?: string
+          idioma: string
+          max_accounts: number
+          max_contacts: number
+          name: string
+          segment: string
+          status?: Database["public"]["Enums"]["search_focus_status"]
+          tenant_id: string
+          updated_at?: string
+          vector: string
+        }
+        Update: {
+          accounts_found?: number
+          contacts_found?: number
+          created_at?: string
+          created_by?: string
+          criteria?: Json
+          hook?: string
+          id?: string
+          idioma?: string
+          max_accounts?: number
+          max_contacts?: number
+          name?: string
+          segment?: string
+          status?: Database["public"]["Enums"]["search_focus_status"]
+          tenant_id?: string
+          updated_at?: string
+          vector?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_focuses_tenant_id_created_by_fkey"
+            columns: ["tenant_id", "created_by"]
+            isOneToOne: false
+            referencedRelation: "executors"
+            referencedColumns: ["tenant_id", "user_id"]
+          },
+          {
+            foreignKeyName: "search_focuses_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1229,6 +1326,7 @@ export type Database = {
         | "expired"
       run_status: "running" | "ok" | "failed" | "cancelled" | "budget_exhausted"
       run_trigger: "chat" | "schedule" | "mcp" | "webhook"
+      search_focus_status: "activo" | "agotado" | "cancelado"
       tenant_role: "platform_admin" | "tenant_admin" | "tenant_member"
       work_item_status: "pending" | "running" | "done" | "refused" | "failed"
     }
@@ -1389,6 +1487,7 @@ export const Constants = {
       ],
       run_status: ["running", "ok", "failed", "cancelled", "budget_exhausted"],
       run_trigger: ["chat", "schedule", "mcp", "webhook"],
+      search_focus_status: ["activo", "agotado", "cancelado"],
       tenant_role: ["platform_admin", "tenant_admin", "tenant_member"],
       work_item_status: ["pending", "running", "done", "refused", "failed"],
     },

@@ -20,6 +20,11 @@ export const NODES: Record<string, NodeInfo> = {
 	"outreach/replies": { effect: 0, tier: null },
 	// Encola follow-ups redactando con el modelo: gasta.
 	"outreach/followups": { effect: 1, tier: "medio" },
+	// Gasta créditos de Apollo, no tokens de modelo.
+	"outreach/target-search": { effect: 1, tier: null },
+	// Tres preguntas a Jev sobre lo que la búsqueda ya trajo gratis. Modelo fijo:
+	// no elige entre el tier variable de `models`.
+	"outreach/icp-score": { effect: 1, tier: null, model: "typesafe-ai/jev" },
 };
 
 export const SERVICES_EXCLUIDOS: Record<string, string> = {
@@ -31,6 +36,8 @@ export const SERVICES_EXCLUIDOS: Record<string, string> = {
 		"la llamada al modelo del nodo outreach/research; se registra junto con él",
 	"outreach/generate-draft":
 		"la llamada al modelo del nodo outreach/draft; se registra junto con él",
+	"outreach/evaluate":
+		"lectura defensiva de las respuestas de Jev que usa outreach/icp-score; se registra junto con él",
 };
 
 export const WORKFLOWS: Record<string, WorkflowInfo> = {
@@ -44,6 +51,28 @@ export const WORKFLOWS: Record<string, WorkflowInfo> = {
 		resources: ["model_usd"],
 		caps: { itemsPerTick: 5, costUsdPerRun: 1 },
 		entry: "seed",
+	},
+	"target-search": {
+		agent: "outreach",
+		subjectType: "search_focus",
+		claims: "foco_activo",
+		produces: "contacto_descubierto",
+		nodes: ["outreach/target-search"],
+		optionalNodes: [],
+		resources: ["apollo_credits"],
+		caps: { itemsPerTick: 2, costUsdPerRun: 0 },
+		entry: "seed",
+	},
+	"icp-scoring": {
+		agent: "outreach",
+		subjectType: "contact",
+		claims: "contacto_descubierto",
+		produces: "contacto_calificado",
+		nodes: ["outreach/icp-score"],
+		optionalNodes: [],
+		resources: ["model_usd"],
+		caps: { itemsPerTick: 20, costUsdPerRun: 0.5 },
+		entry: "upstream",
 	},
 };
 

@@ -10,6 +10,8 @@ import {
 import type { OutreachEventInsert } from "./events";
 import { type Ficha, fichaSchema } from "./ficha";
 import type { GateResult } from "./gate";
+import type { IcpLane } from "./icp";
+import type { JevNoul, JevScore } from "./services/evaluate";
 import {
 	isNoResponse,
 	MAX_TOUCHES,
@@ -49,6 +51,21 @@ export interface TenantOutreach {
 	defaultHooks: Record<string, string | null>;
 }
 
+/** El resultado crudo del scoring de ICP, guardado en contacts.icp (spec
+ * etapa 13 §7.3). `revision` es la de los niveles del tenant en el momento en
+ * que se calificó: cambiarla en la config no recalifica sola, solo marca a
+ * quién le toca de nuevo. */
+export interface ContactIcp {
+	encaje_empresa: JevScore | null;
+	rol_decisor: JevScore | null;
+	excluir: JevNoul | null;
+	lane: IcpLane;
+	reason: string;
+	model: string;
+	revision: string;
+	judged_at: string;
+}
+
 export interface ContactRow {
 	id: string;
 	tenantId: string;
@@ -56,6 +73,7 @@ export interface ContactRow {
 	accountId: string | null;
 	name: string | null;
 	company: string | null;
+	title: string | null;
 	email: string | null;
 	linkedinSlug: string | null;
 	crmId: string | null;
@@ -71,7 +89,8 @@ export interface ContactRow {
 	nextStepAt: string | null;
 	repliedAt: string | null;
 	gmailThreadId: string | null;
-	source: "csv" | "chat";
+	source: "csv" | "chat" | "apollo";
+	icp: ContactIcp | null;
 }
 
 export type NewContact = Pick<
@@ -117,6 +136,10 @@ export interface AccountRow {
 	ficha: Ficha;
 	researchedAt: string;
 	expiresAt: string;
+	/** Firmográficos de Apollo (spec etapa 13 §6). Ausentes en las lecturas de
+	 * research; el fake de tests los usa para espejar upsertDiscoveredAccount. */
+	firmographics?: Record<string, unknown>;
+	externalIds?: Record<string, unknown>;
 }
 
 /** Lo que el sembrador de refresh-fichas necesita de una cuenta: sin la ficha. */
@@ -208,12 +231,20 @@ export interface OutreachStore {
 		tenantId: string,
 		keys: readonly string[],
 	): Promise<ContactRow[]>;
+	findContactById(tenantId: string, id: string): Promise<ContactRow | null>;
 	insertContact(row: NewContact): Promise<ContactRow>;
 	updateContact(
 		tenantId: string,
 		id: string,
 		patch: ContactPatch,
 	): Promise<ContactRow>;
+	/** Pisa contacts.icp entero: es un juicio nuevo, no un patch parcial (spec
+	 * etapa 13 §7.3). */
+	updateContactIcp(
+		tenantId: string,
+		id: string,
+		icp: ContactIcp,
+	): Promise<void>;
 	findAccount(tenantId: string, domain: string): Promise<AccountRow | null>;
 	upsertAccount(row: Omit<AccountRow, "id">): Promise<AccountRow>;
 	findAccountById(tenantId: string, id: string): Promise<AccountRow | null>;
@@ -274,6 +305,41 @@ export interface OutreachStore {
 	/** Eventos `oportunidad_frenada` desde `since` (resumen de sesión:
 	 * Task 11). */
 	countStalled(tenantId: string, since: Date): Promise<number>;
+	/** Focos activos del tenant, para el sembrador de target-search. */
+	listActiveFocuses(tenantId: string): Promise<FocusRow[]>;
+	loadFocus(tenantId: string, id: string): Promise<FocusRow | null>;
+	updateFocus(
+		tenantId: string,
+		id: string,
+		patch: Partial<
+			Pick<FocusRow, "status" | "accountsFound" | "contactsFound">
+		>,
+	): Promise<void>;
+	/** Cuenta descubierta: no pisa la ficha de research si ya existe. */
+	upsertDiscoveredAccount(row: {
+		tenantId: string;
+		domain: string;
+		name: string;
+		firmographics: Record<string, unknown>;
+		externalIds: Record<string, unknown>;
+	}): Promise<{ id: string }>;
+	/** "duplicado" si ese contact_key ya existe en el tenant. */
+	insertDiscoveredContact(row: {
+		tenantId: string;
+		contactKey: string;
+		accountId: string | null;
+		ownerUserId: string;
+		searchFocusId: string;
+		name: string;
+		company: string;
+		title: string | null;
+		linkedinSlug: string | null;
+		segment: string;
+		vector: string;
+		hook: string;
+		idioma: string;
+		externalIds: Record<string, unknown>;
+	}): Promise<{ id: string } | "duplicado">;
 }
 
 export interface PendingReply {
@@ -284,10 +350,29 @@ export interface PendingReply {
 	occurredAt: string;
 }
 
+export interface FocusRow {
+	id: string;
+	tenantId: string;
+	createdBy: string;
+	name: string;
+	criteria: Record<string, unknown>;
+	vector: string;
+	segment: string;
+	hook: string;
+	idioma: string;
+	maxAccounts: number;
+	maxContacts: number;
+	status: "activo" | "agotado" | "cancelado";
+	accountsFound: number;
+	contactsFound: number;
+}
+
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
+const FOCUS_COLUMNS =
+	"id, tenant_id, created_by, name, criteria, vector, segment, hook, idioma, max_accounts, max_contacts, status, accounts_found, contacts_found";
 
 type Row = Record<string, unknown>;
 
@@ -298,6 +383,7 @@ const toContact = (r: Row): ContactRow => ({
 	accountId: (r.account_id as string | null) ?? null,
 	name: (r.name as string | null) ?? null,
 	company: (r.company as string | null) ?? null,
+	title: (r.title as string | null) ?? null,
 	email: (r.email as string | null) ?? null,
 	linkedinSlug: (r.linkedin_slug as string | null) ?? null,
 	crmId: (r.crm_id as string | null) ?? null,
@@ -314,6 +400,14 @@ const toContact = (r: Row): ContactRow => ({
 	repliedAt: (r.replied_at as string | null) ?? null,
 	gmailThreadId: (r.gmail_thread_id as string | null) ?? null,
 	source: r.source as "csv" | "chat",
+	// La columna es `not null default '{}'`: sin scoring todavía, esa fila vacía
+	// vale como "no calificado", igual que null.
+	icp:
+		r.icp &&
+		typeof r.icp === "object" &&
+		Object.keys(r.icp as object).length > 0
+			? (r.icp as ContactIcp)
+			: null,
 });
 
 const toQueueItem = (r: Row): QueueItemRow => ({
@@ -355,7 +449,37 @@ const toAccount = (r: Row): AccountRow => ({
 	ficha: fichaSchema.safeParse(r.ficha).data ?? (r.ficha as Ficha),
 	researchedAt: r.researched_at as string,
 	expiresAt: r.expires_at as string,
+	// Solo viajan cuando el select las pide (findAccountById, para icp-score);
+	// undefined en las lecturas del flujo de research, que no las necesita.
+	firmographics: r.firmographics as Record<string, unknown> | undefined,
+	externalIds: r.external_ids as Record<string, unknown> | undefined,
 });
+
+const toFocus = (r: Row): FocusRow => ({
+	id: r.id as string,
+	tenantId: r.tenant_id as string,
+	createdBy: r.created_by as string,
+	name: r.name as string,
+	criteria: r.criteria as Record<string, unknown>,
+	vector: r.vector as string,
+	segment: r.segment as string,
+	hook: r.hook as string,
+	idioma: r.idioma as string,
+	maxAccounts: r.max_accounts as number,
+	maxContacts: r.max_contacts as number,
+	status: r.status as FocusRow["status"],
+	accountsFound: r.accounts_found as number,
+	contactsFound: r.contacts_found as number,
+});
+
+const FOCUS_PATCH_COLUMNS: Record<
+	keyof Pick<FocusRow, "status" | "accountsFound" | "contactsFound">,
+	string
+> = {
+	status: "status",
+	accountsFound: "accounts_found",
+	contactsFound: "contacts_found",
+};
 
 const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	accountId: "account_id",
@@ -486,6 +610,17 @@ export function createSupabaseOutreachStore(
 			return (data ?? []).map(toContact);
 		},
 
+		async findContactById(tenantId, id) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.maybeSingle();
+			if (error) fail("leer el contacto", error);
+			return data ? toContact(data) : null;
+		},
+
 		async insertContact(row) {
 			const { data, error } = await client
 				.from("contacts")
@@ -523,6 +658,15 @@ export function createSupabaseOutreachStore(
 			return toContact(data);
 		},
 
+		async updateContactIcp(tenantId, id, icp) {
+			const { error } = await client
+				.from("contacts")
+				.update({ icp, updated_at: new Date().toISOString() })
+				.eq("tenant_id", tenantId)
+				.eq("id", id);
+			if (error) fail("guardar el ICP del contacto", error);
+		},
+
 		async findAccount(tenantId, domain) {
 			const { data, error } = await client
 				.from("accounts")
@@ -555,9 +699,13 @@ export function createSupabaseOutreachStore(
 		},
 
 		async findAccountById(tenantId, id) {
+			// A diferencia de findAccount/upsertAccount (flujo de research web),
+			// icp-score necesita los firmográficos de Apollo para calificar.
 			const { data, error } = await client
 				.from("accounts")
-				.select("id, tenant_id, domain, name, ficha, researched_at, expires_at")
+				.select(
+					"id, tenant_id, domain, name, ficha, researched_at, expires_at, firmographics, external_ids",
+				)
 				.eq("tenant_id", tenantId)
 				.eq("id", id)
 				.maybeSingle();
@@ -898,6 +1046,83 @@ export function createSupabaseOutreachStore(
 				.gte("created_at", since.toISOString());
 			if (error) fail("contar oportunidades frenadas", error);
 			return (data ?? []).length;
+		},
+
+		async listActiveFocuses(tenantId) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("status", "activo");
+			if (error) fail("listar focos activos", error);
+			return (data ?? []).map(toFocus);
+		},
+
+		async loadFocus(tenantId, id) {
+			const { data, error } = await client
+				.from("search_focuses")
+				.select(FOCUS_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.maybeSingle();
+			if (error) fail("leer el foco", error);
+			return data ? toFocus(data) : null;
+		},
+
+		async updateFocus(tenantId, id, patch) {
+			const { error } = await client
+				.from("search_focuses")
+				.update({
+					...toColumns(patch, FOCUS_PATCH_COLUMNS),
+					updated_at: new Date().toISOString(),
+				})
+				.eq("tenant_id", tenantId)
+				.eq("id", id);
+			if (error) fail("actualizar el foco", error);
+		},
+
+		async upsertDiscoveredAccount(row) {
+			// Un select-de-existencia seguido de un upsert deja una ventana TOCTOU:
+			// `research_account` (tool de chat sin lease) puede crear la cuenta con
+			// research real justo en el medio, y el upsert de descubrimiento la
+			// pisaría con `ficha: {}`. La función atómica resuelve todo en una sola
+			// sentencia: `ficha`/`expires_at` solo se tocan en el insert.
+			const { data, error } = await client.rpc("upsert_discovered_account", {
+				p_tenant_id: row.tenantId,
+				p_domain: row.domain,
+				p_name: row.name,
+				p_firmographics: row.firmographics,
+				p_external_ids: row.externalIds,
+			});
+			if (error || !data) fail("guardar la cuenta descubierta", error);
+			return { id: data as string };
+		},
+
+		async insertDiscoveredContact(row) {
+			const { data, error } = await client
+				.from("contacts")
+				.insert({
+					tenant_id: row.tenantId,
+					contact_key: row.contactKey,
+					account_id: row.accountId,
+					owner_user_id: row.ownerUserId,
+					search_focus_id: row.searchFocusId,
+					name: row.name,
+					company: row.company,
+					title: row.title,
+					linkedin_slug: row.linkedinSlug,
+					segment: row.segment,
+					vector: row.vector,
+					hook: row.hook,
+					idioma: row.idioma,
+					external_ids: row.externalIds,
+					source: "apollo",
+				})
+				.select("id")
+				.single();
+			if (error?.code === "23505") return "duplicado";
+			if (error || !data) fail("crear el contacto descubierto", error);
+			return { id: data.id as string };
 		},
 	};
 }

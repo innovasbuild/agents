@@ -79,9 +79,12 @@ describe("registry", () => {
 					(node) => (NODES[node]?.effect ?? 0) >= 1,
 				),
 			)
-			.filter(
-				([, wf]) => !(wf.caps.costUsdPerRun > 0) || wf.resources.length === 0,
-			)
+			// costUsdPerRun es el tope en USD/tokens de modelo, no el único gasto
+			// posible de un workflow: uno puede gastar otro recurso medido (p. ej.
+			// apollo_credits) sin tocar el modelo. Lo que importa acá es que declare
+			// al menos un recurso; si además gasta modelo, el test de más abajo ya
+			// exige "model_usd" en resources (spec etapa 13 §15, enmienda 7).
+			.filter(([, wf]) => wf.resources.length === 0)
 			.map(([name]) => name);
 		expect(sinTope).toEqual([]);
 	});

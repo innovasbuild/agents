@@ -1,11 +1,13 @@
 import type { CrmAdapter } from "@/lib/connectors/crm/adapter";
 import { parseOutreachConfig } from "@/lib/outreach/config";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
+import type { Ficha } from "@/lib/outreach/ficha";
 import { isNoResponse } from "@/lib/outreach/stage";
 import type {
 	AccountRow,
 	ContactRow,
 	ExecutorRow,
+	FocusRow,
 	NewContact,
 	NewQueueItem,
 	OutreachStore,
@@ -35,6 +37,7 @@ export interface FakeStore extends OutreachStore {
 	accounts: AccountRow[];
 	queue: QueueItemRow[];
 	events: OutreachEventInsert[];
+	focuses: FocusRow[];
 	contactSeed(): ContactRow;
 }
 
@@ -49,7 +52,27 @@ export function defaultTenant(
 	overrides: Partial<TenantOutreach> = {},
 ): TenantOutreach {
 	return {
-		config: parseOutreachConfig({ timezone: "America/Argentina/Buenos_Aires" }),
+		config: parseOutreachConfig({
+			timezone: "America/Argentina/Buenos_Aires",
+			// Niveles de ICP por defecto (Task 15): así el fake sirve tal cual para
+			// scoreContact sin que cada test tenga que cargarlos a mano. El test que
+			// necesita el tenant SIN niveles los pisa con `icp: null`.
+			icp: {
+				revision: "2026-09-01",
+				encaje_empresa: [
+					"no encaja: no es el tipo de empresa que buscamos",
+					"podría encajar: comparte algunos rasgos del perfil",
+					"encaja bien: es exactamente el tipo de empresa que buscamos",
+				],
+				rol_decisor: [
+					"sin relación con la decisión ni con el problema",
+					"influye en la decisión o sufre el problema de cerca",
+					"decide o compra directamente la solución",
+				],
+				excluir:
+					"es una competidora directa, un proveedor nuestro, o parte de nuestro propio equipo",
+			},
+		}),
 		values: {
 			segmento: ["mid_market_ar"],
 			vector: ["v1"],
@@ -90,6 +113,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		accountId: null,
 		name: "Laura Gómez",
 		company: "Acme",
+		title: null,
 		email: "laura@acme.test",
 		linkedinSlug: null,
 		crmId: null,
@@ -106,6 +130,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		repliedAt: null,
 		gmailThreadId: null,
 		source: "csv",
+		icp: null,
 		...overrides,
 	};
 }
@@ -136,6 +161,7 @@ export function createFakeStore(): FakeStore {
 		accounts: [],
 		queue: [],
 		events: [],
+		focuses: [],
 
 		async loadExecutor(tenantId, userId) {
 			return (
@@ -150,6 +176,12 @@ export function createFakeStore(): FakeStore {
 		async findContactsByKeys(tenantId, keys) {
 			return store.contacts.filter(
 				(c) => c.tenantId === tenantId && keys.includes(c.contactKey),
+			);
+		},
+		async findContactById(tenantId, id) {
+			return (
+				store.contacts.find((c) => c.tenantId === tenantId && c.id === id) ??
+				null
 			);
 		},
 		async insertContact(row: NewContact) {
@@ -175,6 +207,13 @@ export function createFakeStore(): FakeStore {
 				),
 			);
 			return contact;
+		},
+		async updateContactIcp(tenantId, id, icp) {
+			const contact = store.contacts.find(
+				(c) => c.tenantId === tenantId && c.id === id,
+			);
+			if (!contact) throw new Error(`contacto ${id} inexistente`);
+			contact.icp = icp;
 		},
 		async findAccount(tenantId, domain) {
 			return (
@@ -458,6 +497,86 @@ export function createFakeStore(): FakeStore {
 				count++;
 			}
 			return count;
+		},
+
+		async listActiveFocuses(tenantId) {
+			return store.focuses.filter(
+				(f) => f.tenantId === tenantId && f.status === "activo",
+			);
+		},
+
+		async loadFocus(tenantId, id) {
+			return (
+				store.focuses.find((f) => f.tenantId === tenantId && f.id === id) ??
+				null
+			);
+		},
+
+		async updateFocus(tenantId, id, patch) {
+			const focus = store.focuses.find(
+				(f) => f.tenantId === tenantId && f.id === id,
+			);
+			if (!focus) throw new Error(`foco ${id} inexistente`);
+			Object.assign(
+				focus,
+				Object.fromEntries(
+					Object.entries(patch).filter(([, v]) => v !== undefined),
+				),
+			);
+		},
+
+		async upsertDiscoveredAccount(row) {
+			// Igual que la store real: una cuenta existente no pierde su ficha ni
+			// su expires_at, solo se refrescan los firmográficos.
+			const existing = store.accounts.find(
+				(a) => a.tenantId === row.tenantId && a.domain === row.domain,
+			);
+			if (existing) {
+				existing.name = row.name;
+				existing.firmographics = row.firmographics;
+				existing.externalIds = row.externalIds;
+				return { id: existing.id };
+			}
+			const now = new Date().toISOString();
+			const account: AccountRow = {
+				id: nextId("account"),
+				tenantId: row.tenantId,
+				domain: row.domain,
+				name: row.name,
+				ficha: {} as Ficha,
+				researchedAt: now,
+				expiresAt: now,
+				firmographics: row.firmographics,
+				externalIds: row.externalIds,
+			};
+			store.accounts.push(account);
+			return { id: account.id };
+		},
+
+		async insertDiscoveredContact(row) {
+			const existing = store.contacts.find(
+				(c) => c.tenantId === row.tenantId && c.contactKey === row.contactKey,
+			);
+			if (existing) return "duplicado";
+			const contact = contactRow({
+				id: nextId("contact"),
+				tenantId: row.tenantId,
+				contactKey: row.contactKey,
+				accountId: row.accountId,
+				name: row.name,
+				company: row.company,
+				title: row.title,
+				email: null,
+				linkedinSlug: row.linkedinSlug,
+				ownerUserId: row.ownerUserId,
+				segment: row.segment,
+				vector: row.vector,
+				hook: row.hook,
+				idioma: row.idioma,
+				source: "apollo",
+			});
+			store.contacts.push(contact);
+			return { id: contact.id };
 		},
 
 		contactSeed(): ContactRow {

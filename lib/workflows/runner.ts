@@ -260,7 +260,7 @@ export async function runWorkflowPass(
 			// Ítem terminado ok en este intento: se resuelve acá adentro, y recién
 			// después (fuera del try de runItem) se intenta encolar el downstream.
 			// Si eso último tira, el ítem ya cerró done y no debe revivir.
-			let downstreamHash: string | undefined;
+			let downstream: Array<{ subjectId: string; inputHash: string }> = [];
 			let terminoOk = false;
 
 			try {
@@ -273,7 +273,7 @@ export async function runWorkflowPass(
 					});
 					counts.ok++;
 					terminoOk = true;
-					downstreamHash = outcome.downstreamHash;
+					downstream = outcome.downstream ?? [];
 				} else {
 					await store.finishItem(item.id, {
 						status: "refused",
@@ -300,25 +300,29 @@ export async function runWorkflowPass(
 			}
 
 			if (terminoOk) {
+				// Un ítem puede dejar varios sujetos, y de otro tipo que el propio
+				// (spec etapa 13 §4.1). Sin `downstream`, no deja nada.
 				for (const next of downstreamOf(info.produces)) {
 					if (!enabled.has(next)) continue;
-					try {
-						await enqueue(
-							{
-								tenantId,
-								workflow: next,
-								subjectType: WORKFLOWS[next].subjectType,
-								subjectId: item.subjectId,
-								inputHash: downstreamHash ?? item.inputHash,
-							},
-							{ store },
-						);
-					} catch (error) {
-						// El ítem de origen ya cerró done: un fallo acá pierde la arista
-						// downstream, nunca el trabajo ya hecho. No se toca su estado.
-						console.error(
-							`[runner] no se pudo encolar ${next} tras ${input.workflow}/${item.subjectId}: ${errorText(error)}`,
-						);
+					for (const subject of downstream) {
+						try {
+							await enqueue(
+								{
+									tenantId,
+									workflow: next,
+									subjectType: WORKFLOWS[next].subjectType,
+									subjectId: subject.subjectId,
+									inputHash: subject.inputHash,
+								},
+								{ store },
+							);
+						} catch (error) {
+							// El ítem de origen ya cerró done: un fallo acá pierde la arista
+							// downstream, nunca el trabajo ya hecho. No se toca su estado.
+							console.error(
+								`[runner] no se pudo encolar ${next} tras ${input.workflow}/${subject.subjectId}: ${errorText(error)}`,
+							);
+						}
 					}
 				}
 			}

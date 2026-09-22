@@ -403,11 +403,23 @@ export const WORKFLOWS = {
 
 La clave de un nodo es mecánica: `lib/<dominio>/services/<archivo>.ts` → `"<dominio>/<archivo>"`. Un archivo de servicio que no es un nodo por sí mismo (un helper, o la llamada al modelo de otro nodo) va a una lista de excluidos con su motivo.
 
+`NodeInfo` suma un campo opcional `model` (enmienda de la Etapa 12 §15, punto 1): el modelo fijo que usa ese nodo, para cuando no elige entre el `tier` variable de `models` sino que llama siempre al mismo (p. ej. `outreach/icp-score` con Jev).
+
 Los parámetros propios de un workflow no llevan schema en el registry: `parseTenantWorkflowConfig` valida lo que es de la plataforma (cadencia, ítems por tick, nodos opcionales) y le pasa el resto a la implementación como `params`.
 
 ### 9.2 Runner
 
 `lib/workflows/runner.ts`: función pura con dependencias inyectadas (`store`, `now`, `budget`, mapa de implementaciones de nodo). Implementa §5.2 y §6.5 pasos 3 a 7. El schedule `dispatch.ts` es una puerta fina que le arma las dependencias reales.
+
+Lo que devuelve procesar un ítem:
+
+```ts
+type ItemOutcome =
+	| { ok: true; downstream?: Array<{ subjectId: string; inputHash: string }> }
+	| { ok: false; reason: string; message: string };
+```
+
+Un ítem puede dejar varios sujetos aguas abajo (enmienda de la Etapa 13 §15, punto 6). `downstream` es la lista de sujetos que este ítem deja para el workflow de abajo: suele ser el mismo sujeto (1 a 1), pero una búsqueda de target deja N contactos a partir de un foco (spec etapa 13 §4.1). Sin `downstream`, el ítem no deja nada aguas abajo, aunque haya un workflow habilitado que reclame lo que este produce.
 
 ### 9.3 Tests que hacen cumplir
 

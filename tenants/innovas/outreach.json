@@ -2,7 +2,21 @@
 	"config": {
 		"timezone": "America/Argentina/Buenos_Aires",
 		"bcc": "51464889@bcc.hubspot.com",
-		"deal": { "pipeline": "default", "stage": "1404975950" }
+		"deal": { "pipeline": "default", "stage": "1404975950" },
+		"icp": {
+			"revision": "2026-09-22",
+			"encaje_empresa": [
+				"No es del universo: rubro ajeno, tamaño fuera de rango, o sin operación propia que coordinar",
+				"Podría ser: entra en tamaño y geografía, pero no se ve el problema de coordinación que resolvemos",
+				"Encaja: tamaño y rubro del ICP, con señales de que la operación creció más rápido que su método"
+			],
+			"rol_decisor": [
+				"Sin relación con esta decisión: otra área, o rol sin injerencia en cómo opera la empresa",
+				"Influye: sufre el problema o lo reporta, pero no aprueba el gasto",
+				"Decide: dueño, dirección o gerencia con control sobre el presupuesto de operación"
+			],
+			"excluir": "La empresa es competidora nuestra, ya es cliente, o es proveedora nuestra"
+		}
 	},
 	"values": {
 		"segmento": [
