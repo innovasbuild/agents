@@ -10,6 +10,8 @@ import {
 import type { OutreachEventInsert } from "./events";
 import { type Ficha, fichaSchema } from "./ficha";
 import type { GateResult } from "./gate";
+import type { IcpLane } from "./icp";
+import type { JevNoul, JevScore } from "./services/evaluate";
 import {
 	isNoResponse,
 	MAX_TOUCHES,
@@ -49,6 +51,21 @@ export interface TenantOutreach {
 	defaultHooks: Record<string, string | null>;
 }
 
+/** El resultado crudo del scoring de ICP, guardado en contacts.icp (spec
+ * etapa 13 §7.3). `revision` es la de los niveles del tenant en el momento en
+ * que se calificó: cambiarla en la config no recalifica sola, solo marca a
+ * quién le toca de nuevo. */
+export interface ContactIcp {
+	encaje_empresa: JevScore | null;
+	rol_decisor: JevScore | null;
+	excluir: JevNoul | null;
+	lane: IcpLane;
+	reason: string;
+	model: string;
+	revision: string;
+	judged_at: string;
+}
+
 export interface ContactRow {
 	id: string;
 	tenantId: string;
@@ -73,6 +90,7 @@ export interface ContactRow {
 	repliedAt: string | null;
 	gmailThreadId: string | null;
 	source: "csv" | "chat" | "apollo";
+	icp: ContactIcp | null;
 }
 
 export type NewContact = Pick<
@@ -213,12 +231,20 @@ export interface OutreachStore {
 		tenantId: string,
 		keys: readonly string[],
 	): Promise<ContactRow[]>;
+	findContactById(tenantId: string, id: string): Promise<ContactRow | null>;
 	insertContact(row: NewContact): Promise<ContactRow>;
 	updateContact(
 		tenantId: string,
 		id: string,
 		patch: ContactPatch,
 	): Promise<ContactRow>;
+	/** Pisa contacts.icp entero: es un juicio nuevo, no un patch parcial (spec
+	 * etapa 13 §7.3). */
+	updateContactIcp(
+		tenantId: string,
+		id: string,
+		icp: ContactIcp,
+	): Promise<void>;
 	findAccount(tenantId: string, domain: string): Promise<AccountRow | null>;
 	upsertAccount(row: Omit<AccountRow, "id">): Promise<AccountRow>;
 	findAccountById(tenantId: string, id: string): Promise<AccountRow | null>;
@@ -342,7 +368,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -374,6 +400,14 @@ const toContact = (r: Row): ContactRow => ({
 	repliedAt: (r.replied_at as string | null) ?? null,
 	gmailThreadId: (r.gmail_thread_id as string | null) ?? null,
 	source: r.source as "csv" | "chat",
+	// La columna es `not null default '{}'`: sin scoring todavía, esa fila vacía
+	// vale como "no calificado", igual que null.
+	icp:
+		r.icp &&
+		typeof r.icp === "object" &&
+		Object.keys(r.icp as object).length > 0
+			? (r.icp as ContactIcp)
+			: null,
 });
 
 const toQueueItem = (r: Row): QueueItemRow => ({
@@ -572,6 +606,17 @@ export function createSupabaseOutreachStore(
 			return (data ?? []).map(toContact);
 		},
 
+		async findContactById(tenantId, id) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.eq("id", id)
+				.maybeSingle();
+			if (error) fail("leer el contacto", error);
+			return data ? toContact(data) : null;
+		},
+
 		async insertContact(row) {
 			const { data, error } = await client
 				.from("contacts")
@@ -607,6 +652,15 @@ export function createSupabaseOutreachStore(
 				.single();
 			if (error || !data) fail("actualizar el contacto", error);
 			return toContact(data);
+		},
+
+		async updateContactIcp(tenantId, id, icp) {
+			const { error } = await client
+				.from("contacts")
+				.update({ icp, updated_at: new Date().toISOString() })
+				.eq("tenant_id", tenantId)
+				.eq("id", id);
+			if (error) fail("guardar el ICP del contacto", error);
 		},
 
 		async findAccount(tenantId, domain) {

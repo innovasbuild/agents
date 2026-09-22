@@ -8,17 +8,23 @@
 //
 // Imports relativos y no "@/": eve no resuelve los paths de tsconfig en los
 // módulos que compila.
-import { generateText } from "ai";
+import { experimental_evaluate, generateText } from "ai";
 import { defineSchedule } from "eve/schedules";
 import { apiKeyValues } from "../../../lib/connectors/auth";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 import { createApolloAdapter } from "../../../lib/connectors/leads/apollo-adapter";
 import { refuse } from "../../../lib/outreach/result";
+import { runEvaluation } from "../../../lib/outreach/services/evaluate";
 import { generateResearch } from "../../../lib/outreach/services/generate-research";
+import { scoreContact } from "../../../lib/outreach/services/icp-score";
 import { researchAccount } from "../../../lib/outreach/services/research";
 import { searchTargetsPage } from "../../../lib/outreach/services/target-search";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { fetchPublicPage, resolveHost } from "../../../lib/outreach/web-page";
+import {
+	createIcpScoringWorkflow,
+	type IcpScoreNode,
+} from "../../../lib/outreach/workflows/icp-scoring";
 import {
 	createRefreshFichas,
 	type ResearchNode,
@@ -92,6 +98,29 @@ export default defineSchedule({
 				},
 			);
 		};
+
+		const icpScore: IcpScoreNode = ({ tenantId, runId, workflow, contactId }) =>
+			scoreContact(
+				{ tenantId, contactId },
+				{
+					store: outreach,
+					now: () => new Date(),
+					evaluate: metered(
+						(args: Parameters<typeof runEvaluation>[0]) =>
+							runEvaluation(args, { evaluate: experimental_evaluate }),
+						{
+							model: (args) => args.model,
+							record,
+							base: {
+								tenantId,
+								runId,
+								workflow,
+								node: "outreach/icp-score",
+							},
+						},
+					),
+				},
+			);
 
 		// target-search no llega por ctx.useNode como research (que recibe el
 		// tenant explícito en cada llamada): sus deps son fijas para todos los
@@ -182,8 +211,12 @@ export default defineSchedule({
 			impls: {
 				"refresh-fichas": createRefreshFichas({ store: outreach }),
 				"target-search": targetSearch,
+				"icp-scoring": createIcpScoringWorkflow(),
 			},
-			nodes: { "outreach/research": research },
+			nodes: {
+				"outreach/research": research,
+				"outreach/icp-score": icpScore,
+			},
 			now: () => new Date(),
 		});
 

@@ -403,6 +403,8 @@ export const WORKFLOWS = {
 
 La clave de un nodo es mecánica: `lib/<dominio>/services/<archivo>.ts` → `"<dominio>/<archivo>"`. Un archivo de servicio que no es un nodo por sí mismo (un helper, o la llamada al modelo de otro nodo) va a una lista de excluidos con su motivo.
 
+`NodeInfo` suma un campo opcional `model` (enmienda de la Etapa 12 §15, punto 1): el modelo fijo que usa ese nodo, para cuando no elige entre el `tier` variable de `models` sino que llama siempre al mismo (p. ej. `outreach/icp-score` con Jev).
+
 Los parámetros propios de un workflow no llevan schema en el registry: `parseTenantWorkflowConfig` valida lo que es de la plataforma (cadencia, ítems por tick, nodos opcionales) y le pasa el resto a la implementación como `params`.
 
 ### 9.2 Runner

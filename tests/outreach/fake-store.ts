@@ -52,7 +52,27 @@ export function defaultTenant(
 	overrides: Partial<TenantOutreach> = {},
 ): TenantOutreach {
 	return {
-		config: parseOutreachConfig({ timezone: "America/Argentina/Buenos_Aires" }),
+		config: parseOutreachConfig({
+			timezone: "America/Argentina/Buenos_Aires",
+			// Niveles de ICP por defecto (Task 15): así el fake sirve tal cual para
+			// scoreContact sin que cada test tenga que cargarlos a mano. El test que
+			// necesita el tenant SIN niveles los pisa con `icp: null`.
+			icp: {
+				revision: "2026-09-01",
+				encaje_empresa: [
+					"no encaja: no es el tipo de empresa que buscamos",
+					"podría encajar: comparte algunos rasgos del perfil",
+					"encaja bien: es exactamente el tipo de empresa que buscamos",
+				],
+				rol_decisor: [
+					"sin relación con la decisión ni con el problema",
+					"influye en la decisión o sufre el problema de cerca",
+					"decide o compra directamente la solución",
+				],
+				excluir:
+					"es una competidora directa, un proveedor nuestro, o parte de nuestro propio equipo",
+			},
+		}),
 		values: {
 			segmento: ["mid_market_ar"],
 			vector: ["v1"],
@@ -110,6 +130,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		repliedAt: null,
 		gmailThreadId: null,
 		source: "csv",
+		icp: null,
 		...overrides,
 	};
 }
@@ -157,6 +178,12 @@ export function createFakeStore(): FakeStore {
 				(c) => c.tenantId === tenantId && keys.includes(c.contactKey),
 			);
 		},
+		async findContactById(tenantId, id) {
+			return (
+				store.contacts.find((c) => c.tenantId === tenantId && c.id === id) ??
+				null
+			);
+		},
 		async insertContact(row: NewContact) {
 			const contact = contactRow({
 				...row,
@@ -180,6 +207,13 @@ export function createFakeStore(): FakeStore {
 				),
 			);
 			return contact;
+		},
+		async updateContactIcp(tenantId, id, icp) {
+			const contact = store.contacts.find(
+				(c) => c.tenantId === tenantId && c.id === id,
+			);
+			if (!contact) throw new Error(`contacto ${id} inexistente`);
+			contact.icp = icp;
 		},
 		async findAccount(tenantId, domain) {
 			return (
