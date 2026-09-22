@@ -27,6 +27,9 @@ export const NODES: Record<string, NodeInfo> = {
 	"outreach/icp-score": { effect: 1, tier: null, model: "typesafe-ai/jev" },
 	// Gasta un crédito de Apollo por cabeza, igual que target-search.
 	"outreach/reveal-email": { effect: 1, tier: null },
+	// Relee la fuente que draft_message citó como ancla y le pregunta a Jev si
+	// la respalda. Nodo suelto: lo consume el workflow draft-queue (Task 20).
+	"outreach/verify-fact": { effect: 1, tier: null, model: "typesafe-ai/jev" },
 };
 
 export const SERVICES_EXCLUIDOS: Record<string, string> = {
