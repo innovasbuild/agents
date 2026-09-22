@@ -449,6 +449,10 @@ const toAccount = (r: Row): AccountRow => ({
 	ficha: fichaSchema.safeParse(r.ficha).data ?? (r.ficha as Ficha),
 	researchedAt: r.researched_at as string,
 	expiresAt: r.expires_at as string,
+	// Solo viajan cuando el select las pide (findAccountById, para icp-score);
+	// undefined en las lecturas del flujo de research, que no las necesita.
+	firmographics: r.firmographics as Record<string, unknown> | undefined,
+	externalIds: r.external_ids as Record<string, unknown> | undefined,
 });
 
 const toFocus = (r: Row): FocusRow => ({
@@ -695,9 +699,13 @@ export function createSupabaseOutreachStore(
 		},
 
 		async findAccountById(tenantId, id) {
+			// A diferencia de findAccount/upsertAccount (flujo de research web),
+			// icp-score necesita los firmográficos de Apollo para calificar.
 			const { data, error } = await client
 				.from("accounts")
-				.select("id, tenant_id, domain, name, ficha, researched_at, expires_at")
+				.select(
+					"id, tenant_id, domain, name, ficha, researched_at, expires_at, firmographics, external_ids",
+				)
 				.eq("tenant_id", tenantId)
 				.eq("id", id)
 				.maybeSingle();
