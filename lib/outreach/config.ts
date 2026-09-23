@@ -36,6 +36,12 @@ export const outreachConfigSchema = z.object({
 		.object({ pipeline: z.string().min(1), stage: z.string().min(1) })
 		.nullable()
 		.default(null),
+	// Empresa que firma los mails (spec firma de outreach): sin esto la firma
+	// muestra nombre y puesto del ejecutor pero no linkea a la empresa.
+	company: z
+		.object({ name: z.string().trim().min(1).max(120), url: z.url() })
+		.nullable()
+		.default(null),
 	models: z
 		.object({
 			draft_msg1: modelId,

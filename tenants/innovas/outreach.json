@@ -16,7 +16,8 @@
 				"Decide: dueño, dirección o gerencia con control sobre el presupuesto de operación"
 			],
 			"excluir": "La empresa es competidora nuestra, ya es cliente, o es proveedora nuestra"
-		}
+		},
+		"company": { "name": "INNOV.AS", "url": "https://innov.as" }
 	},
 	"values": {
 		"segmento": [

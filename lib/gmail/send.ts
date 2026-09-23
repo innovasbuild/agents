@@ -23,6 +23,8 @@ type MailInput = {
 	inReplyTo?: string | null;
 	references?: string | null;
 	threadId?: string | null;
+	/** Versión HTML del cuerpo (cuerpo + firma). Ver lib/gmail/mime.ts. */
+	html?: string | null;
 };
 
 export class GmailUnauthorizedError extends Error {
