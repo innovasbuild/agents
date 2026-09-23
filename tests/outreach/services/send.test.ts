@@ -160,6 +160,7 @@ describe("sendQueuedEmail", () => {
 			to: "laura@acme.test",
 			subject: SUBJECT,
 			body: PASSING_BODY,
+			html: null,
 			bcc: "123@bcc.hubspot.com",
 			messageId: `<qi-${input.queueItemId}@innov.test>`,
 		});
@@ -180,6 +181,30 @@ describe("sendQueuedEmail", () => {
 		expect(store.events.map((e) => e.type)).toEqual(["encolado", "envio"]);
 	});
 
+	// Firma (spec firma de outreach): sin executors.display_name cargado no
+	// cambia nada (test anterior); con la firma cargada, sendMail recibe el
+	// body con la firma en texto y su versión html.
+	it("con firma cargada en el ejecutor, sendMail recibe body con firma y su html", async () => {
+		const { store, deps, input, sendMail } = await setup();
+		store.executors[0].displayName = "Matías O'Keefe";
+		store.executors[0].title = "CTO y Producto";
+		store.executors[0].linkedinUrl =
+			"https://www.linkedin.com/in/matiasokeefe/";
+		store.tenants.get(TENANT)!.config.company = {
+			name: "INNOV.AS",
+			url: "https://innov.as",
+		};
+		await sendQueuedEmail(input, deps);
+		expect(sendMail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				body: `${PASSING_BODY}\n\n--\nMatías O'Keefe\nCTO y Producto\nINNOV.AS — https://innov.as\nLinkedIn: https://www.linkedin.com/in/matiasokeefe/`,
+				html: expect.stringMatching(
+					/Matías O&#39;Keefe[\s\S]*href="https:\/\/innov\.as"/,
+				),
+			}),
+		);
+	});
+
 	it("un msg1 sin hilo guardado no manda threadId, inReplyTo ni references", async () => {
 		const { deps, input, sendMail } = await setup();
 		await sendQueuedEmail(input, deps);
@@ -189,6 +214,7 @@ describe("sendQueuedEmail", () => {
 			to: "laura@acme.test",
 			subject: SUBJECT,
 			body: PASSING_BODY,
+			html: null,
 			bcc: "123@bcc.hubspot.com",
 			messageId: `<qi-${input.queueItemId}@innov.test>`,
 		});
@@ -378,6 +404,9 @@ describe("sendQueuedEmail", () => {
 			dailyQuota: 30,
 			gmailAuthorizedAt: null,
 			gmailReadAuthorizedAt: null,
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
 		});
 		expect(
 			await sendQueuedEmail(

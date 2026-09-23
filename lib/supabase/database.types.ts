@@ -495,30 +495,39 @@ export type Database = {
           created_at: string
           crm_owner_id: string | null
           daily_quota: number
+          display_name: string | null
           gmail_authorized_at: string | null
           gmail_read_authorized_at: string | null
+          linkedin_url: string | null
           slug: string | null
           tenant_id: string
+          title: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           crm_owner_id?: string | null
           daily_quota?: number
+          display_name?: string | null
           gmail_authorized_at?: string | null
           gmail_read_authorized_at?: string | null
+          linkedin_url?: string | null
           slug?: string | null
           tenant_id: string
+          title?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           crm_owner_id?: string | null
           daily_quota?: number
+          display_name?: string | null
           gmail_authorized_at?: string | null
           gmail_read_authorized_at?: string | null
+          linkedin_url?: string | null
           slug?: string | null
           tenant_id?: string
+          title?: string | null
           user_id?: string
         }
         Relationships: [
@@ -1289,6 +1298,16 @@ export type Database = {
       }
       run_cost_usd: { Args: { p_run: string }; Returns: number }
       set_run_cost: { Args: { p_run: string }; Returns: number }
+      upsert_discovered_account: {
+        Args: {
+          p_domain: string
+          p_external_ids: Json
+          p_firmographics: Json
+          p_name: string
+          p_tenant_id: string
+        }
+        Returns: string
+      }
       usage_sum: {
         Args: {
           p_resource: string

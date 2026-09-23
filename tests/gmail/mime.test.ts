@@ -136,4 +136,53 @@ describe("buildRawMessage", () => {
 			}),
 		).toThrow();
 	});
+
+	describe("con html", () => {
+		function decodeParts(raw: string) {
+			const mime = decodeMime(raw);
+			const boundaryMatch = mime.match(/boundary="([^"]+)"/);
+			expect(boundaryMatch).not.toBeNull();
+			const boundary = boundaryMatch![1];
+			const [, plainPart, htmlPart] = mime.split(`--${boundary}`);
+			const decode = (part: string) =>
+				Buffer.from(part.trim().split("\r\n\r\n")[1], "base64").toString(
+					"utf8",
+				);
+			return { mime, plain: decode(plainPart), html: decode(htmlPart) };
+		}
+
+		it("sin html sigue siendo un único text/plain (compatibilidad)", () => {
+			const mime = decodeMime(
+				buildRawMessage({ to: "a@b.test", subject: "Hola", body: "Cuerpo" }),
+			);
+			expect(mime).toContain('Content-Type: text/plain; charset="UTF-8"');
+			expect(mime).not.toContain("multipart/alternative");
+		});
+
+		it("con html manda multipart/alternative con las dos partes", () => {
+			const raw = buildRawMessage({
+				to: "a@b.test",
+				subject: "Hola",
+				body: "Cuerpo plano",
+				html: "<p>Cuerpo rico</p>",
+			});
+			const mime = decodeMime(raw);
+			expect(mime).toContain("Content-Type: multipart/alternative;");
+			const { plain, html } = decodeParts(raw);
+			expect(plain).toBe("Cuerpo plano");
+			expect(html).toBe("<p>Cuerpo rico</p>");
+		});
+
+		it("preserva UTF-8 en la parte html", () => {
+			const { html } = decodeParts(
+				buildRawMessage({
+					to: "a@b.test",
+					subject: "x",
+					body: "x",
+					html: "<p>Diseño para Ñandú — Matías</p>",
+				}),
+			);
+			expect(html).toBe("<p>Diseño para Ñandú — Matías</p>");
+		});
+	});
 });

@@ -19,6 +19,9 @@ function conEscucha(store: FakeStore, userId = USER): FakeStore {
 			dailyQuota: 30,
 			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
 			gmailReadAuthorizedAt: "2026-09-01T00:00:00Z",
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
 		});
 	return store;
 }
@@ -127,6 +130,9 @@ describe("lecturas de los schedules en el fake store", () => {
 			dailyQuota: 30,
 			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
 			gmailReadAuthorizedAt: null,
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
 		});
 		store.contacts.push(
 			{
@@ -340,6 +346,9 @@ describe("lecturas de los schedules en el fake store", () => {
 			dailyQuota: 30,
 			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
 			gmailReadAuthorizedAt: null,
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
 		});
 		// El ejecutor USER tiene gmail_read_authorized_at = null por defecto
 
