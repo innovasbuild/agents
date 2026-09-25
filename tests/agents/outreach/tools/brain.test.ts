@@ -107,6 +107,28 @@ describe("brain.ts: tools dinámicas del brain por tenant", () => {
 		]);
 	});
 
+	it("sin declaración de brain en tenant_agents no expone tools aunque haya binding", async () => {
+		state.bindings = [binding()];
+		state.agentConfig = {};
+		expect(await resolveTools("tenant-a")).toBeNull();
+	});
+
+	it("sin fila en tenant_agents no expone tools aunque haya binding", async () => {
+		state.bindings = [binding()];
+		state.agentConfig = null;
+		expect(await resolveTools("tenant-a")).toBeNull();
+	});
+
+	it("con brain read expone solo brain_search y brain_read", async () => {
+		state.bindings = [binding()];
+		state.agentConfig = { brain: "read" };
+		const tools = await resolveTools("tenant-a");
+		expect(Object.keys(tools as object).sort()).toEqual([
+			"brain_read",
+			"brain_search",
+		]);
+	});
+
 	it("solo brain_upsert lleva approval", async () => {
 		state.bindings = [binding()];
 		const tools = (await resolveTools("tenant-a")) as Record<
