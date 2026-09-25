@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
 	Fragment,
+	useEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -32,6 +33,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
 import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
+import { createBrowserSupabase } from "@/lib/supabase/browser";
 import {
 	createConversation,
 	deleteConversation,
@@ -306,6 +308,22 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 				}
 			: {}),
 	});
+
+	// verify-caller.ts autentica cada request a /eve/ contra la cookie de
+	// Supabase, pero esa ruta queda afuera del matcher de proxy.ts (no se mete
+	// con el streaming), así que nada la refresca en una navegación normal. El
+	// chat es la pantalla donde más tiempo se queda quieta sin navegar —
+	// justo lo que hace falta para que el access token (1h) venza en medio de
+	// una espera larga, como reautorizar Gmail. Instanciar el cliente del
+	// navegador acá activa su auto-refresh en segundo plano (nativo del SDK en
+	// browser, ver GoTrueClient), que reescribe la cookie antes de que venza y
+	// evita el 401 que deja el hilo trabado (eve no reintenta un 401).
+	useEffect(() => {
+		const supabase = createBrowserSupabase();
+		return () => {
+			void supabase.auth.stopAutoRefresh();
+		};
+	}, []);
 
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
