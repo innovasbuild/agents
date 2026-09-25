@@ -216,7 +216,9 @@ describe("createMcpBrainProvider", () => {
 				throw new Error("ECONNREFUSED 10.0.0.7:443 secreto-interno");
 			},
 		});
-		const error = await provider.search({ query: "" }).catch((caught) => caught);
+		const error = await provider
+			.search({ query: "" })
+			.catch((caught) => caught);
 		expect(error).toBeInstanceOf(BrainProviderError);
 		expect(error.message).toBe("el brain remoto no respondió");
 		expect(logged).toHaveBeenCalledWith("brain mcp remoto:", expect.any(Error));

@@ -151,10 +151,12 @@ describe("resolveMcpAccess", () => {
 		const inactive = store({
 			tenantBySlug: async () => ({ id: "tenant-a", active: false }),
 		});
-		expect(await access("Bearer root", "a", { store: inactive })).toMatchObject({
-			status: 404,
-			code: "tenant_not_found",
-		});
+		expect(await access("Bearer root", "a", { store: inactive })).toMatchObject(
+			{
+				status: 404,
+				code: "tenant_not_found",
+			},
+		);
 	});
 
 	it("un tenant sin brain es 404 brain_not_configured, después de chequear acceso", async () => {
