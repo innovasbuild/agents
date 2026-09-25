@@ -7,6 +7,7 @@ import { userInfo } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { parseBindArgs } from "./connections-bind-args.ts";
 import { loadProviderConfig } from "./connections-bind-config.ts";
+import { describeBindError } from "./connections-bind-errors.ts";
 
 async function main(): Promise<void> {
 	const args = parseBindArgs(process.argv.slice(2));
@@ -47,8 +48,16 @@ async function main(): Promise<void> {
 		)
 		.select("id")
 		.single();
-	if (bindError)
-		throw new Error(`no pude guardar el binding: ${bindError.message}`);
+	if (bindError) {
+		const { data: enabled } = await admin
+			.from("tenant_connections")
+			.select("provider")
+			.eq("tenant_id", tenant.id)
+			.eq("capability", "brain")
+			.eq("enabled", true)
+			.maybeSingle();
+		throw new Error(describeBindError(bindError, enabled?.provider ?? null));
+	}
 
 	const { error: eventError } = await admin.from("events").insert({
 		tenant_id: tenant.id,
