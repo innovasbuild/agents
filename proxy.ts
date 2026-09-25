@@ -4,8 +4,8 @@ import { type NextRequest, NextResponse } from "next/server";
 /**
  * Refresca el access token de Supabase en cada navegación server. Cierra la
  * deuda de la Etapa 0: sin esto el token vence a la hora y el usuario tiene
- * que volver a loguearse. Las rutas de eve quedan afuera del matcher para no
- * meterse con el streaming.
+ * que volver a loguearse. Las rutas de eve, del brain por MCP y de discovery
+ * quedan afuera: se autentican por bearer o son públicas.
  */
 export async function proxy(request: NextRequest) {
 	let response = NextResponse.next({ request });
@@ -38,6 +38,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
 	matcher: [
-		"/((?!_next/static|_next/image|favicon.ico|eve/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+		"/((?!_next/static|_next/image|favicon.ico|eve/|brain/|\\.well-known/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
 	],
 };
