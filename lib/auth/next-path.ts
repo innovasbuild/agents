@@ -15,7 +15,16 @@ export function safeNextPath(
 	try {
 		const url = new URL(raw, origin);
 		if (url.origin !== origin) return "/";
-		return `${url.pathname}${url.search}${url.hash}`;
+		const path = `${url.pathname}${url.search}${url.hash}`;
+		// Rechaza paths que se normalizan a // (e.g., /..//evil.com → //evil.com)
+		if (path.startsWith("//") || path.startsWith("/\\")) {
+			return "/";
+		}
+		// Defensa final: verifica que el path reconstruido sigue en el mismo origen
+		if (new URL(path, origin).origin !== origin) {
+			return "/";
+		}
+		return path;
 	} catch {
 		return "/";
 	}

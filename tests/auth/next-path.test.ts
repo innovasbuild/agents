@@ -22,6 +22,11 @@ describe("safeNextPath", () => {
 		"javascript:alert(1)",
 		"evil.com",
 		"/%2F%2Fevil.com",
+		"/..//evil.com",
+		"/.//evil.com",
+		"/a/..//evil.com",
+		"/x/../..//evil.com",
+		"/..\\evil.com",
 	])("rechaza %s", (raw) => {
 		const result = safeNextPath(raw, origin);
 		expect(new URL(result, origin).origin).toBe(origin);
