@@ -367,12 +367,15 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 **Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools. **Sin verificar todavía**: las verificaciones V1 a V7 de la spec (§11) contra el proyecto real, y por lo tanto este criterio de cierre, quedan pendientes — las hace una persona con login real (Steps 2 y 3 del plan de conexión y cierre).
 
 
-**Runbook de producción** (en este orden):
-1. Decidir el Custom Access Token Hook (spec §13) antes de prender el OAuth Server: sin él, un token de OAuth abre PostgREST con todos los permisos del usuario.
-2. `npx supabase migration list`: confirmar que `20260922090000_search_focuses.sql` ya está aplicada en remoto, porque la pendiente `20260922100000_upsert_discovered_account.sql` depende de ella. Si producción tiene migraciones posteriores a `20260922100000`, `db push` necesita `--include-all`.
-3. `db push` ANTES del deploy de Vercel: el código necesita `brain_mcp_hit` y la declaración `brain` en `tenant_agents`.
-4. `PUBLIC_APP_URL` cargada en Vercel.
-5. Verificaciones V1 a V7 de la spec (§11).
+**Runbook de producción** (en este orden, actualizado 2026-09-25 — `db push` y `PUBLIC_APP_URL` ya hechos):
+
+1. ~~`npx supabase migration list`~~ ✅ Hecho: las 29 migraciones locales coinciden con remoto, sin nada ajeno pendiente (la de Apollo, `20260922100000_upsert_discovered_account.sql`, ya estaba aplicada).
+2. ~~`db push`~~ ✅ Hecho: las 4 migraciones de la Etapa 11 están en producción. `innovas` y `prueba-conexiones` confirmados con `"brain": "read_write"` en `tenant_agents`.
+3. ~~`PUBLIC_APP_URL`~~ ✅ Cargada en Vercel Production: `https://agentes.innov.as` (dominio real confirmado con el CLI; los docs viejos que decían `agents.innov.as` o `agents-six-iota.vercel.app` estaban desactualizados).
+4. **Custom Access Token Hook** (spec §13, migración `20260925120000_oauth_client_role_hook.sql`): código y pgTAP hechos y en producción vía el mismo `db push` del punto 2. Falta seleccionarlo en el dashboard, **antes** de prender el OAuth Server: **Authentication → Hooks (Beta)** → Custom Access Token Hook → `public.custom_access_token_hook`.
+5. Prender el OAuth Server (Authentication → OAuth Server: enabled, Allow Dynamic OAuth Apps, Authorization Path `/oauth/consent`) y las Redirect URLs (`/auth/callback**`).
+6. Deploy de Vercel del PR #51.
+7. Verificaciones V1 a V7 de la spec (§11) — V3 y V7 son las que confirman si el hook del punto 4 realmente corrió para los tokens del OAuth Server.
 
 **Cuando haga falta, no ahora:** búsqueda híbrida con embeddings (`2026-09-13-brain-design.md` §6.2), que se activa por tenant con `config.search = "hybrid"` más un backfill. Señal para prenderla: el agente busca algo que existe y no lo encuentra, o el brain de un tenant pasa de unas 150 páginas.
 

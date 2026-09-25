@@ -63,7 +63,13 @@ E1 va primero porque E2 y E4 usan el contrato. E3 va antes que E4 porque sin emi
 
 ### 4.1 Configuración de Supabase
 
-En el proyecto de producción, **Authentication → OAuth Server**:
+En el proyecto de producción:
+
+**Authentication → Hooks (Beta)**, antes de prender el OAuth Server:
+- Elegir `public.custom_access_token_hook` como Custom Access Token Hook. La migración `20260925120000_oauth_client_role_hook.sql` ya crea la función y sus grants; acá solo se selecciona en el dropdown.
+- Verificar con V3/V7 (§11) que corre para los tokens del OAuth Server, no solo para un login normal.
+
+**Authentication → OAuth Server**:
 - OAuth Server prendido.
 - **Allow Dynamic OAuth Apps** prendido: Claude, claude.ai y Codex se registran solos con RFC 7591 la primera vez.
 - **Authorization Path**: `/oauth/consent`.
@@ -316,11 +322,11 @@ Las corre una persona, con login real. Si alguna falla, **se frena y se decide**
 |---|---|---|
 | V1 | OAuth Server y Dynamic OAuth Apps prendidos; la metadata del emisor responde JSON | Sin esto no hay E3 |
 | V2 | La metadata trae `registration_endpoint` | Hay reportes de que falta en algunos proyectos. Sin él, los clientes que descubren por metadata no se registran: evaluar registro manual por cliente |
-| V3 | Claims del access token: `sub`, `aud`, `client_id`, `role` | Si falta `client_id`, revisar D7. Si hace falta atar `aud` al recurso, evaluar un Custom Access Token Hook |
+| V3 | Claims del access token: `sub`, `aud`, `client_id`, `role`, y si `role` sale como `oauth_client` cuando el token trae `client_id` | Si falta `client_id`, revisar D7. Si `role` no cambia, el hook no corrió para este token: revisar en Authentication > Hooks que `custom_access_token_hook` esté seleccionado, y si Supabase distingue los tokens del OAuth Server de un login normal |
 | V4 | `getClaims` valida un token de OAuth del proyecto | Si el proyecto firma con HS256, `getClaims` consulta al servidor de Auth en cada request: medir latencia |
 | V5 | Claude Code conecta a `/brain/innovas/mcp`, abre el consentimiento y lista las tools | Es el criterio 1 |
 | V6 | claude.ai conecta como conector remoto | Si claude.ai no completa el registro, se documenta y no bloquea el cierre si Claude Code funciona |
-| V7 | Con un token de OAuth, `curl <supabase>/rest/v1/tenants -H "apikey: <anon>" -H "authorization: Bearer <token>"` NO devuelve datos, una vez puesto el hook de §13 | Sin el hook, el token abre PostgREST con todos los permisos del usuario: no se prende el OAuth Server en producción |
+| V7 | Con un token de OAuth, `curl <supabase>/rest/v1/tenants -H "apikey: <anon>" -H "authorization: Bearer <token>"` NO devuelve datos | Si devuelve datos, el hook no se aplicó a este token (ver V3): no se prende el OAuth Server en producción hasta resolverlo |
 
 ## 12. Fuera de alcance
 
@@ -340,7 +346,7 @@ Las corre una persona, con login real. Si alguna falla, **se frena y se decide**
 - **Registro dinámico abierto**: cualquier cliente MCP puede registrarse en el proyecto. No da acceso a nada sin una persona que apruebe en la pantalla de consentimiento y sin membresía en el tenant. Revisar los clientes registrados es tarea de operación.
 - **Superficie pública nueva.** Mitigación: tenant y usuario solo desde token y URL, límites por minuto, topes de tamaño, errores sin detalle interno, y en cada PR la pregunta de si algo se puede leer cruzando tenants.
 - **`@modelcontextprotocol/sdk` cambia rápido.** Mitigación: versión fija, y el transporte usado queda en un solo archivo.
-- **Los tokens del OAuth Server son JWT comunes del proyecto.** Con la anon key funcionan contra PostgREST con todos los permisos que el usuario tiene por RLS, no solo contra el endpoint del brain. `verifyCaller` ya rechaza los que traen `client_id`, así que no abren el chat, pero PostgREST no los distingue. El endurecimiento previsto es un Custom Access Token Hook que, cuando hay `client_id`, asigne un rol sin grants. Se decide con V3: si el hook corre para los tokens del OAuth Server y qué claims ve. Hasta entonces, **no se prende el OAuth Server en producción**.
+- **Los tokens del OAuth Server son JWT comunes del proyecto.** Con la anon key funcionan contra PostgREST con todos los permisos que el usuario tiene por RLS, no solo contra el endpoint del brain. `verifyCaller` ya rechaza los que traen `client_id`, así que no abren el chat, pero PostgREST no los distingue. Mitigado con `custom_access_token_hook` (migración `20260925120000_oauth_client_role_hook.sql`): cuando el token trae `client_id`, el hook le cambia el claim `role` al rol `oauth_client`, creado sin ningún grant, así que cualquier query de PostgREST con ese token falla por falta de permisos en vez de correr con los del usuario. El endpoint del brain no lo necesita: nunca pasa por PostgREST con el token del usuario, usa `getClaims()` más la service role. **Sin verificar todavía si Supabase corre este hook para los tokens que emite el OAuth Server** (no solo para un login normal): eso es V7. Hasta que V7 pase, **no se prende el OAuth Server en producción**.
 - **Una sesión revocada sigue sirviendo hasta que vence el token.** `getClaims` verifica localmente cuando la firma es asimétrica, sin consultar a Auth: revocar un cliente o cerrar la sesión no corta el token hasta su `exp` (como mucho `jwt_expiry`).
 
 ## 14. Enmiendas
