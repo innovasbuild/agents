@@ -15,7 +15,10 @@ export function supabaseClaimsVerifier(): ClaimsVerifier {
 	);
 	return async (token) => {
 		const { data, error } = await client.auth.getClaims(token);
-		if (error || !data) return null;
+		if (error || !data) {
+			if (error) console.warn(`brain mcp: getClaims falló (${error.name})`);
+			return null;
+		}
 		return data.claims as Record<string, unknown>;
 	};
 }

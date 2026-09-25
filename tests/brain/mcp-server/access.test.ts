@@ -156,4 +156,24 @@ describe("resolveMcpAccess", () => {
 			status: 403,
 		});
 	});
+
+	it("un token malformado que hace explotar al verificador es 401, no una excepción", async () => {
+		const throwing = async () => {
+			throw new SyntaxError("Unexpected token");
+		};
+		const result = await resolveMcpAccess(
+			{ authorization: "Bearer YQ.YQ.YQ", slug: "a" },
+			{ verify: throwing, store: store() },
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			status: 401,
+			code: "invalid_token",
+		});
+		expect(warn).toHaveBeenCalledWith(expect.any(String));
+		for (const [message] of warn.mock.calls) {
+			expect(message).not.toContain("Unexpected token");
+			expect(message).not.toContain("YQ.YQ.YQ");
+		}
+	});
 });

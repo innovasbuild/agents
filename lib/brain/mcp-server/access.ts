@@ -50,7 +50,15 @@ export async function resolveMcpAccess(
 	const token = extractBearerToken(input.authorization);
 	if (!token) return deny(401, "unauthorized", "Falta el token de acceso.");
 
-	const claims = await deps.verify(token);
+	let claims: Record<string, unknown> | null;
+	try {
+		claims = await deps.verify(token);
+	} catch (error) {
+		console.warn(
+			`brain mcp: el verificador rechazó el token (${error instanceof Error ? error.name : "desconocido"})`,
+		);
+		return deny(401, "invalid_token", "El token no es válido o venció.");
+	}
 	if (!claims || typeof claims.sub !== "string" || claims.sub === "") {
 		return deny(401, "invalid_token", "El token no es válido o venció.");
 	}
