@@ -30,6 +30,7 @@ describe("parseOutreachConfig", () => {
 			bcc: null,
 			deal: null,
 			icp: null,
+			company: null,
 			models: {
 				...DEFAULT_OUTREACH_MODELS,
 				classify: "anthropic/claude-sonnet-5",

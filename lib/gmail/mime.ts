@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 type MailInput = {
 	to: string;
 	subject: string;
@@ -8,6 +10,10 @@ type MailInput = {
 	 * propio, así que este valor se lee de Gmail, no se inventa. */
 	inReplyTo?: string | null;
 	references?: string | null;
+	/** Versión HTML del cuerpo (cuerpo + firma). Si viene, el mail sale
+	 * multipart/alternative con `body` como la parte de texto plano; sin esto
+	 * sigue siendo un único text/plain, como siempre. */
+	html?: string | null;
 };
 
 const isAscii = (value: string) => /^[\x20-\x7E]*$/.test(value);
@@ -23,6 +29,15 @@ function header(name: string, value: string): string {
 	return `${name}: ${value}`;
 }
 
+function part(contentType: string, content: string): string[] {
+	return [
+		`Content-Type: ${contentType}`,
+		"Content-Transfer-Encoding: base64",
+		"",
+		Buffer.from(content, "utf8").toString("base64"),
+	];
+}
+
 export function buildRawMessage({
 	to,
 	subject,
@@ -31,10 +46,11 @@ export function buildRawMessage({
 	messageId,
 	inReplyTo,
 	references,
+	html,
 }: MailInput): string {
 	// El subject se valida crudo: codificado en base64 ya no mostraría el salto.
 	if (/[\r\n]/.test(subject)) throw new Error("header inválido: Subject");
-	const mime = [
+	const headers = [
 		header("To", to),
 		...(bcc ? [header("Bcc", bcc)] : []),
 		header("Subject", encodeSubject(subject)),
@@ -42,11 +58,24 @@ export function buildRawMessage({
 		...(inReplyTo ? [header("In-Reply-To", inReplyTo)] : []),
 		...(references ? [header("References", references)] : []),
 		"MIME-Version: 1.0",
-		'Content-Type: text/plain; charset="UTF-8"',
-		"Content-Transfer-Encoding: base64",
-		"",
-		Buffer.from(body, "utf8").toString("base64"),
-	].join("\r\n");
+	];
 
-	return Buffer.from(mime, "utf8").toString("base64url");
+	const content = html
+		? (() => {
+				const boundary = `mime_${randomUUID()}`;
+				return [
+					`Content-Type: multipart/alternative; boundary="${boundary}"`,
+					"",
+					`--${boundary}`,
+					...part('text/plain; charset="UTF-8"', body),
+					`--${boundary}`,
+					...part('text/html; charset="UTF-8"', html),
+					`--${boundary}--`,
+				];
+			})()
+		: part('text/plain; charset="UTF-8"', body);
+
+	return Buffer.from([...headers, ...content].join("\r\n"), "utf8").toString(
+		"base64url",
+	);
 }

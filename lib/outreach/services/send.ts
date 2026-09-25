@@ -2,6 +2,7 @@
 // transición pending → approved es la idempotencia; después de enviar nada
 // pausa ni reenvía.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
+import { composeMail } from "../../gmail/signature";
 import {
 	type Canon,
 	canonMissingText,
@@ -33,6 +34,7 @@ export interface SendDeps {
 		threadId?: string | null;
 		inReplyTo?: string | null;
 		references?: string | null;
+		html?: string | null;
 	}) => Promise<{ id: string; threadId: string }>;
 	isMailUnauthorized: (error: unknown) => boolean;
 	/** ¿El error es "no hubo respuesta de Gmail"? Ver el catch del envío. */
@@ -283,12 +285,17 @@ export async function sendQueuedEmail(
 	let sent: { id: string; threadId: string };
 	try {
 		const senderDomain = caller.email.split("@")[1] || "outreach.local";
+		// Sin displayName cargado (executors.display_name) compose devuelve el
+		// mismo body de siempre y html: null: no cambia nada para quien no tiene
+		// firma configurada.
+		const composed = composeMail(item.body, executor, tenant.config.company);
 		// Un follow-up con hilo guardado responde adentro: sin esto, cada follow-up
 		// abriría una conversación nueva en vez de caer bajo el primer mensaje.
 		sent = await deps.sendMail({
 			to: item.toEmail,
 			subject: item.subject,
-			body: item.body,
+			body: composed.text,
+			html: composed.html,
 			bcc: tenant.config.bcc,
 			messageId: `<qi-${item.id}@${senderDomain}>`,
 			...(item.gmailThreadId && item.replyToMessageId

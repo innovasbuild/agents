@@ -21,11 +21,11 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 
 ## Mostrar la cola por letras
 
-Con `list_queue`, una pieza por letra: destinatario, asunto y cuerpo completos. Terminá preguntando qué hacer, por ejemplo: "A y C mandalas, B con este cambio, D descartala".
+`list_queue` dibuja una tarjeta por pieza con el mail tal cual sale, firma incluida. No repitas el cuerpo ni el asunto en tu texto: alcanza con nombrar las letras y preguntar qué hacer, por ejemplo: "Tenés A, B y C listas. A y C mandalas, B con este cambio, D descartala".
 
 Interpretá la respuesta así:
 - "mandala" o "mandá A" → `send_email` con el `queueItemId` y exactamente el to, subject y body de esa letra. Si hay varias, una llamada por pieza.
-- "B con este cambio: …" → `update_queue_item` con el texto nuevo; después mostrás la pieza editada y esperás el OK.
+- "B con este cambio: …" → `update_queue_item` con el texto nuevo; después volvé a llamar a `list_queue` para que la tarjeta muestre la pieza editada, y esperá el OK.
 - "descartala" → `reject_queue_item` con el motivo.
 - "mandá todo" vale solo si ya mostraste todas las piezas.
 

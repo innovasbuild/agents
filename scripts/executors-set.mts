@@ -1,5 +1,6 @@
 // Alta o actualización de un ejecutor de outreach (spec 03 §12.1). Uso:
 //   npm run executors:set -- --tenant innovas --email ana@acme.test --slug ana [--crm-owner-id 123]
+//     [--display-name "Ana López"] [--title "Account Executive"] [--linkedin-url https://www.linkedin.com/in/ana]
 import { userInfo } from "node:os";
 import { createClient } from "@supabase/supabase-js";
 import { parseExecutorsSetArgs } from "./executors-set-args.ts";
@@ -57,6 +58,9 @@ async function main(): Promise<void> {
 			user_id: userId,
 			slug: args.slug,
 			...(args.crmOwnerId ? { crm_owner_id: args.crmOwnerId } : {}),
+			...(args.displayName ? { display_name: args.displayName } : {}),
+			...(args.title ? { title: args.title } : {}),
+			...(args.linkedinUrl ? { linkedin_url: args.linkedinUrl } : {}),
 		},
 		{ onConflict: "tenant_id,user_id" },
 	);
@@ -76,6 +80,9 @@ async function main(): Promise<void> {
 			user_id: userId,
 			slug: args.slug,
 			crm_owner_id: args.crmOwnerId,
+			display_name: args.displayName,
+			title: args.title,
+			linkedin_url: args.linkedinUrl,
 			actor: `script:${userInfo().username}`,
 		},
 	});

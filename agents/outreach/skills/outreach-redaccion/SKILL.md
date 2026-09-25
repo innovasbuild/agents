@@ -14,4 +14,4 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 
 Si la ficha no trae dolores, corré `research_account` antes de redactar: una ficha guardada antes de los dolores se vuelve a investigar sola.
 
-Nunca: IA en la primera línea, contar que investigamos a la empresa, promesas que la ficha no respalda, clientes o cifras que no estén en una fuente.
+Nunca: contar que investigamos a la empresa, promesas que la ficha no respalda, clientes o cifras que no estén en una fuente.

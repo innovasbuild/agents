@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { executorSignature } from "@/lib/outreach/signature-preview";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { ChatClient } from "./chat-client";
@@ -18,6 +19,28 @@ export default async function ChatPage({
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) notFound();
+
+	// La firma con la que sale el mail (send.ts la pega con composeMail): la
+	// previsualización del chat la muestra para que el ejecutor apruebe el texto
+	// completo, no un cuerpo al que después se le agrega algo.
+	const [executorResult, agentResult] = await Promise.all([
+		supabase
+			.from("executors")
+			.select("display_name, title, linkedin_url")
+			.eq("tenant_id", tenant.id)
+			.eq("user_id", auth.user.id)
+			.maybeSingle(),
+		supabase
+			.from("tenant_agents")
+			.select("config")
+			.eq("tenant_id", tenant.id)
+			.eq("agent", "outreach")
+			.maybeSingle(),
+	]);
+	const signature = executorSignature(
+		executorResult.data ?? null,
+		agentResult.data?.config ?? null,
+	);
 
 	const { data: conversations } = await supabase
 		.from("conversations")
@@ -43,6 +66,7 @@ export default async function ChatPage({
 			active={active}
 			allowedModels={tenant.allowedModels}
 			defaultModel={tenant.defaultModel}
+			signature={signature}
 			slug={slug}
 			tenantId={tenant.id}
 			threads={threads}
