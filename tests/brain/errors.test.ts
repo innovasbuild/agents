@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	BrainConflict,
 	BrainNotFound,
+	BrainProviderError,
 	BrainValidation,
 	toToolError,
 } from "@/lib/brain/errors";
@@ -37,5 +38,15 @@ describe("toToolError", () => {
 	it("relanza errores que no son del brain", () => {
 		const boom = new Error("se cayó la base");
 		expect(() => toToolError(boom)).toThrow(boom);
+	});
+
+	it("un error del proveedor sale como provider_unavailable", () => {
+		expect(
+			toToolError(new BrainProviderError("el brain remoto no respondió")),
+		).toEqual({
+			ok: false,
+			error: "provider_unavailable",
+			message: "el brain remoto no respondió",
+		});
 	});
 });

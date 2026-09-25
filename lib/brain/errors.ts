@@ -5,7 +5,8 @@ export type BrainErrorCode =
 	| "not_found"
 	| "conflict"
 	| "validation"
-	| "forbidden";
+	| "forbidden"
+	| "provider_unavailable";
 
 export class BrainError extends Error {
 	readonly code: BrainErrorCode;
@@ -57,6 +58,12 @@ export class BrainValidation extends BrainError {
 export class BrainForbidden extends BrainError {
 	constructor(message: string) {
 		super("forbidden", message);
+	}
+}
+
+export class BrainProviderError extends BrainError {
+	constructor(message: string) {
+		super("provider_unavailable", message);
 	}
 }
 
