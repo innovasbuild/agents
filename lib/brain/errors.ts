@@ -6,7 +6,8 @@ export type BrainErrorCode =
 	| "conflict"
 	| "validation"
 	| "forbidden"
-	| "provider_unavailable";
+	| "provider_unavailable"
+	| "rate_limited";
 
 export class BrainError extends Error {
 	readonly code: BrainErrorCode;
@@ -67,6 +68,18 @@ export class BrainProviderError extends BrainError {
 	}
 }
 
+export class BrainRateLimited extends BrainError {
+	readonly retryAfterSeconds: number;
+
+	constructor(retryAfterSeconds: number) {
+		super(
+			"rate_limited",
+			`Pasaste el límite de llamadas por minuto. Probá de nuevo en ${retryAfterSeconds} segundos.`,
+		);
+		this.retryAfterSeconds = retryAfterSeconds;
+	}
+}
+
 export interface BrainToolError {
 	ok: false;
 	error: BrainErrorCode;
@@ -74,6 +87,8 @@ export interface BrainToolError {
 	suggestions?: string[];
 	currentRevision?: number | null;
 	fields?: string[];
+	retryable?: boolean;
+	retryAfterSeconds?: number;
 }
 
 export function toToolError(error: unknown): BrainToolError {
@@ -90,5 +105,11 @@ export function toToolError(error: unknown): BrainToolError {
 		return { ...base, currentRevision: error.currentRevision };
 	if (error instanceof BrainValidation)
 		return { ...base, fields: error.fields };
+	if (error instanceof BrainRateLimited)
+		return {
+			...base,
+			retryable: true,
+			retryAfterSeconds: error.retryAfterSeconds,
+		};
 	return base;
 }
