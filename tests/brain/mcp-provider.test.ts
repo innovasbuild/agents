@@ -1,7 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import {
 	BrainConflict,
@@ -183,33 +183,43 @@ describe("createMcpBrainProvider", () => {
 		expect(conflict.currentRevision).toBe(5);
 	});
 
-	it("un código de error desconocido es un error del proveedor", async () => {
+	it("un código de error desconocido es un error del proveedor, con el código recortado", async () => {
 		const provider = createMcpBrainProvider({
 			config,
 			transport: remote({
-				brain_read: async () => json({ ok: false, error: "explotó" }, true),
+				brain_read: async () =>
+					json({ ok: false, error: `explotó${"x".repeat(200)}` }, true),
 			}),
 		});
-		await expect(provider.read("x")).rejects.toBeInstanceOf(BrainProviderError);
+		const error = await provider.read("x").catch((caught) => caught);
+		expect(error).toBeInstanceOf(BrainProviderError);
+		expect(error.message).toContain("explotó");
+		expect(error.message).not.toContain("x".repeat(61));
 	});
 
 	it("un remoto que no contesta corta por timeout", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 		const provider = createMcpBrainProvider({
 			config: { ...config, timeoutMs: 50 },
 			transport: remote({ brain_read: () => new Promise(() => {}) }),
 		});
 		await expect(provider.read("x")).rejects.toBeInstanceOf(BrainProviderError);
+		expect(logged).toHaveBeenCalled();
+		logged.mockRestore();
 	});
 
-	it("un transporte que no conecta es un error del proveedor", async () => {
+	it("un transporte que no conecta es un error del proveedor, sin el texto del remoto", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 		const provider = createMcpBrainProvider({
 			config,
 			transport: async () => {
-				throw new Error("ECONNREFUSED");
+				throw new Error("ECONNREFUSED 10.0.0.7:443 secreto-interno");
 			},
 		});
-		await expect(provider.search({ query: "" })).rejects.toBeInstanceOf(
-			BrainProviderError,
-		);
+		const error = await provider.search({ query: "" }).catch((caught) => caught);
+		expect(error).toBeInstanceOf(BrainProviderError);
+		expect(error.message).toBe("el brain remoto no respondió");
+		expect(logged).toHaveBeenCalledWith("brain mcp remoto:", expect.any(Error));
+		logged.mockRestore();
 	});
 });

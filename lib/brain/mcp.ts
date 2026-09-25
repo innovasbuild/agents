@@ -49,7 +49,7 @@ function toBrainError(slug: string, value: unknown): BrainError {
 			);
 		default:
 			return new BrainProviderError(
-				`el brain remoto devolvió el error ${error.error}`,
+				`el brain remoto devolvió el error ${error.error.slice(0, 60)}`,
 			);
 	}
 }
@@ -92,9 +92,9 @@ export function createMcpBrainProvider(
 				},
 			);
 		} catch (error) {
-			throw new BrainProviderError(
-				`el brain remoto no respondió: ${error instanceof Error ? error.message : String(error)}`,
-			);
+			// El texto del remoto o del SDK no le llega a quien llama: queda en el log.
+			console.error("brain mcp remoto:", error);
+			throw new BrainProviderError("el brain remoto no respondió");
 		} finally {
 			await client.close().catch(() => {});
 		}
