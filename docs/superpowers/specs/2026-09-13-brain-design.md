@@ -128,7 +128,9 @@ Errores tipados en `lib/brain/errors.ts`: `BrainNotFound` (con `suggestions`), `
 
 `search` admite solo `fts` hasta que exista §6.2. `updated` se completa solo con la fecha de escritura si no viene.
 
-### 4.4 Proveedor `mcp` (diseñado, no se construye)
+### 4.4 Proveedor `mcp`
+
+Construido en la Etapa 11: `docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §7.
 
 - Binding con `connector_uid` (conector `api-key` de Connect, D3 de la Etapa 2) y `config`:
   ```json
