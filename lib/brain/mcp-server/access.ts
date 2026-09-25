@@ -74,12 +74,18 @@ export async function resolveMcpAccess(
 	}
 	const userId = claims.sub;
 
-	const tenant = await deps.store.tenantBySlug(input.slug);
-	if (!tenant || !tenant.active)
-		return deny(404, "tenant_not_found", "No existe ese cliente.");
-
+	// Los roles van antes que el tenant: quien tiene un token no tiene que poder
+	// averiguar qué slugs de clientes existen. Solo un platform_admin ve el 404.
 	const roles = await deps.store.rolesOf(userId);
 	const platformAdmin = roles.some((row) => row.role === "platform_admin");
+
+	const tenant = await deps.store.tenantBySlug(input.slug);
+	if (!tenant || !tenant.active) {
+		return platformAdmin
+			? deny(404, "tenant_not_found", "No existe ese cliente.")
+			: deny(403, "forbidden", "No tenés acceso a este cliente.");
+	}
+
 	const own = roles.find((row) => row.tenantId === tenant.id);
 	if (!platformAdmin && !own)
 		return deny(403, "forbidden", "No tenés acceso a este cliente.");

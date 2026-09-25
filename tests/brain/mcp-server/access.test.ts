@@ -132,15 +132,26 @@ describe("resolveMcpAccess", () => {
 		);
 	});
 
-	it("un tenant inexistente o inactivo es 404", async () => {
-		expect(await access("Bearer ana", "zzz")).toMatchObject({
+	it("para quien no es platform_admin, un tenant inexistente o inactivo es 403 como uno ajeno", async () => {
+		const ajeno = await access("Bearer ana", "b");
+		const inexistente = await access("Bearer ana", "zzz");
+		expect(inexistente).toMatchObject({ status: 403, code: "forbidden" });
+		expect(inexistente).toEqual(ajeno);
+		const inactive = store({
+			tenantBySlug: async () => ({ id: "tenant-a", active: false }),
+		});
+		expect(await access("Bearer ana", "a", { store: inactive })).toEqual(ajeno);
+	});
+
+	it("para un platform_admin, un tenant inexistente o inactivo es 404", async () => {
+		expect(await access("Bearer root", "zzz")).toMatchObject({
 			status: 404,
 			code: "tenant_not_found",
 		});
 		const inactive = store({
 			tenantBySlug: async () => ({ id: "tenant-a", active: false }),
 		});
-		expect(await access("Bearer ana", "a", { store: inactive })).toMatchObject({
+		expect(await access("Bearer root", "a", { store: inactive })).toMatchObject({
 			status: 404,
 			code: "tenant_not_found",
 		});

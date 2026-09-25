@@ -123,8 +123,8 @@ El host público sale de una variable de entorno (`PUBLIC_APP_URL`), no del head
 1. **Tamaño.** Cuerpo de más de 1 MiB: 413, sin leerlo entero.
 2. **Token.** `extractBearerToken` de `eve/channels/auth`, después el verificador (D6). Falla: 401 con el challenge de §5.1.
 3. **Claims.** Sin `client_id`: 401 (D7). `sub` es el `userId`.
-4. **Tenant.** El slug de la URL contra `tenants`. Inexistente o inactivo: 404.
-5. **Acceso.** `platform_admin` pasa siempre. Si no, la membresía del usuario en ese tenant; sin membresía: 403. El rol define el acceso: `read` o `read_write` (D4).
+4. **Roles.** Los roles del usuario, antes de mirar el tenant. Así quien tiene un token no puede averiguar qué slugs de clientes existen: para él, un cliente inexistente y uno ajeno responden igual.
+5. **Tenant y acceso.** El slug de la URL contra `tenants`. Inexistente o inactivo: 404 solo si el usuario es `platform_admin`; para cualquier otro, 403 con el mismo mensaje que la falta de membresía. Con el tenant encontrado, `platform_admin` pasa siempre; si no, la membresía del usuario en ese tenant; sin membresía: 403. El rol define el acceso: `read` o `read_write` (D4).
 6. **Binding.** `resolveBrainBinding(tenantId)`. Sin brain: 404 con mensaje claro, no una lista de tools vacía.
 7. **Servidor.** Uno nuevo por request, con las tools que corresponden al acceso. Cada tool pasa por el límite (§6) y después por `getBrainProvider(binding)`.
 
