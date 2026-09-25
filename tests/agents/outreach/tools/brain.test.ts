@@ -27,16 +27,40 @@ function binding(overrides: Partial<Binding> = {}): Binding {
 	};
 }
 
-const state = vi.hoisted(() => ({ bindings: [] as Binding[] }));
+const state = vi.hoisted(() => ({
+	bindings: [] as Binding[],
+	// Config que devuelve tenant_agents para el agente "outreach". Por
+	// defecto read_write, como antes de declarar el acceso explícitamente.
+	agentConfig: { brain: "read_write" } as Record<string, unknown> | null,
+}));
 
 vi.mock("@/lib/connectors/bindings", () => ({
 	loadTenantBindings: vi.fn(async () => state.bindings),
 }));
 
-// No debe llegar a Supabase de verdad: brain_upsert/read/search solo lo
-// invocan dentro de execute(), que este archivo no ejercita.
+// loadAgentBrainAccess consulta tenant_agents antes de resolver el binding;
+// brain_upsert/read/search en sí no llegan a Supabase de verdad, porque solo
+// se invocan dentro de execute(), que este archivo no ejercita.
 vi.mock("@/lib/supabase/admin", () => ({
-	createAdminClient: vi.fn(() => ({})),
+	createAdminClient: vi.fn(() => ({
+		from: (table: string) => {
+			if (table !== "tenant_agents") {
+				throw new Error(`tabla inesperada en el mock: ${table}`);
+			}
+			return {
+				select: () => ({
+					eq: () => ({
+						eq: () => ({
+							maybeSingle: async () => ({
+								data: state.agentConfig ? { config: state.agentConfig } : null,
+								error: null,
+							}),
+						}),
+					}),
+				}),
+			};
+		},
+	})),
 }));
 
 const { default: brainDynamic } = await import("@/agents/outreach/tools/brain");
@@ -64,6 +88,7 @@ async function resolveTools(tenantId: string) {
 describe("brain.ts: tools dinámicas del brain por tenant", () => {
 	beforeEach(() => {
 		state.bindings = [];
+		state.agentConfig = { brain: "read_write" };
 	});
 
 	it("sin binding de brain válido no expone ninguna tool", async () => {

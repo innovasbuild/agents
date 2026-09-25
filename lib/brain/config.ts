@@ -5,6 +5,7 @@ export interface WikiConfig {
 	categories: string[];
 	requiredFrontmatter: string[];
 	search: "fts";
+	mcpLimits?: { readsPerMinute: number; writesPerMinute: number };
 }
 
 const CATEGORY = /^[a-z][a-z0-9-]{0,40}$/;
