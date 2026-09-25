@@ -364,7 +364,15 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 - **Un token malformado da 401, no una excepción del gate:** si el verificador de claims explota con un token roto (JWT mal formado), `resolveMcpAccess` lo captura y devuelve 401 `invalid_token` en vez de dejar que la excepción suba y termine en el 500 genérico.
 - **Un error inesperado adentro del endpoint da 500 genérico con un id:** `handleBrainMcp` envuelve todo el request; cualquier excepción no prevista se loguea con un `crypto.randomUUID()` y sale como `{ ok: false, code: "internal", error: "Error interno (<id>)." }`, sin detalle interno en la respuesta.
 
-**Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools. **Sin verificar todavía**: las verificaciones V1 a V6 de la spec (§11) contra el proyecto real, y por lo tanto este criterio de cierre, quedan pendientes — las hace una persona con login real (Steps 2 y 3 del plan de conexión y cierre).
+**Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools. **Sin verificar todavía**: las verificaciones V1 a V7 de la spec (§11) contra el proyecto real, y por lo tanto este criterio de cierre, quedan pendientes — las hace una persona con login real (Steps 2 y 3 del plan de conexión y cierre).
+
+
+**Runbook de producción** (en este orden):
+1. Decidir el Custom Access Token Hook (spec §13) antes de prender el OAuth Server: sin él, un token de OAuth abre PostgREST con todos los permisos del usuario.
+2. `npx supabase migration list`: confirmar que `20260922090000_search_focuses.sql` ya está aplicada en remoto, porque la pendiente `20260922100000_upsert_discovered_account.sql` depende de ella. Si producción tiene migraciones posteriores a `20260922100000`, `db push` necesita `--include-all`.
+3. `db push` ANTES del deploy de Vercel: el código necesita `brain_mcp_hit` y la declaración `brain` en `tenant_agents`.
+4. `PUBLIC_APP_URL` cargada en Vercel.
+5. Verificaciones V1 a V7 de la spec (§11).
 
 **Cuando haga falta, no ahora:** búsqueda híbrida con embeddings (`2026-09-13-brain-design.md` §6.2), que se activa por tenant con `config.search = "hybrid"` más un backfill. Señal para prenderla: el agente busca algo que existe y no lo encuentra, o el brain de un tenant pasa de unas 150 páginas.
 
