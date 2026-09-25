@@ -8,6 +8,12 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 const SCOPES = "openid email profile";
 
+function callbackUrl(): string {
+	const next = new URLSearchParams(window.location.search).get("next");
+	const base = `${window.location.origin}/auth/callback`;
+	return next ? `${base}?next=${encodeURIComponent(next)}` : base;
+}
+
 export default function LoginPage() {
 	const supabase = createBrowserSupabase();
 	const [email, setEmail] = useState("");
@@ -18,7 +24,7 @@ export default function LoginPage() {
 			provider: "google",
 			options: {
 				scopes: SCOPES,
-				redirectTo: `${window.location.origin}/auth/callback`,
+				redirectTo: callbackUrl(),
 			},
 		});
 	}
@@ -28,7 +34,7 @@ export default function LoginPage() {
 		const { error } = await supabase.auth.signInWithOtp({
 			email: email.trim().toLowerCase(),
 			options: {
-				emailRedirectTo: `${window.location.origin}/auth/callback`,
+				emailRedirectTo: callbackUrl(),
 				// Sin esto, un mail nunca invitado crea igual una fila en auth.users
 				// y recibe un link — contradice "alta solo por invitación". Un
 				// invitado real ya tiene su fila (la crea admin.inviteUserByEmail al
