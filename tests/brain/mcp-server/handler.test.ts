@@ -120,6 +120,26 @@ describe("handleBrainMcp", () => {
 		expect(d.providerInstance.search).toHaveBeenCalledWith({ query: "icp" });
 	});
 
+	it("el proveedor recibe el binding del tenant de la URL", async () => {
+		const provider = vi.fn(() => fakeProvider());
+		const d = deps({
+			store: {
+				...store,
+				brainBinding: async (tenantId) => ({ ...binding, tenantId }),
+			},
+			provider,
+		});
+		const client = await connect("ana", d, "a");
+		await client.callTool({
+			name: "brain_search",
+			arguments: { query: "icp", tenantId: "tenant-b" },
+		});
+		expect(provider).toHaveBeenCalled();
+		for (const [called] of provider.mock.calls) {
+			expect((called as BrainBinding).tenantId).toBe("tenant-a");
+		}
+	});
+
 	it("un admin escribe como usuario, sin aprobación", async () => {
 		const d = deps();
 		const client = await connect("admin", d);
