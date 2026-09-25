@@ -121,7 +121,7 @@ describe("handleBrainMcp", () => {
 	});
 
 	it("el proveedor recibe el binding del tenant de la URL", async () => {
-		const provider = vi.fn(() => fakeProvider());
+		const provider = vi.fn((_binding: BrainBinding) => fakeProvider());
 		const d = deps({
 			store: {
 				...store,
@@ -136,7 +136,7 @@ describe("handleBrainMcp", () => {
 		});
 		expect(provider).toHaveBeenCalled();
 		for (const [called] of provider.mock.calls) {
-			expect((called as BrainBinding).tenantId).toBe("tenant-a");
+			expect(called.tenantId).toBe("tenant-a");
 		}
 	});
 
