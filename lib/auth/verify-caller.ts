@@ -31,7 +31,8 @@ function parseCookieHeader(
 
 /**
  * Verifica al caller de un request crudo (fuera del scope de Next) contra una
- * sesión de Supabase armada a mano desde el header `cookie`. Devuelve `null`
+ * sesión de Supabase armada a mano desde el header `cookie`. Un token emitido
+ * por el servidor OAuth (claim `client_id`) no cuenta como sesión. Devuelve `null`
  * en cualquier caso de falla (sin cookies, cookie inválida, error de red,
  * etc.) para que el auth walk de eve avance al siguiente autenticador —
  * nunca tira.
@@ -63,6 +64,13 @@ export async function verifyCaller(
 
 		const { data, error } = await supabase.auth.getUser();
 		if (error || !data.user?.email) return null;
+
+		// Los tokens que emite el servidor OAuth a un cliente MCP traen
+		// `client_id`: sirven para el brain por MCP, no para abrir el chat.
+		const { data: claimsData, error: claimsError } =
+			await supabase.auth.getClaims();
+		if (claimsError || !claimsData?.claims) return null;
+		if (claimsData.claims.client_id) return null;
 
 		return { userId: data.user.id, email: data.user.email };
 	} catch {

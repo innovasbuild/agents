@@ -63,9 +63,10 @@ export default async function ConsentPage({
 					{data.client.name} quiere conectarse a tu cuenta
 				</h1>
 				<p className="text-muted-foreground text-sm">
-					Entrás como {data.user.email}. Va a poder usar el brain de los
-					clientes a los que ya tenés acceso, con los mismos permisos que tenés
-					en la plataforma.
+					Entrás como {data.user.email}. Si lo permitís, esta app va a actuar
+					como vos en la plataforma, con los mismos permisos que tenés: el brain
+					y los datos de todos los clientes a los que tenés acceso. Permitilo
+					solo si reconocés la app.
 				</p>
 			</div>
 			<ul className="list-disc space-y-1 pl-5 text-sm">
