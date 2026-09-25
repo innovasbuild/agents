@@ -7,7 +7,9 @@ import { EllipsisIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
+	createContext,
 	Fragment,
+	useContext,
 	useMemo,
 	useRef,
 	useState,
@@ -31,7 +33,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
+import { isEmailApproval, queuePreviewItems } from "@/lib/agents/mail-preview";
 import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
+import { mailText } from "@/lib/gmail/signature";
 import {
 	createConversation,
 	deleteConversation,
@@ -46,10 +50,16 @@ interface Thread {
 	last_message_at: string;
 }
 
+// Firma del ejecutor (la que pega composeMail al enviar) para todas las
+// tarjetas del hilo: viaja por contexto y no como prop de cada componente,
+// porque la usan piezas que están a tres niveles del ChatClient.
+const SignatureContext = createContext<string | null>(null);
+
 export function ChatClient({
 	active,
 	allowedModels,
 	defaultModel,
+	signature,
 	slug,
 	tenantId,
 	threads,
@@ -57,6 +67,7 @@ export function ChatClient({
 	active: Thread | null;
 	allowedModels: string[];
 	defaultModel: string;
+	signature: string | null;
 	slug: string;
 	tenantId: string;
 	threads: Thread[];
@@ -65,78 +76,80 @@ export function ChatClient({
 	const [model, setModel] = useState(defaultModel);
 
 	return (
-		<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
-			{/* min-w-0: un hijo de grid nace con min-width:auto, así que el track
+		<SignatureContext value={signature}>
+			<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
+				{/* min-w-0: un hijo de grid nace con min-width:auto, así que el track
 			    se estira al min-content de los títulos (que van con truncate, o
 			    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
 			    empujaba el ⋯ fuera de la pantalla. */}
-			<aside className="min-w-0 space-y-4">
-				<div className="space-y-2">
-					<label
-						className="block text-muted-foreground text-sm"
-						htmlFor="modelo"
-					>
-						Modelo del hilo nuevo
-					</label>
-					<select
-						className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-						id="modelo"
-						onChange={(event) => setModel(event.target.value)}
-						value={model}
-					>
-						{allowedModels.map((option) => (
-							<option key={option} value={option}>
-								{option}
-							</option>
-						))}
-					</select>
-					<Button
-						className="w-full"
-						onClick={async () => {
-							const id = await createConversation(tenantId, slug, model);
-							if (id) router.push(`/${slug}/chat?hilo=${id}`);
-						}}
-						type="button"
-					>
-						Hilo nuevo
-					</Button>
-				</div>
+				<aside className="min-w-0 space-y-4">
+					<div className="space-y-2">
+						<label
+							className="block text-muted-foreground text-sm"
+							htmlFor="modelo"
+						>
+							Modelo del hilo nuevo
+						</label>
+						<select
+							className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+							id="modelo"
+							onChange={(event) => setModel(event.target.value)}
+							value={model}
+						>
+							{allowedModels.map((option) => (
+								<option key={option} value={option}>
+									{option}
+								</option>
+							))}
+						</select>
+						<Button
+							className="w-full"
+							onClick={async () => {
+								const id = await createConversation(tenantId, slug, model);
+								if (id) router.push(`/${slug}/chat?hilo=${id}`);
+							}}
+							type="button"
+						>
+							Hilo nuevo
+						</Button>
+					</div>
 
-				<ul className="space-y-0.5">
-					{threads.map((thread) => {
-						const isActive = thread.id === active?.id;
-						return (
-							<li
-								className={`flex items-center rounded-md transition-colors hover:bg-muted ${
-									isActive ? "bg-muted font-medium" : ""
-								}`}
-								key={thread.id}
-							>
-								<a
-									className={`min-w-0 flex-1 truncate rounded-md py-2 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-										isActive ? "" : "text-muted-foreground"
+					<ul className="space-y-0.5">
+						{threads.map((thread) => {
+							const isActive = thread.id === active?.id;
+							return (
+								<li
+									className={`flex items-center rounded-md transition-colors hover:bg-muted ${
+										isActive ? "bg-muted font-medium" : ""
 									}`}
-									href={`/${slug}/chat?hilo=${thread.id}`}
+									key={thread.id}
 								>
-									{threadTitle(thread)}
-								</a>
-								<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
-							</li>
-						);
-					})}
-				</ul>
-			</aside>
+									<a
+										className={`min-w-0 flex-1 truncate rounded-md py-2 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+											isActive ? "" : "text-muted-foreground"
+										}`}
+										href={`/${slug}/chat?hilo=${thread.id}`}
+									>
+										{threadTitle(thread)}
+									</a>
+									<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
+								</li>
+							);
+						})}
+					</ul>
+				</aside>
 
-			{active ? (
-				<Thread key={active.id} slug={slug} thread={active} />
-			) : (
-				<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
-					<p className="text-muted-foreground">
-						Elegí un hilo o abrí uno nuevo para hablar con el agente.
-					</p>
-				</div>
-			)}
-		</div>
+				{active ? (
+					<Thread key={active.id} slug={slug} thread={active} />
+				) : (
+					<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
+						<p className="text-muted-foreground">
+							Elegí un hilo o abrí uno nuevo para hablar con el agente.
+						</p>
+					</div>
+				)}
+			</div>
+		</SignatureContext>
 	);
 }
 
@@ -642,6 +655,21 @@ function isLongTextValue(value: unknown): value is string {
 	);
 }
 
+/**
+ * El mail como lo va a leer el destinatario: el cuerpo aprobado más la firma
+ * que `composeMail` pega al enviar (send.ts). Sin markdown ni recortes: lo que
+ * se ve acá es lo que sale.
+ */
+function MailPreview({ body }: { body: string }) {
+	const signature = useContext(SignatureContext);
+	return (
+		<div className="whitespace-pre-wrap rounded-md border bg-white p-4 text-slate-900 text-sm leading-relaxed">
+			<span className="sr-only">Mail tal cual sale: </span>
+			{mailText(body, signature)}
+		</div>
+	);
+}
+
 function formatApprovalValue(value: unknown): string {
 	if (value === null || value === undefined || value === "") return "—";
 	if (typeof value === "boolean") return value ? "Sí" : "No";
@@ -659,6 +687,7 @@ function ApprovalPayload({ input }: { input: Record<string, unknown> }) {
 	const entries = Object.entries(input);
 	if (entries.length === 0) return null;
 
+	const isMail = isEmailApproval(input);
 	const shortFields = entries.filter(([, value]) => !isLongTextValue(value));
 	const longFields = entries.filter(([, value]) => isLongTextValue(value));
 
@@ -676,15 +705,19 @@ function ApprovalPayload({ input }: { input: Record<string, unknown> }) {
 					))}
 				</dl>
 			) : null}
-			{longFields.map(([key, value]) => (
-				<p
-					className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm"
-					key={key}
-				>
-					<span className="sr-only">{approvalFieldLabel(key)}: </span>
-					{value as string}
-				</p>
-			))}
+			{longFields.map(([key, value]) =>
+				isMail && key === "body" ? (
+					<MailPreview body={value as string} key={key} />
+				) : (
+					<p
+						className="whitespace-pre-wrap rounded-md border bg-background p-3 text-sm"
+						key={key}
+					>
+						<span className="sr-only">{approvalFieldLabel(key)}: </span>
+						{value as string}
+					</p>
+				),
+			)}
 		</>
 	);
 }
@@ -740,6 +773,13 @@ function MessageText({ message }: { message: EveMessage }) {
 			part.state === "output-available"
 		) {
 			return <DraftMessageCard key={part.toolCallId} part={part} />;
+		}
+		if (
+			part.type === "dynamic-tool" &&
+			part.toolName === "list_queue" &&
+			part.state === "output-available"
+		) {
+			return <QueueCards key={part.toolCallId} output={part.output} />;
 		}
 		return null;
 	});
@@ -819,15 +859,50 @@ function DraftMessageCard({
 				<dt className="text-muted-foreground">Idioma</dt>
 				<dd>{output.idiomaLabel ?? output.idioma}</dd>
 			</dl>
-			<p className="whitespace-pre-wrap rounded-md border bg-background p-3">
-				<span className="sr-only">Cuerpo: </span>
-				{output.body}
-			</p>
+			{output.body ? <MailPreview body={output.body} /> : null}
 			{output.ancla ? (
 				<p className="text-muted-foreground text-xs">
 					Ancla: {output.ancla.hecho} ({output.ancla.fuente})
 				</p>
 			) : null}
 		</fieldset>
+	);
+}
+
+/**
+ * La cola como tarjetas, una por pieza: el ejecutor ve cada mail tal cual sale
+ * y contesta por letra. El agente no repite el cuerpo en el texto del chat.
+ */
+function QueueCards({ output }: { output: unknown }) {
+	const items = queuePreviewItems(output);
+	if (items.length === 0) return null;
+
+	return (
+		<div className="space-y-3">
+			{items.map((item) => (
+				<fieldset
+					className="space-y-3 rounded-lg border bg-card p-4 text-sm"
+					key={item.queueItemId}
+				>
+					<legend className="px-1 font-medium text-sm">
+						Pieza {item.letter}
+						{item.trabada ? " (trabada)" : ""}
+					</legend>
+					<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+						<dt className="text-muted-foreground">Para</dt>
+						<dd>{item.to}</dd>
+						<dt className="text-muted-foreground">Asunto</dt>
+						<dd>{item.subject}</dd>
+					</dl>
+					<MailPreview body={item.body} />
+					{item.trabada ? (
+						<p className="text-muted-foreground text-xs">
+							Quedó en el medio de un envío: revisá en Gmail si el mail salió
+							antes de tocarla.
+						</p>
+					) : null}
+				</fieldset>
+			))}
+		</div>
 	);
 }

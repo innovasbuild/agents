@@ -75,6 +75,22 @@ function signatureHtml(signer: Signer, company: Company | null): string {
 		.join("\n");
 }
 
+/** El bloque de firma en texto, tal cual queda al pie del mail, o null si el
+ * ejecutor todavía no tiene `displayName`. Lo usa composeMail al enviar y la
+ * previsualización del chat, para que el ejecutor apruebe lo que se manda. */
+export function signatureBlock(
+	signer: Signer,
+	company: Company | null,
+): string | null {
+	if (!signer.displayName) return null;
+	return `--\n${signatureText(signer, company)}`;
+}
+
+/** Cuerpo aprobado más el bloque de firma: el texto que lee el destinatario. */
+export function mailText(body: string, block: string | null): string {
+	return block ? `${body}\n\n${block}` : body;
+}
+
 /** Arma el mail final a partir del cuerpo aprobado: sin `displayName` no hay
  * firma que mostrar (ejecutor sin cargar todavía), y se manda como siempre. */
 export function composeMail(
@@ -82,9 +98,10 @@ export function composeMail(
 	signer: Signer,
 	company: Company | null,
 ): ComposedMail {
-	if (!signer.displayName) return { text: body, html: null };
+	const block = signatureBlock(signer, company);
+	if (!block) return { text: body, html: null };
 	return {
-		text: `${body}\n\n--\n${signatureText(signer, company)}`,
+		text: mailText(body, block),
 		html: `${bodyToHtml(body)}\n${signatureHtml(signer, company)}`,
 	};
 }

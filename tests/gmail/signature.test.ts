@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { composeMail } from "@/lib/gmail/signature";
+import {
+	composeMail,
+	mailText,
+	signatureBlock,
+} from "@/lib/gmail/signature";
 
 const SIGNER = {
 	displayName: "Matías O'Keefe",
@@ -82,5 +86,23 @@ describe("composeMail", () => {
 		expect(result.html).toContain("Primero<br>Segunda línea");
 		expect(result.html).toMatch(/<p[^>]*>Primero<br>Segunda línea<\/p>/);
 		expect(result.html).toContain("Otro párrafo");
+	});
+});
+
+describe("signatureBlock y mailText", () => {
+	it("el bloque de firma es el mismo que composeMail pega al final del texto", () => {
+		const block = signatureBlock(SIGNER, COMPANY);
+		expect(block).not.toBeNull();
+		const body = "Hola Laura,\n\nTe escribo por...";
+		expect(mailText(body, block)).toBe(composeMail(body, SIGNER, COMPANY).text);
+	});
+
+	it("sin displayName no hay bloque, y el texto queda igual al body", () => {
+		const block = signatureBlock(
+			{ displayName: null, title: null, linkedinUrl: null },
+			COMPANY,
+		);
+		expect(block).toBeNull();
+		expect(mailText("Hola", block)).toBe("Hola");
 	});
 });
