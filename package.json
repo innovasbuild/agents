@@ -25,9 +25,11 @@
 		"executors:set": "node --env-file=.env.local scripts/executors-set.mts",
 		"workflows:set": "node --env-file=.env.local scripts/workflows-set.mts",
 		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts",
-		"jev:probe": "node --env-file=.env.local scripts/jev-probe.mts"
+		"jev:probe": "node --env-file=.env.local scripts/jev-probe.mts",
+		"oauth:probe": "node --env-file=.env.local scripts/oauth-probe.mts"
 	},
 	"dependencies": {
+		"@modelcontextprotocol/sdk": "1.30.1",
 		"@supabase/ssr": "^0.12.7",
 		"@supabase/supabase-js": "^2.116.0",
 		"@vercel/connect": "1.0.0",

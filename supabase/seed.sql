@@ -21,8 +21,8 @@ values
 on conflict (tenant_id, user_id) do nothing;
 
 -- Sin esta fila el canal rechaza todo, que es el comportamiento correcto.
-insert into public.tenant_agents (tenant_id, agent)
+insert into public.tenant_agents (tenant_id, agent, config)
 values
-  ('99999999-0000-0000-0000-000000000001', 'outreach'),
-  ('99999999-0000-0000-0000-000000000002', 'outreach')
+  ('99999999-0000-0000-0000-000000000001', 'outreach', '{"brain": "read_write"}'),
+  ('99999999-0000-0000-0000-000000000002', 'outreach', '{"brain": "read_write"}')
 on conflict (tenant_id, agent) do nothing;

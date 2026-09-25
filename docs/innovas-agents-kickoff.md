@@ -255,14 +255,14 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 3 · Agente de outreach v1 | ✅ hecho | #15 y previos |
 | 4 · Dashboard | ✅ hecho | #23, #24 |
 | 5 · Escucha, follow-ups y fuentes | ✅ hecho — falta ColdIQ/Places como flujo de carga (deferido, etapa propia) | #26 |
-| 6 · Canal MCP (Claude / ChatGPT) | ⬜ no arrancada | — |
+| 6 · Canal MCP (Claude / ChatGPT) | 🔧 emisor hecho en la 11, falta el canal del agente | — |
 | 7 · Segundo tenant | ⬜ no arrancada — va después de la 12 y la 13 | — |
 | 8 · Chat SDK | ⬜ no arrancada | — |
 | 9 · Observabilidad por cliente | ⬜ no arrancada — conviene después de la 12 | — |
 | 10 · Agentes inbound y handoff | ⬜ no arrancada | — |
-| 11 · Brain por MCP | ⬜ no arrancada | #25 (spec) |
+| 11 · Brain por MCP | 🔧 código hecho, verificación pendiente | #25 (spec) · sin PR de implementación todavía |
 | 12 · Modelo de orquestación | ✅ hecho — `refresh-fichas` en producción para `innovas`; la ley en `docs/02-orquestacion.md` | #29, #32, #35, #36, #37, #39 y el de la E4 |
-| 13 · Pipeline de GTM | 📝 spec y plan listos, sin implementar | #30 |
+| 13 · Pipeline de GTM | 🔧 E1–E4 código mergeado; cierre contra producción en pausa por Apollo | #30, #47 |
 | 14 · Subida de eve | ⬜ no arrancada | — |
 | 15 · Propuesta comercial | ⬜ no arrancada | — |
 | 16 · Auto-respuesta con umbral | ⬜ no arrancada — arranca por datos, no por fecha | — |

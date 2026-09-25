@@ -1,15 +1,38 @@
 // Configuración del proveedor wiki en tenant_connections.config (spec brain
-// §4.3). Sin imports: la usa scripts/connections-bind.mts con Node directo.
+// §4.3). Solo imports relativos con extensión .ts: la usa scripts/connections-bind.mts con Node directo.
+import { type McpLimits, parseMcpLimits } from "./limits.ts";
 
 export interface WikiConfig {
 	categories: string[];
 	requiredFrontmatter: string[];
 	search: "fts";
+	mcpLimits: McpLimits;
 }
 
 const CATEGORY = /^[a-z][a-z0-9-]{0,40}$/;
 const FRONTMATTER_KEY = /^[a-z][a-z0-9_]{0,40}$/;
-const KNOWN_KEYS = new Set(["categories", "requiredFrontmatter", "search"]);
+const KNOWN_KEYS = new Set([
+	"categories",
+	"requiredFrontmatter",
+	"search",
+	"mcpLimits",
+]);
+
+export function parseCategories(value: unknown): string[] {
+	if (
+		!Array.isArray(value) ||
+		value.length === 0 ||
+		!value.every((item) => typeof item === "string" && CATEGORY.test(item))
+	) {
+		throw new Error(
+			"categories tiene que ser una lista no vacía de categorías en minúsculas (a-z, 0-9, guiones)",
+		);
+	}
+	if (new Set(value).size !== value.length) {
+		throw new Error("categories tiene valores repetidos");
+	}
+	return [...value] as string[];
+}
 
 export function parseWikiConfig(value: unknown): WikiConfig {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -24,19 +47,7 @@ export function parseWikiConfig(value: unknown): WikiConfig {
 		);
 	}
 
-	const categories = raw.categories;
-	if (
-		!Array.isArray(categories) ||
-		categories.length === 0 ||
-		!categories.every((item) => typeof item === "string" && CATEGORY.test(item))
-	) {
-		throw new Error(
-			"categories tiene que ser una lista no vacía de categorías en minúsculas (a-z, 0-9, guiones)",
-		);
-	}
-	if (new Set(categories).size !== categories.length) {
-		throw new Error("categories tiene valores repetidos");
-	}
+	const categories = parseCategories(raw.categories);
 
 	const required = raw.requiredFrontmatter ?? [];
 	if (
@@ -58,8 +69,9 @@ export function parseWikiConfig(value: unknown): WikiConfig {
 	}
 
 	return {
-		categories: [...categories] as string[],
+		categories,
 		requiredFrontmatter: [...required] as string[],
 		search: "fts",
+		mcpLimits: parseMcpLimits(raw.mcpLimits),
 	};
 }

@@ -5,7 +5,6 @@ import { getBrainProvider } from "../brain/provider";
 import { resolveBrainBinding } from "../brain/resolve";
 import type { BrainPage, BrainProvider } from "../brain/types";
 import { loadTenantBindings } from "../connectors/bindings";
-import { createAdminClient } from "../supabase/admin";
 import {
 	emptyGateRules,
 	type GateRules,
@@ -153,5 +152,5 @@ export async function brainForTenant(
 	tenantId: string,
 ): Promise<BrainProvider | null> {
 	const binding = await resolveBrainBinding(tenantId, loadTenantBindings);
-	return binding ? getBrainProvider(binding, createAdminClient()) : null;
+	return binding ? getBrainProvider(binding) : null;
 }

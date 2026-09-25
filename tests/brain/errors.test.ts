@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	BrainConflict,
 	BrainNotFound,
+	BrainProviderError,
+	BrainRateLimited,
 	BrainValidation,
 	toToolError,
 } from "@/lib/brain/errors";
@@ -37,5 +39,26 @@ describe("toToolError", () => {
 	it("relanza errores que no son del brain", () => {
 		const boom = new Error("se cayó la base");
 		expect(() => toToolError(boom)).toThrow(boom);
+	});
+
+	it("un error del proveedor sale como provider_unavailable", () => {
+		expect(
+			toToolError(new BrainProviderError("el brain remoto no respondió")),
+		).toEqual({
+			ok: false,
+			error: "provider_unavailable",
+			message: "el brain remoto no respondió",
+		});
+	});
+
+	it("un límite alcanzado es reintentable y dice cuánto esperar", () => {
+		expect(toToolError(new BrainRateLimited(12))).toEqual({
+			ok: false,
+			error: "rate_limited",
+			message:
+				"Pasaste el límite de llamadas por minuto. Probá de nuevo en 12 segundos.",
+			retryable: true,
+			retryAfterSeconds: 12,
+		});
 	});
 });

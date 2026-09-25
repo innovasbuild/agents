@@ -6,6 +6,7 @@ const wikiConfig = {
 	categories: ["comercial"],
 	requiredFrontmatter: [],
 	search: "fts",
+	mcpLimits: { readsPerMinute: 60, writesPerMinute: 10 },
 };
 
 function binding(overrides: Partial<Binding>): Binding {
@@ -48,9 +49,42 @@ describe("resolveBrainBinding", () => {
 	});
 
 	it("un proveedor de brain no construido se omite con aviso", async () => {
-		const load = vi.fn(async () => [binding({ provider: "mcp" })]);
+		const load = vi.fn(async () => [binding({ provider: "gbrain" })]);
 		expect(await resolveBrainBinding("tenant-a", load)).toBeNull();
-		expect(warn).toHaveBeenCalledWith(expect.stringContaining("mcp"));
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("gbrain"));
+	});
+
+	it("con mcp devuelve el binding con conector y configuración parseada", async () => {
+		const load = vi.fn(async () => [
+			binding({
+				provider: "mcp",
+				connectorUid: "cliente-brain",
+				config: {
+					url: "https://brain.cliente.test/mcp",
+					categories: ["comercial"],
+				},
+			}),
+		]);
+		expect(await resolveBrainBinding("tenant-a", load)).toMatchObject({
+			provider: "mcp",
+			connectorUid: "cliente-brain",
+			config: { url: "https://brain.cliente.test/mcp", timeoutMs: 10000 },
+		});
+	});
+
+	it("un mcp sin conector se omite con aviso", async () => {
+		const load = vi.fn(async () => [
+			binding({
+				provider: "mcp",
+				connectorUid: null,
+				config: {
+					url: "https://brain.cliente.test/mcp",
+					categories: ["comercial"],
+				},
+			}),
+		]);
+		expect(await resolveBrainBinding("tenant-a", load)).toBeNull();
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("conector"));
 	});
 
 	it("una configuración inválida se omite con aviso", async () => {

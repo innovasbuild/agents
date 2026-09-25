@@ -59,12 +59,13 @@ export function parseBindArgs(argv: string[]): BindArgs {
 
 	const rawConfig = flag(argv, "config");
 	const configPath = rawConfig ? rawConfig.replace(/^@/, "") : null;
-	if (provider === "wiki" && !configPath) {
+	const needsConfig = provider === "wiki" || provider === "mcp";
+	if (needsConfig && !configPath) {
 		throw new Error(
-			"wiki necesita --config <ruta a tenants/<slug>/brain.json>",
+			`${provider} necesita --config <ruta a tenants/<slug>/brain*.json>`,
 		);
 	}
-	if (provider !== "wiki" && configPath) {
+	if (!needsConfig && configPath) {
 		throw new Error(`${provider} no acepta --config`);
 	}
 

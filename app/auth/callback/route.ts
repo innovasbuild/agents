@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { safeNextPath } from "@/lib/auth/next-path";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 export async function GET(request: Request) {
@@ -32,5 +33,9 @@ export async function GET(request: Request) {
 		);
 	}
 
-	return NextResponse.redirect(new URL("/", requestUrl.origin));
+	const next = safeNextPath(
+		requestUrl.searchParams.get("next"),
+		requestUrl.origin,
+	);
+	return NextResponse.redirect(new URL(next, requestUrl.origin));
 }
