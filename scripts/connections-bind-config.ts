@@ -2,6 +2,7 @@
 // Import con extensión .ts: lo ejecuta Node directo.
 import { readFile } from "node:fs/promises";
 import { parseWikiConfig } from "../lib/brain/config.ts";
+import { parseMcpBrainConfig } from "../lib/brain/mcp-config.ts";
 import type { ProviderKey } from "../lib/connectors/providers.ts";
 
 export function validateProviderConfig(
@@ -9,6 +10,7 @@ export function validateProviderConfig(
 	raw: unknown,
 ): Record<string, unknown> {
 	if (provider === "wiki") return { ...parseWikiConfig(raw) };
+	if (provider === "mcp") return { ...parseMcpBrainConfig(raw, "production") };
 	throw new Error(`${provider} no acepta --config`);
 }
 

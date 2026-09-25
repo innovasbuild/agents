@@ -13,6 +13,7 @@ const config: WikiConfig = {
 	categories: ["comercial", "marketing"],
 	requiredFrontmatter: ["title", "category", "status", "updated"],
 	search: "fts",
+	mcpLimits: { readsPerMinute: 60, writesPerMinute: 10 },
 };
 
 const write: BrainWrite = {

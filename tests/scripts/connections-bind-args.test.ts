@@ -74,6 +74,42 @@ describe("parseBindArgs", () => {
 		).toThrow(/--config/);
 	});
 
+	it("acepta un brain mcp con conector y config", () => {
+		expect(
+			parseBindArgs([
+				"--tenant",
+				"cliente",
+				"--capability",
+				"brain",
+				"--provider",
+				"mcp",
+				"--connector",
+				"cliente-brain",
+				"--config",
+				"tenants/cliente/brain-mcp.json",
+			]),
+		).toMatchObject({
+			provider: "mcp",
+			connector: "cliente-brain",
+			configPath: "tenants/cliente/brain-mcp.json",
+		});
+	});
+
+	it("un brain mcp sin config falla", () => {
+		expect(() =>
+			parseBindArgs([
+				"--tenant",
+				"cliente",
+				"--capability",
+				"brain",
+				"--provider",
+				"mcp",
+				"--connector",
+				"cliente-brain",
+			]),
+		).toThrow("--config");
+	});
+
 	it("rechaza conector en un proveedor sin llave", () => {
 		expect(() =>
 			parseBindArgs([

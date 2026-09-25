@@ -26,6 +26,12 @@ export const PROVIDERS = {
 		kind: "tool",
 		authKind: "none",
 	},
+	mcp: {
+		capability: "brain",
+		multiple: false,
+		kind: "tool",
+		authKind: "connect_api_key",
+	},
 	coldiq: {
 		capability: "leads",
 		multiple: true,

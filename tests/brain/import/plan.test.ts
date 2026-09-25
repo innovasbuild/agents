@@ -11,6 +11,7 @@ const config: WikiConfig = {
 	categories: ["company", "producto", "marketing", "proyectos"],
 	requiredFrontmatter: ["title", "category", "status", "updated"],
 	search: "fts",
+	mcpLimits: { readsPerMinute: 60, writesPerMinute: 10 },
 };
 
 const manifest = parseManifest({
