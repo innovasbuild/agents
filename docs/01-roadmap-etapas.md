@@ -233,29 +233,29 @@ Tareas:
 
 ---
 
-## Etapa 6 · Canal MCP (Claude / ChatGPT) — `[ ]`
+## Etapa 6 · Canal MCP (Claude / ChatGPT) — `[x]`
 
 **Modelo Claude Code:** Opus 5, effort `high` (es auth: `oauthResource` sobre Supabase como emisor OAuth 2.1).
 **Modelo runtime:** el del tenant.
 **Spec/Plan:** `docs/superpowers/specs/2026-09-27-etapa-6-canal-mcp-design.md` · `docs/superpowers/plans/2026-09-27-etapa-6-canal-mcp.md`
 
-**Estado:** código hecho, verificación contra producción pendiente (Steps M1–M6 de abajo, spec §9). El título pasa a `[x]` cuando M1 y M5 estén confirmados.
+**Estado:** verificado contra producción (M1–M5; M6 no bloquea, ver abajo). En el camino apareció un defecto real (no de esta spec, de cómo eve compila tools dinámicas para poder rehidratarlas): `brain_search`/`brain_read`/`brain_upsert` no aparecían en ninguna sesión por MCP porque su `execute` cerraba sobre una función local en vez de datos serializables. Arreglado y verificado en [PR #57](https://github.com/innovasbuild/agents/pull/57) (`lib/brain/tools.ts`).
 
 - [x] Supabase Auth como servidor OAuth 2.1 con registro dinámico de clientes. Hecho y verificado contra producción en la Etapa 11 (`docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §4, §11): OAuth Server prendido, Allow Dynamic OAuth Apps, pantalla de consentimiento, `next` seguro en el login, `custom_access_token_hook` confirmado corriendo para tokens de cliente OAuth (V3, V7). Este emisor es genérico y ya sirve para cualquier `resource`, no solo el del brain.
-- [x] `channels/mcp.ts` con `oauthResource(verifyMcpChannelToken, { issuer, resource, scopes })`. El tenant sale de `?tenant=<slug>` en la URL de conexión, no de un argumento (la ruta de `mcpChannel` es fija, sin segmento dinámico). (código; sin verificar contra producción)
+- [x] `channels/mcp.ts` con `oauthResource(verifyMcpChannelToken, { issuer, resource, scopes })`. El tenant sale de `?tenant=<slug>` en la URL de conexión, no de un argumento (la ruta de `mcpChannel` es fija, sin segmento dinámico). Verificado contra producción (M1–M4).
 - [x] Docs de conexión (`docs/agente-mcp-conexion.md`; claude.ai sin probar, igual que con el brain).
 - [ ] `/ship` + `/context-save`.
 
-**Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís algo simple y el trabajo corre durable en Vercel, con su `run` en `trigger: 'mcp'` y sin fila nueva en `conversations`. **Sin verificar todavía**, contra producción:
+**Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís algo simple y el trabajo corre durable en Vercel, con su `run` en `trigger: 'mcp'` y sin fila nueva en `conversations`. Verificado contra producción:
 
-| # | Qué |
-|---|---|
-| M1 | Claude Code conecta a `.../eve/agents/outreach/eve/v1/mcp?tenant=innovas`, `agent_start` con un mensaje simple, `agent_get` llega a `completed` |
-| M2 | Sin `?tenant`: error claro, no un 401 de login |
-| M3 | Un token sin membresía en ese tenant: rechazado |
-| M4 | La fila de `runs` tiene `trigger = 'mcp'`; no hay fila nueva en `conversations` |
-| M5 | Una tool con aprobación (`send_email`, en un tenant de prueba, no `innovas`) llega a `input_required` y se resuelve con `agent_update` |
-| M6 | claude.ai conecta como conector remoto (no bloquea el cierre si M1 funciona) |
+| # | Qué | Resultado |
+|---|---|---|
+| M1 | Claude Code conecta a `.../eve/agents/outreach/eve/v1/mcp?tenant=innovas`, `agent_start` con un mensaje simple, `agent_get` llega a `completed` | ✅ `agent_start`→`agent_get`→`completed`, con `brain_search`/`brain_read`/`brain_upsert` presentes tras el PR #57 |
+| M2 | Sin `?tenant`: error claro, no un 401 de login | ✅ `403 forbidden`, `"Falta el tenant en la URL de conexión: agregá ?tenant=<slug>."` |
+| M3 | Un token sin membresía en ese tenant: rechazado | ✅ `403 forbidden` contra un tenant inexistente (`"No existe ese cliente."`). Sin probar en vivo la rama exacta "es miembro de otro tenant real": hoy no hay una segunda cuenta no-admin en la base; queda cubierta solo por el test unitario que fija el mensaje exacto (`tests/agents/mcp-channel-auth.test.ts`) |
+| M4 | La fila de `runs` tiene `trigger = 'mcp'`; no hay fila nueva en `conversations` | ✅ confirmado por query directa a la base |
+| M5 | Una tool con aprobación (`send_email`, en un tenant de prueba, no `innovas`) llega a `input_required` y se resuelve con `agent_update` | ✅ con `crm_upsert_contact` en `prueba-conexiones` en vez de `send_email`: ese tenant no tiene brain conectado (necesario para `draft_message`/`queue_touch`) ni un ejecutor de outreach dado de alta de antes. `input_required`→`agent_update` (cancelar)→`completed`, sin escribir nada real |
+| M6 | claude.ai conecta como conector remoto (no bloquea el cierre si M1 funciona) | Sin probar |
 
 El emisor OAuth que se reusa acá es el mismo que sirve el brain por MCP (Etapa 11): el `resource` cambia, el emisor no.
 
