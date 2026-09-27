@@ -126,15 +126,36 @@ describe("resolveMcpChannelAuth", () => {
 		);
 	});
 
-	it("sin membresía en un tenant que sí existe: forbidden", async () => {
+	it("sin membresía en un tenant que sí existe: mismo mensaje que un tenant inexistente (sin oráculo)", async () => {
 		// ana solo tiene membresía en tenant-a (ver deps()); acá se conecta a un
-		// tenant-b real donde no tiene ninguna fila.
+		// tenant-b real donde no tiene ninguna fila. Si alguien cambia el
+		// mensaje de una rama sin tocar la otra, esta comparación tiene que
+		// fallar: es la propiedad de seguridad de F4, no solo el "kind".
 		const sinMembresiaAhi = deps({
 			tenantBySlug: async (slug) =>
 				slug === "b" ? { id: "tenant-b", active: true } : null,
 		});
-		expect(
-			await resolveMcpChannelAuth(request("ana", "b"), sinMembresiaAhi),
-		).toMatchObject({ ok: false, kind: "forbidden" });
+		const sinMembresia = await resolveMcpChannelAuth(
+			request("ana", "b"),
+			sinMembresiaAhi,
+		);
+		const inexistente = await resolveMcpChannelAuth(request("ana", "zzz"), deps());
+		expect(sinMembresia).toMatchObject({ ok: false, kind: "forbidden" });
+		expect((sinMembresia as { message: string }).message).toBe(
+			(inexistente as { message: string }).message,
+		);
+	});
+
+	it("un error de la base al leer membresías o tenant da forbidden, sin filtrar el motivo", async () => {
+		const throwing = deps({
+			membershipsOf: async () => {
+				throw new Error("conexión a postgres perdida");
+			},
+		});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const result = await resolveMcpChannelAuth(request("ana", "a"), throwing);
+		expect(result).toMatchObject({ ok: false, kind: "forbidden" });
+		expect(JSON.stringify(result)).not.toContain("conexión a postgres perdida");
+		error.mockRestore();
 	});
 });

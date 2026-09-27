@@ -70,10 +70,20 @@ export async function resolveMcpChannelAuth(
 		);
 	}
 
-	const roles = await deps.membershipsOf(userId);
+	let roles: { tenantId: string; role: string }[];
+	let tenant: { id: string; active: boolean } | null;
+	try {
+		roles = await deps.membershipsOf(userId);
+		tenant = await deps.tenantBySlug(slug);
+	} catch (error) {
+		console.error("canal mcp: no pude resolver el acceso", error);
+		return deny(
+			"forbidden",
+			"No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+		);
+	}
 	const platformAdmin = roles.some((row) => row.role === "platform_admin");
 
-	const tenant = await deps.tenantBySlug(slug);
 	if (!tenant || !tenant.active) {
 		return deny(
 			"forbidden",
