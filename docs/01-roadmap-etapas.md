@@ -239,7 +239,7 @@ Tareas:
 **Modelo runtime:** el del tenant.
 **Spec/Plan:** `docs/superpowers/specs/06-canal-mcp.md` · `docs/superpowers/plans/06-canal-mcp.md`
 
-- [x] Supabase Auth como servidor OAuth 2.1 con registro dinámico de clientes. Código hecho en la Etapa 11 (`docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §4): OAuth Server, pantalla de consentimiento, `next` seguro en el login. Falta prender **Allow Dynamic OAuth Apps** en el dashboard de Supabase de producción (Step 2 del plan de conexión de esa etapa) y las verificaciones V1 a V4 contra el proyecto real.
+- [x] Supabase Auth como servidor OAuth 2.1 con registro dinámico de clientes. Hecho y verificado contra producción en la Etapa 11 (`docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §4, §11): OAuth Server prendido, Allow Dynamic OAuth Apps, pantalla de consentimiento, `next` seguro en el login, `custom_access_token_hook` confirmado corriendo para tokens de cliente OAuth (V3, V7). Este emisor es genérico y ya sirve para cualquier `resource`, no solo el del brain.
 - [ ] `channels/mcp.ts` con `oauthResource(verifyToken, { issuer, resource, scopes })`. Sigue pendiente: la Etapa 11 solo construyó el endpoint del brain (`/brain/<slug>/mcp`), no el canal del agente por MCP.
 - [ ] Docs de conexión (Claude Code y claude.ai).
 - [ ] `/ship` + `/context-save`.
