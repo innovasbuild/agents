@@ -42,6 +42,46 @@ describe("createBrainTools", () => {
 		expect(tools.brain_search.approval).toBeUndefined();
 	});
 
+	it("brain_search y brain_read siguen llamando al provider inyectado al ejecutar", async () => {
+		const summary = {
+			slug: "a",
+			title: "A",
+			category: "comercial",
+			status: "activo" as const,
+			tags: [],
+			snippet: "",
+			updatedAt: "2026-01-01",
+		};
+		const page = {
+			slug: "a",
+			title: "A",
+			category: "comercial",
+			status: "activo" as const,
+			tags: [],
+			frontmatter: {},
+			body: "",
+			revision: 1,
+			updatedAt: "2026-01-01",
+		};
+		const search = vi.fn(async () => [summary]);
+		const read = vi.fn(async () => page);
+		const providerFactory = vi.fn(() => ({
+			search,
+			read,
+			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
+		}));
+		const tools = createBrainTools(binding, "read", { provider: providerFactory });
+
+		const searchResult = await tools.brain_search.execute({ query: "hola" }, {} as never);
+		const readResult = await tools.brain_read.execute({ slug: "a" }, {} as never);
+
+		expect(providerFactory).toHaveBeenCalledWith(binding);
+		expect(search).toHaveBeenCalledWith({ query: "hola" });
+		expect(read).toHaveBeenCalledWith("a");
+		expect(searchResult).toMatchObject({ ok: true });
+		expect(readResult).toMatchObject({ ok: true });
+	});
+
 	it("la descripción de brain_upsert del agente avisa que la aprueba un administrador", () => {
 		const tools = createBrainTools(binding, "read_write", {
 			provider: fakeProvider,
