@@ -23,6 +23,8 @@ El agente expone cuatro tools, las mismas para cualquier agente conectado por MC
 - `agent_start`: le mandás un mensaje, te devuelve un `invocationId` al toque. El trabajo sigue corriendo aunque cierres la conexión.
 - `agent_get`: con el `invocationId`, el estado actual. Mientras esté `working`, seguí preguntando cada tanto.
 - `agent_update`: si el estado es `input_required` (por ejemplo, una tool que necesita que apruebes algo), contestás acá.
+
+  Ojo: por este canal las aprobaciones no pasan por la cola del dashboard ni le llegan a otra persona. Cuando el agente pide aprobar algo (por ejemplo, mandar un mail), lo contesta quien maneja el cliente MCP (Claude Code, claude.ai) con `agent_update`. Si conectás el agente así, sos vos quien revisa y confirma cada aprobación antes de contestarla: nunca armes `agent_update` para que apruebe solo.
 - `agent_cancel`: pide cancelar un trabajo en curso.
 
 Un `agent_start` no es para reintentar solo: si se corta la respuesta, preguntale a la persona antes de mandar el mismo pedido dos veces.

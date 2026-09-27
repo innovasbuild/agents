@@ -206,7 +206,9 @@ Reusa el emisor de la Etapa 11: V1, V2 y V4 (metadata, `getClaims`) no se repite
 
 - **Confiar en que eve preserva el query string del `Request` en `oauthResource`/`mcpChannel`.** Mitigación: test de la Sección 4.3 antes de dar el diseño por cerrado en la implementación.
 - **`eve` 0.54.2 tiene una superficie de MCP relativamente nueva.** Mitigación: M1 y M5 contra producción antes de cerrar; si `agent_update` no resuelve una aprobación pendiente, es un problema de versión de eve (Etapa 14), no algo para parchear acá.
+- **Las aprobaciones por MCP las contesta el cliente conectado, no una persona en el dashboard.** Una tool que pide aprobación (mandar un mail) queda `input_required` y se resuelve con `agent_update` desde Claude Code o claude.ai; no entra a la cola de aprobación del dashboard. Mitigación: `docs/agente-mcp-conexion.md` lo dice explícito — quien conecta el agente revisa y confirma cada aprobación, y `agent_update` nunca se cablea para aprobar solo.
 
 ## 12. Enmiendas
 
 - **`docs/01-roadmap-etapas.md`**: Etapa 6 con esta spec y su plan; el ítem de `channels/mcp.ts` deja de estar pendiente cuando se implemente.
+- **Ruta real del canal y scope (enmienda de la implementación).** §2, §4.1, §7 y la línea M1 del roadmap dicen `/eve/v1/mcp`; como el agente `outreach` está nombrado en `next.config.ts`, eve lo monta en `/eve/agents/outreach/eve/v1/mcp` (corregido en la Task 2, con su metadata en `app/.well-known/oauth-protected-resource/eve/agents/outreach/eve/v1/mcp/route.ts`). El `scopes: ["agent:invoke"]` de §4.1 quedó en `["openid", "email"]`: el servidor OAuth de Supabase solo publica `openid`, `profile`, `email` y `phone`, y ese par es el que la Etapa 11 probó de punta a punta. Se deja asentado acá una vez; el resto del documento no se reescribe.
