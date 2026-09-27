@@ -11,14 +11,23 @@ import type { BrainProvider } from "./types.ts";
 
 function buildBrainReadTools(
 	contract: ReturnType<typeof brainContract>,
-	provider: () => BrainProvider,
+	binding: BrainBinding,
+	deps: { provider?: (binding: BrainBinding) => BrainProvider },
 ) {
+	// execute() llama a getBrainProvider directo, sin pasar por una función
+	// local: eve compila estos callbacks para poder rehidratarlos entre
+	// invocaciones (guides/dynamic-capabilities.md), y solo tolera cerrar
+	// sobre datos JSON-serializables más llamadas a imports estables. Una
+	// función guardada en una variable local (el `provider` que había acá
+	// antes) es un valor no serializable y hace que eve descarte todo el
+	// resolver en session.started sin avisar más que por log.
 	const brain_search = defineTool({
 		description: `${contract.search.description} Usalo antes de investigar o redactar.`,
 		inputSchema: contract.search.input,
 		execute: async (input) => {
 			try {
-				return { ok: true as const, results: await provider().search(input) };
+				const provider = (deps.provider ?? getBrainProvider)(binding);
+				return { ok: true as const, results: await provider.search(input) };
 			} catch (error) {
 				return toToolError(error);
 			}
@@ -30,7 +39,8 @@ function buildBrainReadTools(
 		inputSchema: contract.read.input,
 		execute: async ({ slug }) => {
 			try {
-				return { ok: true as const, page: await provider().read(slug) };
+				const provider = (deps.provider ?? getBrainProvider)(binding);
+				return { ok: true as const, page: await provider.read(slug) };
 			} catch (error) {
 				return toToolError(error);
 			}
@@ -43,7 +53,7 @@ function buildBrainReadTools(
 function buildBrainUpsertTool(
 	binding: BrainBinding,
 	contract: ReturnType<typeof brainContract>,
-	provider: () => BrainProvider,
+	deps: { provider?: (binding: BrainBinding) => BrainProvider },
 ) {
 	return defineTool({
 		description: `${contract.upsert.description} Siempre la aprueba un administrador.`,
@@ -58,7 +68,8 @@ function buildBrainUpsertTool(
 			const userId =
 				initiator?.principalType === "user" ? initiator.principalId : null;
 			try {
-				const result = await provider().upsert(input, {
+				const provider = (deps.provider ?? getBrainProvider)(binding);
+				const result = await provider.upsert(input, {
 					kind: "agent",
 					userId,
 					sessionId: toolCtx.session.id,
@@ -79,12 +90,11 @@ export function createBrainTools(
 	access: "read" | "read_write",
 	deps: { provider?: (binding: BrainBinding) => BrainProvider } = {},
 ): BrainReadTools | (BrainReadTools & { brain_upsert: BrainUpsertTool }) {
-	const provider = () => (deps.provider ?? getBrainProvider)(binding);
 	const contract = brainContract(binding.config.categories);
-	const readTools = buildBrainReadTools(contract, provider);
+	const readTools = buildBrainReadTools(contract, binding, deps);
 
 	if (access === "read") return readTools;
 
-	const brain_upsert = buildBrainUpsertTool(binding, contract, provider);
+	const brain_upsert = buildBrainUpsertTool(binding, contract, deps);
 	return { ...readTools, brain_upsert };
 }
