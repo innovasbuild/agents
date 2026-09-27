@@ -260,7 +260,7 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 8 · Chat SDK | ⬜ no arrancada | — |
 | 9 · Observabilidad por cliente | ⬜ no arrancada — conviene después de la 12 | — |
 | 10 · Agentes inbound y handoff | ⬜ no arrancada | — |
-| 11 · Brain por MCP | 🔧 código hecho, verificación pendiente | #25 (spec) · sin PR de implementación todavía |
+| 11 · Brain por MCP | ✅ hecho, verificado contra producción el 2026-09-27 | #25 (spec) · #51, #52 |
 | 12 · Modelo de orquestación | ✅ hecho — `refresh-fichas` en producción para `innovas`; la ley en `docs/02-orquestacion.md` | #29, #32, #35, #36, #37, #39 y el de la E4 |
 | 13 · Pipeline de GTM | 🔧 E1–E4 código mergeado; cierre contra producción en pausa por Apollo | #30, #47 |
 | 14 · Subida de eve | ⬜ no arrancada | — |

@@ -327,55 +327,55 @@ Tareas:
 
 ---
 
-## Etapa 11 · Brain por MCP: servirlo a los clientes y consumir brains externos — `[ ]`
+## Etapa 11 · Brain por MCP: servirlo a los clientes y consumir brains externos — `[x]`
 
 **Modelo Claude Code:** Opus 5, effort `high` para la spec (es auth y es superficie expuesta a terceros). Sesión nueva con Sonnet 5 para el wiring.
 **Modelo runtime:** n/a para el endpoint; el del tenant para el agente.
-**Spec/Plan:** `docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` · `docs/superpowers/plans/2026-09-24-etapa-11-brain-mcp.md`
+**Spec/Plan:** `docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` · `docs/superpowers/plans/2026-09-24-etapa-11-brain-mcp.md` (PR #51 y #52, mergeados)
 
 Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se usa desde el agente. Faltan las dos puntas: que el cliente lo use desde **sus** herramientas (Claude Code, Codex, claude.ai) y que un cliente pueda tener su brain **en un servidor aparte**, aislado de los demás tenants, sin perder las mismas tres tools.
 
 **Depende de:** Etapa 2 (bindings por tenant, ya cerrada), Etapa 6 (Supabase como emisor OAuth 2.1: se reusa ese emisor, no se inventa una segunda auth) y, para que el cliente tenga dónde editar, Etapa 4 (editor del brain).
 
-**Estado:** código hecho en la rama `etapa-11-brain-mcp`, verificación contra producción pendiente. Las "decisiones a confirmar" de A y B, abajo, quedaron resueltas en la spec por D4, D5 y D9 (rol decide qué tools se listan, `brain_upsert` por MCP escribe sin aprobación, un solo brain habilitado por tenant); el caso "brain aislado" de B pasó a fuera de alcance de esta etapa (spec §12).
+**Estado: cerrada el 2026-09-27**, verificada contra producción (V1–V5 y V7 de la spec §11; V6, claude.ai, no probado, no bloquea). Las "decisiones a confirmar" de A y B, abajo, quedaron resueltas en la spec por D4, D5 y D9 (rol decide qué tools se listan, `brain_upsert` por MCP escribe sin aprobación, un solo brain habilitado por tenant); el caso "brain aislado" de B pasó a fuera de alcance de esta etapa (spec §12).
 
-### A. Servir el brain desde la plataforma (código hecho, verificación pendiente)
+### A. Servir el brain desde la plataforma
 
-- [x] Endpoint MCP remoto del brain, por tenant, con `brain_search`, `brain_read` y `brain_upsert`. Es **distinto** del canal MCP de la Etapa 6: ahí se le delega una tarea al agente, acá se leen y escriben páginas directo. (código; sin verificar contra producción)
-- [x] Auth con el emisor OAuth de la Etapa 6. El token resuelve tenant y usuario; la membresía define el alcance. Un token de un tenant nunca ve páginas de otro: se lee por el mismo camino, con `tenant_id` y RLS. (código; sin verificar contra producción)
+- [x] Endpoint MCP remoto del brain, por tenant, con `brain_search`, `brain_read` y `brain_upsert`. Es **distinto** del canal MCP de la Etapa 6: ahí se le delega una tarea al agente, acá se leen y escriben páginas directo. Verificado contra producción (V5): Claude Code conectó a `/brain/innovas/mcp` y `brain_search` devolvió el canon real.
+- [x] Auth con el emisor OAuth de la Etapa 6. El token resuelve tenant y usuario; la membresía define el alcance. Un token de un tenant nunca ve páginas de otro: se lee por el mismo camino, con `tenant_id` y RLS.
 - [x] **Decisión a confirmar en la spec, resuelta por D4 y D5:** por MCP escribe una persona, no el agente, así que `brain_upsert` no pide aprobación (la aprobación existe porque el agente propone). El rol decide qué tools se listan: `tenant_admin` y `platform_admin` ven las tres, `tenant_member` solo lectura. La escritura pasa igual por `brain_upsert_page`, deja revisión con `author_kind: "user"` y evento.
-- [x] Rate limit y tamaño de respuesta: es una superficie pública autenticada, no un endpoint interno. (código; sin verificar contra producción)
+- [x] Rate limit y tamaño de respuesta: es una superficie pública autenticada, no un endpoint interno.
 - [x] Doc de conexión para el cliente: Claude Code, Codex y claude.ai (`docs/brain-mcp-conexion.md`; Codex sin probar).
 
-### B. Consumir brains externos (código hecho, verificación pendiente)
+### B. Consumir brains externos
 
-- [x] Construir el proveedor `mcp` que la spec del brain ya dejó diseñado (`2026-09-13-brain-design.md` §4.4): binding por tenant con `connector_uid` de Vercel Connect, `config.url` y mapeo de nombres de tools. El adapter traduce al contrato de tres tools y la aprobación de `brain_upsert` sigue siendo nuestra, no del servidor remoto. (código, probado contra un servidor MCP en proceso; no hay brain externo real todavía)
+- [x] Construir el proveedor `mcp` que la spec del brain ya dejó diseñado (`2026-09-13-brain-design.md` §4.4): binding por tenant con `connector_uid` de Vercel Connect, `config.url` y mapeo de nombres de tools. El adapter traduce al contrato de tres tools y la aprobación de `brain_upsert` sigue siendo nuestra, no del servidor remoto. Probado contra un servidor MCP en proceso; no hay brain externo real todavía, así que sigue sin correr contra uno de verdad.
 - [ ] **Caso "brain aislado" — pasa a fuera de alcance (spec §12):** el mismo wiki desplegado aparte, con base propia del cliente, consumido por el proveedor `mcp` y conectado también desde las tools del cliente. Requiere un deploy nuevo y un segundo modo de auth (llave de servicio) en el endpoint, que esta etapa no construye; el proveedor `mcp` ya lo deja conectable el día que alguien lo pida.
 - [x] Un brain de terceros (gbrain o a medida) entra por el mismo proveedor, siempre que sea **MCP remoto sobre HTTP**: eve y Connect no hablan con procesos stdio (lección de ColdIQ, Etapa 2). (código)
 - [x] **Decisión a confirmar en la spec, resuelta por D9:** un tenant tiene un solo brain habilitado a la vez, forzado con un índice único parcial en la base (antes `resolveBrainBinding` tomaba el `wiki` y descartaba el resto en silencio; ahora el error aparece al dar de alta, no al arrancar una sesión).
 
-### C. Configurable por tenant y por agente (código hecho, verificación pendiente)
+### C. Configurable por tenant y por agente
 
-- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`. (código; sin verificar contra producción)
-- [x] Cada agente declara en `tenant_agents.config.brain` si usa brain y con qué alcance (`none`, `read` o `read_write`). Un agente sin brain declarado no expone ninguna tool `brain_*`, igual que hoy pasa con un tenant sin binding. (código; sin verificar contra producción)
+- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`.
+- [x] Cada agente declara en `tenant_agents.config.brain` si usa brain y con qué alcance (`none`, `read` o `read_write`). Un agente sin brain declarado no expone ninguna tool `brain_*`, igual que hoy pasa con un tenant sin binding. Confirmado en producción: `innovas` y `prueba-conexiones` con `"brain": "read_write"`.
 
-**Tres desvíos sobre la spec, encontrados al implementar:**
+**Cuatro desvíos sobre la spec, encontrados al implementar y al verificar:**
 - **Slugs de tenant reservados** (`20260924100050_reserved_tenant_slugs.sql`): un tenant con slug igual a una palabra de ruta de primer nivel de `app/` (`api`, `auth`, `brain`, `eve`, `login`, `oauth`, `sin-acceso`) quedaría tapado por esa ruta estática y fuera del refresh de sesión del proxy. Se reserva la palabra a nivel de base, con `check` y migración que frena si ya hay un tenant en conflicto.
 - **Un token malformado da 401, no una excepción del gate:** si el verificador de claims explota con un token roto (JWT mal formado), `resolveMcpAccess` lo captura y devuelve 401 `invalid_token` en vez de dejar que la excepción suba y termine en el 500 genérico.
 - **Un error inesperado adentro del endpoint da 500 genérico con un id:** `handleBrainMcp` envuelve todo el request; cualquier excepción no prevista se loguea con un `crypto.randomUUID()` y sale como `{ ok: false, code: "internal", error: "Error interno (<id>)." }`, sin detalle interno en la respuesta.
+- **`custom_access_token_hook`** (`20260925120000_oauth_client_role_hook.sql`, PR #52, no estaba en la spec original): los tokens del OAuth Server son JWT comunes del proyecto y, con la anon key, funcionarían contra PostgREST con todos los permisos RLS del usuario. El hook les asigna el rol `oauth_client`, sin ningún grant, cuando el token trae `client_id`. Verificado contra producción (V3, V7): el hook corre para esos tokens y PostgREST responde `403 permission denied`.
 
-**Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools. **Sin verificar todavía**: las verificaciones V1 a V7 de la spec (§11) contra el proyecto real, y por lo tanto este criterio de cierre, quedan pendientes — las hace una persona con login real (Steps 2 y 3 del plan de conexión y cierre).
+**Terminado cuando:** desde el Claude Code de un cliente, con su propia cuenta, `brain_search` y `brain_read` responden su canon y ninguna página de otro tenant; un tenant con brain externo por `mcp` responde las mismas tres tools desde el chat del agente; y un agente que no declara brain no expone esas tools. **Cumplido el 2026-09-27**, con `innovas` en producción: `brain_search` desde Claude Code devolvió el canon real (V5); el caso del brain externo por `mcp` queda probado solo con tests, sin un servidor de terceros real todavía (spec criterio 3).
 
+**Runbook de producción — completado el 2026-09-27:**
 
-**Runbook de producción** (en este orden, actualizado 2026-09-25 — `db push` y `PUBLIC_APP_URL` ya hechos):
-
-1. ~~`npx supabase migration list`~~ ✅ Hecho: las 29 migraciones locales coinciden con remoto, sin nada ajeno pendiente (la de Apollo, `20260922100000_upsert_discovered_account.sql`, ya estaba aplicada).
-2. ~~`db push`~~ ✅ Hecho: las 4 migraciones de la Etapa 11 están en producción. `innovas` y `prueba-conexiones` confirmados con `"brain": "read_write"` en `tenant_agents`.
-3. ~~`PUBLIC_APP_URL`~~ ✅ Cargada en Vercel Production: `https://agentes.innov.as` (dominio real confirmado con el CLI; los docs viejos que decían `agents.innov.as` o `agents-six-iota.vercel.app` estaban desactualizados).
-4. **Custom Access Token Hook** (spec §13, migración `20260925120000_oauth_client_role_hook.sql`): código y pgTAP hechos y en producción vía el mismo `db push` del punto 2. Falta seleccionarlo en el dashboard, **antes** de prender el OAuth Server: **Authentication → Hooks (Beta)** → Custom Access Token Hook → `public.custom_access_token_hook`.
-5. Prender el OAuth Server (Authentication → OAuth Server: enabled, Allow Dynamic OAuth Apps, Authorization Path `/oauth/consent`) y las Redirect URLs (`/auth/callback**`).
-6. Deploy de Vercel del PR #51.
-7. Verificaciones V1 a V7 de la spec (§11) — V3 y V7 son las que confirman si el hook del punto 4 realmente corrió para los tokens del OAuth Server.
+1. ✅ `npx supabase migration list`: las migraciones locales coincidían con remoto, sin nada ajeno pendiente (la de Apollo, `20260922100000_upsert_discovered_account.sql`, ya estaba aplicada).
+2. ✅ `db push`: las migraciones de la Etapa 11 (incluida la del hook, PR #52) están en producción.
+3. ✅ `PUBLIC_APP_URL` cargada en Vercel Production: `https://agentes.innov.as` (dominio real confirmado con el CLI; los docs viejos que decían `agents.innov.as` o `agents-six-iota.vercel.app` estaban desactualizados).
+4. ✅ Custom Access Token Hook seleccionado en el dashboard (Authentication → Hooks → `public.custom_access_token_hook`).
+5. ✅ OAuth Server prendido (Dynamic OAuth Apps, Authorization Path `/oauth/consent`, Redirect URLs).
+6. ✅ Deploy de Vercel de los PR #51 y #52 (el merge a `main` no disparó el deploy solo; hubo que promoverlo a mano desde el dashboard de Vercel — revisar por qué el auto-deploy de Production no se dispara con un push a `main`, es deuda de infraestructura, no de esta etapa).
+7. ✅ Verificaciones V1 a V5 y V7 de la spec (§11). Un hallazgo en el camino: la **Site URL** de Supabase seguía en `http://localhost:3000` desde el setup inicial del proyecto (nunca actualizada), lo que mandaba la pantalla de consentimiento a localhost sin importar qué MCP server tuviera configurado el cliente. Corregida a `https://agentes.innov.as`. V6 (claude.ai) no se probó; no bloquea el cierre.
 
 **Cuando haga falta, no ahora:** búsqueda híbrida con embeddings (`2026-09-13-brain-design.md` §6.2), que se activa por tenant con `config.search = "hybrid"` más un backfill. Señal para prenderla: el agente busca algo que existe y no lo encuentra, o el brain de un tenant pasa de unas 150 páginas.
 
