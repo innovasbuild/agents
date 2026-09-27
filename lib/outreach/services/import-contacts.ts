@@ -199,6 +199,7 @@ export async function importContacts(
 			name: row.name,
 			company: row.company,
 			email: row.email,
+			domain: row.domain,
 			linkedinSlug: linkedinSlug(row.linkedinUrl),
 			crmId,
 			segment: row.segment,

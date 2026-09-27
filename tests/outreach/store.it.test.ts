@@ -44,6 +44,38 @@ describe.skipIf(!enabled)("store de outreach contra Supabase local", () => {
 		).toHaveLength(1);
 	});
 
+	it("insertContact persiste domain distinto del dominio del email", async () => {
+		// Regresión: import_contacts guarda `domain` (columna del CSV) aparte del
+		// email; draftMessage lo prioriza sobre domainFromEmail para contactos con
+		// email personal. Si la columna real no existiera, esto fallaría acá y no
+		// silenciosamente en el fake store.
+		await admin
+			.from("contacts")
+			.delete()
+			.eq("tenant_id", TENANT)
+			.eq("contact_key", "em:prueba.ux.it@gmail.com");
+		const contact = await store.insertContact({
+			tenantId: TENANT,
+			contactKey: "em:prueba.ux.it@gmail.com",
+			accountId: null,
+			name: "Prueba IT",
+			company: "Acme Eval",
+			email: "prueba.ux.it@gmail.com",
+			domain: "acme-eval.test",
+			linkedinSlug: null,
+			crmId: null,
+			segment: null,
+			vector: null,
+			source: "csv",
+		});
+		expect(contact.domain).toBe("acme-eval.test");
+		const [reloaded] = await store.findContactsByKeys(TENANT, [
+			"em:prueba.ux.it@gmail.com",
+		]);
+		expect(reloaded?.domain).toBe("acme-eval.test");
+		await admin.from("contacts").delete().eq("id", contact.id);
+	});
+
 	it("encola una sola pieza viva, transiciona condicional y cuenta envíos", async () => {
 		await admin.from("queue_items").delete().eq("tenant_id", TENANT);
 		const [contact] = await store.findContactsByKeys(TENANT, [

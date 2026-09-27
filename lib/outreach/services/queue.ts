@@ -91,13 +91,13 @@ async function gateFor(
 async function anchorError(
 	deps: Pick<QueueDeps, "store" | "now">,
 	tenantId: string,
-	email: string,
+	contact: Pick<ContactRow, "email" | "domain">,
 	fuente: string,
 ): Promise<string | null> {
 	const { domain, account } = await findFichaVigente(
 		deps.store,
 		tenantId,
-		email,
+		contact,
 		deps.now(),
 	);
 	if (!account) {
@@ -177,7 +177,7 @@ export async function queueTouch(
 		const anchor = await anchorError(
 			deps,
 			caller.tenantId,
-			contact.email,
+			contact,
 			input.ancla?.fuente ?? "",
 		);
 		if (anchor) return refuse("sin_ancla", anchor);

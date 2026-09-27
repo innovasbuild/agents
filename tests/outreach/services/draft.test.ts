@@ -196,6 +196,22 @@ describe("draftMessage", () => {
 		).toMatchObject({ reason: "canon_no_disponible" });
 	});
 
+	it("un contacto con email personal (gmail) usa contact.domain, no el dominio del email", async () => {
+		// Bug real: import_contacts con email de prueba (gmail) + columna domain
+		// de la empresa. domainFromEmail(email) da null (gmail es free-mail), así
+		// que sin contact.domain la ficha de acme.test nunca se encontraba pese a
+		// que research_account ya la había investigado.
+		const store = seeded();
+		store.contacts[0].email = "prueba.ux@gmail.com";
+		store.contacts[0].domain = "acme.test";
+		const generate = vi.fn(async () => ({ output: good, usage: {} }));
+		const result = await draftMessage(
+			{ caller, contactKey: "em:laura@acme.test", kind: "msg1" },
+			{ store, loadCanon: async () => canon, generate, now },
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
 	it("ya no rechaza un followup_2: los follow-ups llegaron con la escucha", async () => {
 		const store = seeded();
 		store.contacts[0].gmailThreadId = "th-1";

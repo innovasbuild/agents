@@ -79,6 +79,12 @@ export interface ContactRow {
 	company: string | null;
 	title: string | null;
 	email: string | null;
+	/** Dominio de la empresa del contacto, de la columna `domain` del CSV de
+	 * import_contacts (o derivado de su email si no vino explícito). Puede
+	 * diferir del dominio del email (un contacto de prueba con gmail, por
+	 * ejemplo): es lo que draftMessage/queueTouch usan para encontrar la
+	 * ficha, antes de derivar del email. */
+	domain: string | null;
 	linkedinSlug: string | null;
 	crmId: string | null;
 	ownerUserId: string | null;
@@ -108,6 +114,7 @@ export type NewContact = Pick<
 	| "name"
 	| "company"
 	| "email"
+	| "domain"
 	| "linkedinSlug"
 	| "crmId"
 	| "segment"
@@ -419,7 +426,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, title, email, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, domain, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -436,6 +443,7 @@ const toContact = (r: Row): ContactRow => ({
 	company: (r.company as string | null) ?? null,
 	title: (r.title as string | null) ?? null,
 	email: (r.email as string | null) ?? null,
+	domain: (r.domain as string | null) ?? null,
 	linkedinSlug: (r.linkedin_slug as string | null) ?? null,
 	crmId: (r.crm_id as string | null) ?? null,
 	ownerUserId: (r.owner_user_id as string | null) ?? null,
@@ -686,6 +694,7 @@ export function createSupabaseOutreachStore(
 					name: row.name,
 					company: row.company,
 					email: row.email,
+					domain: row.domain,
 					linkedin_slug: row.linkedinSlug,
 					crm_id: row.crmId,
 					segment: row.segment,
