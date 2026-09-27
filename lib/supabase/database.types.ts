@@ -274,6 +274,7 @@ export type Database = {
           contact_key: string
           created_at: string
           crm_id: string | null
+          domain: string | null
           email: string | null
           external_ids: Json
           first_touch_at: string | null
@@ -304,6 +305,7 @@ export type Database = {
           contact_key: string
           created_at?: string
           crm_id?: string | null
+          domain?: string | null
           email?: string | null
           external_ids?: Json
           first_touch_at?: string | null
@@ -334,6 +336,7 @@ export type Database = {
           contact_key?: string
           created_at?: string
           crm_id?: string | null
+          domain?: string | null
           email?: string | null
           external_ids?: Json
           first_touch_at?: string | null

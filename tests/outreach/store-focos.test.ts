@@ -196,6 +196,7 @@ describe("funnelForFocus", () => {
 			name: "Normal",
 			company: "Acme",
 			email: "normal@test.com",
+			domain: null,
 			linkedinSlug: null,
 			crmId: null,
 			segment: "s1",

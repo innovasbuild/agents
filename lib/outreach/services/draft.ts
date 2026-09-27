@@ -12,20 +12,29 @@ import { type GateResult, type GateViolation, runGate } from "../gate";
 import { buildDraftPrompt, draftOutputSchema } from "../prompt";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
-import type { AccountRow, OutreachStore, QueueItemKind } from "../store";
+import type {
+	AccountRow,
+	ContactRow,
+	OutreachStore,
+	QueueItemKind,
+} from "../store";
 import { attributionError, resolveExecutor } from "./executor";
 
 export const MAX_DRAFT_ATTEMPTS = 3;
 
-/** Cuenta y vigencia de su ficha para un email (spec 03 §6.3): la comparten
- * draftMessage y queueTouch para no duplicar la búsqueda por dominio. */
+/** Cuenta y vigencia de su ficha para un contacto (spec 03 §6.3): la comparten
+ * draftMessage y queueTouch para no duplicar la búsqueda por dominio. Prioriza
+ * `contact.domain` (la columna `domain` de import_contacts) sobre el dominio
+ * derivado del email: un contacto con email personal (gmail, etc.) no tiene
+ * otra forma de asociarse a la ficha de research_account. */
 export async function findFichaVigente(
 	store: OutreachStore,
 	tenantId: string,
-	email: string,
+	contact: Pick<ContactRow, "email" | "domain">,
 	now: Date,
 ): Promise<{ domain: string | null; account: AccountRow | null }> {
-	const domain = domainFromEmail(email);
+	const domain =
+		contact.domain ?? (contact.email ? domainFromEmail(contact.email) : null);
 	const account = domain ? await store.findAccount(tenantId, domain) : null;
 	return {
 		domain,
@@ -94,7 +103,7 @@ export async function draftMessage(
 	const { domain, account } = await findFichaVigente(
 		deps.store,
 		input.caller.tenantId,
-		contact.email,
+		contact,
 		deps.now(),
 	);
 	if (!account) {

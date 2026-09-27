@@ -119,6 +119,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		company: "Acme",
 		title: null,
 		email: "laura@acme.test",
+		domain: null,
 		linkedinSlug: null,
 		crmId: null,
 		ownerUserId: null,
