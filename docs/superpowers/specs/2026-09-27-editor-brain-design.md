@@ -18,7 +18,7 @@ Pedido de Matías: "leer y entender y editar mejor todo". "Entender" es, concret
 |---|---|---|
 | E1 | Las conexiones se calculan al leer, en código, con una función pura sobre los bodies del tenant | Sin migración, sin backfill y sin tocar `brain_upsert_page`, que comparten el agente, el import y el MCP. El brain de `innovas` es de decenas a pocos cientos de páginas |
 | E2 | Sin grafo visual en esta etapa | Con pocas páginas una lista de enlaces explica más que un grafo de fuerza. Queda pendiente (§10) |
-| E3 | Rutas de página bajo `/brain/p/[...slug]` | Un slug `mapa` o `nueva` no puede chocar con las rutas fijas de `/brain` |
+| E3 | Vista en `/brain/p/[...slug]`, edición en `/brain/editar/[...slug]`, historial en `/brain/historial/[...slug]` | Un slug `mapa` o `nueva` no puede chocar con las rutas fijas de `/brain`, y en Next un catch-all tiene que ser el último segmento: `p/[...slug]/editar` no compila |
 | E4 | Solo el proveedor `wiki` tiene editor | Un brain externo por `mcp` se edita en su origen; no hay forma de listar todas sus páginas para armar conexiones |
 | E5 | Se escribe solo por `provider.upsert` con autor `user` | Es el único camino de escritura de la spec del brain §5.4: revisión, evento y control de `baseRevision` ya resueltos |
 | E6 | El rol se chequea en la server action, no solo en la pantalla | La escritura corre con service role; la RLS no protege este camino |
@@ -35,9 +35,9 @@ Todo bajo `app/[tenant]/brain/`. Ítem **"Brain"** nuevo en la nav del layout de
 | `/brain` | Índice. Páginas agrupadas por categoría (orden de `config.categories`), buscador, filtro por estado (por defecto oculta `archivado`) y chips de tags de canon. Cada fila: título, slug, estado, tags de canon, links entrantes y salientes. Botón "Nueva página" para admin |
 | `/brain/mapa` | La vista para entender: por categoría, hubs (páginas ordenadas por links entrantes), huérfanas (sin links entrantes) y links rotos con su página de origen |
 | `/brain/p/[...slug]` | Página renderizada, con wikilinks navegables. Panel lateral (abajo en mobile): categoría, estado, tags, revisión, última edición; **Enlaza a** y **La enlazan**. Botones Editar e Historial |
-| `/brain/p/[...slug]/editar` | Formulario de edición (§5) |
+| `/brain/editar/[...slug]` | Formulario de edición (§5) |
 | `/brain/nueva` | El mismo formulario con el slug editable |
-| `/brain/p/[...slug]/historial` | Revisiones y diff (§6) |
+| `/brain/historial/[...slug]` | Revisiones y diff (§6) |
 
 - Tenant sin binding de brain: `/brain` muestra "Este cliente no tiene brain configurado".
 - Binding `mcp`: `/brain` muestra "Este brain vive en un servidor externo; se edita en su origen" y ninguna otra ruta funciona (404).
@@ -88,7 +88,7 @@ Reglas:
 
 - Leen todos los miembros del tenant y `platform_admin`.
 - Crean, editan, archivan y restauran `tenant_admin` y `platform_admin`. Es la misma regla que el MCP (D4 de la Etapa 11).
-- Un `tenant_member` no ve botones de escritura y las rutas `/editar` y `/nueva` le dan 404.
+- Un `tenant_member` no ve botones de escritura y las rutas `/brain/editar/…` y `/brain/nueva` le dan 404.
 - La server action repite el chequeo (E6).
 
 ### 5.2 Formulario
@@ -124,7 +124,7 @@ Es cambiar el estado a `archivado` por el mismo formulario. No hay borrado.
 
 ## 6. Historial
 
-- `/brain/p/[...slug]/historial` lee `brain_revisions` de la página con el cliente de sesión (RLS de select por membresía ya existe), de la más nueva a la más vieja.
+- `/brain/historial/[...slug]` lee `brain_revisions` de la página con el cliente de sesión (RLS de select por membresía ya existe), de la más nueva a la más vieja.
 - Cada revisión: número, fecha, badge de tipo de autor (**Persona**, **Agente**, **Import**) y motivo. Para `user` y `agent` se muestra el email del usuario: se resuelve en el servidor con el cliente admin, solo para los `author_user_id` que son miembros del tenant; si no, "Persona" o "Agente" a secas.
 - Abrir una revisión muestra su diff contra la anterior. Selector para compararla contra la vigente.
 - **Restaurar** (solo admin): llama a `saveBrainPage` con el contenido de esa revisión, `baseRevision` de la vigente y motivo "Restaurada desde la revisión N". Si alguien guardó en el medio, sale el conflicto de §5.3.
@@ -164,7 +164,7 @@ Es cambiar el estado a `archivado` por el mismo formulario. No hay borrado.
 
 ## 9. Desvíos sobre la spec del brain §8
 
-- Rutas de página bajo `/brain/p/` en vez de `/brain/[...slug]` (E3).
+- Rutas de página bajo `/brain/p/`, `/brain/editar/` y `/brain/historial/` en vez de `/brain/[...slug]` y sus subrutas (E3).
 - Se suma `/brain/mapa` y el panel de conexiones por página: el §8 pedía solo un "panel de wikilinks rotos".
 - El diff dentro de la tarjeta de aprobación del chat no entra en esta etapa (§10).
 
