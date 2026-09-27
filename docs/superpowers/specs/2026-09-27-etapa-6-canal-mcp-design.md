@@ -89,16 +89,17 @@ export async function resolveMcpChannelAuth(
 export async function verifyMcpChannelToken(request: Request): Promise<SessionAuthContext>;
 ```
 
-Pasos, en orden:
+Pasos, en orden — el mismo orden que `resolveMcpAccess` de la Etapa 11 (`lib/brain/mcp-server/access.ts`): **los roles se resuelven antes que el tenant**, porque si no, alguien con un token válido pero sin ningún acceso podría distinguir un slug que existe (403 después de buscarlo) de uno inventado, y usar eso para enumerar qué clientes tiene la plataforma. Es exactamente el hallazgo F4 que la revisión final de la Etapa 11 encontró y corrigió; no se repite acá:
 
-1. `extractBearerToken` (de `eve/channels/auth`) + `deps.verify(token)`. Sin token o el verificador tira/devuelve `null`: `{ ok: false, kind: "unauthenticated", message: "El token no es válido o venció." }`.
+1. `extractBearerToken` (de `eve/channels/auth`) + `deps.verify(token)` **en un try/catch** (un verificador que explota con un token roto no puede tirar hacia arriba — mismo motivo que el fix de la Etapa 11 sobre un token malformado). Sin token, `verify` tira, devuelve `null`, o `claims.sub` no es un string no vacío: `{ ok: false, kind: "unauthenticated", message: "El token no es válido o venció." }`.
 2. `slug = new URL(request.url).searchParams.get("tenant")`. Vacío: `{ ok: false, kind: "forbidden", message: "Falta el tenant en la URL de conexión: agregá ?tenant=<slug>." }`.
-3. `deps.tenantBySlug(slug)`. Inexistente o inactivo: mismo mensaje que "sin acceso" (no un mensaje distinto — un token sin membresía en ese tenant y un slug inexistente no tienen por qué distinguirse para quien pregunta).
-4. `deps.membershipsOf(claims.sub)`. Sea `own` la fila cuyo `tenantId` coincide con el tenant resuelto, y `platformAdmin` si alguna fila (de cualquier tenant) tiene `role === "platform_admin"` — `memberships.tenant_id` es `not null`: un `platform_admin` tiene su fila bajo un tenant "de origen" (hoy, Mati la tiene bajo `innovas`), pero eso le da acceso a cualquier otro por `is_platform_admin()`, no por una fila propia ahí. Sin `own` y sin `platformAdmin`: `{ ok: false, kind: "forbidden", message: "No tenés acceso a ese cliente." }`.
-5. `role = own?.role ?? "platform_admin"` (si hay `platformAdmin` pero no `own`, expone `"platform_admin"` igual — es el string que ya compara `decideBrainUpsertResponse` y cualquier otra tool que mire `attributes.role`, nunca queda `undefined`).
-6. `{ ok: true, sessionAuth: { authenticator: "oauth", issuer, principalId: claims.sub, principalType: "user", subject: claims.sub, attributes: { email: claims.email, tenantId, tenantSlug: slug, role } } }`.
+3. `deps.membershipsOf(claims.sub)`. `platformAdmin` es `true` si alguna fila (de cualquier tenant) tiene `role === "platform_admin"` — `memberships.tenant_id` es `not null`: un `platform_admin` tiene su fila bajo un tenant "de origen" (hoy, Mati la tiene bajo `innovas`), pero eso le da acceso a cualquier otro por `is_platform_admin()`, no por una fila propia ahí.
+4. `deps.tenantBySlug(slug)`. Inexistente o inactivo: `{ ok: false, kind: "forbidden", message: platformAdmin ? "No existe ese cliente." : "No tenés acceso a ese cliente." }` — el mensaje más específico solo lo ve alguien que ya es platform_admin, así que no es una fuga nueva; para cualquier otro, el mensaje es igual de genérico exista o no el tenant.
+5. `own = ` la fila de membresía cuyo `tenantId` coincide con el tenant ya resuelto. Sin `own` y sin `platformAdmin`: `{ ok: false, kind: "forbidden", message: "No tenés acceso a ese cliente." }`.
+6. `role = own?.role ?? "platform_admin"` (si hay `platformAdmin` pero no `own`, expone `"platform_admin"` igual — es el string que ya compara `decideBrainUpsertResponse` y cualquier otra tool que mire `attributes.role`, nunca queda `undefined`).
+7. `{ ok: true, sessionAuth: { authenticator: "oauth", issuer, principalId: claims.sub, principalType: "user", subject: claims.sub, attributes: { email: claims.email, tenantId: tenant.id, tenantSlug: slug, role } } }`.
 
-`agents/outreach/channels/mcp.ts` importa `resolveMcpChannelAuth`, lo llama con las dependencias reales (`createOAuthClaimsVerifier()`, `loadTenantBySlug`, `loadMemberships`, ver §5), y traduce `ok: false` a `UnauthenticatedError` o `ForbiddenError` de `eve/channels/auth` según `kind`. Es el único archivo que conoce esas clases; `resolveMcpChannelAuth` no.
+`verifyMcpChannelToken` (§4.1) traduce `kind: "unauthenticated"` a `UnauthenticatedError` y `kind: "forbidden"` a `ForbiddenError`, ambas de `eve/channels/auth`.
 
 ### 4.3 Verificación de la Sección 1 pendiente
 
