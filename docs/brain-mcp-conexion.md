@@ -2,13 +2,13 @@
 
 Cada cliente tiene su brain en una URL propia:
 
-    https://agents-six-iota.vercel.app/brain/<cliente>/mcp
+    https://agentes.innov.as/brain/<cliente>/mcp
 
 Entrás con tu cuenta de la plataforma. Si sos administrador del cliente podés leer y escribir; si no, solo leer.
 
 ## Claude Code
 
-    claude mcp add --transport http brain-<cliente> https://agents-six-iota.vercel.app/brain/<cliente>/mcp
+    claude mcp add --transport http brain-<cliente> https://agentes.innov.as/brain/<cliente>/mcp
 
 Después, dentro de Claude Code, `/mcp`, elegí `brain-<cliente>` y autenticá. Se abre el navegador, entrás con tu cuenta y aprobás el acceso.
 

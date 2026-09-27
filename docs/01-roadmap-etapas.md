@@ -237,16 +237,27 @@ Tareas:
 
 **Modelo Claude Code:** Opus 5, effort `high` (es auth: `oauthResource` sobre Supabase como emisor OAuth 2.1).
 **Modelo runtime:** el del tenant.
-**Spec/Plan:** `docs/superpowers/specs/06-canal-mcp.md` · `docs/superpowers/plans/06-canal-mcp.md`
+**Spec/Plan:** `docs/superpowers/specs/2026-09-27-etapa-6-canal-mcp-design.md` · `docs/superpowers/plans/2026-09-27-etapa-6-canal-mcp.md`
+
+**Estado:** código hecho, verificación contra producción pendiente (Steps M1–M6 de abajo, spec §9). El título pasa a `[x]` cuando M1 y M5 estén confirmados.
 
 - [x] Supabase Auth como servidor OAuth 2.1 con registro dinámico de clientes. Hecho y verificado contra producción en la Etapa 11 (`docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §4, §11): OAuth Server prendido, Allow Dynamic OAuth Apps, pantalla de consentimiento, `next` seguro en el login, `custom_access_token_hook` confirmado corriendo para tokens de cliente OAuth (V3, V7). Este emisor es genérico y ya sirve para cualquier `resource`, no solo el del brain.
-- [ ] `channels/mcp.ts` con `oauthResource(verifyToken, { issuer, resource, scopes })`. Sigue pendiente: la Etapa 11 solo construyó el endpoint del brain (`/brain/<slug>/mcp`), no el canal del agente por MCP.
-- [ ] Docs de conexión (Claude Code y claude.ai).
+- [x] `channels/mcp.ts` con `oauthResource(verifyMcpChannelToken, { issuer, resource, scopes })`. El tenant sale de `?tenant=<slug>` en la URL de conexión, no de un argumento (la ruta de `mcpChannel` es fija, sin segmento dinámico). (código; sin verificar contra producción)
+- [x] Docs de conexión (`docs/agente-mcp-conexion.md`; claude.ai sin probar, igual que con el brain).
 - [ ] `/ship` + `/context-save`.
 
-**Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís "armá la cola de hoy" y el trabajo corre durable en Vercel.
+**Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís algo simple y el trabajo corre durable en Vercel, con su `run` en `trigger: 'mcp'` y sin fila nueva en `conversations`. **Sin verificar todavía**, contra producción:
 
-El emisor OAuth que se arma acá lo reusa la Etapa 11 para servir el brain por MCP. Conviene dejarlo genérico: el `resource` cambia, el emisor no.
+| # | Qué |
+|---|---|
+| M1 | Claude Code conecta a `.../eve/agents/outreach/eve/v1/mcp?tenant=innovas`, `agent_start` con un mensaje simple, `agent_get` llega a `completed` |
+| M2 | Sin `?tenant`: error claro, no un 401 de login |
+| M3 | Un token sin membresía en ese tenant: rechazado |
+| M4 | La fila de `runs` tiene `trigger = 'mcp'`; no hay fila nueva en `conversations` |
+| M5 | Una tool con aprobación (`send_email`, en un tenant de prueba, no `innovas`) llega a `input_required` y se resuelve con `agent_update` |
+| M6 | claude.ai conecta como conector remoto (no bloquea el cierre si M1 funciona) |
+
+El emisor OAuth que se reusa acá es el mismo que sirve el brain por MCP (Etapa 11): el `resource` cambia, el emisor no.
 
 ---
 
