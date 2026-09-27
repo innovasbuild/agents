@@ -3,6 +3,7 @@
 import { createHash } from "node:crypto";
 import { parse } from "yaml";
 import { BRAIN_STATUSES, type BrainStatus } from "../types.ts";
+import { WIKILINK_PATTERN as WIKILINK } from "../wikilinks.ts";
 
 export interface VaultFile {
 	path: string;
@@ -23,7 +24,6 @@ export interface PageDraft {
 
 const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 const HEADING = /^#\s+(.+)$/m;
-const WIKILINK = /\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]+))?\]\]/g;
 const COLUMN_KEYS = new Set(["title", "category", "status", "tags"]);
 
 export function slugFromPath(relativePath: string): string {
