@@ -318,15 +318,19 @@ La migración de `tenant_agents` no tiene pgTAP: `db:test` corre sin datos (`--n
 
 Las corre una persona, con login real. Si alguna falla, **se frena y se decide**; no se parcha sobre la marcha.
 
-| # | Qué | Si falla |
+**Corridas el 2026-09-27, contra producción (`agentes.innov.as`, proyecto `gxsebhduezvhnqkyxjdh`):**
+
+| # | Qué | Resultado |
 |---|---|---|
-| V1 | OAuth Server y Dynamic OAuth Apps prendidos; la metadata del emisor responde JSON | Sin esto no hay E3 |
-| V2 | La metadata trae `registration_endpoint` | Hay reportes de que falta en algunos proyectos. Sin él, los clientes que descubren por metadata no se registran: evaluar registro manual por cliente |
-| V3 | Claims del access token: `sub`, `aud`, `client_id`, `role`, y si `role` sale como `oauth_client` cuando el token trae `client_id` | Si falta `client_id`, revisar D7. Si `role` no cambia, el hook no corrió para este token: revisar en Authentication > Hooks que `custom_access_token_hook` esté seleccionado, y si Supabase distingue los tokens del OAuth Server de un login normal |
-| V4 | `getClaims` valida un token de OAuth del proyecto | Si el proyecto firma con HS256, `getClaims` consulta al servidor de Auth en cada request: medir latencia |
-| V5 | Claude Code conecta a `/brain/innovas/mcp`, abre el consentimiento y lista las tools | Es el criterio 1 |
-| V6 | claude.ai conecta como conector remoto | Si claude.ai no completa el registro, se documenta y no bloquea el cierre si Claude Code funciona |
-| V7 | Con un token de OAuth, `curl <supabase>/rest/v1/tenants -H "apikey: <anon>" -H "authorization: Bearer <token>"` NO devuelve datos | Si devuelve datos, el hook no se aplicó a este token (ver V3): no se prende el OAuth Server en producción hasta resolverlo |
+| V1 | OAuth Server y Dynamic OAuth Apps prendidos; la metadata del emisor responde JSON | ✅ `npm run oauth:probe`: metadata completa |
+| V2 | La metadata trae `registration_endpoint` | ✅ Presente, con PKCE S256 |
+| V3 | Claims del access token: `sub`, `aud`, `client_id`, `role`, y si `role` sale como `oauth_client` cuando el token trae `client_id` | ✅ Probado con un cliente OAuth registrado ad hoc (RFC 7591) y el flujo completo de autorización: `client_id` presente, **`role: "oauth_client"`** — el hook corre para los tokens del OAuth Server, no solo para un login normal. Quedaba como la pregunta abierta más importante de la etapa; queda cerrada |
+| V4 | `getClaims` valida un token de OAuth del proyecto | Sin medir formalmente; no se notó latencia extra en las pruebas manuales |
+| V5 | Claude Code conecta a `/brain/innovas/mcp`, abre el consentimiento y lista las tools | ✅ Conectó, aprobó en `/oauth/consent`, `brain_search` devolvió el canon real de `innovas` (páginas de outreach, ICP, cuentas) |
+| V6 | claude.ai conecta como conector remoto | No probado. No bloquea el cierre (V5 ya cumple el criterio 1) |
+| V7 | Con un token de OAuth, `curl <supabase>/rest/v1/tenants -H "apikey: <anon>" -H "authorization: Bearer <token>"` NO devuelve datos | ✅ `403 permission denied for table tenants` (`42501`), con el mismo token de V3 |
+
+**Hallazgo de la verificación, ya corregido:** la primera vez que Claude Code conectó, el navegador abría `http://localhost:3000/oauth/consent` en vez de la URL de producción. La causa no era el MCP ni la config de Claude Code: la **Site URL** de Supabase (Authentication → URL Configuration) seguía en `http://localhost:3000` desde el setup inicial del proyecto, y Supabase arma el link de consentimiento como `<Site URL><Authorization Path>`. Se corrigió a mano en el dashboard, a `https://agentes.innov.as`. `supabase config diff` mostró además otras ~14 diferencias entre el `config.toml` local y el remoto (confirmaciones de mail, MFA, Twilio, tamaño del pooler) que no se tocaron: son de otras etapas, no de esta.
 
 ## 12. Fuera de alcance
 
@@ -346,7 +350,7 @@ Las corre una persona, con login real. Si alguna falla, **se frena y se decide**
 - **Registro dinámico abierto**: cualquier cliente MCP puede registrarse en el proyecto. No da acceso a nada sin una persona que apruebe en la pantalla de consentimiento y sin membresía en el tenant. Revisar los clientes registrados es tarea de operación.
 - **Superficie pública nueva.** Mitigación: tenant y usuario solo desde token y URL, límites por minuto, topes de tamaño, errores sin detalle interno, y en cada PR la pregunta de si algo se puede leer cruzando tenants.
 - **`@modelcontextprotocol/sdk` cambia rápido.** Mitigación: versión fija, y el transporte usado queda en un solo archivo.
-- **Los tokens del OAuth Server son JWT comunes del proyecto.** Con la anon key funcionan contra PostgREST con todos los permisos que el usuario tiene por RLS, no solo contra el endpoint del brain. `verifyCaller` ya rechaza los que traen `client_id`, así que no abren el chat, pero PostgREST no los distingue. Mitigado con `custom_access_token_hook` (migración `20260925120000_oauth_client_role_hook.sql`): cuando el token trae `client_id`, el hook le cambia el claim `role` al rol `oauth_client`, creado sin ningún grant, así que cualquier query de PostgREST con ese token falla por falta de permisos en vez de correr con los del usuario. El endpoint del brain no lo necesita: nunca pasa por PostgREST con el token del usuario, usa `getClaims()` más la service role. **Sin verificar todavía si Supabase corre este hook para los tokens que emite el OAuth Server** (no solo para un login normal): eso es V7. Hasta que V7 pase, **no se prende el OAuth Server en producción**.
+- **Los tokens del OAuth Server son JWT comunes del proyecto.** Con la anon key funcionan contra PostgREST con todos los permisos que el usuario tiene por RLS, no solo contra el endpoint del brain. `verifyCaller` ya rechaza los que traen `client_id`, así que no abren el chat, pero PostgREST no los distingue. Mitigado con `custom_access_token_hook` (migración `20260925120000_oauth_client_role_hook.sql`): cuando el token trae `client_id`, el hook le cambia el claim `role` al rol `oauth_client`, creado sin ningún grant, así que cualquier query de PostgREST con ese token falla por falta de permisos en vez de correr con los del usuario. El endpoint del brain no lo necesita: nunca pasa por PostgREST con el token del usuario, usa `getClaims()` más la service role. **Verificado el 2026-09-27 (V3, V7):** Supabase corre el hook también para los tokens del OAuth Server, no solo para un login normal — un token con `client_id` sale con `role: "oauth_client"`, y con ese rol PostgREST devuelve `403 permission denied` en vez de datos.
 - **Una sesión revocada sigue sirviendo hasta que vence el token.** `getClaims` verifica localmente cuando la firma es asimétrica, sin consultar a Auth: revocar un cliente o cerrar la sesión no corta el token hasta su `exp` (como mucho `jwt_expiry`).
 
 ## 14. Enmiendas
