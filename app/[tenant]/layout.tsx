@@ -11,6 +11,7 @@ const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
 	{ href: "/contactos", label: "Contactos" },
 	{ href: "/cuentas", label: "Cuentas" },
 	{ href: "/focos", label: "Focos" },
+	{ href: "/brain", label: "Brain" },
 	{ href: "/metricas", label: "Métricas" },
 	// /settings hace notFound() para tenant_member: el link no se muestra,
 	// no tiene sentido ofrecer una ruta que va a 404.
