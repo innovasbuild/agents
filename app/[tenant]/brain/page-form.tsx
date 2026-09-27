@@ -167,34 +167,39 @@ export function PageForm({
 					className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 text-sm"
 				>
 					<p className="font-medium">{result.message}</p>
-					{result.code === "conflict" && result.currentRevision !== null && (
-						<div className="mt-3 space-y-3">
-							<p>
-								Tu texto sigue acá. Mirá qué cambió y, si querés guardar igual,
-								reintentá sobre la revisión {result.currentRevision}.
-							</p>
-							{serverBody !== null && (
-								<details open>
-									<summary className="cursor-pointer">
-										Diferencias entre la vigente y tu versión
-									</summary>
-									<div className="mt-2">
-										<DiffView blocks={diffLines(serverBody, form.body)} />
-									</div>
-								</details>
-							)}
-							<Button
-								type="button"
-								variant="outline"
-								onClick={() => {
-									setBaseRevision(result.currentRevision);
-									setResult(null);
-								}}
-							>
-								Reintentar sobre la revisión {result.currentRevision}
-							</Button>
-						</div>
-					)}
+					{/* mode !== "new": reintentar una creación no tiene una revisión propia
+					    contra la cual apoyarse; save.ts ya fuerza currentRevision a null en
+					    ese caso, esto es una segunda barrera contra pisar otra página. */}
+					{mode !== "new" &&
+						result.code === "conflict" &&
+						result.currentRevision !== null && (
+							<div className="mt-3 space-y-3">
+								<p>
+									Tu texto sigue acá. Mirá qué cambió y, si querés guardar
+									igual, reintentá sobre la revisión {result.currentRevision}.
+								</p>
+								{serverBody !== null && (
+									<details open>
+										<summary className="cursor-pointer">
+											Diferencias entre la vigente y tu versión
+										</summary>
+										<div className="mt-2">
+											<DiffView blocks={diffLines(serverBody, form.body)} />
+										</div>
+									</details>
+								)}
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => {
+										setBaseRevision(result.currentRevision);
+										setResult(null);
+									}}
+								>
+									Reintentar sobre la revisión {result.currentRevision}
+								</Button>
+							</div>
+						)}
 				</div>
 			)}
 

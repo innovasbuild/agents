@@ -139,9 +139,15 @@ describe("savePage", () => {
 		});
 	});
 
-	it("slug nuevo que ya existe: conflicto sin revisión con mensaje propio", async () => {
+	it("slug nuevo que ya existe: conflicto sin revisión con mensaje propio, sin ofrecer reintentar", async () => {
+		// brain_upsert_page (rama "else", p_base_revision null) tira BR409 con la
+		// revisión vigente en el detail, no vacío: translateStoreError la traduce
+		// a BrainConflict con esa revisión. savePage la fuerza a null igual,
+		// porque no hay revisión válida contra la cual reintentar una creación:
+		// reintentar con la revisión de otra página la pisaría (hallazgo del
+		// review de la rama).
 		const exists = deps({}, async () => {
-			throw new BrainConflict("comercial/icp", null);
+			throw new BrainConflict("comercial/icp", 7);
 		});
 		expect(
 			await savePage({ ...input, baseRevision: null }, exists.deps),

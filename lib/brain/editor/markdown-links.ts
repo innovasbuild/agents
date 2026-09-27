@@ -12,6 +12,15 @@ function escapeText(text: string): string {
 	return text.replace(/([[\]\\])/g, "\\$1");
 }
 
+// El destino de un link `(<...>)` en CommonMark puede llevar casi cualquier
+// carácter, incluido el espacio, siempre que se escapen `<`, `>` y `\`. Sin
+// los `< >`, un target con espacio (un wikilink escrito a mano que no
+// resolvió a un slug, spec editor §4.1) corta el link y el resto queda como
+// texto plano en vez de mostrarse roto.
+function escapeDestination(destination: string): string {
+	return destination.replace(/([<>\\])/g, "\\$1");
+}
+
 function replaceLinks(
 	chunk: string,
 	titleFor: (slug: string) => string | undefined,
@@ -20,8 +29,11 @@ function replaceLinks(
 	let cursor = 0;
 	for (const link of parseWikilinks(chunk)) {
 		const text = link.alias ?? titleFor(link.target) ?? link.target;
-		const anchor = link.anchor ? `#${encodeURIComponent(link.anchor)}` : "";
-		out += `${chunk.slice(cursor, link.start)}[${escapeText(text)}](${WIKI_SCHEME}${link.target}${anchor})`;
+		const anchor = link.anchor ? `#${link.anchor}` : "";
+		const destination = escapeDestination(
+			`${WIKI_SCHEME}${link.target}${anchor}`,
+		);
+		out += `${chunk.slice(cursor, link.start)}[${escapeText(text)}](<${destination}>)`;
 		cursor = link.end;
 	}
 	return out + chunk.slice(cursor);

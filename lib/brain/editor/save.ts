@@ -90,16 +90,23 @@ export async function savePage(
 			.upsert(write, { kind: "user", userId: access.userId });
 		return { ok: true, slug: saved.slug, revision: saved.revision };
 	} catch (error) {
-		if (error instanceof BrainConflict)
+		if (error instanceof BrainConflict) {
+			// Al crear (baseRevision null), brain_upsert_page devuelve en el
+			// conflicto la revisión de la página EXISTENTE, no la de esta. No hay
+			// revisión propia contra la cual reintentar: forzar null evita que la
+			// pantalla ofrezca "reintentar" y termine pisando esa otra página.
+			const currentRevision =
+				input.baseRevision === null ? null : error.currentRevision;
 			return {
 				ok: false,
 				code: "conflict",
-				currentRevision: error.currentRevision,
+				currentRevision,
 				message:
 					input.baseRevision === null
 						? "Ya existe una página con ese slug."
 						: `Alguien guardó la revisión ${error.currentRevision ?? "nueva"} mientras editabas.`,
 			};
+		}
 		if (error instanceof BrainValidation)
 			return {
 				ok: false,
