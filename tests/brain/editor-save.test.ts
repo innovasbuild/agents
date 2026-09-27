@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+	type SaveDeps,
+	type SavePageInput,
+	savePage,
+} from "@/lib/brain/editor/save";
 import { BrainConflict, BrainValidation } from "@/lib/brain/errors";
-import { type SaveDeps, type SavePageInput, savePage } from "@/lib/brain/editor/save";
 import type { BrainBinding } from "@/lib/brain/resolve";
 import type { BrainProvider } from "@/lib/brain/types";
 
@@ -10,7 +14,11 @@ const wiki = {
 	provider: "wiki",
 	config: {},
 } as unknown as BrainBinding;
-const mcp = { id: "b2", tenantId: "t1", provider: "mcp" } as unknown as BrainBinding;
+const mcp = {
+	id: "b2",
+	tenantId: "t1",
+	provider: "mcp",
+} as unknown as BrainBinding;
 
 const input: SavePageInput = {
 	tenantSlug: "innovas",
@@ -29,12 +37,17 @@ function deps(over: Partial<SaveDeps> = {}, upsert?: BrainProvider["upsert"]) {
 	const provider: BrainProvider = {
 		search: vi.fn(),
 		read: vi.fn(),
-		upsert: upsert ?? vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
+		upsert:
+			upsert ?? vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
 	};
 	return {
 		provider,
 		deps: {
-			access: async () => ({ tenantId: "t1", role: "tenant_admin" as const, userId: "u1" }),
+			access: async () => ({
+				tenantId: "t1",
+				role: "tenant_admin" as const,
+				userId: "u1",
+			}),
 			binding: async () => wiki,
 			provider: () => provider,
 			...over,
@@ -71,7 +84,11 @@ describe("savePage", () => {
 
 	it("rechaza a tenant_member y a quien no tiene acceso sin llamar al provider", async () => {
 		const member = deps({
-			access: async () => ({ tenantId: "t1", role: "tenant_member", userId: "u2" }),
+			access: async () => ({
+				tenantId: "t1",
+				role: "tenant_member",
+				userId: "u2",
+			}),
 		});
 		expect(await savePage(input, member.deps)).toMatchObject({
 			ok: false,
@@ -142,7 +159,9 @@ describe("savePage", () => {
 		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const result = await savePage(input, boom.deps);
 		expect(result).toMatchObject({ ok: false, code: "internal" });
-		expect(result.ok === false && result.message).toMatch(/No se pudo guardar \(.+\)/);
+		expect(result.ok === false && result.message).toMatch(
+			/No se pudo guardar \(.+\)/,
+		);
 		spy.mockRestore();
 	});
 });

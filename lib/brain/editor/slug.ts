@@ -9,7 +9,9 @@ export function slugFromParams(segments: string[] | undefined): string | null {
 	} catch {
 		return null;
 	}
-	return slug.length <= MAX_SLUG_LENGTH && SLUG_PATTERN.test(slug) ? slug : null;
+	return slug.length <= MAX_SLUG_LENGTH && SLUG_PATTERN.test(slug)
+		? slug
+		: null;
 }
 
 export function pageHref(tenantSlug: string, pageSlug: string): string {

@@ -2,9 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+	type SavePageInput,
+	type SavePageResult,
+	savePage,
+} from "@/lib/brain/editor/save";
 import { getBrainProvider } from "@/lib/brain/provider";
 import { resolveBrainBinding } from "@/lib/brain/resolve";
-import { type SavePageInput, type SavePageResult, savePage } from "@/lib/brain/editor/save";
 import { BRAIN_STATUSES } from "@/lib/brain/types";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -25,7 +29,9 @@ const inputSchema = z.object({
 	baseRevision: z.number().int().positive().nullable(),
 });
 
-export async function saveBrainPage(raw: SavePageInput): Promise<SavePageResult> {
+export async function saveBrainPage(
+	raw: SavePageInput,
+): Promise<SavePageResult> {
 	const parsed = inputSchema.safeParse(raw);
 	if (!parsed.success)
 		return {

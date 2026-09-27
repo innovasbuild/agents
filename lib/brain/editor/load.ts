@@ -3,10 +3,10 @@
 // los emails de autores con el cliente admin, siempre filtrados por el tenant
 // que resolvió la sesión.
 import { cache } from "react";
+import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { loadTenantBindings } from "@/lib/connectors/bindings";
-import { type TenantAccess, resolveTenantAccess } from "@/lib/tenants/resolve";
+import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveBrainBinding } from "../resolve";
 import type { BrainStatus } from "../types";
 
@@ -106,16 +106,13 @@ export async function loadRevisions(
 	if (error) throw new Error(`No pude leer el historial: ${error.message}`);
 
 	const rows = (data ?? []) as Array<Record<string, unknown>>;
-	const emails = await memberEmails(
-		tenantId,
-		[
-			...new Set(
-				rows
-					.map((r) => r.author_user_id as string | null)
-					.filter((id): id is string => !!id),
-			),
-		],
-	);
+	const emails = await memberEmails(tenantId, [
+		...new Set(
+			rows
+				.map((r) => r.author_user_id as string | null)
+				.filter((id): id is string => !!id),
+		),
+	]);
 
 	return rows.map((row) => ({
 		revision: row.revision as number,

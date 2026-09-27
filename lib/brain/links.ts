@@ -60,7 +60,8 @@ export function buildLinkIndex(pages: LinkPage[]): LinkIndex {
 
 	const orphans = pages
 		.filter(
-			(p) => p.status !== "archivado" && (incoming.get(p.slug)?.length ?? 0) === 0,
+			(p) =>
+				p.status !== "archivado" && (incoming.get(p.slug)?.length ?? 0) === 0,
 		)
 		.map((p) => p.slug)
 		.sort();

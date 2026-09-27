@@ -1,7 +1,10 @@
 // Diff de revisiones del brain (spec editor §6.1). LCS de líneas: las páginas
 // pesan hasta 200 KB, del orden de miles de líneas, y se compara de a dos.
 
-export type DiffBlock = { kind: "equal" | "added" | "removed"; lines: string[] };
+export type DiffBlock = {
+	kind: "equal" | "added" | "removed";
+	lines: string[];
+};
 
 function splitLines(text: string): string[] {
 	return text === "" ? [] : text.replace(/\r\n/g, "\n").split("\n");
@@ -58,7 +61,8 @@ export interface MetaChange {
 export function diffMeta(a: MetaSnapshot, b: MetaSnapshot) {
 	const changes: MetaChange[] = [];
 	for (const field of ["title", "category", "status"] as const)
-		if (a[field] !== b[field]) changes.push({ field, from: a[field], to: b[field] });
+		if (a[field] !== b[field])
+			changes.push({ field, from: a[field], to: b[field] });
 	return {
 		changes,
 		tagsAdded: b.tags.filter((t) => !a.tags.includes(t)),

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { toMarkdownLinks, WIKI_SCHEME } from "@/lib/brain/editor/markdown-links";
+import {
+	toMarkdownLinks,
+	WIKI_SCHEME,
+} from "@/lib/brain/editor/markdown-links";
 import { pageHref } from "@/lib/brain/editor/slug";
 import type { BrainStatus } from "@/lib/brain/types";
 
@@ -48,8 +51,12 @@ export function BrainMarkdown({
 						return (
 							<Link
 								href={`${pageHref(tenantSlug, slug)}${anchor ? `#${anchor}` : ""}`}
-								className={target.status === "archivado" ? "opacity-60" : undefined}
-								title={target.status === "archivado" ? "Archivada" : target.title}
+								className={
+									target.status === "archivado" ? "opacity-60" : undefined
+								}
+								title={
+									target.status === "archivado" ? "Archivada" : target.title
+								}
 							>
 								{children}
 							</Link>

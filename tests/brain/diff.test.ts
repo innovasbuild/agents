@@ -18,7 +18,9 @@ describe("diffLines", () => {
 	});
 
 	it("de vacío a texto es todo agregado", () => {
-		expect(diffLines("", "a\nb")).toEqual([{ kind: "added", lines: ["a", "b"] }]);
+		expect(diffLines("", "a\nb")).toEqual([
+			{ kind: "added", lines: ["a", "b"] },
+		]);
 	});
 
 	it("\\r\\n y \\n se tratan igual", () => {

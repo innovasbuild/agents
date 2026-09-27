@@ -21,8 +21,17 @@ export interface SavePageInput {
 
 export type SavePageResult =
 	| { ok: true; slug: string; revision: number }
-	| { ok: false; code: "forbidden" | "unsupported" | "internal"; message: string }
-	| { ok: false; code: "conflict"; currentRevision: number | null; message: string }
+	| {
+			ok: false;
+			code: "forbidden" | "unsupported" | "internal";
+			message: string;
+	  }
+	| {
+			ok: false;
+			code: "conflict";
+			currentRevision: number | null;
+			message: string;
+	  }
 	| { ok: false; code: "validation"; fields: string[]; message: string };
 
 export interface SaveDeps {
@@ -70,7 +79,9 @@ export async function savePage(
 		frontmatter: input.frontmatter,
 		body: input.body,
 		reason: input.reason.trim(),
-		...(input.baseRevision === null ? {} : { baseRevision: input.baseRevision }),
+		...(input.baseRevision === null
+			? {}
+			: { baseRevision: input.baseRevision }),
 	};
 
 	try {
@@ -90,9 +101,18 @@ export async function savePage(
 						: `Alguien guardó la revisión ${error.currentRevision ?? "nueva"} mientras editabas.`,
 			};
 		if (error instanceof BrainValidation)
-			return { ok: false, code: "validation", fields: error.fields, message: error.message };
+			return {
+				ok: false,
+				code: "validation",
+				fields: error.fields,
+				message: error.message,
+			};
 		const id = crypto.randomUUID();
 		console.error(`brain editor: error al guardar (${id})`, error);
-		return { ok: false, code: "internal", message: `No se pudo guardar (${id}).` };
+		return {
+			ok: false,
+			code: "internal",
+			message: `No se pudo guardar (${id}).`,
+		};
 	}
 }
