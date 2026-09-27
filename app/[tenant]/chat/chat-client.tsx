@@ -33,7 +33,10 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { pendingInputRequests } from "@/lib/agents/input-requests";
+import {
+	type PendingInputRequest,
+	pendingInputRequests,
+} from "@/lib/agents/input-requests";
 import { isEmailApproval, queuePreviewItems } from "@/lib/agents/mail-preview";
 import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
 import { mailText } from "@/lib/gmail/signature";
@@ -495,29 +498,23 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 							<ApprovalPayload input={request.input} />
 						</>
 					)}
-					<div className="flex flex-wrap gap-2 pt-1">
-						{request.options.map((option) => (
-							<Button
-								disabled={!canAnswer}
-								key={option.id}
-								onClick={() =>
-									void agent.respond([
-										{ requestId: request.requestId, optionId: option.id },
-									])
-								}
-								type="button"
-								variant={
-									option.style === "primary"
-										? "default"
-										: option.style === "danger"
-											? "destructive"
-											: "outline"
-								}
-							>
-								{option.label}
-							</Button>
-						))}
-					</div>
+					<ApprovalOptions
+						askReasonOnReject={request.kind === "tool-approval"}
+						canAnswer={canAnswer}
+						onAnswer={(optionId) =>
+							void agent.respond([{ requestId: request.requestId, optionId }])
+						}
+						onReject={(optionId, reason) => {
+							void (async () => {
+								await agent.respond([
+									{ requestId: request.requestId, optionId },
+								]);
+								const trimmed = reason.trim();
+								if (trimmed) await agent.send(trimmed, { turnPolicy: "steer" });
+							})();
+						}}
+						options={request.options}
+					/>
 					{request.allowFreeform ? (
 						<FreeformAnswer
 							disabled={!canAnswer}
@@ -737,6 +734,97 @@ function ApprovalPayload({ input }: { input: Record<string, unknown> }) {
 				),
 			)}
 		</>
+	);
+}
+
+/**
+ * Botonera de una tarjeta de aprobación. La opción "cancel" de una
+ * tool-approval no responde al toque: primero abre un campo para el motivo
+ * (opcional), porque una vez resuelta la aprobación no hay forma de agregarle
+ * contexto después. El motivo, si lo hay, viaja como mensaje de seguimiento
+ * — no como parte de la respuesta de la aprobación — así el agente lo lee
+ * como cualquier otro pedido del ejecutor (reescribir, descartar, nada).
+ */
+function ApprovalOptions({
+	askReasonOnReject,
+	canAnswer,
+	onAnswer,
+	onReject,
+	options,
+}: {
+	askReasonOnReject: boolean;
+	canAnswer: boolean;
+	onAnswer: (optionId: string) => void;
+	onReject: (optionId: string, reason: string) => void;
+	options: PendingInputRequest["options"];
+}) {
+	const [rejectingOptionId, setRejectingOptionId] = useState<string | null>(
+		null,
+	);
+	const [reason, setReason] = useState("");
+
+	if (rejectingOptionId) {
+		return (
+			<form
+				className="flex flex-wrap items-center gap-2 pt-1"
+				onSubmit={(event) => {
+					event.preventDefault();
+					onReject(rejectingOptionId, reason);
+					setRejectingOptionId(null);
+					setReason("");
+				}}
+			>
+				<Input
+					aria-label="Motivo del rechazo"
+					disabled={!canAnswer}
+					onChange={(event) => setReason(event.target.value)}
+					placeholder="Por qué (opcional)"
+					value={reason}
+				/>
+				<Button disabled={!canAnswer} type="submit" variant="destructive">
+					Confirmar rechazo
+				</Button>
+				<Button
+					disabled={!canAnswer}
+					onClick={() => {
+						setRejectingOptionId(null);
+						setReason("");
+					}}
+					type="button"
+					variant="ghost"
+				>
+					Volver
+				</Button>
+			</form>
+		);
+	}
+
+	return (
+		<div className="flex flex-wrap gap-2 pt-1">
+			{options.map((option) => (
+				<Button
+					disabled={!canAnswer}
+					key={option.id}
+					onClick={() => {
+						if (askReasonOnReject && option.id === "cancel") {
+							setRejectingOptionId(option.id);
+							return;
+						}
+						onAnswer(option.id);
+					}}
+					type="button"
+					variant={
+						option.style === "primary"
+							? "default"
+							: option.style === "danger"
+								? "destructive"
+								: "outline"
+					}
+				>
+					{option.label}
+				</Button>
+			))}
+		</div>
 	);
 }
 

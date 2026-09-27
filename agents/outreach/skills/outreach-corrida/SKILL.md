@@ -18,10 +18,13 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 3. `research_account` con el dominio de la empresa. Sin hechos con fuente no hay primer mensaje: salteá la cuenta.
 4. `draft_message` con `kind: "msg1"`.
 5. `queue_touch` con la pieza tal cual la devolvió `draft_message`.
+6. `send_email` con el `queueItemId`, to, subject y body de esa misma pieza. Su tarjeta de aprobación es la que el ejecutor usa para aprobar o rechazar: no preguntes antes, ni por texto ni con `ask_question` (instructions.md).
 
-## Mostrar la cola por letras
+## Mostrar una cola con varias piezas ya cargadas
 
-`list_queue` dibuja una tarjeta por pieza con el mail tal cual sale, firma incluida. No repitas el cuerpo ni el asunto en tu texto: alcanza con nombrar las letras y preguntar qué hacer, por ejemplo: "Tenés A, B y C listas. A y C mandalas, B con este cambio, D descartala".
+Al arrancar una sesión con piezas pendientes, o cuando el ejecutor pide ver la cola, `list_queue` dibuja una tarjeta por pieza con el mail tal cual sale, firma incluida. No repitas el cuerpo ni el asunto en tu texto: alcanza con nombrar las letras y preguntar qué hacer, por ejemplo: "Tenés A, B y C listas. A y C mandalas, B con este cambio, D descartala".
+
+Esto es distinto del contacto único recién cargado (arriba): una vez que `send_email` dispara su tarjeta, solo una persona la resuelve con un click, vos no podés retirarla. Por eso, con varias piezas juntas, primero preguntás qué hacer con cada letra y recién ahí llamás a la herramienta que corresponda — así no dejás tarjetas de aprobación abiertas por piezas que el ejecutor quería editar o descartar.
 
 Interpretá la respuesta así:
 - "mandala" o "mandá A" → `send_email` con el `queueItemId` y exactamente el to, subject y body de esa letra. Si hay varias, una llamada por pieza.
