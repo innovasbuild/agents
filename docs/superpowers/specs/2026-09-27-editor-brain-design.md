@@ -167,6 +167,8 @@ Es cambiar el estado a `archivado` por el mismo formulario. No hay borrado.
 - Rutas de página bajo `/brain/p/`, `/brain/editar/` y `/brain/historial/` en vez de `/brain/[...slug]` y sus subrutas (E3).
 - Se suma `/brain/mapa` y el panel de conexiones por página: el §8 pedía solo un "panel de wikilinks rotos".
 - El diff dentro de la tarjeta de aprobación del chat no entra en esta etapa (§10).
+- **Wikilinks a markdown, sin plugin remark:** en vez de un plugin remark que opere sobre el AST (como decía el §7 original), `lib/brain/editor/markdown-links.ts` reescribe el texto a links `[texto](wiki:slug)` antes de pasarlo a `react-markdown`, salteando bloques de código con una regex propia. Mismo resultado en pantalla, más simple de testear sin depender de los internos de `unified`.
+- **QA interactiva de la implementación (Task 11), sin completar:** el navegador de este entorno de desarrollo no pudo autenticar contra el Supabase local (magic link vía Mailpit y sesión inyectada por `verifyOtp` devolvían `404` en toda ruta nueva, incluida una página de prueba sin lógica alguna en un segmento nuevo del árbol de `app/`). `npm run build` sí compila y su manifiesto de rutas lista las siete rutas nuevas del editor (`/[tenant]/brain`, `.../mapa`, `.../nueva`, `.../p/[...slug]`, `.../editar/[...slug]`, `.../historial/[...slug]`, `.../raw/[...slug]`), lo que descarta un error de registro de rutas en el código; el bloqueo es del dev server de este sandbox, no del código. La caminata de las cinco escenas de `/qa` (spec §8, "Navegador") queda pendiente para una sesión con un navegador que sí autentique contra la base local.
 
 ## 10. Pendientes, fuera de esta etapa
 

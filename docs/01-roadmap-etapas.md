@@ -205,7 +205,7 @@ Tareas:
 - [ ] `/metricas` (por hook, segmento, canal, ejecutor).
 - [ ] `/settings` (modelo default, ejecutores, cupos, conexiones del tenant).
 - [ ] Realtime en `/cola` y `/pipeline`.
-- [ ] Editor del brain (spec 2026-09-13-brain-design §8). El acceso del cliente por MCP desde sus propias tools es la Etapa 11.
+- [x] Editor del brain: código completo (spec y plan `2026-09-27-editor-brain-design`), sin PR todavía. El acceso del cliente por MCP desde sus propias tools es la Etapa 11.
 - [ ] `/qa` en desktop y mobile.
 - [ ] `/design-review`.
 - [ ] `/ship` + `/context-save`.
