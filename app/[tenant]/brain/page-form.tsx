@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { DiffView } from "@/components/brain/diff-view";
 import { BrainMarkdown, type PageLookup } from "@/components/brain/markdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -177,30 +178,9 @@ export function PageForm({
 									<summary className="cursor-pointer">
 										Diferencias entre la vigente y tu versión
 									</summary>
-									<pre className="mt-2 max-h-80 overflow-auto rounded bg-muted p-3 text-xs">
-										{diffLines(serverBody, form.body).map((block, i) =>
-											block.lines.map((line, j) => (
-												// biome-ignore lint/suspicious/noArrayIndexKey: bloques de diff sin id estable
-												<div
-													key={`${i}-${j}`}
-													className={
-														block.kind === "added"
-															? "bg-green-500/15"
-															: block.kind === "removed"
-																? "bg-red-500/15"
-																: ""
-													}
-												>
-													{block.kind === "added"
-														? "+ "
-														: block.kind === "removed"
-															? "- "
-															: "  "}
-													{line}
-												</div>
-											)),
-										)}
-									</pre>
+									<div className="mt-2">
+										<DiffView blocks={diffLines(serverBody, form.body)} />
+									</div>
 								</details>
 							)}
 							<Button
