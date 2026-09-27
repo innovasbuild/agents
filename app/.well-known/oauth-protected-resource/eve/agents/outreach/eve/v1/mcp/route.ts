@@ -5,6 +5,8 @@
 // nunca /.well-known/*. Mismo problema que resolvió la Etapa 11 para el
 // endpoint del brain (app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts),
 // con la misma forma de respuesta.
+import { publicSettings } from "@/lib/brain/mcp-server/production";
+
 const CORS = {
 	"access-control-allow-origin": "*",
 	"access-control-allow-methods": "GET, HEAD, OPTIONS",
@@ -12,8 +14,8 @@ const CORS = {
 };
 
 export async function GET(): Promise<Response> {
-	const resource = `${process.env.PUBLIC_APP_URL}/eve/agents/outreach/eve/v1/mcp`;
-	const issuer = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`;
+	const { publicUrl, issuer } = publicSettings();
+	const resource = `${publicUrl}/eve/agents/outreach/eve/v1/mcp`;
 	return Response.json(
 		{
 			resource,
