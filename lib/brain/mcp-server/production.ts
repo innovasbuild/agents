@@ -24,11 +24,19 @@ function sharedDeps(): Pick<BrainMcpDeps, "verify" | "store" | "hit"> {
 }
 
 export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
-	const publicUrl = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
+	// PUBLIC_APP_URL solo está cargada en Production (Etapa 11): en Preview y
+	// Development no tiene sentido un valor fijo, porque cada deploy de Vercel
+	// tiene su propia URL. VERCEL_URL la pone Vercel solo, en todo ambiente
+	// (incluidos los que evalúa eve al buildear un canal, antes de servir
+	// ningún request) — sin este fallback, un canal de eve que llama a esta
+	// función a nivel de módulo tira el build entero de cualquier preview.
+	const explicit = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
+	const publicUrl =
+		explicit ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 	if (!publicUrl || !supabaseUrl) {
 		throw new Error(
-			"faltan PUBLIC_APP_URL o NEXT_PUBLIC_SUPABASE_URL para el brain por MCP",
+			"faltan PUBLIC_APP_URL (o VERCEL_URL) o NEXT_PUBLIC_SUPABASE_URL para el brain por MCP",
 		);
 	}
 	return { publicUrl, issuer: `${supabaseUrl}/auth/v1` };
