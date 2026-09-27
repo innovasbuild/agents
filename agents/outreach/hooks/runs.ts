@@ -26,6 +26,7 @@ export default defineHook({
 					agent: ctx.agent.name,
 					sessionId: ctx.session.id,
 					turnId: event.data.turnId,
+					trigger: auth?.authenticator === "oauth" ? "mcp" : "chat",
 				});
 			} catch (error) {
 				console.error("runs hook (turn.started):", error);

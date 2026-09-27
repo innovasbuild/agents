@@ -7,6 +7,7 @@ export interface OpenRunInput {
 	agent: string;
 	sessionId: string;
 	turnId: string;
+	trigger: "chat" | "mcp";
 }
 
 export interface CloseRunInput {
@@ -58,7 +59,7 @@ export async function openRun(input: OpenRunInput): Promise<void> {
 	const { error } = await admin.from("runs").insert({
 		tenant_id: input.tenantId,
 		agent: input.agent,
-		trigger: "chat",
+		trigger: input.trigger,
 		eve_session_id: input.sessionId,
 		eve_turn_id: input.turnId,
 		conversation_id: input.conversationId,

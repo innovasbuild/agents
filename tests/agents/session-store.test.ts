@@ -53,13 +53,14 @@ describe("bindSessionToConversation", () => {
 });
 
 describe("openRun", () => {
-	it("inserta el run en estado running", async () => {
+	it("inserta el run en estado running, con el trigger que le pasan", async () => {
 		await openRun({
 			tenantId: "tenant-1",
 			conversationId: "conv-1",
 			agent: "outreach",
 			sessionId: "wrun_A",
 			turnId: "turn-1",
+			trigger: "chat",
 		});
 
 		expect(calls.inserts[0]).toMatchObject({
@@ -70,5 +71,18 @@ describe("openRun", () => {
 			eve_turn_id: "turn-1",
 			status: "running",
 		});
+	});
+
+	it("acepta trigger mcp", async () => {
+		await openRun({
+			tenantId: "tenant-1",
+			conversationId: null,
+			agent: "outreach",
+			sessionId: "wrun_B",
+			turnId: "turn-2",
+			trigger: "mcp",
+		});
+
+		expect(calls.inserts[0]).toMatchObject({ trigger: "mcp" });
 	});
 });
