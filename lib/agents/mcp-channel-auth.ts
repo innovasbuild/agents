@@ -14,6 +14,7 @@ import {
 	loadMemberships,
 	loadTenantBySlug,
 } from "../auth/oauth-principal";
+import { tenantSubjectId } from "../connectors/auth";
 
 type SessionAuthContext = Exclude<
 	Awaited<ReturnType<AuthFn<Request>>>,
@@ -104,10 +105,16 @@ export async function resolveMcpChannelAuth(
 		ok: true,
 		sessionAuth: {
 			authenticator: "oauth",
-			issuer: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1`,
+			// Mismo issuer que el canal del dashboard (agents/outreach/channels/eve.ts):
+			// Connect arma su subject con este campo, así que un issuer distinto
+			// sería otra identidad y pediría autorizar Gmail/HubSpot de nuevo.
+			issuer: process.env.NEXT_PUBLIC_SUPABASE_URL!,
 			principalId: userId,
 			principalType: "user",
-			subject: userId,
+			// eve arma la clave de dueño de una invocación sin mirar
+			// attributes.tenantId: con el userId pelado, la misma persona
+			// conectada a dos tenants vería las invocaciones de uno desde el otro.
+			subject: tenantSubjectId(tenant.id, userId),
 			attributes: {
 				email: typeof claims.email === "string" ? claims.email : "",
 				tenantId: tenant.id,

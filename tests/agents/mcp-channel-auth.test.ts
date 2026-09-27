@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type McpChannelAuthDeps,
 	resolveMcpChannelAuth,
@@ -35,15 +35,22 @@ function request(bearer: string | null, tenant: string | null) {
 }
 
 describe("resolveMcpChannelAuth", () => {
+	beforeEach(() => {
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://proyecto.supabase.co");
+	});
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
 	it("un miembro entra a su tenant, con su role", async () => {
 		expect(await resolveMcpChannelAuth(request("ana", "a"), deps())).toEqual({
 			ok: true,
 			sessionAuth: {
 				authenticator: "oauth",
-				issuer: expect.any(String),
+				issuer: "https://proyecto.supabase.co",
 				principalId: "ana",
 				principalType: "user",
-				subject: "ana",
+				subject: "tenant-a:ana",
 				attributes: {
 					email: "ana@a.test",
 					tenantId: "tenant-a",
@@ -157,5 +164,40 @@ describe("resolveMcpChannelAuth", () => {
 		expect(result).toMatchObject({ ok: false, kind: "forbidden" });
 		expect(JSON.stringify(result)).not.toContain("conexión a postgres perdida");
 		error.mockRestore();
+	});
+
+	it("el issuer de la sesión es el mismo que el del canal del dashboard (sin /auth/v1): Connect ve la misma identidad", async () => {
+		const result = await resolveMcpChannelAuth(request("ana", "a"), deps());
+		expect(result).toMatchObject({
+			ok: true,
+			sessionAuth: { issuer: process.env.NEXT_PUBLIC_SUPABASE_URL },
+		});
+		expect(
+			(result as { sessionAuth: { issuer: string } }).sessionAuth.issuer,
+		).not.toMatch(/\/auth\/v1$/);
+	});
+
+	it("el mismo usuario en dos tenants tiene dos subject distintos: sus invocaciones no se cruzan", async () => {
+		const dosTenants = deps({
+			tenantBySlug: async (slug) =>
+				slug === "a"
+					? { id: "tenant-a", active: true }
+					: slug === "b"
+						? { id: "tenant-b", active: true }
+						: null,
+			membershipsOf: async () => [
+				{ tenantId: "tenant-a", role: "tenant_member" },
+				{ tenantId: "tenant-b", role: "tenant_member" },
+			],
+		});
+		const enA = await resolveMcpChannelAuth(request("ana", "a"), dosTenants);
+		const enB = await resolveMcpChannelAuth(request("ana", "b"), dosTenants);
+		const subjectA = (enA as { sessionAuth: { subject: string } }).sessionAuth
+			.subject;
+		const subjectB = (enB as { sessionAuth: { subject: string } }).sessionAuth
+			.subject;
+		expect(subjectA).not.toBe(subjectB);
+		expect(enA).toMatchObject({ sessionAuth: { principalId: "ana" } });
+		expect(enB).toMatchObject({ sessionAuth: { principalId: "ana" } });
 	});
 });
