@@ -20,7 +20,7 @@
 - El verificador de claims y la lectura de membresías/tenant se comparten con el endpoint del brain, en un solo lugar (`lib/auth/oauth-principal.ts`), no se duplican (D-MCP-4).
 - Sin acceso: `ForbiddenError` con mensaje propio, nunca un 401 genérico (D-MCP-5).
 - El canal MCP no lleva `localDev()` ni `evalAuth()` como fallback: siempre pasa por `oauthResource`, igual que el endpoint del brain no tuvo un modo sin auth.
-- `agents/outreach/channels/mcp.ts` es el único archivo que puede importar `UnauthenticatedError`/`ForbiddenError` de `eve/channels/auth` en este trabajo — la resolución de acceso en sí (`lib/agents/mcp-channel-auth.ts`, salvo su adaptador) no depende de esas clases.
+- `verifyMcpChannelToken` (el adaptador, dentro de `lib/agents/mcp-channel-auth.ts`) es el único punto que importa `UnauthenticatedError`/`ForbiddenError` de `eve/channels/auth` en este trabajo — `resolveMcpChannelAuth`, la función pura del mismo archivo, no depende de esas clases, y `agents/outreach/channels/mcp.ts` tampoco las importa directamente.
 - Comandos: `npm test`, `npm run typecheck`. `lint:fix` reformatea archivos ajenos (suele ser una veintena, no solo 4): revertirlos con `git checkout -- <archivo>` antes de commitear.
 - Commits con prefijo `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` y el trailer `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`.
 - Rama actual: `main`, al día con `origin/main` (Etapa 11 ya mergeada). Crear una rama nueva para este trabajo antes de la Task 1.

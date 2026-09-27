@@ -9,6 +9,7 @@ export default defineHook({
 	events: {
 		async "session.started"(_event, ctx) {
 			const auth = ctx.session.auth.initiator ?? ctx.session.auth.current;
+			if (auth?.authenticator === "oauth") return;
 			// Sin try/catch a propósito: si esto falla, el turno tiene que fallar.
 			await bindSessionToConversation(
 				attribute(auth?.attributes?.conversationId),
