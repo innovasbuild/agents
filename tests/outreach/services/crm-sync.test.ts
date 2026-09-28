@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { CrmContactCheck } from "@/lib/connectors/crm/adapter";
-import { fakeCrm } from "../fake-store";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
 import { runCrmSync } from "@/lib/outreach/services/crm-sync";
-import type { ContactPatch, ContactRow, ExecutorRow } from "@/lib/outreach/store";
+import type {
+	ContactPatch,
+	ContactRow,
+	ExecutorRow,
+} from "@/lib/outreach/store";
+import { fakeCrm } from "../fake-store";
 
 const NOW = new Date("2026-09-27T12:00:00Z");
 
@@ -65,7 +69,10 @@ function buildDeps(input: {
 	contacts: ContactRow[];
 	executors: ExecutorRow[];
 	checks?: CrmContactCheck[];
-	notesByContact?: Record<string, { id: string; body: string; at: Date; ownerId: string | null }[]>;
+	notesByContact?: Record<
+		string,
+		{ id: string; body: string; at: Date; ownerId: string | null }[]
+	>;
 	failNotesFor?: string;
 }) {
 	const patches: { tenantId: string; id: string; patch: ContactPatch }[] = [];
@@ -82,7 +89,11 @@ function buildDeps(input: {
 			input.contacts.filter((c) => c.tenantId === tenantId),
 		listExecutorsWithCrmOwner: async (tenantId: string) =>
 			input.executors.filter((e) => e.tenantId === tenantId),
-		updateContact: async (tenantId: string, id: string, patch: ContactPatch) => {
+		updateContact: async (
+			tenantId: string,
+			id: string,
+			patch: ContactPatch,
+		) => {
 			patches.push({ tenantId, id, patch });
 		},
 		insertEvents: async (rows: OutreachEventInsert[]) => {
@@ -163,7 +174,9 @@ describe("runCrmSync", () => {
 		expect(events).toContainEqual(
 			expect.objectContaining({
 				type: "crm_sync_pendiente",
-				payload: expect.objectContaining({ hubspot_owner_id: "owner-desconocido" }),
+				payload: expect.objectContaining({
+					hubspot_owner_id: "owner-desconocido",
+				}),
 			}),
 		);
 	});
@@ -233,7 +246,11 @@ describe("runCrmSync", () => {
 	});
 
 	it("un contacto que tira error en listNotesSince no frena a los demás del tenant", async () => {
-		const otro = contact({ id: "c2", crmId: "202", contactKey: "em:otro@acme.test" });
+		const otro = contact({
+			id: "c2",
+			crmId: "202",
+			contactKey: "em:otro@acme.test",
+		});
 		const { deps, patches } = buildDeps({
 			contacts: [contact(), otro],
 			executors: [executor()],

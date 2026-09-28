@@ -64,5 +64,8 @@ export interface CrmAdapter {
 	 * resultado (nunca se asume ninguna de las dos cosas por default). */
 	batchCheckContacts(crmIds: string[]): Promise<CrmContactCheck[]>;
 	/** Notas del contacto más nuevas que `sinceIso` (todas si es null). */
-	listNotesSince(crmId: string, sinceIso: string | null): Promise<CrmActivityNote[]>;
+	listNotesSince(
+		crmId: string,
+		sinceIso: string | null,
+	): Promise<CrmActivityNote[]>;
 }

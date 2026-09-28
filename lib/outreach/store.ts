@@ -1304,7 +1304,8 @@ export function createSupabaseOutreachStore(
 					.eq("contact_key", contactKey),
 			]);
 			if (events.error) fail("chequear eventos del contacto", events.error);
-			if (queueItems.error) fail("chequear piezas del contacto", queueItems.error);
+			if (queueItems.error)
+				fail("chequear piezas del contacto", queueItems.error);
 			return (events.count ?? 0) > 0 || (queueItems.count ?? 0) > 0;
 		},
 
@@ -1363,7 +1364,8 @@ export function createSupabaseOutreachStore(
 				.eq("search_focus_id", focusId);
 			if (contactsError) fail("armar el embudo del foco", contactsError);
 			const rows = contacts ?? [];
-			const lane = (r: Row) => (r.icp as { lane?: string } | null)?.lane ?? null;
+			const lane = (r: Row) =>
+				(r.icp as { lane?: string } | null)?.lane ?? null;
 			const keys = rows.map((r) => r.contact_key as string);
 
 			const { data: queueItems, error: queueError } = keys.length

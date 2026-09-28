@@ -262,9 +262,10 @@ describe("createHubSpotAdapter", () => {
 				},
 			},
 		]);
-		const checks = await createHubSpotAdapter("tok", fetchImpl).batchCheckContacts(
-			["1", "2", "3"],
-		);
+		const checks = await createHubSpotAdapter(
+			"tok",
+			fetchImpl,
+		).batchCheckContacts(["1", "2", "3"]);
 		// "3" quedó afuera: category RATE_LIMITS no confirma que esté borrado, y
 		// no está en `results`, así que nunca se asume ni found ni not-found.
 		expect(checks).toEqual([
@@ -286,7 +287,9 @@ describe("createHubSpotAdapter", () => {
 			{ json: { results: [], errors: [] } },
 		]);
 		const ids = Array.from({ length: 150 }, (_, i) => `id-${i}`);
-		await createHubSpotAdapter("tok", batched.fetchImpl).batchCheckContacts(ids);
+		await createHubSpotAdapter("tok", batched.fetchImpl).batchCheckContacts(
+			ids,
+		);
 		expect(batched.calls).toHaveLength(2);
 		expect(
 			(batched.calls[0].body as { inputs: unknown[] }).inputs,
@@ -298,9 +301,10 @@ describe("createHubSpotAdapter", () => {
 
 	it("batchCheckContacts con lista vacía no llama a HubSpot", async () => {
 		const { calls, fetchImpl } = fakeHubSpot([]);
-		const checks = await createHubSpotAdapter("tok", fetchImpl).batchCheckContacts(
-			[],
-		);
+		const checks = await createHubSpotAdapter(
+			"tok",
+			fetchImpl,
+		).batchCheckContacts([]);
 		expect(checks).toEqual([]);
 		expect(calls).toHaveLength(0);
 	});

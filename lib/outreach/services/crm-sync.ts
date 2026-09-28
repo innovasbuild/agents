@@ -3,7 +3,7 @@
 // fuera (se borra un duplicado, se reasigna el owner, se deja una nota a
 // mano) y hoy nada se entera. Efecto 0: solo lee de HubSpot y escribe acá.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
-import { outreachEvent, type OutreachEventInsert } from "../events";
+import { type OutreachEventInsert, outreachEvent } from "../events";
 import type { ContactPatch, ContactRow, ExecutorRow } from "../store";
 
 export interface CrmSyncDeps {

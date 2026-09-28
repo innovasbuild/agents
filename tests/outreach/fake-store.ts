@@ -689,7 +689,9 @@ export function createFakeStore(): FakeStore {
 			// Orden desc por created_at, igual que la store real: acá no hay
 			// columna, así que el orden de inserción (más nuevo al final) se
 			// invierte.
-			return [...store.focuses].filter((f) => f.tenantId === tenantId).reverse();
+			return [...store.focuses]
+				.filter((f) => f.tenantId === tenantId)
+				.reverse();
 		},
 
 		async insertFocus(row) {
