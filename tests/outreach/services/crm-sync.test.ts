@@ -245,6 +245,81 @@ describe("runCrmSync", () => {
 		expect(events).toEqual([]);
 	});
 
+	it("owner de HubSpot que ya coincide con el local: no genera patch ni evento", async () => {
+		const { deps, patches, events } = buildDeps({
+			contacts: [contact({ ownerUserId: "user-mati" })],
+			executors: [executor({ userId: "user-mati", crmOwnerId: "92296278" })],
+			checks: [{ id: "101", found: true, ownerId: "92296278" }],
+		});
+		const result = await runCrmSync(TENANT, deps);
+		expect(result.ownersActualizados).toBe(0);
+		expect(patches.find((p) => "ownerUserId" in p.patch)).toBeUndefined();
+		expect(events).not.toContainEqual(
+			expect.objectContaining({ type: "crm_owner_actualizado" }),
+		);
+	});
+
+	it("owner sin ejecutor local: el evento crm_sync_pendiente solo se inserta en la primera corrida", async () => {
+		const { deps: deps1, events: events1 } = buildDeps({
+			contacts: [contact({ ownerUserId: "user-viejo", crmSyncedAt: null })],
+			executors: [executor({ crmOwnerId: "otro-owner" })],
+			checks: [{ id: "101", found: true, ownerId: "owner-desconocido" }],
+		});
+		await runCrmSync(TENANT, deps1);
+		expect(events1).toContainEqual(
+			expect.objectContaining({ type: "crm_sync_pendiente" }),
+		);
+
+		const { deps: deps2, events: events2 } = buildDeps({
+			contacts: [
+				contact({
+					ownerUserId: "user-viejo",
+					crmSyncedAt: "2026-09-20T00:00:00Z",
+				}),
+			],
+			executors: [executor({ crmOwnerId: "otro-owner" })],
+			checks: [{ id: "101", found: true, ownerId: "owner-desconocido" }],
+		});
+		await runCrmSync(TENANT, deps2);
+		expect(events2).not.toContainEqual(
+			expect.objectContaining({ type: "crm_sync_pendiente" }),
+		);
+	});
+
+	it("notas de la propia app (prefijo [out · o [nota ·) no se reimportan como nota entrante", async () => {
+		const { deps, events } = buildDeps({
+			contacts: [contact({ crmSyncedAt: "2026-09-20T00:00:00Z" })],
+			executors: [executor()],
+			checks: [{ id: "101", found: true, ownerId: "92296278" }],
+			notesByContact: {
+				"101": [
+					{
+						id: "n1",
+						body: "[out · msg1 · email · v1 · h1]\n\nAsunto: Hola\n\ncuerpo",
+						at: new Date("2026-09-26T09:00:00Z"),
+						ownerId: "92296278",
+					},
+					{
+						id: "n2",
+						body: "Llamó y quedó en pensarlo",
+						at: new Date("2026-09-26T10:00:00Z"),
+						ownerId: "92296278",
+					},
+				],
+			},
+		});
+		const result = await runCrmSync(TENANT, deps);
+		expect(result.notasAgregadas).toBe(1);
+		const notaEvents = events.filter((e) => e.type === "nota");
+		expect(notaEvents).toHaveLength(1);
+		expect(notaEvents[0]).toEqual(
+			expect.objectContaining({
+				summary: expect.stringContaining("Llamó y quedó en pensarlo"),
+				payload: expect.objectContaining({ hubspot_note_id: "n2" }),
+			}),
+		);
+	});
+
 	it("un contacto que tira error en listNotesSince no frena a los demás del tenant", async () => {
 		const otro = contact({
 			id: "c2",

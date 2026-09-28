@@ -69,15 +69,11 @@ export default defineSchedule({
 				let token: string | null = null;
 				for (const executor of executors) {
 					try {
-						const { token: t } = await tokenForSubject(
-							HUBSPOT_CONNECTOR_UID,
-							{
-								tenantId: tenant.id,
-								userId: executor.userId,
-								issuer: process.env.NEXT_PUBLIC_SUPABASE_URL,
-							},
-							[],
-						);
+						const { token: t } = await tokenForSubject(HUBSPOT_CONNECTOR_UID, {
+							tenantId: tenant.id,
+							userId: executor.userId,
+							issuer: process.env.NEXT_PUBLIC_SUPABASE_URL,
+						});
 						token = t;
 						break;
 					} catch (error) {

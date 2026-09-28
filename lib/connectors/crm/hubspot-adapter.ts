@@ -319,10 +319,16 @@ export function createHubSpotAdapter(
 				"notes",
 				crmId,
 				sinceIso
-					? [{ propertyName: "hs_timestamp", operator: "GT", value: sinceIso }]
+					? [
+							{
+								propertyName: "hs_createdate",
+								operator: "GT",
+								value: sinceIso,
+							},
+						]
 					: [],
-				["hs_note_body", "hs_timestamp", "hubspot_owner_id"],
-				20,
+				["hs_note_body", "hs_timestamp", "hs_createdate", "hubspot_owner_id"],
+				100,
 			);
 			const notes: CrmActivityNote[] = [];
 			for (const row of data.results ?? []) {

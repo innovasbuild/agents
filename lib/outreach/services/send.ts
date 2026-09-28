@@ -12,6 +12,7 @@ import {
 import { outreachEvent } from "../events";
 import { gateSummary, runGate } from "../gate";
 import { canTouch, MAILBOX_GUARD_DAYS, TOUCH_REASON_TEXT } from "../guards";
+import { OUT_NOTE_PREFIX } from "../note-prefixes";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
 import { canAdvance, nextFollowup, type OutreachStage } from "../stage";
@@ -430,7 +431,7 @@ async function recordInCrm(args: {
 			properties,
 		});
 		await crm.addNote(crmId, {
-			body: `[out · ${item.kind} · email · ${item.vector} · ${item.hook}]\n\nAsunto: ${item.subject}\n\n${item.body}`,
+			body: `${OUT_NOTE_PREFIX}${item.kind} · email · ${item.vector} · ${item.hook}]\n\nAsunto: ${item.subject}\n\n${item.body}`,
 			at: now,
 			ownerId: executor.crmOwnerId,
 		});

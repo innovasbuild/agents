@@ -2,6 +2,7 @@
 // canal, una reunión. El estado solo avanza; lo escribe el adapter del CRM.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
 import { type OutreachEventInsert, outreachEvent } from "../events";
+import { NOTA_NOTE_PREFIX } from "../note-prefixes";
 import { isRefusal, type Refusal, refuse } from "../result";
 import type { Caller } from "../session";
 import { canAdvance, type OutreachStage } from "../stage";
@@ -70,7 +71,7 @@ export async function recordCrmUpdate(
 	});
 	if (input.note) {
 		await deps.crm.addNote(crmId, {
-			body: `[nota · ${localDate(tenant.config.timezone, now)}]\n\n${input.note}`,
+			body: `${NOTA_NOTE_PREFIX}${localDate(tenant.config.timezone, now)}]\n\n${input.note}`,
 			at: now,
 			ownerId: executor.crmOwnerId,
 		});

@@ -487,9 +487,9 @@ Agregada el 2026-09-20. La escucha de la Etapa 5 responde sola cuando tiene conf
 
 ---
 
-## Fuera de etapas · Sync entrante de HubSpot — `[x]`
+## Fuera de etapas · Sync entrante de HubSpot — `[ ]`
 
-Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué.
+Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué. Implementado y revisado; falta su primera corrida real en producción y correr `npm run db:reset`/`npm run db:types` (necesitan Docker, no disponible en el entorno donde se construyó esto).
 
 **Spec/Plan:** `docs/superpowers/specs/2026-09-27-hubspot-crm-sync-design.md` · `docs/superpowers/plans/2026-09-27-hubspot-crm-sync.md`
 

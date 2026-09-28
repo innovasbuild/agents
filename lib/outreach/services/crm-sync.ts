@@ -4,6 +4,7 @@
 // mano) y hoy nada se entera. Efecto 0: solo lee de HubSpot y escribe acá.
 import type { CrmAdapter } from "../../connectors/crm/adapter";
 import { type OutreachEventInsert, outreachEvent } from "../events";
+import { NOTA_NOTE_PREFIX, OUT_NOTE_PREFIX } from "../note-prefixes";
 import type { ContactPatch, ContactRow, ExecutorRow } from "../store";
 
 export interface CrmSyncDeps {
@@ -84,7 +85,12 @@ async function syncOneContact(
 	// check === null: batchCheckContacts no pudo confirmar ni found ni
 	// not-found para este id (error ambiguo de HubSpot) — se salta entero,
 	// nunca se asume borrado ni se pide notas de un id en duda.
-	if (!check) return;
+	if (!check) {
+		console.warn(
+			`crm-sync: HubSpot no confirmó ni found ni not-found para ${contact.contactKey} (tenant ${tenantId}), se salta`,
+		);
+		return;
+	}
 
 	if (!check.found) {
 		await deps.updateContact(tenantId, contact.id, { crmId: null });
@@ -122,23 +128,38 @@ async function syncOneContact(
 			]);
 			result.ownersActualizados++;
 		} else if (!localUserId) {
-			await deps.insertEvents([
-				outreachEvent({
-					tenant_id: tenantId,
-					actor_user_id: null,
-					contact_key: contact.contactKey,
-					channel: null,
-					type: "crm_sync_pendiente",
-					summary: "owner de HubSpot sin ejecutor local con ese crm_owner_id",
-					payload: { hubspot_owner_id: check.ownerId },
-				}),
-			]);
+			// Solo la primera corrida para este contacto (crm_synced_at null) deja
+			// el evento informativo: sin esto, cada corrida (cada 9-15h, para
+			// siempre) lo volvería a insertar y ensuciaría "necesita atención"
+			// (PROBLEM_TYPES en historial-query.ts) con algo ya avisado.
+			if (contact.crmSyncedAt === null) {
+				await deps.insertEvents([
+					outreachEvent({
+						tenant_id: tenantId,
+						actor_user_id: null,
+						contact_key: contact.contactKey,
+						channel: null,
+						type: "crm_sync_pendiente",
+						summary: "owner de HubSpot sin ejecutor local con ese crm_owner_id",
+						payload: { hubspot_owner_id: check.ownerId },
+					}),
+				]);
+			}
 		}
 	}
 
-	const notes = await deps.crm.listNotesSince(
+	const allNotes = await deps.crm.listNotesSince(
 		contact.crmId as string,
 		contact.crmSyncedAt,
+	);
+	// Filtra las notas que la propia app ya escribió en HubSpot (al mandar un
+	// mail, o desde crm_record en el chat): events es append-only, así que sin
+	// este filtro cada mail enviado se reimportaría para siempre como si fuera
+	// una nota agregada a mano en HubSpot.
+	const notes = allNotes.filter(
+		(note) =>
+			!note.body.startsWith(OUT_NOTE_PREFIX) &&
+			!note.body.startsWith(NOTA_NOTE_PREFIX),
 	);
 	if (notes.length > 0) {
 		await deps.insertEvents(

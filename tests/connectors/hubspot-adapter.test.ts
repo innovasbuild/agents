@@ -342,7 +342,7 @@ describe("createHubSpotAdapter", () => {
 			calls[0].body as { filterGroups: Array<{ filters: unknown[] }> }
 		).filterGroups[0].filters;
 		expect(filters).toContainEqual({
-			propertyName: "hs_timestamp",
+			propertyName: "hs_createdate",
 			operator: "GT",
 			value: "2026-09-19T00:00:00Z",
 		});
@@ -358,7 +358,7 @@ describe("createHubSpotAdapter", () => {
 			}
 		).filterGroups[0].filters;
 		expect(filtersSinMarca).not.toContainEqual(
-			expect.objectContaining({ propertyName: "hs_timestamp" }),
+			expect.objectContaining({ propertyName: "hs_createdate" }),
 		);
 	});
 });
