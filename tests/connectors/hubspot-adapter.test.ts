@@ -238,4 +238,127 @@ describe("createHubSpotAdapter", () => {
 			).addNote("1", { body: "x", at: new Date(), ownerId: null }),
 		).rejects.toThrow("HubSpot respondió 500 en POST /crm/v3/objects/notes");
 	});
+
+	it("batchCheckContacts separa encontrados, borrados e inciertos, y parte en tandas de 100", async () => {
+		const { calls, fetchImpl } = fakeHubSpot([
+			{
+				json: {
+					results: [{ id: "1", properties: { hubspot_owner_id: "9" } }],
+					numErrors: 2,
+					errors: [
+						{
+							status: "error",
+							category: "OBJECT_NOT_FOUND",
+							message: "not found",
+							context: { ids: ["2"] },
+						},
+						{
+							status: "error",
+							category: "RATE_LIMITS",
+							message: "too many requests",
+							context: { ids: ["3"] },
+						},
+					],
+				},
+			},
+		]);
+		const checks = await createHubSpotAdapter(
+			"tok",
+			fetchImpl,
+		).batchCheckContacts(["1", "2", "3"]);
+		// "3" quedó afuera: category RATE_LIMITS no confirma que esté borrado, y
+		// no está en `results`, así que nunca se asume ni found ni not-found.
+		expect(checks).toEqual([
+			{ id: "1", found: true, ownerId: "9" },
+			{ id: "2", found: false, ownerId: null },
+		]);
+		expect(calls[0]).toMatchObject({
+			method: "POST",
+			url: "https://api.hubapi.com/crm/v3/objects/contacts/batch/read",
+			body: {
+				properties: ["hubspot_owner_id"],
+				inputs: [{ id: "1" }, { id: "2" }, { id: "3" }],
+			},
+		});
+
+		// 150 IDs: dos llamadas, la primera con 100, la segunda con 50.
+		const batched = fakeHubSpot([
+			{ json: { results: [], errors: [] } },
+			{ json: { results: [], errors: [] } },
+		]);
+		const ids = Array.from({ length: 150 }, (_, i) => `id-${i}`);
+		await createHubSpotAdapter("tok", batched.fetchImpl).batchCheckContacts(
+			ids,
+		);
+		expect(batched.calls).toHaveLength(2);
+		expect(
+			(batched.calls[0].body as { inputs: unknown[] }).inputs,
+		).toHaveLength(100);
+		expect(
+			(batched.calls[1].body as { inputs: unknown[] }).inputs,
+		).toHaveLength(50);
+	});
+
+	it("batchCheckContacts con lista vacía no llama a HubSpot", async () => {
+		const { calls, fetchImpl } = fakeHubSpot([]);
+		const checks = await createHubSpotAdapter(
+			"tok",
+			fetchImpl,
+		).batchCheckContacts([]);
+		expect(checks).toEqual([]);
+		expect(calls).toHaveLength(0);
+	});
+
+	it("listNotesSince pide notas del contacto, con filtro de fecha solo si hay marca de agua", async () => {
+		const { calls, fetchImpl } = fakeHubSpot([
+			{
+				json: {
+					results: [
+						{
+							id: "n1",
+							properties: {
+								hs_note_body: "Llamó y quedó en pensarlo",
+								hs_timestamp: "2026-09-20T10:00:00Z",
+								hubspot_owner_id: "9",
+							},
+						},
+					],
+				},
+			},
+		]);
+		const notes = await createHubSpotAdapter("tok", fetchImpl).listNotesSince(
+			"101",
+			"2026-09-19T00:00:00Z",
+		);
+		expect(notes).toEqual([
+			{
+				id: "n1",
+				body: "Llamó y quedó en pensarlo",
+				at: new Date("2026-09-20T10:00:00Z"),
+				ownerId: "9",
+			},
+		]);
+		const filters = (
+			calls[0].body as { filterGroups: Array<{ filters: unknown[] }> }
+		).filterGroups[0].filters;
+		expect(filters).toContainEqual({
+			propertyName: "hs_createdate",
+			operator: "GT",
+			value: "2026-09-19T00:00:00Z",
+		});
+
+		const sinMarca = fakeHubSpot([{ json: { results: [] } }]);
+		await createHubSpotAdapter("tok", sinMarca.fetchImpl).listNotesSince(
+			"101",
+			null,
+		);
+		const filtersSinMarca = (
+			sinMarca.calls[0].body as {
+				filterGroups: Array<{ filters: unknown[] }>;
+			}
+		).filterGroups[0].filters;
+		expect(filtersSinMarca).not.toContainEqual(
+			expect.objectContaining({ propertyName: "hs_createdate" }),
+		);
+	});
 });

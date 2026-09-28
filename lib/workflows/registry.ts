@@ -17,6 +17,9 @@ export const NODES: Record<string, NodeInfo> = {
 	// Lee Gmail y registra hechos en la base propia; no gasta ni escribe afuera.
 	"outreach/sweep": { effect: 0, tier: null },
 	"outreach/reconcile": { effect: 0, tier: null },
+	// Lee HubSpot y corrige la base propia (crm_id huérfano, owner, notas);
+	// nunca escribe hacia HubSpot.
+	"outreach/crm-sync": { effect: 0, tier: null },
 	"outreach/replies": { effect: 0, tier: null },
 	// Encola follow-ups redactando con el modelo: gasta.
 	"outreach/followups": { effect: 1, tier: "medio" },

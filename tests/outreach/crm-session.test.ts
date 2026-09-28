@@ -16,6 +16,8 @@ function adapterThatFails(error: Error): CrmAdapter {
 		createTask: reject,
 		listOpenDeals: reject,
 		createDeal: reject,
+		batchCheckContacts: reject,
+		listNotesSince: reject,
 	};
 }
 

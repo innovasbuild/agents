@@ -1,6 +1,11 @@
 // HubSpot por REST con el token del conector del MCP (spec 03 §13.1 S6).
 import { linkedinSlug } from "../../outreach/contact-key";
-import type { CrmAdapter, CrmContactMatch } from "./adapter";
+import type {
+	CrmActivityNote,
+	CrmAdapter,
+	CrmContactCheck,
+	CrmContactMatch,
+} from "./adapter";
 import { HubSpotUnauthorizedError } from "./hubspot";
 
 const API = "https://api.hubapi.com";
@@ -269,6 +274,75 @@ export function createHubSpotAdapter(
 				},
 			})) as { id: string };
 			return { id: created.id };
+		},
+
+		async batchCheckContacts(crmIds) {
+			const checks: CrmContactCheck[] = [];
+			for (let i = 0; i < crmIds.length; i += 100) {
+				const batch = crmIds.slice(i, i + 100);
+				if (batch.length === 0) continue;
+				const data = (await call("/crm/v3/objects/contacts/batch/read", {
+					method: "POST",
+					body: {
+						properties: ["hubspot_owner_id"],
+						inputs: batch.map((id) => ({ id })),
+					},
+				})) as {
+					results?: Array<{
+						id: string;
+						properties: { hubspot_owner_id?: string | null };
+					}>;
+					errors?: Array<{
+						category: string;
+						context?: { ids?: string[] };
+					}>;
+				};
+				for (const row of data.results ?? []) {
+					checks.push({
+						id: row.id,
+						found: true,
+						ownerId: row.properties.hubspot_owner_id ?? null,
+					});
+				}
+				for (const error of data.errors ?? []) {
+					if (error.category !== "OBJECT_NOT_FOUND") continue;
+					for (const id of error.context?.ids ?? []) {
+						checks.push({ id, found: false, ownerId: null });
+					}
+				}
+			}
+			return checks;
+		},
+
+		async listNotesSince(crmId, sinceIso) {
+			const data = await searchAssociated(
+				"notes",
+				crmId,
+				sinceIso
+					? [
+							{
+								propertyName: "hs_createdate",
+								operator: "GT",
+								value: sinceIso,
+							},
+						]
+					: [],
+				["hs_note_body", "hs_timestamp", "hs_createdate", "hubspot_owner_id"],
+				100,
+			);
+			const notes: CrmActivityNote[] = [];
+			for (const row of data.results ?? []) {
+				const body = row.properties.hs_note_body;
+				const timestamp = row.properties.hs_timestamp;
+				if (!body || !timestamp) continue;
+				notes.push({
+					id: row.id,
+					body,
+					at: new Date(timestamp),
+					ownerId: row.properties.hubspot_owner_id ?? null,
+				});
+			}
+			return notes;
 		},
 	};
 }

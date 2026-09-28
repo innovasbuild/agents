@@ -105,6 +105,8 @@ export function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
 		createTask: async () => {},
 		listOpenDeals: async () => [],
 		createDeal: async () => ({ id: "deal-1" }),
+		batchCheckContacts: async () => [],
+		listNotesSince: async () => [],
 		...overrides,
 	};
 }
@@ -137,6 +139,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		source: "csv",
 		icp: null,
 		externalIds: {},
+		crmSyncedAt: null,
 		...overrides,
 	};
 }
@@ -408,6 +411,18 @@ export function createFakeStore(): FakeStore {
 			);
 		},
 
+		async listContactsWithCrmId(tenantId) {
+			return store.contacts.filter(
+				(c) => c.tenantId === tenantId && c.crmId !== null,
+			);
+		},
+
+		async listExecutorsWithCrmOwner(tenantId) {
+			return store.executors.filter(
+				(e) => e.tenantId === tenantId && e.crmOwnerId !== null,
+			);
+		},
+
 		async listContactsWithThread(tenantId, ownerUserId) {
 			return store.contacts.filter(
 				(c) =>
@@ -674,7 +689,9 @@ export function createFakeStore(): FakeStore {
 			// Orden desc por created_at, igual que la store real: acá no hay
 			// columna, así que el orden de inserción (más nuevo al final) se
 			// invierte.
-			return [...store.focuses].filter((f) => f.tenantId === tenantId).reverse();
+			return [...store.focuses]
+				.filter((f) => f.tenantId === tenantId)
+				.reverse();
 		},
 
 		async insertFocus(row) {
