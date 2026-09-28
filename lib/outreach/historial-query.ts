@@ -23,6 +23,8 @@ export const EVENT_LABELS: Record<OutreachEventType, string> = {
 	crm_sync_ok: "Sincronizado al CRM",
 	freno: "Freno",
 	nota: "Nota",
+	crm_id_huerfano: "crm_id ya no existe en HubSpot",
+	crm_owner_actualizado: "Owner actualizado desde HubSpot",
 };
 
 /** Eventos que el operador tiene que poder encontrar de un vistazo. */

@@ -19,6 +19,8 @@ export const OUTREACH_EVENT_TYPES = [
 	"crm_sync_ok",
 	"freno",
 	"nota",
+	"crm_id_huerfano",
+	"crm_owner_actualizado",
 ] as const;
 
 export type OutreachEventType = (typeof OUTREACH_EVENT_TYPES)[number];
