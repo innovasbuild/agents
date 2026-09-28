@@ -27,7 +27,7 @@ export const GMAIL_AUTH_OPTIONS = {
 
 export default defineTool({
 	description:
-		"Envía por Gmail una pieza pendiente de la cola del ejecutor. Pasá queueItemId y exactamente el to, subject y body que devolvió list_queue. La tarjeta de aprobación de esta tool ES la confirmación del usuario: no pidas otra antes, ni por texto ni con ask_question. Si devuelve ok:false, citá el message.",
+		"Envía por Gmail una pieza pendiente de la cola del ejecutor. Pasá queueItemId y exactamente el to, subject y body que devolvió list_queue. La tarjeta de aprobación de esta tool ES la confirmación del usuario: no pidas otra confirmación antes. Si devuelve ok:false, citá el message.",
 	inputSchema: z.object({
 		queueItemId: z.uuid(),
 		to: z.email(),

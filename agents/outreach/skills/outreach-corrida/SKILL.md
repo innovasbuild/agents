@@ -18,7 +18,7 @@ Si no tenés herramientas `brain_*`, avisá que falta el canon del cliente y no 
 3. `research_account` con el dominio de la empresa. Sin hechos con fuente no hay primer mensaje: salteá la cuenta.
 4. `draft_message` con `kind: "msg1"`.
 5. `queue_touch` con la pieza tal cual la devolvió `draft_message`.
-6. `send_email` con el `queueItemId`, to, subject y body de esa misma pieza. Su tarjeta de aprobación es la que el ejecutor usa para aprobar o rechazar: no preguntes antes, ni por texto ni con `ask_question` (instructions.md).
+6. `send_email` con el `queueItemId`, to, subject y body de esa misma pieza. Su tarjeta de aprobación es la que el ejecutor usa para aprobar o rechazar: no preguntes antes (instructions.md).
 
 ## Mostrar una cola con varias piezas ya cargadas
 

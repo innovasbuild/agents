@@ -344,7 +344,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
 
-	// Aprobaciones de tools y preguntas del agente (ask_question) llegan igual;
+	// Aprobaciones de tools y preguntas de workflow tools (ctx.ask) llegan igual;
 	// cada una se responde con el id de sus propias opciones.
 	const pendingRequests = pendingInputRequests(agent.data.messages);
 
