@@ -105,7 +105,23 @@ La etapa se cierra solo si pasa todo esto:
 
 **Prueba:** una tool descartable que pregunta algo con dos opciones y devuelve lo que se eligió. Se corre en `eve dev`, primero respondiendo con una opción y después con texto libre. Se anota la forma de `{ status, optionId, text }` que llega y qué pasa en una sesión que no puede pedir input.
 
-**Resultado:** se completa al correr el spike (anda / no anda, con qué forma y qué restricciones). Esa respuesta es la entrada de la Etapa 15.
+**Resultado (2026-09-28, eve 0.67.2): no anda en `agents/outreach/`.**
+
+- Compila y tipa bien. `defineWorkflowTool` con `"use workflow"` y `ctx.ask({ prompt, options, allowFreeform })` pasa `tsc` (`allowFreeform` existe), y el modelo ve la tool y la llama.
+- Falla al ejecutarse, siempre con el mismo error: `Tool "spike_ask" is not registered as a workflow in this deployment (workflow//./agents/outreach/tools/spike_ask//execute)`. Pasa en `next dev` (con `withEve`) y en el host propio de eve (`eve eval`), así que no depende de Next.
+- **Causa:** los ids no coinciden. El compilador registra el cuerpo del workflow como `workflow//./tools/spike_ask//execute`, relativo a la carpeta del agente (se ve en `.eve/compile/authored-modules/*.mjs`). El manifest (`compiled-agent-manifest.json`) lo busca como `workflow//./agents/outreach/tools/spike_ask//execute`, relativo a la raíz de la app. Es la misma familia de bug que la 0.64.1 arregló solo para las tools en background de workspace agents ("use app-relative workflow IDs").
+- **No se llegó a observar** la forma de `{ status, optionId, text }`, porque la tool nunca llega a `ctx.ask`. Según la documentación de 0.67.2 (`tools/workflows.mdx`, `tools/human-in-the-loop.md`) debería ser `{ status: "answered", optionId?, text? }`, `{ status: "dismissed" }` o `{ status: "unavailable" }`.
+
+**Para la Etapa 15:** con eve 0.67.2 y el agente en `agents/outreach/`, la propuesta comercial **no** puede usar `defineWorkflowTool`. Hay tres caminos: (a) diseñarla sin workflow tool, con una tool común que devuelve y deja que el modelo pregunte por texto; (b) esperar una versión de eve que corrija el id y volver a correr este spike (tarda minutos: una tool y una eval descartables); (c) reportar el bug a eve con esta evidencia. La tarjeta "Pregunta del agente" del chat se conservó (R2) para cuando esto ande.
+
+## 7.1 Rulings del plan
+
+Decididos al escribir el plan (`docs/superpowers/plans/2026-09-28-etapa-14-subida-eve.md`) y ejecutados así:
+
+- **R1 · §4.2 "deja de reconocer la forma vieja".** No se exige. La regex de `channel-context.ts` no se ancla al inicio del path, porque no está confirmado qué prefijo trae `request.url` detrás de la reescritura de Vercel. Sin ancla, la forma vieja sigue matcheando como substring, pero eve 0.67 ya no enruta esa URL (en local devuelve 404).
+- **R2 · §4.4 "pierden la rama de preguntas del agente".** No se saca. `pendingInputRequests` y la tarjeta "Pregunta del agente" manejan `kind: "question"` en general, que es lo que produce `ctx.ask()`. Solo se sacaron las menciones a `ask_question`.
+- **R3 · §4.6 bloqueo de botones.** El chat ya calculaba `canAnswer = !isBusy && !isResuming`. Se corrigieron los comentarios y se probó en navegador (local): los botones se deshabilitan al hacer click y la tarjeta se va cuando confirma el servidor.
+- **R4 · §4.3 prueba de resolución durable.** Es una eval (`brain-tools.eval.ts`) contra el agente compilado, porque en vitest no corre el compilador de eve. En rojo mostró `callback "inputSchema" has a non-serializable capture` y en verde pasó 4/4.
 
 ## 8. Terminado cuando
 
