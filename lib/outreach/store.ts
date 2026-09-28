@@ -104,6 +104,10 @@ export interface ContactRow {
 	/** IDs del proveedor de origen (Apollo, etc.), `{}` si no vino de uno. Lo
 	 * usa reveal-email para saber a quién pedirle el email. */
 	externalIds: Record<string, unknown>;
+	/** Última vez que el sync entrante de HubSpot revisó este contacto; null =
+	 * nunca. Marca de agua para no repetir notas ya vistas (docs/superpowers/
+	 * specs/2026-09-27-hubspot-crm-sync-design.md D7). */
+	crmSyncedAt: string | null;
 }
 
 export type NewContact = Pick<
@@ -139,6 +143,7 @@ export type ContactPatch = Partial<
 		| "nextStepAt"
 		| "repliedAt"
 		| "gmailThreadId"
+		| "crmSyncedAt"
 	>
 >;
 
@@ -311,6 +316,12 @@ export interface OutreachStore {
 	listActiveTenants(): Promise<{ id: string; slug: string }[]>;
 	/** Ejecutores del tenant con Gmail autorizado. */
 	listExecutorsWithGmailRead(tenantId: string): Promise<ExecutorRow[]>;
+	/** Contactos del tenant con crm_id cargado — universo del sync entrante de
+	 * HubSpot. */
+	listContactsWithCrmId(tenantId: string): Promise<ContactRow[]>;
+	/** Ejecutores del tenant con owner de HubSpot cargado — para mapear
+	 * hubspot_owner_id a un usuario local. */
+	listExecutorsWithCrmOwner(tenantId: string): Promise<ExecutorRow[]>;
 	/** Contactos del tenant con hilo de Gmail asignado a un ejecutor específico. */
 	listContactsWithThread(
 		tenantId: string,
@@ -426,7 +437,7 @@ export interface FocusRow {
 }
 
 const CONTACT_COLUMNS =
-	"id, tenant_id, contact_key, account_id, name, company, title, email, domain, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids";
+	"id, tenant_id, contact_key, account_id, name, company, title, email, domain, linkedin_slug, crm_id, owner_user_id, segment, vector, hook, idioma, stage, touches, first_touch_at, last_touch_at, next_step_at, replied_at, gmail_thread_id, source, icp, external_ids, crm_synced_at";
 const QUEUE_COLUMNS =
 	"id, tenant_id, contact_id, contact_key, executor_user_id, kind, to_email, subject, body, hook, vector, idioma, ancla, draft_original, gate_result, status, expires_at, reply_to_message_id, gmail_thread_id, gmail_message_id, approved_at, sent_at, error, eve_session_id, approval_call_id, created_at";
 const FOCUS_COLUMNS =
@@ -468,6 +479,7 @@ const toContact = (r: Row): ContactRow => ({
 			? (r.icp as ContactIcp)
 			: null,
 	externalIds: (r.external_ids as Record<string, unknown> | null) ?? {},
+	crmSyncedAt: (r.crm_synced_at as string | null) ?? null,
 });
 
 const toQueueItem = (r: Row): QueueItemRow => ({
@@ -556,6 +568,7 @@ const CONTACT_PATCH_COLUMNS: Record<keyof ContactPatch, string> = {
 	nextStepAt: "next_step_at",
 	repliedAt: "replied_at",
 	gmailThreadId: "gmail_thread_id",
+	crmSyncedAt: "crm_synced_at",
 };
 
 const QUEUE_PATCH_COLUMNS: Record<keyof QueueItemPatch, string> = {
@@ -964,6 +977,41 @@ export function createSupabaseOutreachStore(
 				.eq("tenant_id", tenantId)
 				.not("gmail_read_authorized_at", "is", null);
 			if (error) fail("listar ejecutores con Gmail", error);
+			return (data ?? []).map((r) => ({
+				tenantId: r.tenant_id,
+				userId: r.user_id,
+				slug: r.slug ?? null,
+				crmOwnerId: r.crm_owner_id ?? null,
+				dailyQuota: r.daily_quota,
+				gmailAuthorizedAt: r.gmail_authorized_at ?? null,
+				gmailReadAuthorizedAt: r.gmail_read_authorized_at ?? null,
+				displayName: r.display_name ?? null,
+				title: r.title ?? null,
+				linkedinUrl: r.linkedin_url ?? null,
+			}));
+		},
+
+		async listContactsWithCrmId(tenantId) {
+			const { data, error } = await client
+				.from("contacts")
+				.select(CONTACT_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.not("crm_id", "is", null)
+				// Orden estable: mismo motivo que listContactsWithThread.
+				.order("contact_key", { ascending: true });
+			if (error) fail("listar contactos con crm_id", error);
+			return (data ?? []).map(toContact);
+		},
+
+		async listExecutorsWithCrmOwner(tenantId) {
+			const { data, error } = await client
+				.from("executors")
+				.select(
+					"tenant_id, user_id, slug, crm_owner_id, daily_quota, gmail_authorized_at, gmail_read_authorized_at, display_name, title, linkedin_url",
+				)
+				.eq("tenant_id", tenantId)
+				.not("crm_owner_id", "is", null);
+			if (error) fail("listar ejecutores con owner de CRM", error);
 			return (data ?? []).map((r) => ({
 				tenantId: r.tenant_id,
 				userId: r.user_id,

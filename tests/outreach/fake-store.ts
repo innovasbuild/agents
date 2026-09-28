@@ -139,6 +139,7 @@ export function contactRow(overrides: Partial<ContactRow> = {}): ContactRow {
 		source: "csv",
 		icp: null,
 		externalIds: {},
+		crmSyncedAt: null,
 		...overrides,
 	};
 }
@@ -407,6 +408,18 @@ export function createFakeStore(): FakeStore {
 		async listExecutorsWithGmailRead(tenantId) {
 			return store.executors.filter(
 				(e) => e.tenantId === tenantId && e.gmailReadAuthorizedAt !== null,
+			);
+		},
+
+		async listContactsWithCrmId(tenantId) {
+			return store.contacts.filter(
+				(c) => c.tenantId === tenantId && c.crmId !== null,
+			);
+		},
+
+		async listExecutorsWithCrmOwner(tenantId) {
+			return store.executors.filter(
+				(e) => e.tenantId === tenantId && e.crmOwnerId !== null,
 			);
 		},
 

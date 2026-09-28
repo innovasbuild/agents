@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import { outreachEvent } from "@/lib/outreach/events";
 import { isNoResponse, NO_RESPONSE_AFTER_DAYS } from "@/lib/outreach/stage";
 import type { FakeStore } from "./fake-store";
-import { createFakeStore, OTHER_USER, TENANT, USER } from "./fake-store";
+import {
+	contactRow,
+	createFakeStore,
+	OTHER_USER,
+	TENANT,
+	USER,
+} from "./fake-store";
 
 /** Un contacto vencido real siempre tiene ejecutor con lectura de Gmail: sin
  * grant de lectura nadie está escuchando sus respuestas, y ahí el carril de
@@ -629,5 +635,54 @@ describe("lecturas de los schedules en el fake store", () => {
 		);
 
 		expect(rows.map((r) => r.contactKey)).toEqual(["em:sin_pieza@test.com"]);
+	});
+
+	describe("listContactsWithCrmId", () => {
+		it("solo trae contactos con crm_id cargado, de ese tenant", async () => {
+			const store = createFakeStore();
+			store.contacts.push(
+				contactRow({ id: "c1", crmId: "101" }),
+				contactRow({ id: "c2", crmId: null }),
+				contactRow({ id: "c3", tenantId: "otro-tenant", crmId: "202" }),
+			);
+			const result = await store.listContactsWithCrmId(TENANT);
+			expect(result.map((c) => c.id)).toEqual(["c1"]);
+		});
+	});
+
+	describe("listExecutorsWithCrmOwner", () => {
+		it("solo trae ejecutores con crm_owner_id cargado, de ese tenant", async () => {
+			const store = createFakeStore();
+			store.executors.push(
+				{
+					tenantId: TENANT,
+					userId: "user-con-owner",
+					slug: "marcos",
+					crmOwnerId: "92296386",
+					dailyQuota: 30,
+					gmailAuthorizedAt: null,
+					gmailReadAuthorizedAt: null,
+					displayName: null,
+					title: null,
+					linkedinUrl: null,
+				},
+				{
+					tenantId: "otro-tenant",
+					userId: "user-otro-tenant",
+					slug: "x",
+					crmOwnerId: "1",
+					dailyQuota: 30,
+					gmailAuthorizedAt: null,
+					gmailReadAuthorizedAt: null,
+					displayName: null,
+					title: null,
+					linkedinUrl: null,
+				},
+			);
+			const result = await store.listExecutorsWithCrmOwner(TENANT);
+			// El ejecutor "ana" del store base tiene crmOwnerId: null (fake-store.ts):
+			// no debería aparecer.
+			expect(result.map((e) => e.userId)).toEqual(["user-con-owner"]);
+		});
 	});
 });
