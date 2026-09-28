@@ -21,9 +21,15 @@ function buildBrainReadTools(
 	// función guardada en una variable local (el `provider` que había acá
 	// antes) es un valor no serializable y hace que eve descarte todo el
 	// resolver en session.started sin avisar más que por log.
+	//
+	// Por lo mismo, los schemas se arman inline a partir de un dato JSON: eve
+	// (0.59+) convierte la expresión de inputSchema en una fábrica durable y
+	// captura solo lo que la expresión usa. Un schema guardado en una variable
+	// (contract.search.input) es una captura no serializable.
+	const categories = binding.config.categories;
 	const brain_search = defineTool({
 		description: `${contract.search.description} Usalo antes de investigar o redactar.`,
-		inputSchema: contract.search.input,
+		inputSchema: brainContract(categories).search.input,
 		execute: async (input) => {
 			try {
 				const provider = (deps.provider ?? getBrainProvider)(binding);
@@ -36,7 +42,7 @@ function buildBrainReadTools(
 
 	const brain_read = defineTool({
 		description: contract.read.description,
-		inputSchema: contract.read.input,
+		inputSchema: brainContract(categories).read.input,
 		execute: async ({ slug }) => {
 			try {
 				const provider = (deps.provider ?? getBrainProvider)(binding);
@@ -55,9 +61,11 @@ function buildBrainUpsertTool(
 	contract: ReturnType<typeof brainContract>,
 	deps: { provider?: (binding: BrainBinding) => BrainProvider },
 ) {
+	// Schema inline por la misma razón que en buildBrainReadTools.
+	const categories = binding.config.categories;
 	return defineTool({
 		description: `${contract.upsert.description} Siempre la aprueba un administrador.`,
-		inputSchema: contract.upsert.input,
+		inputSchema: brainContract(categories).upsert.input,
 		approval: {
 			request: always(),
 			response: ({ responder }) =>
