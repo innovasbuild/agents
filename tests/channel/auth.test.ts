@@ -7,18 +7,18 @@ const BASE = process.env.SPIKE_BASE_URL ?? "http://localhost:3000";
 // checkout limpio, sin necesitar un server levantado.
 describe.skipIf(!process.env.SPIKE_BASE_URL)("canal eve", () => {
 	it("rechaza a un caller sin sesión", async () => {
-		const res = await fetch(`${BASE}/eve/agents/outreach/eve/v1/info`);
+		const res = await fetch(`${BASE}/eve/outreach/v1/info`);
 		expect([401, 403]).toContain(res.status);
 	});
 
 	it("deja pasar el health, que es público por diseño", async () => {
-		const res = await fetch(`${BASE}/eve/agents/outreach/eve/v1/health`);
+		const res = await fetch(`${BASE}/eve/outreach/v1/health`);
 		expect(res.status).toBe(200);
 	});
 
 	it("exige sesión para continuar una sesión existente, no solo para crearla", async () => {
 		const response = await fetch(
-			`${process.env.SPIKE_BASE_URL}/eve/agents/outreach/eve/v1/session/wrun_inexistente`,
+			`${process.env.SPIKE_BASE_URL}/eve/outreach/v1/session/wrun_inexistente`,
 			{ method: "POST", body: JSON.stringify({ message: "hola" }) },
 		);
 

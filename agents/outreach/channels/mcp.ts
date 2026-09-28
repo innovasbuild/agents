@@ -11,11 +11,10 @@ import { publicSettings } from "../../../lib/brain/mcp-server/production";
 // "undefined/eve/...".
 const { publicUrl, issuer } = publicSettings();
 // El agente "outreach" está nombrado en next.config.ts, así que eve lo monta
-// bajo /eve/agents/outreach/eve/v1/* (no en la ruta por default /eve/v1/*).
-// Confirmado en Step 6 con curl contra el dev server y contra
-// node_modules/eve/dist/src/internal/vercel/eve-service-contribution.js: la
-// reescritura de Vercel solo reenvía ese prefijo, nada de /.well-known/.
-const resource = `${publicUrl}/eve/agents/outreach/eve/v1/mcp`;
+// bajo /eve/outreach/v1/* (desde eve 0.58; antes era /eve/agents/outreach/eve/v1/*).
+// La reescritura de Vercel solo reenvía ese prefijo, nada de /.well-known/:
+// la metadata OAuth la sirve Next.js a mano (app/.well-known/...).
+const resource = `${publicUrl}/eve/outreach/v1/mcp`;
 
 export default mcpChannel({
 	auth: oauthResource(verifyMcpChannelToken, {
