@@ -80,7 +80,7 @@ Relevamiento cruzado contra `origin/main` al 2026-09-27. Lo que no aparece en es
 
 La etapa se cierra solo si pasa todo esto:
 
-1. **Chat.** Un hilo nuevo lista la cola y usa `brain_search`. Una tarjeta de aprobación se aprueba y otra se rechaza con motivo, sin botones colgados. Un hilo **anterior al deploy** recibe un mensaje y sigue andando (importación de sesión de la 0.57).
+1. **Chat.** Un hilo nuevo lista la cola y usa `brain_search`. Una tarjeta de aprobación se aprueba y otra se rechaza con motivo, sin botones colgados. Un hilo **anterior al deploy** recibe un mensaje y sigue andando (importación de sesión de la 0.57). Si hay un hilo anterior al deploy con una tarjeta de aprobación sin responder, se responde: la tarjeta tiene que resolverse o mostrar la interrupción de la importación. Si queda trabada, la pieza sigue `pending` (no se pierde nada) y el aviso del chat ya indica abrir un hilo nuevo, así que se avisa a quien tenía ese hilo y no se hace rollback.
 2. **MCP.** `outreach-innovas` reconfigurado con la URL nueva. Se repiten M1 (`agent_start` → `completed`, con `brain_search`, `brain_read` y `brain_upsert` en la lista de tools), M2 (sin `?tenant` → 403 con mensaje claro) y M5 (`input_required` → `agent_update` cancelando → `completed`, sin escribir nada). La URL vieja devuelve 404.
 3. **Schedules y Etapa 12.** El próximo tick de `dispatch`, `morning-sweep` y `followups` aparece en `runs` sin error, y una corrida de workflow cuenta lo que entró contra lo que salió.
 4. **Logs.** En la ventana de verificación hay cero `Dynamic tool resolver` con `failed` y cero errores `[eve:` que no existieran antes del deploy.
