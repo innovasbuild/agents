@@ -17,11 +17,10 @@ export default defineEval({
 		await enableEvalGmailBinding();
 		try {
 			const pieceId = await seedPendingPiece("em:laura@acme-eval.test");
-			await t.send("Mostrame la cola y mandá la pieza A.");
+			const turn = await t.send("Mostrame la cola y mandá la pieza A.");
 			t.calledTool("list_queue");
-			t.notCalledTool("ask_question");
-			t.requireInputRequest({ toolName: "send_email" });
-			const approved = await t.respondAll("approve");
+			turn.session.requireInputRequest({ toolName: "send_email" });
+			const approved = await turn.session.respondAll("approve");
 			t.log(`turno después de aprobar: ${approved.status}`);
 			approved.expectOk();
 			approved.event("authorization.required");

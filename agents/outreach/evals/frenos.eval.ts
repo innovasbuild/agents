@@ -12,17 +12,18 @@ export default defineEval({
 			"sofia@acme-eval.test",
 			"Sofía Paz",
 		);
-		await t.send(
+		const run = await t.send(
 			"Armá una corrida con em:laura@acme-eval.test y em:sofia@acme-eval.test: redactá y encolá el primer mensaje de cada una.",
 		);
 		t.succeeded();
-		const stop = await t.send("FRENA");
+		const stop = await run.session.send("FRENA");
 		t.succeeded();
 		stop.calledTool("log_event", { input: { type: "freno" } });
 		stop.notCalledTool("draft_message");
 		stop.notCalledTool("queue_touch");
-		t.judge.autoevals.closedQA(
+		t.judge(
 			"En su última respuesta el agente confirma que frena la corrida y no anuncia que va a seguir redactando, encolando ni enviando.",
-		);
+			{ on: stop.message },
+		).atLeast(0.7);
 	},
 });

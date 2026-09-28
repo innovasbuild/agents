@@ -344,7 +344,7 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
 
-	// Aprobaciones de tools y preguntas del agente (ask_question) llegan igual;
+	// Aprobaciones de tools y preguntas de workflow tools (ctx.ask) llegan igual;
 	// cada una se responde con el id de sus propias opciones.
 	const pendingRequests = pendingInputRequests(agent.data.messages);
 
@@ -385,15 +385,15 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	// Con una tarjeta pendiente el input principal se bloquea: eve resuelve el
 	// texto contra las opciones (id, etiqueta o número, channel/resolve-text.js),
 	// así que escribir "1" aprobaría un send_email sin pasar por la tarjeta.
-	// Tras un error también: eve oculta la tarjeta antes de que su respuesta
-	// llegue al servidor y no la restaura si falla, así que el pedido puede
-	// seguir abierto sin tarjeta (client/eve-agent-store.js).
+	// Tras un error también, por las dudas de que quede un pedido abierto.
 	const isInputBlocked =
 		isResuming ||
 		isAuthorizing ||
 		pendingRequests.length > 0 ||
 		agent.status === "error";
-	// eve rechaza respond() con un turno en vuelo o mientras reanuda.
+	// Desde eve 0.67 la tarjeta sigue en pantalla hasta que el servidor confirma
+	// la respuesta: los botones se apagan mientras hay un turno en vuelo o
+	// reanudando, para no mandarla dos veces.
 	const canAnswer = !isBusy && !isResuming;
 
 	return (

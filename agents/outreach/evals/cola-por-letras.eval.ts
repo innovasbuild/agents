@@ -25,14 +25,14 @@ export default defineEval({
 		const ids: string[] = [];
 		for (const key of keys) ids.push(await seedPendingPiece(key));
 
-		await t.send("Mostrame la cola por letras.");
+		const listed = await t.send("Mostrame la cola por letras.");
 		t.calledTool("list_queue");
-		await t.send(
+		await listed.session.send(
 			"A y C mandalas, B cambiale el asunto a 'Otra idea para Acme', D descartala porque no es ICP.",
 		);
 		t.calledTool("update_queue_item");
 		t.calledTool("reject_queue_item");
-		await t.respondAll("cancel");
+		await listed.session.respondAll("cancel");
 		// calledTool matchea status "completed" por default; cancelada, la llamada queda "rejected".
 		t.calledTool("send_email", { status: "rejected", count: 2 });
 

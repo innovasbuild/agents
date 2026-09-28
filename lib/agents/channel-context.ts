@@ -9,9 +9,11 @@ export interface ChannelContext {
 	role: string;
 }
 
-// Las rutas de sesión de eve traen el id en el path, tanto en
-// /eve/v1/session/:id como en /eve/agents/<agente>/eve/v1/session/:id.
-const SESSION_PATH = /\/eve\/v1\/session\/([^/?]+)/;
+// Las rutas de sesión de eve traen el id en el path: /eve/v1/session/:id para
+// el agente raíz y /eve/<agente>/v1/session/:id para uno con nombre (eve 0.58+).
+// Sin ancla al inicio: no está confirmado qué prefijo trae request.url detrás
+// de la reescritura de Vercel.
+const SESSION_PATH = /\/eve\/(?:[^/]+\/)?v1\/session\/([^/?]+)/;
 
 // El hook `session.started` (bind-session.ts) recién ata `eve_session_id` a
 // la conversación DESPUÉS de que eve ya le devolvió el sessionId al cliente

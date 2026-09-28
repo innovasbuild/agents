@@ -15,7 +15,7 @@ const CORS = {
 
 export async function GET(): Promise<Response> {
 	const { publicUrl, issuer } = publicSettings();
-	const resource = `${publicUrl}/eve/agents/outreach/eve/v1/mcp`;
+	const resource = `${publicUrl}/eve/outreach/v1/mcp`;
 	return Response.json(
 		{
 			resource,

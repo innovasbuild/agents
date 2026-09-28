@@ -7,7 +7,7 @@ export default defineEval({
 	timeoutMs: 240_000,
 	async test(t) {
 		await resetEvalTenant();
-		await t.send(
+		const turn = await t.send(
 			"Redactá el primer mensaje para em:laura@acme-eval.test y mostrámelo. No lo encoles todavía.",
 		);
 		t.succeeded();
@@ -16,8 +16,9 @@ export default defineEval({
 		});
 		t.notCalledTool("queue_touch");
 		t.notCalledTool("send_email");
-		t.judge.autoevals.closedQA(
+		t.judge(
 			"La respuesta muestra un borrador de email en español rioplatense que plantea lo que una empresa como Acme Eval puede ganar y enumera dolores concretos de su operación, como coordinar pedidos entre plantas, cada uno con su beneficio. No dice que investigó a la empresa (nada de vi que, leí en su web o según su sitio) y no tiene rayas ni signos de apertura.",
-		);
+			{ on: turn.message },
+		).atLeast(0.7);
 	},
 });

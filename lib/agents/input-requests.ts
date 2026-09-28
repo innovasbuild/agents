@@ -15,7 +15,7 @@ export interface PendingInputRequest {
 }
 
 // Solo se traducen las etiquetas de eve: los ids son los que eve espera de
-// vuelta. Las de ask_question las escribe el modelo y quedan como vienen.
+// vuelta. Las de las preguntas (ctx.ask) las escribe la tool y quedan como vienen.
 const FRAMEWORK_LABELS: Partial<
 	Record<EveMessageInputRequest["kind"], Record<string, string>>
 > = {
@@ -27,10 +27,9 @@ const FRAMEWORK_LABELS: Partial<
 };
 
 /**
- * Pedidos de input pendientes (aprobaciones de tools, ask_question, límites
- * de sesión). La respuesta tiene que usar un `id` de `options` o `text`: eve
- * no valida la respuesta de una pregunta contra sus opciones y se la pasa tal
- * cual al modelo (harness/hitl/question-input-requests.js).
+ * Pedidos de input pendientes (aprobaciones de tools, preguntas de workflow
+ * tools con ctx.ask, límites de sesión). La respuesta tiene que usar un `id`
+ * de `options` o `text`.
  */
 export function pendingInputRequests(
 	messages: readonly EveMessage[],

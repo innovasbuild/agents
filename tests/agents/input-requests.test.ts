@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { pendingInputRequests } from "@/lib/agents/input-requests";
 
 // Forma real de los pedidos de eve 0.54.2: approval-input-requests.js arma
-// las opciones approve/cancel; ask_question trae las que eligió el modelo.
+// las opciones approve/cancel; una pregunta (ctx.ask) trae las que definió la tool.
 function toolPart(
 	toolName: string,
 	input: unknown,
@@ -24,13 +24,13 @@ function messages(...parts: unknown[]): EveMessage[] {
 }
 
 describe("pendingInputRequests", () => {
-	it("responde un ask_question con los ids de sus opciones, no con approve", () => {
+	it("responde una pregunta con los ids de sus opciones, no con approve", () => {
 		// Caso de producción del 2026-09-15: el chat mandaba optionId
 		// "approve" a esta pregunta y eve se lo pasaba tal cual al modelo.
 		const [request] = pendingInputRequests(
 			messages(
 				toolPart(
-					"ask_question",
+					"pedir_dato",
 					{},
 					{
 						kind: "question",
@@ -61,7 +61,7 @@ describe("pendingInputRequests", () => {
 		const [request] = pendingInputRequests(
 			messages(
 				toolPart(
-					"ask_question",
+					"pedir_dato",
 					{},
 					{
 						kind: "question",
@@ -78,12 +78,12 @@ describe("pendingInputRequests", () => {
 	});
 
 	it("habilita texto libre en una pregunta sin opciones aunque no lo pida", () => {
-		// ask_question acepta solo prompt: sin esto la tarjeta no tendría
+		// una pregunta puede traer solo prompt: sin esto la tarjeta no tendría
 		// ninguna forma de responder.
 		const [request] = pendingInputRequests(
 			messages(
 				toolPart(
-					"ask_question",
+					"pedir_dato",
 					{},
 					{
 						kind: "question",
@@ -180,7 +180,7 @@ describe("pendingInputRequests", () => {
 		const [request] = pendingInputRequests(
 			messages(
 				toolPart(
-					"ask_question",
+					"pedir_dato",
 					{},
 					{
 						kind: "question",
@@ -203,7 +203,7 @@ describe("pendingInputRequests", () => {
 
 	it("junta los pedidos de varios mensajes y partes en orden", () => {
 		const question = toolPart(
-			"ask_question",
+			"pedir_dato",
 			{},
 			{ kind: "question", requestId: "q4", prompt: "¿A quién?" },
 		);

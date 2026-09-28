@@ -132,10 +132,19 @@ beforeEach(() => {
 });
 
 describe("resolveChannelContext", () => {
+	it("toma el id de sesión también de la ruta raíz /eve/v1", async () => {
+		const context = await resolveChannelContext(
+			createRequest("https://app.test/eve/v1/session/wrun_A"),
+			CONVERSATION.user_id,
+		);
+
+		expect(context?.conversationId).toBe(CONVERSATION.id);
+	});
+
 	it("resuelve el tenant al crear una sesión", async () => {
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session",
+				"https://app.test/eve/outreach/v1/session",
 				CONVERSATION.id,
 			),
 			CONVERSATION.user_id,
@@ -152,7 +161,7 @@ describe("resolveChannelContext", () => {
 	it("rechaza crear sobre una conversación ajena", async () => {
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session",
+				"https://app.test/eve/outreach/v1/session",
 				CONVERSATION.id,
 			),
 			"99999999-9999-9999-9999-999999999999",
@@ -163,9 +172,7 @@ describe("resolveChannelContext", () => {
 
 	it("rechaza continuar la sesión de otro usuario", async () => {
 		const context = await resolveChannelContext(
-			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
-			),
+			createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 			"99999999-9999-9999-9999-999999999999",
 		);
 
@@ -177,7 +184,7 @@ describe("resolveChannelContext", () => {
 
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+				"https://app.test/eve/outreach/v1/session/wrun_A",
 				"cccccccc-0000-0000-0000-000000000009",
 			),
 			CONVERSATION.user_id,
@@ -198,7 +205,7 @@ describe("resolveChannelContext", () => {
 
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+				"https://app.test/eve/outreach/v1/session/wrun_A",
 				ATTACKER_CONVERSATION.id,
 			),
 			ATTACKER_CONVERSATION.user_id,
@@ -216,7 +223,7 @@ describe("resolveChannelContext", () => {
 
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session",
+				"https://app.test/eve/outreach/v1/session",
 				CONVERSATION.id,
 			),
 			CONVERSATION.user_id,
@@ -230,7 +237,7 @@ describe("resolveChannelContext", () => {
 
 		const context = await resolveChannelContext(
 			createRequest(
-				"https://app.test/eve/agents/outreach/eve/v1/session",
+				"https://app.test/eve/outreach/v1/session",
 				CONVERSATION.id,
 			),
 			CONVERSATION.user_id,
@@ -241,7 +248,7 @@ describe("resolveChannelContext", () => {
 
 	it("rechaza cuando no hay sesión ni header", async () => {
 		const context = await resolveChannelContext(
-			createRequest("https://app.test/eve/agents/outreach/eve/v1/session"),
+			createRequest("https://app.test/eve/outreach/v1/session"),
 			CONVERSATION.user_id,
 		);
 
@@ -257,9 +264,7 @@ describe("resolveChannelContext", () => {
 		try {
 			rows.conversationBySession = null;
 			const pending = resolveChannelContext(
-				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
-				),
+				createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 				CONVERSATION.user_id,
 			);
 
@@ -293,7 +298,7 @@ describe("resolveChannelContext", () => {
 
 			const pending = resolveChannelContext(
 				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					"https://app.test/eve/outreach/v1/session/wrun_A",
 					CONVERSATION.id,
 				),
 				CONVERSATION.user_id,
@@ -317,7 +322,7 @@ describe("resolveChannelContext", () => {
 
 			const pending = resolveChannelContext(
 				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					"https://app.test/eve/outreach/v1/session/wrun_A",
 					CONVERSATION.id,
 				),
 				CONVERSATION.user_id,
@@ -355,7 +360,7 @@ describe("resolveChannelContext", () => {
 
 			const pending = resolveChannelContext(
 				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					"https://app.test/eve/outreach/v1/session/wrun_A",
 					CONVERSATION.id,
 				),
 				CONVERSATION.user_id,
@@ -388,7 +393,7 @@ describe("resolveChannelContext", () => {
 
 			const pending = resolveChannelContext(
 				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
+					"https://app.test/eve/outreach/v1/session/wrun_A",
 					CONVERSATION.id,
 				),
 				CONVERSATION.user_id,
@@ -414,9 +419,7 @@ describe("resolveChannelContext", () => {
 		try {
 			rows.conversationBySession = null;
 			const pending = resolveChannelContext(
-				createRequest(
-					"https://app.test/eve/agents/outreach/eve/v1/session/wrun_A",
-				),
+				createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 				CONVERSATION.user_id,
 			);
 
