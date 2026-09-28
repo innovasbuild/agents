@@ -105,6 +105,8 @@ export function fakeCrm(overrides: Partial<CrmAdapter> = {}): CrmAdapter {
 		createTask: async () => {},
 		listOpenDeals: async () => [],
 		createDeal: async () => ({ id: "deal-1" }),
+		batchCheckContacts: async () => [],
+		listNotesSince: async () => [],
 		...overrides,
 	};
 }
