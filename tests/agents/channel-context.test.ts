@@ -172,9 +172,7 @@ describe("resolveChannelContext", () => {
 
 	it("rechaza continuar la sesión de otro usuario", async () => {
 		const context = await resolveChannelContext(
-			createRequest(
-				"https://app.test/eve/outreach/v1/session/wrun_A",
-			),
+			createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 			"99999999-9999-9999-9999-999999999999",
 		);
 
@@ -266,9 +264,7 @@ describe("resolveChannelContext", () => {
 		try {
 			rows.conversationBySession = null;
 			const pending = resolveChannelContext(
-				createRequest(
-					"https://app.test/eve/outreach/v1/session/wrun_A",
-				),
+				createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 				CONVERSATION.user_id,
 			);
 
@@ -423,9 +419,7 @@ describe("resolveChannelContext", () => {
 		try {
 			rows.conversationBySession = null;
 			const pending = resolveChannelContext(
-				createRequest(
-					"https://app.test/eve/outreach/v1/session/wrun_A",
-				),
+				createRequest("https://app.test/eve/outreach/v1/session/wrun_A"),
 				CONVERSATION.user_id,
 			);
 
