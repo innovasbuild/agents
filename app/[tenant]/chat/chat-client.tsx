@@ -33,6 +33,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
 	type PendingInputRequest,
 	pendingInputRequests,
@@ -610,10 +611,23 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 					>
 						<PaperclipIcon />
 					</Button>
-					<Input
+					<Textarea
 						aria-label="Mensaje para el agente"
+						className="max-h-60 min-h-9 resize-none py-1.5"
 						disabled={isInputBlocked}
 						onChange={(event) => setText(event.target.value)}
+						onKeyDown={(event) => {
+							// Enter envía; Shift+Enter deja el salto de línea.
+							if (
+								event.key !== "Enter" ||
+								event.shiftKey ||
+								event.nativeEvent.isComposing
+							)
+								return;
+							event.preventDefault();
+							event.currentTarget.form?.requestSubmit();
+						}}
+						rows={1}
 						placeholder={
 							pendingRequests.length > 0
 								? "Respondé la tarjeta pendiente para seguir"
