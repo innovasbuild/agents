@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GmailMessage } from "@/lib/gmail/read";
 import type { OutreachEventInsert } from "@/lib/outreach/events";
 import {
+	closeScheduleLock,
 	needsHandoff,
 	runMorningSweep,
 	runSweep,
@@ -265,6 +266,7 @@ describe("el lock de la corrida", () => {
 		const result = await runMorningSweep({
 			...deps({ store: { ...deps().store, listExecutorsWithGmailRead } }),
 			takeLock: async () => false,
+			closeLock: async () => {},
 		});
 
 		expect(result).toBeNull();
@@ -285,6 +287,7 @@ describe("el lock de la corrida", () => {
 					},
 				}),
 				takeLock,
+				closeLock: async () => {},
 			}),
 		).rejects.toThrow("base caída");
 		// El lock no se tomó: el próximo disparo del día puede correr.
@@ -300,6 +303,7 @@ describe("el lock de la corrida", () => {
 		await runMorningSweep({
 			...deps({ store: { ...deps().store, listActiveTenants } }),
 			takeLock,
+			closeLock: async () => {},
 		});
 
 		expect(listActiveTenants).toHaveBeenCalledTimes(1);
@@ -310,8 +314,117 @@ describe("el lock de la corrida", () => {
 		const result = await runMorningSweep({
 			...deps(),
 			takeLock: async () => true,
+			closeLock: async () => {},
 		});
 		expect(result?.tenants).toHaveLength(1);
+	});
+});
+
+describe("el cierre de la corrida", () => {
+	it("un barrido que termina cierra la fila en ok", async () => {
+		const closeLock = vi.fn(async () => {});
+
+		await runMorningSweep({
+			...deps(),
+			takeLock: async () => true,
+			closeLock,
+		});
+
+		expect(closeLock).toHaveBeenCalledTimes(1);
+		expect(closeLock).toHaveBeenCalledWith({ status: "ok" });
+	});
+
+	it("un barrido que explota cierra la fila en failed y relanza", async () => {
+		const closeLock = vi.fn(async () => {});
+		// Un tenant que tira al leerlo revienta afuera de los try/catch del
+		// barrido: es la única forma de que runSweep mismo tire.
+		const roto = {
+			get id(): string {
+				throw new Error("tenant roto");
+			},
+			slug: "roto",
+		};
+
+		await expect(
+			runMorningSweep({
+				...deps({
+					store: { ...deps().store, listActiveTenants: async () => [roto] },
+				}),
+				takeLock: async () => true,
+				closeLock,
+			}),
+		).rejects.toThrow("tenant roto");
+		expect(closeLock).toHaveBeenCalledWith({
+			status: "failed",
+			error: "tenant roto",
+		});
+	});
+
+	it("si ya corrió hoy no toca la fila de otro disparo", async () => {
+		const closeLock = vi.fn(async () => {});
+
+		await runMorningSweep({
+			...deps(),
+			takeLock: async () => false,
+			closeLock,
+		});
+
+		expect(closeLock).not.toHaveBeenCalled();
+	});
+
+	it("si el lock no se pudo tomar tampoco hay fila que cerrar", async () => {
+		const closeLock = vi.fn(async () => {});
+
+		await expect(
+			runMorningSweep({
+				...deps(),
+				takeLock: async () => {
+					throw new Error("connection failure");
+				},
+				closeLock,
+			}),
+		).rejects.toThrow("connection failure");
+		expect(closeLock).not.toHaveBeenCalled();
+	});
+
+	it("actualiza la fila del día con el estado y finished_at", async () => {
+		const updateRun = vi.fn(async () => ({ error: null }));
+
+		await closeScheduleLock(
+			{ updateRun },
+			{
+				scheduleKey: "morning-sweep:2026-09-19",
+				status: "ok",
+				now: new Date("2026-09-19T10:04:00Z"),
+			},
+		);
+
+		expect(updateRun).toHaveBeenCalledWith("morning-sweep:2026-09-19", {
+			status: "ok",
+			error: null,
+			finished_at: "2026-09-19T10:04:00.000Z",
+		});
+	});
+
+	it("un error al cerrar se loguea pero no tapa el resultado del barrido", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const updateRun = vi.fn(async () => ({
+			error: { message: "connection failure" },
+		}));
+
+		await expect(
+			closeScheduleLock(
+				{ updateRun },
+				{
+					scheduleKey: "morning-sweep:2026-09-19",
+					status: "failed",
+					error: "boom",
+					now: new Date("2026-09-19T10:04:00Z"),
+				},
+			),
+		).resolves.toBeUndefined();
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
 	});
 });
 

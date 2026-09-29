@@ -10,6 +10,7 @@ import { GOOGLE_CONNECTOR_UID } from "../../../lib/connectors/platform";
 import { fetchThread, findByRfc822Id } from "../../../lib/gmail/read";
 import { GMAIL_SCOPES } from "../../../lib/gmail/send";
 import {
+	closeScheduleLock,
 	needsHandoff,
 	runMorningSweep,
 	type SweepExecutor,
@@ -131,6 +132,22 @@ export default defineSchedule({
 						},
 					},
 					{ scheduleKey, tenantId: anyTenant.id, agent: AGENT },
+				);
+			},
+			async closeLock(outcome) {
+				await closeScheduleLock(
+					{
+						updateRun: async (scheduleKey, patch) => {
+							// Solo si sigue abierta: nunca pisar una fila ya cerrada.
+							const { error } = await admin
+								.from("runs")
+								.update(patch)
+								.eq("schedule_key", scheduleKey)
+								.eq("status", "running");
+							return { error };
+						},
+					},
+					{ scheduleKey, ...outcome, now: new Date() },
 				);
 			},
 			async getToken(executor) {

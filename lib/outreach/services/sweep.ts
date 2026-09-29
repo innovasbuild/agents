@@ -185,6 +185,52 @@ export async function takeScheduleLock(
 	);
 }
 
+export interface RunClosePatch {
+	status: "ok" | "failed";
+	error: string | null;
+	finished_at: string;
+}
+
+export interface RunCloseDeps {
+	updateRun(
+		scheduleKey: string,
+		patch: RunClosePatch,
+	): Promise<{ error: { message?: string } | null }>;
+}
+
+/**
+ * Cierra la fila que abrió `takeScheduleLock`, mismo criterio que `closeRun`
+ * (lib/agents/session-store.ts) para los runs del chat. Nunca tira: el
+ * barrido ya quedó registrado, y un cierre que falla no puede tapar ni su
+ * resultado ni el error que lo hizo fallar. La fila sigue siendo el lock del
+ * día igual, porque el 23505 depende de `schedule_key`, no del status.
+ */
+export async function closeScheduleLock(
+	deps: RunCloseDeps,
+	input: {
+		scheduleKey: string;
+		status: "ok" | "failed";
+		error?: string;
+		now: Date;
+	},
+): Promise<void> {
+	try {
+		const { error } = await deps.updateRun(input.scheduleKey, {
+			status: input.status,
+			error: input.error ?? null,
+			finished_at: input.now.toISOString(),
+		});
+		if (error) {
+			console.error(
+				`no pude cerrar ${input.scheduleKey}:`,
+				error.message ?? "sin detalle",
+			);
+		}
+	} catch (error) {
+		console.error(`no pude cerrar ${input.scheduleKey}:`, error);
+	}
+}
+
 /**
  * ¿Este tenant tiene algo para que el agente interprete? Solo las respuestas
  * que el agente va a poder VER: `read_replies` filtra por `respuesta_neutra`,
@@ -208,11 +254,28 @@ export function needsHandoff(tenant: SweepTenantResult): boolean {
 export async function runMorningSweep(
 	deps: SweepDeps & {
 		takeLock(tenants: readonly SweepTenant[]): Promise<boolean>;
+		/** Cierra la fila del lock. Solo se llama si el lock se tomó en esta
+		 * corrida: si ya corrió hoy, la fila es de otro disparo. */
+		closeLock(outcome: {
+			status: "ok" | "failed";
+			error?: string;
+		}): Promise<void>;
 	},
 ): Promise<SweepResult | null> {
 	const tenants = await deps.store.listActiveTenants();
 	if (!(await deps.takeLock(tenants))) return null;
-	return await runSweep(deps, tenants);
+	let result: SweepResult;
+	try {
+		result = await runSweep(deps, tenants);
+	} catch (error) {
+		await deps.closeLock({
+			status: "failed",
+			error: error instanceof Error ? error.message : String(error),
+		});
+		throw error;
+	}
+	await deps.closeLock({ status: "ok" });
+	return result;
 }
 
 export async function runSweep(
