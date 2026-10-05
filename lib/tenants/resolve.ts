@@ -1,4 +1,5 @@
 import { createServerSupabase } from "@/lib/supabase/server";
+import { isPlatformOwnerAdmin } from "@/lib/tenants/platform";
 
 export type TenantRole = "platform_admin" | "tenant_admin" | "tenant_member";
 
@@ -78,21 +79,19 @@ export async function resolveTenantAccess(
 		.eq("user_id", auth.user.id)
 		.maybeSingle();
 
-	// El platform_admin entra a cualquier tenant aunque no tenga membership ahí.
-	const { data: platformAdmin } = await supabase
-		.from("memberships")
-		.select("role")
-		.eq("user_id", auth.user.id)
-		.eq("role", "platform_admin")
-		.maybeSingle();
+	// El platform_admin del tenant dueño entra a cualquier tenant aunque no
+	// tenga membership ahí, y siempre gana sobre el rol local, igual que en la
+	// RLS. Si se resolviera al revés, uno que además tuviera una membership
+	// local (tenant_member, por ejemplo) se vería degradado en la UI aunque la
+	// base le siga dando acceso completo.
+	const platformAdmin = await isPlatformOwnerAdmin(supabase, auth.user.id);
 
-	// platform_admin siempre gana, igual que en la RLS (todas las políticas lo
-	// chequean como condición aparte, nunca subordinada al rol local). Si se
-	// resolviera al revés, un platform_admin que además tuviera una membership
-	// local en un tenant (tenant_member, por ejemplo) se vería degradado en la
-	// UI aunque la base le siga dando acceso completo — la Task 9 usa este rol
-	// para decidir quién ve /settings/usuarios.
-	const role = (platformAdmin?.role ?? membership?.role) as
+	// Una fila platform_admin fuera del tenant dueño no es rol de plataforma
+	// para la aplicación (spec consola §3): acá vale como admin de ese tenant.
+	const localRole =
+		membership?.role === "platform_admin" ? "tenant_admin" : membership?.role;
+
+	const role = (platformAdmin ? "platform_admin" : localRole) as
 		| TenantRole
 		| undefined;
 	if (!role) return null;
