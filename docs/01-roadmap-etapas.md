@@ -487,6 +487,24 @@ Agregada el 2026-09-20. La escucha de la Etapa 5 responde sola cuando tiene conf
 
 ---
 
+## Etapa 17 · Permisos del brain por carpeta y por página — `[ ]`
+
+**Modelo Claude Code:** Fable 5.1 para la spec (hecha) y para 17.2, que toca RLS y el punto de control de acceso. Sonnet 5 en sesión nueva para 17.1 (refactor sin cambio funcional) y 17.3 (UI).
+**Modelo runtime:** n/a.
+**Spec:** `docs/superpowers/specs/2026-10-05-etapa-17-permisos-brain-design.md` · **Plan:** a escribir por entrega.
+
+Agregada el 2026-10-05. Un administrador del tenant decide quién ve y quién edita cada carpeta y cada página del brain, con herencia hacia abajo como en Drive, y eso vale en el editor web, por MCP y en el chat con el agente. El módulo `lib/brain` queda aislado en `core/` y `adapters/` para poder mudarlo a su propio repo. Por MCP, todos ven las tres tools; el acceso lo decide la configuración del brain.
+
+Tres entregas, una sesión y un PR cada una:
+
+- [ ] **17.1 · Aislamiento.** `lib/brain/core` sin imports de afuera, `lib/brain/adapters` con Supabase, Next, eve y la plataforma, test de frontera, `list()` en el provider y el editor leyendo por ahí. Sin cambio visible.
+- [ ] **17.2 · Permisos.** Tabla `brain_access_rules`, revoke del `select` de `authenticated` en `brain_pages` y `brain_revisions` (hoy un miembro puede leer toda la tabla por la API), `resolveAccess` y `withAccess` puros, cableados en editor, MCP y agente. En el chat el agente actúa en nombre de la persona. La raíz nace abierta: nadie pierde nada el día del despliegue.
+- [ ] **17.3 · Árbol y compartir.** Árbol estilo Obsidian en `/brain`, menú de tres puntos por carpeta y página, diálogo de compartir con personas, niveles y acceso general.
+
+**Terminado cuando:** en producción, un admin restringe una carpeta desde el diálogo y le da lectura a una persona; esa persona la ve en el árbol y por MCP, otro miembro no la ve en el árbol ni por `brain_search`, y tampoco se la saca al agente por el chat.
+
+---
+
 ## Fuera de etapas · Sync entrante de HubSpot — `[ ]`
 
 Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué. Implementado y revisado; falta su primera corrida real en producción y correr `npm run db:reset`/`npm run db:types` (necesitan Docker, no disponible en el entorno donde se construyó esto).
