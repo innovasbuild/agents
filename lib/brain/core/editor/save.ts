@@ -1,10 +1,14 @@
 // Guardado del editor (spec editor §5.3). La escritura corre con service role
 // por provider.upsert, así que el rol se chequea acá: la RLS no protege este
 // camino. Sin Next: la server action solo arma las dependencias reales.
-import type { TenantRole } from "@/lib/tenants/resolve";
-import { BrainConflict, BrainValidation } from "../core/errors";
-import type { BrainProvider, BrainStatus, BrainWrite } from "../core/types";
+import { BrainConflict, BrainValidation } from "../errors";
 import type { BrainBinding } from "../resolve";
+import type {
+	BrainProvider,
+	BrainRole,
+	BrainStatus,
+	BrainWrite,
+} from "../types";
 
 export interface SavePageInput {
 	tenantSlug: string;
@@ -37,7 +41,7 @@ export type SavePageResult =
 export interface SaveDeps {
 	access(
 		tenantSlug: string,
-	): Promise<{ tenantId: string; role: TenantRole; userId: string } | null>;
+	): Promise<{ tenantId: string; role: BrainRole; userId: string } | null>;
 	binding(tenantId: string): Promise<BrainBinding | null>;
 	provider(binding: BrainBinding): BrainProvider;
 }

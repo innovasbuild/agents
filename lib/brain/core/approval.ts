@@ -1,6 +1,9 @@
 // Quién puede aprobar un brain_upsert (spec brain §3). El rol y el tenant los
 // estampa el canal (agents/outreach/channels/eve.ts) desde memberships.
-import type { ApprovalResponseDecision } from "eve/tools/approval";
+
+export type BrainApprovalDecision =
+	| { status: "allowed" }
+	| { status: "rejected"; reason: string };
 
 export const BRAIN_APPROVER_ROLES: readonly string[] = [
 	"tenant_admin",
@@ -10,7 +13,7 @@ export const BRAIN_APPROVER_ROLES: readonly string[] = [
 export function decideBrainUpsertResponse(
 	responder: { attributes?: Record<string, unknown> } | null | undefined,
 	tenantId: string,
-): ApprovalResponseDecision {
+): BrainApprovalDecision {
 	const attributes = responder?.attributes ?? {};
 	if (attributes.tenantId !== tenantId) {
 		return {

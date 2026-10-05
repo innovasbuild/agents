@@ -10,8 +10,8 @@ import {
 	buildBrainMcpServer,
 	MCP_MAX_REQUEST_BYTES,
 } from "../core/mcp-server/server.ts";
+import type { BrainBinding } from "../core/resolve.ts";
 import type { BrainProvider } from "../core/types.ts";
-import type { BrainBinding } from "../resolve.ts";
 import {
 	type AccessStore,
 	type ClaimsVerifier,

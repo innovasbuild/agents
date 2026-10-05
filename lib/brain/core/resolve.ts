@@ -1,8 +1,18 @@
 // Qué brain tiene el tenant de la sesión (spec brain §4.1, etapa 11 §7.2). Sin
 // efectos. La base garantiza un solo brain habilitado por tenant (D9).
-import type { Binding } from "../connectors/providers.ts";
-import { parseWikiConfig, type WikiConfig } from "./core/config.ts";
-import { type McpBrainConfig, parseMcpBrainConfig } from "./core/mcp-config.ts";
+// Lo que el módulo necesita saber de una conexión del tenant. Es un subconjunto
+// de Binding de la plataforma: cualquier Binding la satisface.
+export interface BrainConnection {
+	id: string;
+	tenantId: string;
+	capability: string;
+	provider: string;
+	connectorUid: string | null;
+	config: Record<string, unknown>;
+}
+
+import { parseWikiConfig, type WikiConfig } from "./config.ts";
+import { type McpBrainConfig, parseMcpBrainConfig } from "./mcp-config.ts";
 
 export interface WikiBrainBinding {
 	id: string;
@@ -28,7 +38,7 @@ function omit(tenantId: string, reason: string): null {
 
 export async function resolveBrainBinding(
 	tenantId: string,
-	load: (tenantId: string) => Promise<Binding[]>,
+	load: (tenantId: string) => Promise<BrainConnection[]>,
 ): Promise<BrainBinding | null> {
 	if (!tenantId) return null;
 

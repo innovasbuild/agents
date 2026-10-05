@@ -7,9 +7,9 @@ import {
 	type SavePageInput,
 	type SavePageResult,
 	savePage,
-} from "@/lib/brain/editor/save";
+} from "@/lib/brain/core/editor/save";
 import { getBrainProvider } from "@/lib/brain/provider";
-import { resolveBrainBinding } from "@/lib/brain/resolve";
+import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";

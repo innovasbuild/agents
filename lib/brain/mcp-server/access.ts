@@ -1,7 +1,7 @@
 // Quién entra al brain de qué tenant por MCP (spec etapa 11 §5.2, D3, D4, D7).
 // El tenant sale de la URL y el usuario del token; nada viene de los argumentos.
 import { extractBearerToken } from "eve/channels/auth";
-import type { BrainBinding } from "../resolve.ts";
+import type { BrainBinding } from "../core/resolve.ts";
 
 export type ClaimsVerifier = (
 	token: string,

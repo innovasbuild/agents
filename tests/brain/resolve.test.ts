@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveBrainBinding } from "@/lib/brain/resolve";
+import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import type { Binding } from "@/lib/connectors/providers";
 
 const wikiConfig = {

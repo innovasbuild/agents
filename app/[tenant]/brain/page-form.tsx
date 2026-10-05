@@ -19,7 +19,7 @@ import {
 	type BrainStatus,
 	CANON_TAGS,
 } from "@/lib/brain/core/types";
-import type { SavePageResult } from "@/lib/brain/editor/save";
+import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { saveBrainPage } from "./actions";
 
 export interface PageFormInitial {

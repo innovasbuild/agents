@@ -2,6 +2,10 @@
 
 export type BrainStatus = "activo" | "borrador" | "archivado";
 
+// Rol del usuario en el tenant, tal como lo estampa la plataforma. Es el mismo
+// conjunto de literales que TenantRole: el módulo no importa de la plataforma.
+export type BrainRole = "platform_admin" | "tenant_admin" | "tenant_member";
+
 export const BRAIN_STATUSES: readonly BrainStatus[] = [
 	"activo",
 	"borrador",

@@ -7,8 +7,8 @@ import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
+import { resolveBrainBinding } from "../core/resolve";
 import type { BrainStatus } from "../core/types";
-import { resolveBrainBinding } from "../resolve";
 
 export type EditorContext =
 	| { kind: "ok"; tenant: TenantAccess; canEdit: boolean; categories: string[] }

@@ -2,7 +2,7 @@
 // (spec etapa 11 §8.3). Sin declaración o sin binding, no hay tools brain_*.
 import { defineDynamic } from "eve/tools";
 import { loadAgentBrainAccess } from "../../../lib/brain/agent-access";
-import { resolveBrainBinding } from "../../../lib/brain/resolve";
+import { resolveBrainBinding } from "../../../lib/brain/core/resolve";
 import { createBrainTools } from "../../../lib/brain/tools";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 

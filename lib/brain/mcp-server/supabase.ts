@@ -10,7 +10,7 @@ import {
 import { loadTenantBindings } from "../../connectors/bindings";
 import { createAdminClient } from "../../supabase/admin";
 import type { HitFn } from "../core/mcp-server/rate-limit.ts";
-import { resolveBrainBinding } from "../resolve.ts";
+import { resolveBrainBinding } from "../core/resolve.ts";
 import type { AccessStore, ClaimsVerifier } from "./access.ts";
 
 export function supabaseClaimsVerifier(): ClaimsVerifier {

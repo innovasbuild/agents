@@ -12,7 +12,7 @@ import {
 import { buildLinkIndex } from "@/lib/brain/core/links";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
 import { getBrainProvider } from "@/lib/brain/provider";
-import { resolveBrainBinding } from "@/lib/brain/resolve";
+import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 
 const STATUS_LABEL = {

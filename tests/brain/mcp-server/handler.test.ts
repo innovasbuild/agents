@@ -2,6 +2,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { describe, expect, it, vi } from "vitest";
 import { BrainConflict } from "@/lib/brain/core/errors";
+import type { BrainBinding } from "@/lib/brain/core/resolve";
 import type { BrainProvider } from "@/lib/brain/core/types";
 import type { AccessStore } from "@/lib/brain/mcp-server/access";
 import {
@@ -9,7 +10,6 @@ import {
 	handleBrainMcp,
 	protectedResourceMetadata,
 } from "@/lib/brain/mcp-server/handler";
-import type { BrainBinding } from "@/lib/brain/resolve";
 
 const binding: BrainBinding = {
 	id: "b1",
