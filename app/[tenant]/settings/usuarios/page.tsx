@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import { resolveTenantAccess, type TenantRole } from "@/lib/tenants/resolve";
+import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 import { revokeInvitation, revokeMembership } from "./actions";
 import { InviteForm } from "./invite-form";
 
@@ -28,6 +30,27 @@ export default async function UsuariosPage({
 		.eq("tenant_id", tenant.id)
 		.eq("status", "pending");
 
+	// Nombre y correo viven en auth.users, que la RLS no expone: se leen con
+	// el cliente admin, solo para los user_id que esta consulta ya autorizó.
+	const admin = createAdminClient();
+	const people = new Map(
+		await Promise.all(
+			(memberships ?? []).map(async ({ user_id }) => {
+				const { data } = await admin.auth.admin.getUserById(user_id);
+				const meta = data.user?.user_metadata ?? {};
+				const name =
+					[meta.given_name, meta.family_name].filter(Boolean).join(" ") ||
+					meta.full_name ||
+					meta.name ||
+					"";
+				return [
+					user_id,
+					{ name: name as string, email: data.user?.email },
+				] as const;
+			}),
+		),
+	);
+
 	return (
 		<div className="max-w-3xl space-y-10">
 			<section>
@@ -40,9 +63,16 @@ export default async function UsuariosPage({
 							key={membership.id}
 							className="flex items-center gap-3 px-4 py-3"
 						>
-							<span className="font-mono text-sm">{membership.user_id}</span>
+							<div className="min-w-0">
+								<div>
+									{people.get(membership.user_id)?.name || "Sin nombre"}
+								</div>
+								<div className="truncate text-muted-foreground text-sm">
+									{people.get(membership.user_id)?.email}
+								</div>
+							</div>
 							<span className="text-muted-foreground text-sm">
-								{membership.role}
+								{ROLE_LABELS[membership.role as TenantRole]}
 							</span>
 							<form
 								className="ml-auto"
@@ -67,7 +97,7 @@ export default async function UsuariosPage({
 						>
 							<span>{invitation.email}</span>
 							<span className="text-muted-foreground text-sm">
-								{invitation.role}
+								{ROLE_LABELS[invitation.role as TenantRole]}
 							</span>
 							<form
 								className="ml-auto"
