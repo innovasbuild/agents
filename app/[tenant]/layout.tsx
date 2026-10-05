@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { brandStyle } from "@/lib/brand/contrast";
-import { resolveTenantAccess, type TenantRole } from "@/lib/tenants/resolve";
+import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
 const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
 	{ href: "/chat", label: "Chat" },
@@ -17,12 +18,6 @@ const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
 	// no tiene sentido ofrecer una ruta que va a 404.
 	{ href: "/settings", label: "Configuración", adminOnly: true },
 ];
-
-const ROLE_LABELS: Record<TenantRole, string> = {
-	platform_admin: "Admin de plataforma",
-	tenant_admin: "Admin",
-	tenant_member: "Miembro",
-};
 
 export default async function TenantLayout({
 	children,
