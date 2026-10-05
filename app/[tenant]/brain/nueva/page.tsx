@@ -10,7 +10,7 @@ export default async function NewBrainPage({
 	const { tenant: tenantSlug } = await params;
 	const ctx = await loadEditorContext(tenantSlug);
 	if (!ctx || ctx.kind !== "ok" || !ctx.canEdit) notFound();
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	return (
 		<div>
 			<h1 className="mb-6 text-3xl leading-tight">Nueva página</h1>

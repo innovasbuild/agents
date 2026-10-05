@@ -12,7 +12,7 @@ export default async function EditBrainPage({
 	const ctx = await loadEditorContext(tenantSlug);
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !ctx.canEdit || !slug) notFound();
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) notFound();
 	return (

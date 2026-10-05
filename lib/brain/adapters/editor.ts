@@ -1,19 +1,27 @@
-// Lecturas del editor (spec editor §4.3 y §6). Páginas y revisiones con el
-// cliente de sesión: la RLS de lectura por membresía ya existe. El binding y
-// los emails de autores con el cliente admin, siempre filtrados por el tenant
-// que resolvió la sesión.
+// Lecturas del editor (spec editor §4.3 y §6; etapa 17 §5.2). Todo se lee por
+// el proveedor del brain: el editor deja de tocar brain_pages y brain_revisions
+// con el cliente de sesión. El tenant sale de resolveTenantAccess, que ya
+// verificó la membresía; el proveedor filtra siempre por ese tenant.
 import { cache } from "react";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveBrainBinding } from "../core/resolve";
-import type { BrainStatus } from "../core/types";
+import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
+import { getBrainProvider } from "./provider";
 
 export type EditorContext =
-	| { kind: "ok"; tenant: TenantAccess; canEdit: boolean; categories: string[] }
+	| {
+			kind: "ok";
+			tenant: TenantAccess;
+			canEdit: boolean;
+			categories: string[];
+			provider: BrainProvider;
+	  }
 	| { kind: "no-brain"; tenant: TenantAccess }
 	| { kind: "external"; tenant: TenantAccess };
+
+export type OkEditorContext = Extract<EditorContext, { kind: "ok" }>;
 
 export const loadEditorContext = cache(
 	async (tenantSlug: string): Promise<EditorContext | null> => {
@@ -27,107 +35,39 @@ export const loadEditorContext = cache(
 			tenant,
 			canEdit: tenant.role !== "tenant_member",
 			categories: binding.config.categories,
+			provider: getBrainProvider(binding),
 		};
 	},
 );
 
-export interface BrainPageRow {
-	slug: string;
-	title: string;
-	category: string;
-	status: BrainStatus;
-	tags: string[];
-	frontmatter: Record<string, unknown>;
-	body: string;
-	revision: number;
-	updatedAt: string;
-}
-
+// cache() compara por identidad: loadEditorContext devuelve el mismo objeto
+// durante todo el request, así que la lista se lee una sola vez.
 export const loadBrainPages = cache(
-	async (tenantId: string): Promise<BrainPageRow[]> => {
-		const supabase = await createServerSupabase();
-		const { data, error } = await supabase
-			.from("brain_pages")
-			.select(
-				"slug, title, category, status, tags, frontmatter, body, revision, updated_at",
-			)
-			.eq("tenant_id", tenantId)
-			.order("slug");
-		if (error) throw new Error(`No pude leer el brain: ${error.message}`);
-		return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-			slug: row.slug as string,
-			title: row.title as string,
-			category: row.category as string,
-			status: row.status as BrainStatus,
-			tags: (row.tags as string[] | null) ?? [],
-			frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
-			body: row.body as string,
-			revision: row.revision as number,
-			updatedAt: row.updated_at as string,
-		}));
-	},
+	async (ctx: OkEditorContext): Promise<BrainPage[]> => ctx.provider.list(),
 );
 
-export interface RevisionRow {
-	revision: number;
-	title: string;
-	category: string;
-	status: BrainStatus;
-	tags: string[];
-	frontmatter: Record<string, unknown>;
-	body: string;
-	authorKind: "user" | "agent" | "import";
+export interface RevisionRow extends Omit<BrainRevision, "authorUserId"> {
 	authorEmail: string | null;
-	reason: string;
-	createdAt: string;
 }
 
 export async function loadRevisions(
-	tenantId: string,
+	ctx: OkEditorContext,
 	slug: string,
 ): Promise<RevisionRow[] | null> {
-	const supabase = await createServerSupabase();
-	const { data: page } = await supabase
-		.from("brain_pages")
-		.select("id")
-		.eq("tenant_id", tenantId)
-		.eq("slug", slug)
-		.maybeSingle();
-	if (!page) return null;
+	const revisions = await ctx.provider.history(slug);
+	if (!revisions) return null;
 
-	const { data, error } = await supabase
-		.from("brain_revisions")
-		.select(
-			"revision, title, category, status, tags, frontmatter, body, author_kind, author_user_id, reason, created_at",
-		)
-		.eq("tenant_id", tenantId)
-		.eq("page_id", page.id)
-		.order("revision", { ascending: false });
-	if (error) throw new Error(`No pude leer el historial: ${error.message}`);
-
-	const rows = (data ?? []) as Array<Record<string, unknown>>;
-	const emails = await memberEmails(tenantId, [
+	const emails = await memberEmails(ctx.tenant.id, [
 		...new Set(
-			rows
-				.map((r) => r.author_user_id as string | null)
-				.filter((id): id is string => !!id),
+			revisions
+				.map((r) => r.authorUserId)
+				.filter((id): id is string => id !== null),
 		),
 	]);
 
-	return rows.map((row) => ({
-		revision: row.revision as number,
-		title: row.title as string,
-		category: row.category as string,
-		status: row.status as BrainStatus,
-		tags: (row.tags as string[] | null) ?? [],
-		frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
-		body: row.body as string,
-		authorKind: row.author_kind as RevisionRow["authorKind"],
-		authorEmail: row.author_user_id
-			? (emails.get(row.author_user_id as string) ?? null)
-			: null,
-		reason: row.reason as string,
-		createdAt: row.created_at as string,
+	return revisions.map(({ authorUserId, ...revision }) => ({
+		...revision,
+		authorEmail: authorUserId ? (emails.get(authorUserId) ?? null) : null,
 	}));
 }
 

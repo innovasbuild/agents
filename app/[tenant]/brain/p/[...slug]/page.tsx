@@ -31,7 +31,7 @@ export default async function BrainPageView({
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !slug) notFound();
 
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) {
 		const binding = await resolveBrainBinding(

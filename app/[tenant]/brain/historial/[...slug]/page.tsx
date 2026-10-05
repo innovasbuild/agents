@@ -33,7 +33,7 @@ export default async function HistoryPage({
 	const ctx = await loadEditorContext(tenantSlug);
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !slug) notFound();
-	const revisions = await loadRevisions(ctx.tenant.id, slug);
+	const revisions = await loadRevisions(ctx, slug);
 	if (!revisions || revisions.length === 0) notFound();
 
 	const current = revisions[0];

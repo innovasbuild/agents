@@ -17,7 +17,7 @@ export default async function BrainMapPage({
 	if (!ctx) notFound();
 	if (ctx.kind !== "ok") return <BrainNotice kind={ctx.kind} />;
 
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const index = buildLinkIndex(pages);
 	const title = new Map(pages.map((p) => [p.slug, p.title]));
 	const live = pages.filter((p) => p.status !== "archivado");

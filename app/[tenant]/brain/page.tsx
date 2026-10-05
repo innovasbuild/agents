@@ -28,7 +28,7 @@ export default async function BrainIndexPage({
 	if (!ctx) notFound();
 	if (ctx.kind !== "ok") return <BrainNotice kind={ctx.kind} />;
 
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const index = buildLinkIndex(pages);
 	const status = BRAIN_STATUSES.includes(estado as BrainStatus)
 		? (estado as BrainStatus)
