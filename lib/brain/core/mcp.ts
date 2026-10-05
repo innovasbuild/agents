@@ -130,6 +130,16 @@ export function createMcpBrainProvider(
 			);
 			return out.page;
 		},
+		async list() {
+			throw new BrainProviderError(
+				"este brain vive en un servidor externo y no se lista desde la plataforma",
+			);
+		},
+		async history() {
+			throw new BrainProviderError(
+				"este brain vive en un servidor externo y no tiene historial en la plataforma",
+			);
+		},
 		async upsert(write) {
 			const out = await call(
 				config.tools.upsert,

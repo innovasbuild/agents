@@ -39,6 +39,8 @@ function brainWith(pages: BrainPage[]): BrainProvider {
 			if (!found) throw new Error("no existe");
 			return found;
 		},
+		list: async () => [],
+		history: async () => null,
 		upsert: async () => {
 			throw new Error("no se usa");
 		},
@@ -101,6 +103,8 @@ describe("loadCanon", () => {
 			read: async () => {
 				throw new Error("x");
 			},
+			list: async () => [],
+			history: async () => null,
 			upsert: async () => {
 				throw new Error("x");
 			},

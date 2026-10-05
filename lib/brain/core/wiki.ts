@@ -131,6 +131,15 @@ export function createWikiProvider(
 			return page;
 		},
 
+		async list() {
+			return store.list(tenantId);
+		},
+
+		async history(slug) {
+			if (!isValidSlug(slug)) throw new BrainValidation(["slug"]);
+			return store.listRevisions(tenantId, slug);
+		},
+
 		async upsert(write, author) {
 			const frontmatter = validateWrite(write, config, today());
 			try {
