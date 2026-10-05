@@ -497,7 +497,7 @@ Agregada el 2026-10-05. Un administrador del tenant decide quién ve y quién ed
 
 Tres entregas, una sesión y un PR cada una:
 
-- [ ] **17.1 · Aislamiento.** `lib/brain/core` sin imports de afuera, `lib/brain/adapters` con Supabase, Next, eve y la plataforma, test de frontera, `list()` en el provider y el editor leyendo por ahí. Sin cambio visible.
+- [x] **17.1 · Aislamiento.** `lib/brain/core` sin imports de afuera, `lib/brain/adapters` con Supabase, Next, eve y la plataforma, test de frontera, `list()` en el provider y el editor leyendo por ahí. Sin cambio visible. Plan: `docs/superpowers/plans/2026-10-05-etapa-17-1-aislamiento-brain.md`.
 - [ ] **17.2 · Permisos.** Tabla `brain_access_rules`, revoke del `select` de `authenticated` en `brain_pages` y `brain_revisions` (hoy un miembro puede leer toda la tabla por la API), `resolveAccess` y `withAccess` puros, cableados en editor, MCP y agente. En el chat el agente actúa en nombre de la persona. La raíz nace abierta: nadie pierde nada el día del despliegue.
 - [ ] **17.3 · Árbol y compartir.** Árbol estilo Obsidian en `/brain`, menú de tres puntos por carpeta y página, diálogo de compartir con personas, niveles y acceso general.
 
