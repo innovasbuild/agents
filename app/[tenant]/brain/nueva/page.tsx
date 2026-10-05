@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
 import { PageForm } from "../page-form";
 
 export default async function NewBrainPage({

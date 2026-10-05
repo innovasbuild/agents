@@ -1,7 +1,7 @@
 import Link from "next/link";
+import type { BrainPageRow } from "@/lib/brain/adapters/editor";
 import { pageHref } from "@/lib/brain/core/editor/slug";
 import { CANON_TAGS } from "@/lib/brain/core/types";
-import type { BrainPageRow } from "@/lib/brain/editor/load";
 
 const STATUS_LABEL = {
 	activo: "Activo",

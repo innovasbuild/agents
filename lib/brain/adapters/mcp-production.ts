@@ -4,12 +4,12 @@
 // entre requests en vez de reconstruirse en cada llamada.
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import type { BrainMcpDeps } from "../core/mcp-server/handler.ts";
-import { getBrainProvider } from "../provider.ts";
 import {
 	supabaseAccessStore,
 	supabaseClaimsVerifier,
 	supabaseHit,
-} from "./supabase.ts";
+} from "./mcp-supabase.ts";
+import { getBrainProvider } from "./provider.ts";
 
 let memoized: Pick<BrainMcpDeps, "verify" | "store" | "hit"> | undefined;
 

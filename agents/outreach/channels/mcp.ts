@@ -4,7 +4,7 @@
 import { oauthResource } from "eve/channels/auth";
 import { mcpChannel } from "eve/channels/mcp";
 import { verifyMcpChannelToken } from "../../../lib/agents/mcp-channel-auth";
-import { publicSettings } from "../../../lib/brain/mcp-server/production";
+import { publicSettings } from "../../../lib/brain/adapters/mcp-production";
 
 // Valida y recorta la barra final de PUBLIC_APP_URL y NEXT_PUBLIC_SUPABASE_URL:
 // si falta alguna, el módulo explota con un error claro en vez de publicar

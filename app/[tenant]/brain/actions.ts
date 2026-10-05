@@ -2,14 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { BRAIN_STATUSES } from "@/lib/brain/core/types";
+import { getBrainProvider } from "@/lib/brain/adapters/provider";
 import {
 	type SavePageInput,
 	type SavePageResult,
 	savePage,
 } from "@/lib/brain/core/editor/save";
-import { getBrainProvider } from "@/lib/brain/provider";
 import { resolveBrainBinding } from "@/lib/brain/core/resolve";
+import { BRAIN_STATUSES } from "@/lib/brain/core/types";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";

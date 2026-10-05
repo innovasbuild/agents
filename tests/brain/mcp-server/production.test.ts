@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { publicSettings } from "@/lib/brain/mcp-server/production";
+import { publicSettings } from "@/lib/brain/adapters/mcp-production";
 
 afterEach(() => {
 	vi.unstubAllEnvs();

@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DiffView } from "@/components/brain/diff-view";
+import { loadEditorContext, loadRevisions } from "@/lib/brain/adapters/editor";
 import { diffLines, diffMeta } from "@/lib/brain/core/diff";
 import {
 	historyHref as historyPath,
 	pageHref,
 	slugFromParams,
 } from "@/lib/brain/core/editor/slug";
-import { loadEditorContext, loadRevisions } from "@/lib/brain/editor/load";
 import { RestoreButton } from "./restore-button";
 
 const AUTHOR_LABEL = {

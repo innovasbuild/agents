@@ -1,5 +1,5 @@
+import { loadEditorContext } from "@/lib/brain/adapters/editor";
 import { slugFromParams } from "@/lib/brain/core/editor/slug";
-import { loadEditorContext } from "@/lib/brain/editor/load";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 // Cuerpo vigente de una página, para el diff del aviso de conflicto. Misma

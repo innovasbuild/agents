@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BrainProvider } from "@/lib/brain/core/types";
+import { createBrainTools } from "@/lib/brain/adapters/tools";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
-import { createBrainTools } from "@/lib/brain/tools";
+import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
 	id: "b1",

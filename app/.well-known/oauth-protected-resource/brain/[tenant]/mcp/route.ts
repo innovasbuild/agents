@@ -1,5 +1,5 @@
+import { publicSettings } from "@/lib/brain/adapters/mcp-production";
 import { protectedResourceMetadata } from "@/lib/brain/core/mcp-server/handler";
-import { publicSettings } from "@/lib/brain/mcp-server/production";
 
 const CORS = {
 	"access-control-allow-origin": "*",
