@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { loadPeople } from "@/lib/tenants/people";
 import { resolveTenantAccess, type TenantRole } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 import { revokeInvitation, revokeMembership } from "./actions";
@@ -30,25 +30,8 @@ export default async function UsuariosPage({
 		.eq("tenant_id", tenant.id)
 		.eq("status", "pending");
 
-	// Nombre y correo viven en auth.users, que la RLS no expone: se leen con
-	// el cliente admin, solo para los user_id que esta consulta ya autorizó.
-	const admin = createAdminClient();
-	const people = new Map(
-		await Promise.all(
-			(memberships ?? []).map(async ({ user_id }) => {
-				const { data } = await admin.auth.admin.getUserById(user_id);
-				const meta = data.user?.user_metadata ?? {};
-				const name =
-					[meta.given_name, meta.family_name].filter(Boolean).join(" ") ||
-					meta.full_name ||
-					meta.name ||
-					"";
-				return [
-					user_id,
-					{ name: name as string, email: data.user?.email },
-				] as const;
-			}),
-		),
+	const people = await loadPeople(
+		(memberships ?? []).map(({ user_id }) => user_id),
 	);
 
 	return (

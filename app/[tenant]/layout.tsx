@@ -84,9 +84,22 @@ export default async function TenantLayout({
 							{tenant.displayName}
 						</span>
 					)}
-					<span className="hidden shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs sm:inline-block">
-						{ROLE_LABELS[tenant.role]}
-					</span>
+					{tenant.role === "platform_admin" ? (
+						// Visible también en mobile, a diferencia del badge de los otros
+						// roles: es la única entrada a la consola de plataforma.
+						<Link
+							href="/plataforma"
+							className="inline-flex min-h-11 shrink-0 items-center"
+						>
+							<span className="whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs transition-colors hover:border-input hover:text-foreground">
+								{ROLE_LABELS[tenant.role]}
+							</span>
+						</Link>
+					) : (
+						<span className="hidden shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs sm:inline-block">
+							{ROLE_LABELS[tenant.role]}
+						</span>
+					)}
 				</div>
 				{/* La nav vive en su propia fila, no adentro del header: con cuatro
 				    destinos ya no entraba junto al logo y el nombre a 375px, y las
