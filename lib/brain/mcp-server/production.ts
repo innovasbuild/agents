@@ -32,8 +32,7 @@ export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
 	// función a nivel de módulo tira el build entero de cualquier preview.
 	const explicit = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
 	const publicUrl =
-		explicit ??
-		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+		explicit ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 	if (!publicUrl || !supabaseUrl) {
 		throw new Error(

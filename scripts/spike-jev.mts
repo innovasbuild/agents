@@ -35,7 +35,4 @@ const result = await evaluate({
 
 console.log("answers:", JSON.stringify(result.answers, null, 2));
 console.log("usage:", JSON.stringify(result.usage));
-console.log(
-	"providerMetadata:",
-	JSON.stringify(result.providerMetadata, null, 2),
-);
+console.log("providerMetadata:", JSON.stringify(result.providerMetadata, null, 2));

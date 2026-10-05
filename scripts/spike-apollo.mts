@@ -30,17 +30,11 @@ const orgs = await call("/mixed_companies/search", {
 });
 console.log("ORG status:", orgs.status);
 console.log("ORG top-level keys:", Object.keys((orgs.json as object) ?? {}));
-console.log(
-	"ORG pagination:",
-	(orgs.json as Record<string, unknown>)?.pagination,
-);
+console.log("ORG pagination:", (orgs.json as Record<string, unknown>)?.pagination);
 const orgList =
 	((orgs.json as Record<string, unknown>)?.organizations as unknown[]) ?? [];
 console.log("ORG count:", orgList.length);
-console.log(
-	"ORG primer registro:",
-	JSON.stringify(orgList[0], null, 2)?.slice(0, 1500),
-);
+console.log("ORG primer registro:", JSON.stringify(orgList[0], null, 2)?.slice(0, 1500));
 
 // S5: personas dentro de esas empresas
 const orgIds = orgList
@@ -54,17 +48,11 @@ const people = await call("/mixed_people/search", {
 	per_page: 25,
 });
 console.log("PEOPLE status:", people.status);
-console.log(
-	"PEOPLE top-level keys:",
-	Object.keys((people.json as object) ?? {}),
-);
+console.log("PEOPLE top-level keys:", Object.keys((people.json as object) ?? {}));
 const peopleList =
 	((people.json as Record<string, unknown>)?.people as unknown[]) ?? [];
 console.log("PEOPLE count:", peopleList.length);
-console.log(
-	"PEOPLE primer registro:",
-	JSON.stringify(peopleList[0], null, 2)?.slice(0, 1500),
-);
+console.log("PEOPLE primer registro:", JSON.stringify(peopleList[0], null, 2)?.slice(0, 1500));
 
 // S3: ¿informa créditos consumidos en algún header o campo?
 console.log("ORG texto crudo (primeros 600):", orgs.text);
