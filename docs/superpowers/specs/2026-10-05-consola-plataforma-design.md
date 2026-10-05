@@ -26,7 +26,7 @@ Pedido de Matías: usar el label de rol de arriba a la derecha como botón hacia
 
 ## 3. Tenant dueño y acceso
 
-`PLATFORM_OWNER_TENANT_SLUG` es una variable solo de servidor (sin `NEXT_PUBLIC_`). Va en `.env.local` (`innovas-seed`), en `.env.eval.example` y en Vercel para producción y preview (`innovas`).
+`PLATFORM_OWNER_TENANT_SLUG` es una variable solo de servidor (sin `NEXT_PUBLIC_`). Va en `.env.local` (`innovas-seed` contra la base local) y en Vercel para producción y preview (`innovas`).
 
 `lib/tenants/platform.ts`:
 - `platformOwnerSlug()` lee la variable. Vacía o ausente devuelve `null`.
