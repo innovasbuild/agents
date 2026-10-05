@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { BRAIN_STATUSES } from "@/lib/brain/core/types";
 import {
 	type SavePageInput,
 	type SavePageResult,
@@ -9,7 +10,6 @@ import {
 } from "@/lib/brain/editor/save";
 import { getBrainProvider } from "@/lib/brain/provider";
 import { resolveBrainBinding } from "@/lib/brain/resolve";
-import { BRAIN_STATUSES } from "@/lib/brain/types";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";

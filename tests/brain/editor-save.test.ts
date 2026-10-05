@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
+import type { BrainProvider } from "@/lib/brain/core/types";
 import {
 	type SaveDeps,
 	type SavePageInput,
 	savePage,
 } from "@/lib/brain/editor/save";
-import { BrainConflict, BrainValidation } from "@/lib/brain/errors";
 import type { BrainBinding } from "@/lib/brain/resolve";
-import type { BrainProvider } from "@/lib/brain/types";
 
 const wiki = {
 	id: "b1",

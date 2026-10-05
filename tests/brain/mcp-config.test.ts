@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMcpBrainConfig } from "@/lib/brain/mcp-config";
+import { parseMcpBrainConfig } from "@/lib/brain/core/mcp-config";
 
 const base = {
 	url: "https://brain.cliente.test/mcp",

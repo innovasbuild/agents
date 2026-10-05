@@ -8,16 +8,16 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { parseWikiConfig } from "../lib/brain/config.ts";
-import { readVaultFiles } from "../lib/brain/import/files.ts";
-import { parseManifest } from "../lib/brain/import/manifest.ts";
+import { parseWikiConfig } from "../lib/brain/core/config.ts";
+import { readVaultFiles } from "../lib/brain/core/import/files.ts";
+import { parseManifest } from "../lib/brain/core/import/manifest.ts";
 import {
 	buildImportPlan,
 	type ExistingPage,
 	formatImportReport,
-} from "../lib/brain/import/plan.ts";
-import { createWikiProvider } from "../lib/brain/wiki.ts";
-import { createSupabaseWikiStore } from "../lib/brain/wiki-store.ts";
+} from "../lib/brain/core/import/plan.ts";
+import { createWikiProvider } from "../lib/brain/core/wiki.ts";
+import { createSupabaseWikiStore } from "../lib/brain/core/wiki-store.ts";
 import { parseImportArgs } from "./brain-import-args.ts";
 
 // Raíz del repo relativa a este script (no a process.cwd()): así el import

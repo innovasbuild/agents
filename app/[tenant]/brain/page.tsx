@@ -4,15 +4,15 @@ import { BrainNotice } from "@/components/brain/brain-notice";
 import { PageList } from "@/components/brain/page-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
-import { buildLinkIndex } from "@/lib/brain/links";
-import { getBrainProvider } from "@/lib/brain/provider";
-import { resolveBrainBinding } from "@/lib/brain/resolve";
+import { buildLinkIndex } from "@/lib/brain/core/links";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
 	CANON_TAGS,
-} from "@/lib/brain/types";
+} from "@/lib/brain/core/types";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
+import { getBrainProvider } from "@/lib/brain/provider";
+import { resolveBrainBinding } from "@/lib/brain/resolve";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 
 export default async function BrainIndexPage({

@@ -2,9 +2,9 @@
 // por provider.upsert, así que el rol se chequea acá: la RLS no protege este
 // camino. Sin Next: la server action solo arma las dependencias reales.
 import type { TenantRole } from "@/lib/tenants/resolve";
-import { BrainConflict, BrainValidation } from "../errors";
+import { BrainConflict, BrainValidation } from "../core/errors";
+import type { BrainProvider, BrainStatus, BrainWrite } from "../core/types";
 import type { BrainBinding } from "../resolve";
-import type { BrainProvider, BrainStatus, BrainWrite } from "../types";
 
 export interface SavePageInput {
 	tenantSlug: string;

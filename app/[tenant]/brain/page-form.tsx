@@ -8,18 +8,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { diffLines } from "@/lib/brain/diff";
+import { diffLines } from "@/lib/brain/core/diff";
 import {
 	insertWikilink,
 	wikilinkQueryAt,
-} from "@/lib/brain/editor/autocomplete";
-import type { SavePageResult } from "@/lib/brain/editor/save";
-import { pageHref } from "@/lib/brain/editor/slug";
+} from "@/lib/brain/core/editor/autocomplete";
+import { pageHref } from "@/lib/brain/core/editor/slug";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
 	CANON_TAGS,
-} from "@/lib/brain/types";
+} from "@/lib/brain/core/types";
+import type { SavePageResult } from "@/lib/brain/editor/save";
 import { saveBrainPage } from "./actions";
 
 export interface PageFormInitial {

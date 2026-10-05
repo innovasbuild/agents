@@ -1,10 +1,10 @@
 import { apiKeyBearer } from "../connectors/auth";
 import { createAdminClient } from "../supabase/admin";
-import { createMcpBrainProvider, streamableTransport } from "./mcp.ts";
+import { createMcpBrainProvider, streamableTransport } from "./core/mcp.ts";
+import type { BrainProvider } from "./core/types.ts";
+import { createWikiProvider } from "./core/wiki.ts";
+import { createSupabaseWikiStore } from "./core/wiki-store.ts";
 import type { BrainBinding } from "./resolve.ts";
-import type { BrainProvider } from "./types.ts";
-import { createWikiProvider } from "./wiki.ts";
-import { createSupabaseWikiStore } from "./wiki-store.ts";
 
 export function getBrainProvider(binding: BrainBinding): BrainProvider {
 	if (binding.provider === "mcp") {

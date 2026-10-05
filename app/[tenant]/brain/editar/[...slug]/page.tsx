@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
+import { slugFromParams } from "@/lib/brain/core/editor/slug";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
-import { slugFromParams } from "@/lib/brain/editor/slug";
 import { PageForm } from "../../page-form";
 
 export default async function EditBrainPage({

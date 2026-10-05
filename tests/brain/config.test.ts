@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWikiConfig } from "@/lib/brain/config";
+import { parseWikiConfig } from "@/lib/brain/core/config";
 
 const valid = {
 	categories: ["company", "comercial"],

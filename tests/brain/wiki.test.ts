@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WikiConfig } from "@/lib/brain/config";
+import type { WikiConfig } from "@/lib/brain/core/config";
 import {
 	BrainConflict,
 	BrainNotFound,
 	BrainValidation,
-} from "@/lib/brain/errors";
-import type { BrainWrite } from "@/lib/brain/types";
-import { createWikiProvider, validateWrite } from "@/lib/brain/wiki";
-import { type WikiStore, WikiStoreError } from "@/lib/brain/wiki-store";
+} from "@/lib/brain/core/errors";
+import type { BrainWrite } from "@/lib/brain/core/types";
+import { createWikiProvider, validateWrite } from "@/lib/brain/core/wiki";
+import { type WikiStore, WikiStoreError } from "@/lib/brain/core/wiki-store";
 
 const config: WikiConfig = {
 	categories: ["comercial", "marketing"],

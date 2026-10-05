@@ -1,8 +1,8 @@
 // Qué brain tiene el tenant de la sesión (spec brain §4.1, etapa 11 §7.2). Sin
 // efectos. La base garantiza un solo brain habilitado por tenant (D9).
 import type { Binding } from "../connectors/providers.ts";
-import { parseWikiConfig, type WikiConfig } from "./config.ts";
-import { type McpBrainConfig, parseMcpBrainConfig } from "./mcp-config.ts";
+import { parseWikiConfig, type WikiConfig } from "./core/config.ts";
+import { type McpBrainConfig, parseMcpBrainConfig } from "./core/mcp-config.ts";
 
 export interface WikiBrainBinding {
 	id: string;

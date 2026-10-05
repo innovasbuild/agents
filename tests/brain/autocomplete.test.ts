@@ -3,7 +3,7 @@ import {
 	insertWikilink,
 	sanitizeAlias,
 	wikilinkQueryAt,
-} from "@/lib/brain/editor/autocomplete";
+} from "@/lib/brain/core/editor/autocomplete";
 
 describe("wikilinkQueryAt", () => {
 	it("detecta un [[ abierto antes del cursor", () => {

@@ -4,13 +4,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
-import { BrainNotFound } from "@/lib/brain/errors";
-import type { RateLimiter } from "@/lib/brain/mcp-server/rate-limit";
+import { BrainNotFound } from "@/lib/brain/core/errors";
+import type { RateLimiter } from "@/lib/brain/core/mcp-server/rate-limit";
 import {
 	buildBrainMcpServer,
 	MCP_MAX_UPSERT_BODY_BYTES,
-} from "@/lib/brain/mcp-server/server";
-import type { BrainProvider } from "@/lib/brain/types";
+} from "@/lib/brain/core/mcp-server/server";
+import type { BrainProvider } from "@/lib/brain/core/types";
 
 const page = {
 	slug: "comercial/icp",

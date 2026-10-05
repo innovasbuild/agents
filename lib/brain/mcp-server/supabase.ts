@@ -9,9 +9,9 @@ import {
 } from "../../auth/oauth-principal";
 import { loadTenantBindings } from "../../connectors/bindings";
 import { createAdminClient } from "../../supabase/admin";
+import type { HitFn } from "../core/mcp-server/rate-limit.ts";
 import { resolveBrainBinding } from "../resolve.ts";
 import type { AccessStore, ClaimsVerifier } from "./access.ts";
-import type { HitFn } from "./rate-limit.ts";
 
 export function supabaseClaimsVerifier(): ClaimsVerifier {
 	return createOAuthClaimsVerifier();

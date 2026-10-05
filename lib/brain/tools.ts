@@ -3,11 +3,11 @@
 import { defineTool } from "eve/tools";
 import { always } from "eve/tools/approval";
 import { decideBrainUpsertResponse } from "./approval.ts";
-import { brainContract } from "./contract.ts";
-import { toToolError } from "./errors.ts";
+import { brainContract } from "./core/contract.ts";
+import { toToolError } from "./core/errors.ts";
+import type { BrainProvider } from "./core/types.ts";
 import { getBrainProvider } from "./provider.ts";
 import type { BrainBinding } from "./resolve.ts";
-import type { BrainProvider } from "./types.ts";
 
 function buildBrainReadTools(
 	contract: ReturnType<typeof brainContract>,

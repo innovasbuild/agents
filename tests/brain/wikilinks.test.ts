@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWikilinks } from "@/lib/brain/wikilinks";
+import { parseWikilinks } from "@/lib/brain/core/wikilinks";
 
 describe("parseWikilinks", () => {
 	it("lee slug solo, con alias y con ancla", () => {

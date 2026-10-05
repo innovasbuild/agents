@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 import { ConnectionsPanel } from "@/components/brain/connections-panel";
 import { BrainMarkdown } from "@/components/brain/markdown";
 import { Button } from "@/components/ui/button";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
 import {
 	editHref,
 	historyHref,
 	pageHref,
 	slugFromParams,
-} from "@/lib/brain/editor/slug";
-import { buildLinkIndex } from "@/lib/brain/links";
+} from "@/lib/brain/core/editor/slug";
+import { buildLinkIndex } from "@/lib/brain/core/links";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
 import { getBrainProvider } from "@/lib/brain/provider";
 import { resolveBrainBinding } from "@/lib/brain/resolve";
 import { loadTenantBindings } from "@/lib/connectors/bindings";

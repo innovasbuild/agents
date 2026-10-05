@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_MCP_LIMITS, parseMcpLimits } from "@/lib/brain/limits";
+import { DEFAULT_MCP_LIMITS, parseMcpLimits } from "@/lib/brain/core/limits";
 
 describe("parseMcpLimits", () => {
 	it("sin valor usa los defaults", () => {

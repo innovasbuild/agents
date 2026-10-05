@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import type { BrainProvider } from "@/lib/brain/core/types";
 import type { BrainBinding } from "@/lib/brain/resolve";
 import { createBrainTools } from "@/lib/brain/tools";
-import type { BrainProvider } from "@/lib/brain/types";
 
 const binding: BrainBinding = {
 	id: "b1",
@@ -70,10 +70,18 @@ describe("createBrainTools", () => {
 			read,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
-		const tools = createBrainTools(binding, "read", { provider: providerFactory });
+		const tools = createBrainTools(binding, "read", {
+			provider: providerFactory,
+		});
 
-		const searchResult = await tools.brain_search.execute({ query: "hola" }, {} as never);
-		const readResult = await tools.brain_read.execute({ slug: "a" }, {} as never);
+		const searchResult = await tools.brain_search.execute(
+			{ query: "hola" },
+			{} as never,
+		);
+		const readResult = await tools.brain_read.execute(
+			{ slug: "a" },
+			{} as never,
+		);
 
 		expect(providerFactory).toHaveBeenCalledWith(binding);
 		expect(search).toHaveBeenCalledWith({ query: "hola" });

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrainNotice } from "@/components/brain/brain-notice";
+import { pageHref } from "@/lib/brain/core/editor/slug";
+import { buildLinkIndex } from "@/lib/brain/core/links";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
-import { pageHref } from "@/lib/brain/editor/slug";
-import { buildLinkIndex } from "@/lib/brain/links";
 
 const HUBS_PER_CATEGORY = 5;
 

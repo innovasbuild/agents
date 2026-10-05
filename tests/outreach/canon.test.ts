@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BrainPage, BrainProvider } from "@/lib/brain/types";
+import type { BrainPage, BrainProvider } from "@/lib/brain/core/types";
 import type { Canon } from "@/lib/outreach/canon";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));

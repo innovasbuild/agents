@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { WikiConfig } from "@/lib/brain/config";
-import type { VaultFile } from "@/lib/brain/import/document";
-import { readVaultFiles } from "@/lib/brain/import/files";
-import { parseManifest } from "@/lib/brain/import/manifest";
-import { buildImportPlan, formatImportReport } from "@/lib/brain/import/plan";
+import type { WikiConfig } from "@/lib/brain/core/config";
+import type { VaultFile } from "@/lib/brain/core/import/document";
+import { readVaultFiles } from "@/lib/brain/core/import/files";
+import { parseManifest } from "@/lib/brain/core/import/manifest";
+import {
+	buildImportPlan,
+	formatImportReport,
+} from "@/lib/brain/core/import/plan";
 
 const config: WikiConfig = {
 	categories: ["company", "producto", "marketing", "proyectos"],

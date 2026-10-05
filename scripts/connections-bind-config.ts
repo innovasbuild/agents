@@ -1,8 +1,8 @@
 // scripts/connections-bind-config.ts
 // Import con extensión .ts: lo ejecuta Node directo.
 import { readFile } from "node:fs/promises";
-import { parseWikiConfig } from "../lib/brain/config.ts";
-import { parseMcpBrainConfig } from "../lib/brain/mcp-config.ts";
+import { parseWikiConfig } from "../lib/brain/core/config.ts";
+import { parseMcpBrainConfig } from "../lib/brain/core/mcp-config.ts";
 import type { ProviderKey } from "../lib/connectors/providers.ts";
 
 export function validateProviderConfig(

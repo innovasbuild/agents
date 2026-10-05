@@ -2,15 +2,21 @@
 // servidor y un transporte por request, con respuesta JSON.
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createUnauthorizedResponse } from "eve/channels/auth";
+import {
+	createRateLimiter,
+	type HitFn,
+} from "../core/mcp-server/rate-limit.ts";
+import {
+	buildBrainMcpServer,
+	MCP_MAX_REQUEST_BYTES,
+} from "../core/mcp-server/server.ts";
+import type { BrainProvider } from "../core/types.ts";
 import type { BrainBinding } from "../resolve.ts";
-import type { BrainProvider } from "../types.ts";
 import {
 	type AccessStore,
 	type ClaimsVerifier,
 	resolveMcpAccess,
 } from "./access.ts";
-import { createRateLimiter, type HitFn } from "./rate-limit.ts";
-import { buildBrainMcpServer, MCP_MAX_REQUEST_BYTES } from "./server.ts";
 
 export interface BrainMcpDeps {
 	verify: ClaimsVerifier;

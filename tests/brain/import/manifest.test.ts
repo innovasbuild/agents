@@ -3,7 +3,7 @@ import {
 	isIncluded,
 	parseManifest,
 	tagsFor,
-} from "@/lib/brain/import/manifest";
+} from "@/lib/brain/core/import/manifest";
 
 const manifest = parseManifest({
 	include: ["comercial/**/*.md", "marketing/**/*.md"],

@@ -5,7 +5,7 @@ import {
 	parseDocument,
 	rewriteWikilinks,
 	slugFromPath,
-} from "@/lib/brain/import/document";
+} from "@/lib/brain/core/import/document";
 
 describe("slugFromPath", () => {
 	it("usa la ruta sin extensión, en minúsculas y sin acentos", () => {
