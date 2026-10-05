@@ -1,17 +1,34 @@
+import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { brandStyle } from "@/lib/brand/contrast";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
-const NAV: { href: string; label: string; adminOnly?: boolean }[] = [
+type NavLink = { href: string; label: string; adminOnly?: boolean };
+// Una entrada con `items` es un desplegable: agrupa destinos de un mismo
+// dominio para que la tira no ponga todo al mismo nivel.
+type NavEntry = NavLink | { label: string; items: NavLink[] };
+
+const NAV: NavEntry[] = [
 	{ href: "/chat", label: "Chat" },
-	{ href: "/cola", label: "Cola" },
-	{ href: "/pipeline", label: "Pipeline" },
-	{ href: "/contactos", label: "Contactos" },
-	{ href: "/cuentas", label: "Cuentas" },
-	{ href: "/focos", label: "Focos" },
+	{
+		label: "Outreach",
+		items: [
+			{ href: "/cola", label: "Cola" },
+			{ href: "/pipeline", label: "Pipeline" },
+			{ href: "/contactos", label: "Contactos" },
+			{ href: "/cuentas", label: "Cuentas" },
+			{ href: "/focos", label: "Focos" },
+		],
+	},
 	{ href: "/brain", label: "Brain" },
 	{ href: "/metricas", label: "Métricas" },
 	// /settings hace notFound() para tenant_member: el link no se muestra,
@@ -78,17 +95,42 @@ export default async function TenantLayout({
 				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
 					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
 						{NAV.filter(
-							(item) => !item.adminOnly || tenant.role !== "tenant_member",
-						).map((item) => (
-							<li key={item.href}>
-								<Link
-									className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
-									href={`/${slug}${item.href}`}
-								>
-									{item.label}
-								</Link>
-							</li>
-						))}
+							(item) =>
+								"items" in item ||
+								!item.adminOnly ||
+								tenant.role !== "tenant_member",
+						).map((item) =>
+							"items" in item ? (
+								<li key={item.label}>
+									<DropdownMenu>
+										<DropdownMenuTrigger className="inline-flex min-h-11 items-center gap-1 text-muted-foreground hover:text-foreground data-[state=open]:text-foreground">
+											{item.label}
+											<ChevronDownIcon aria-hidden className="size-4" />
+										</DropdownMenuTrigger>
+										<DropdownMenuContent className="min-w-40">
+											{item.items.map((sub) => (
+												<DropdownMenuItem
+													asChild
+													className="py-2"
+													key={sub.href}
+												>
+													<Link href={`/${slug}${sub.href}`}>{sub.label}</Link>
+												</DropdownMenuItem>
+											))}
+										</DropdownMenuContent>
+									</DropdownMenu>
+								</li>
+							) : (
+								<li key={item.href}>
+									<Link
+										className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
+										href={`/${slug}${item.href}`}
+									>
+										{item.label}
+									</Link>
+								</li>
+							),
+						)}
 					</ul>
 				</nav>
 			</header>
