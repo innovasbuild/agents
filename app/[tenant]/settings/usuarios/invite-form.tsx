@@ -4,10 +4,14 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 
 export function InviteForm({ tenantId }: { tenantId: string }) {
 	const router = useRouter();
 	const [email, setEmail] = useState("");
+	const [role, setRole] = useState<"tenant_admin" | "tenant_member">(
+		"tenant_member",
+	);
 	const [message, setMessage] = useState<string | null>(null);
 
 	async function invite(allowExternal: boolean) {
@@ -18,7 +22,7 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 			body: JSON.stringify({
 				tenantId,
 				email,
-				role: "tenant_member",
+				role,
 				allowExternal,
 			}),
 		});
@@ -57,6 +61,17 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 					type="email"
 					value={email}
 				/>
+				<select
+					aria-label="Rol"
+					className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+					onChange={(event) =>
+						setRole(event.target.value as "tenant_admin" | "tenant_member")
+					}
+					value={role}
+				>
+					<option value="tenant_member">{ROLE_LABELS.tenant_member}</option>
+					<option value="tenant_admin">{ROLE_LABELS.tenant_admin}</option>
+				</select>
 				<Button type="submit">Invitar</Button>
 			</form>
 			{message ? (
