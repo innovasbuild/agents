@@ -80,9 +80,6 @@ export default async function TenantDetailPage({
 					)}
 				</div>
 				<TenantForm
-					// La key fuerza a remontar el form cuando la fila cambia tras
-					// guardar: sin eso los defaultValue quedan con lo viejo.
-					key={JSON.stringify(tenant)}
 					tenant={{
 						id: tenant.id,
 						slug: tenant.slug,

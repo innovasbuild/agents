@@ -13,7 +13,8 @@ import {
 	validateLogo,
 } from "@/lib/tenants/tenant-form";
 
-const idSchema = z.uuid();
+// guid y no uuid: el seed local usa ids que no son v4 y zod 4 exige la versión.
+const idSchema = z.guid();
 
 type Failure = { ok: false; message: string };
 export type TenantResult = { ok: true } | Failure;

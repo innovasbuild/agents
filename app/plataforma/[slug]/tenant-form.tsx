@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { parseList } from "@/lib/tenants/tenant-form";
-import { updateTenant } from "./actions";
+import { type TenantResult, updateTenant } from "./actions";
 
 export interface TenantFormValues {
 	id: string;
@@ -31,6 +31,12 @@ export interface TenantFormValues {
 	active: boolean;
 }
 
+/**
+ * El contenedor guarda el resultado del último guardado: tras guardar, la
+ * página se revalida y la fila cambia, así que el formulario de adentro se
+ * remonta (la key) para tomar los valores normalizados. Si el mensaje viviera
+ * en el formulario, se perdería con el remonte.
+ */
 export function TenantForm({
 	tenant,
 	isOwner,
@@ -38,13 +44,35 @@ export function TenantForm({
 	tenant: TenantFormValues;
 	isOwner: boolean;
 }) {
+	const [result, setResult] = useState<TenantResult | null>(null);
+
+	return (
+		<TenantFormBody
+			key={JSON.stringify(tenant)}
+			tenant={tenant}
+			isOwner={isOwner}
+			result={result}
+			onResult={setResult}
+		/>
+	);
+}
+
+function TenantFormBody({
+	tenant,
+	isOwner,
+	result,
+	onResult,
+}: {
+	tenant: TenantFormValues;
+	isOwner: boolean;
+	result: TenantResult | null;
+	onResult: (result: TenantResult | null) => void;
+}) {
 	const formRef = useRef<HTMLFormElement>(null);
 	const [models, setModels] = useState(tenant.allowedModels.join("\n"));
 	const [defaultModel, setDefaultModel] = useState(tenant.defaultModel);
 	const [active, setActive] = useState(tenant.active);
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [message, setMessage] = useState<string | null>(null);
-	const [saved, setSaved] = useState(false);
 	const [isPending, startTransition] = useTransition();
 
 	const modelOptions = parseList(models);
@@ -54,9 +82,7 @@ export function TenantForm({
 		if (!form) return;
 		const formData = new FormData(form);
 		startTransition(async () => {
-			const result = await updateTenant(tenant.id, formData);
-			setMessage(result.ok ? null : result.message);
-			setSaved(result.ok);
+			onResult(await updateTenant(tenant.id, formData));
 		});
 	}
 
@@ -66,7 +92,7 @@ export function TenantForm({
 			className="space-y-5"
 			onSubmit={(event) => {
 				event.preventDefault();
-				setSaved(false);
+				onResult(null);
 				// Desactivar deja al cliente en 404 para todos sus usuarios: se
 				// confirma antes de guardar.
 				if (tenant.active && !active) setConfirmOpen(true);
@@ -229,12 +255,12 @@ export function TenantForm({
 				<Button type="submit" size="lg" disabled={isPending}>
 					{isPending ? "Guardando…" : "Guardar"}
 				</Button>
-				{message ? (
+				{result && !result.ok ? (
 					<p role="alert" className="text-destructive text-sm">
-						{message}
+						{result.message}
 					</p>
 				) : null}
-				{saved ? (
+				{result?.ok ? (
 					<output className="text-muted-foreground text-sm">
 						Cambios guardados.
 					</output>

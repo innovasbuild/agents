@@ -69,7 +69,8 @@ export default async function PlataformaPage() {
 									{tenant.active ? "Activo" : "Inactivo"}
 								</span>
 								<span className="text-muted-foreground text-sm">
-									{users.get(tenant.id) ?? 0} usuarios
+									{users.get(tenant.id) ?? 0}{" "}
+									{users.get(tenant.id) === 1 ? "usuario" : "usuarios"}
 								</span>
 								<span className="text-muted-foreground text-sm">
 									{new Date(tenant.created_at).toLocaleDateString("es-AR")}
