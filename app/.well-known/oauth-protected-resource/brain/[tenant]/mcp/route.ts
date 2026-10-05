@@ -1,4 +1,4 @@
-import { protectedResourceMetadata } from "@/lib/brain/mcp-server/handler";
+import { protectedResourceMetadata } from "@/lib/brain/core/mcp-server/handler";
 import { publicSettings } from "@/lib/brain/mcp-server/production";
 
 const CORS = {

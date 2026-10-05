@@ -2,8 +2,9 @@
 // (y el store y el contador que van con service role) se arman una sola vez
 // por proceso: así la caché de JWKS de supabaseClaimsVerifier() sobrevive
 // entre requests en vez de reconstruirse en cada llamada.
+import { createUnauthorizedResponse } from "eve/channels/auth";
+import type { BrainMcpDeps } from "../core/mcp-server/handler.ts";
 import { getBrainProvider } from "../provider.ts";
-import type { BrainMcpDeps } from "./handler.ts";
 import {
 	supabaseAccessStore,
 	supabaseClaimsVerifier,
@@ -47,5 +48,6 @@ export function productionDeps(): BrainMcpDeps {
 		...publicSettings(),
 		...sharedDeps(),
 		provider: getBrainProvider,
+		unauthorized: createUnauthorizedResponse,
 	};
 }

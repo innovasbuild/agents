@@ -1,4 +1,4 @@
-import { handleBrainMcp } from "@/lib/brain/mcp-server/handler";
+import { handleBrainMcp } from "@/lib/brain/core/mcp-server/handler";
 import { productionDeps } from "@/lib/brain/mcp-server/production";
 
 export async function POST(

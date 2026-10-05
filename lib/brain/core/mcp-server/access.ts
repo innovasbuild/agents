@@ -1,7 +1,7 @@
 // Quién entra al brain de qué tenant por MCP (spec etapa 11 §5.2, D3, D4, D7).
 // El tenant sale de la URL y el usuario del token; nada viene de los argumentos.
-import { extractBearerToken } from "eve/channels/auth";
-import type { BrainBinding } from "../core/resolve.ts";
+import type { BrainBinding } from "../resolve.ts";
+import { extractBearer } from "./bearer.ts";
 
 export type ClaimsVerifier = (
 	token: string,
@@ -47,7 +47,7 @@ export async function resolveMcpAccess(
 	input: { authorization: string | null; slug: string },
 	deps: { verify: ClaimsVerifier; store: AccessStore },
 ): Promise<McpAccess> {
-	const token = extractBearerToken(input.authorization);
+	const token = extractBearer(input.authorization);
 	if (!token) return deny(401, "unauthorized", "Falta el token de acceso.");
 
 	let claims: Record<string, unknown> | null;
