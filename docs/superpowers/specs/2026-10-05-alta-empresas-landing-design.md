@@ -23,8 +23,9 @@ Visión de Matías: cada cliente tiene su portal de agentes, tools y brain. Esta
 | A6 | El alta no es transaccional de punta a punta: tenant+agente son atómicos, logo e invitación no | Storage y Auth no participan de la transacción. Si fallan, la empresa queda creada y la pantalla lo dice; se completa desde el detalle |
 | A7 | Un solo `LoginForm` para `/login` y `/login/[tenant]` | Evita dos copias de la misma lógica de OAuth y OTP |
 | A8 | La lógica de invitar sale de `app/api/invitations/route.ts` a `lib/invitations/invite.ts` | La usan la ruta (sin cambios de comportamiento) y la action de alta. Único refactor de la etapa |
-| A9 | La invitación del primer admin lleva `next=/<slug>/chat` | Al aceptar cae en su portal, no en el selector de empresas |
+| A9 | La invitación del primer admin lleva `next=/<slug>/chat`; el link de invitación se cierra en `/auth/confirmar` | Supabase devuelve la sesión del link en el fragmento (`#access_token`), que `/auth/callback` no puede leer. Sin `code`, el callback sigue a `/auth/confirmar`, que la lee en el navegador. Verificado de punta a punta |
 | A10 | Fuera: agentes y conectores desde la UI, login con Microsoft, proveedor Outlook, dominio propio | Pedido explícito de Matías: etapa 1 es alta + landing. Conectores siguen por `npm run connections:bind` |
+| A11 | `/auth/confirmar` no abre la sesión sola: muestra "Vas a entrar como <correo>" y espera el clic | Un link armado con tokens ajenos dejaría a quien lo abre logueado como otra persona (login CSRF). Es la primera ruta que acepta tokens de la URL. Cuesta un clic al primer admin |
 
 ## 3. Base de datos
 
@@ -68,6 +69,10 @@ Server action `createTenant(formData)` en `app/plataforma/nueva/actions.ts`:
 ## 6. Invitaciones compartidas
 
 `lib/invitations/invite.ts`: `inviteToTenant({ admin, tenantId, email, role, invitedBy, allowExternal, origin, next })` con la lógica que hoy está en `app/api/invitations/route.ts`: chequeo de dominio, insert en `invitations`, evento `invitation.external`, `inviteUserByEmail` con `redirectTo = <origin>/auth/callback` más `?next=` si viene. Devuelve un resultado discriminado (`ok`, `dominio_no_permitido`, `duplicada`, `mail_fallo`, `ya_existe`). La ruta lo consume y mapea a los mismos códigos HTTP que hoy; su contrato no cambia.
+
+### 6.1 Cierre del ingreso por link de invitación
+
+`/auth/callback` sin `code` redirige a `/auth/confirmar?next=<next seguro>`; el navegador conserva el fragmento. `app/auth/confirmar/` (cliente) lee el fragmento con `parseSessionFragment`, lo saca de la URL de inmediato y muestra el correo del token (`emailFromAccessToken`, sin verificar firma: es solo informativo). Al confirmar: `setSession` (el cliente de `@supabase/ssr` usa PKCE y rechaza el flujo implícito), `accept_pending_invitations` y `window.location.replace(next)` validado con `safeNextPath`. Un fragmento de error o ausente no abre sesión aunque el navegador ya tuviera una, y ofrece la landing de la empresa deducida del `next`. Los tokens siguen en el historial global del navegador (límite del flujo implícito de Supabase; eliminarlo exige `token_hash` + `verifyOtp` y cambiar el template del mail).
 
 ## 7. Detalle de la empresa
 
