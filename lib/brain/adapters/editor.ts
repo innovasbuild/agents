@@ -71,6 +71,10 @@ export async function loadRevisions(
 	}));
 }
 
+// Tope de autores distintos por vista de historial: cada uno es una llamada a
+// la API de administración de Auth. Los que pasen el tope salen sin email.
+const MAX_AUTHOR_LOOKUPS = 50;
+
 // Solo usuarios con membership en este tenant: un email de otra empresa no se
 // muestra aunque haya quedado como autor.
 async function memberEmails(
@@ -80,15 +84,40 @@ async function memberEmails(
 	const result = new Map<string, string>();
 	if (userIds.length === 0) return result;
 	const admin = createAdminClient();
-	const { data: members } = await admin
+	const { data: members, error } = await admin
 		.from("memberships")
 		.select("user_id")
 		.eq("tenant_id", tenantId)
 		.in("user_id", userIds);
+	if (error) {
+		console.error(
+			`brain editor: no pude leer las membresías de los autores: ${error.message}`,
+		);
+		return result;
+	}
+	const authors = ((members ?? []) as Array<{ user_id: string }>).map(
+		(member) => member.user_id,
+	);
+	if (authors.length > MAX_AUTHOR_LOOKUPS) {
+		console.warn(
+			`brain editor: ${authors.length} autores; solo se resuelven ${MAX_AUTHOR_LOOKUPS} emails`,
+		);
+	}
 	await Promise.all(
-		((members ?? []) as Array<{ user_id: string }>).map(async ({ user_id }) => {
-			const { data } = await admin.auth.admin.getUserById(user_id);
-			if (data.user?.email) result.set(user_id, data.user.email);
+		authors.slice(0, MAX_AUTHOR_LOOKUPS).map(async (userId) => {
+			try {
+				const { data, error: lookupError } =
+					await admin.auth.admin.getUserById(userId);
+				if (lookupError) {
+					console.error(
+						`brain editor: no pude leer un autor: ${lookupError.message}`,
+					);
+					return;
+				}
+				if (data.user?.email) result.set(userId, data.user.email);
+			} catch (caught) {
+				console.error("brain editor: falló la consulta de un autor", caught);
+			}
 		}),
 	);
 	return result;

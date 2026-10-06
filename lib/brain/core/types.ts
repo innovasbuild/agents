@@ -93,7 +93,9 @@ export type BrainAuthor =
 
 export interface BrainProvider {
 	search(input: BrainSearchInput): Promise<BrainPageSummary[]>;
-	read(slug: string): Promise<BrainPage>;
+	// suggestions: false evita la búsqueda de páginas parecidas cuando no existe
+	// (quien solo necesita saber si existe, como la ruta raw, no las usa).
+	read(slug: string, options?: { suggestions?: boolean }): Promise<BrainPage>;
 	list(): Promise<BrainPage[]>;
 	history(slug: string): Promise<BrainRevision[] | null>;
 	upsert(

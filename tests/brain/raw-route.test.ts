@@ -76,6 +76,8 @@ describe("GET /[tenant]/brain/raw/[...slug]", () => {
 		expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
 		expect(res.headers.get("cache-control")).toBe("no-store");
 		expect(ctx.provider.read).toHaveBeenCalledTimes(1);
-		expect(ctx.provider.read).toHaveBeenCalledWith("comercial/icp");
+		expect(ctx.provider.read).toHaveBeenCalledWith("comercial/icp", {
+			suggestions: false,
+		});
 	});
 });

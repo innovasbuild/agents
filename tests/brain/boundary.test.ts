@@ -65,6 +65,24 @@ describe("detector de frontera", () => {
 		expect(findViolations(file, 'const z = require("zod");', CORE)).toEqual([]);
 	});
 
+	it("rechaza import() con especificador que no es un literal", () => {
+		// biome-ignore lint/suspicious/noTemplateCurlyInString: es el código fuente a analizar, no una plantilla
+		const templated = "const m = await import(`./${name}.ts`);";
+		expect(findViolations(file, templated, CORE)).toHaveLength(1);
+		expect(
+			findViolations(file, "const m = await import(modulePath);", CORE),
+		).toHaveLength(1);
+	});
+
+	it("ignora imports que solo aparecen en comentarios", () => {
+		const source = [
+			'// el import (que los reescribe) viene de "@/lib/x"',
+			'/* import { a } from "eve/tools"; */',
+			'import { z } from "zod";',
+		].join("\n");
+		expect(findViolations(file, source, CORE)).toEqual([]);
+	});
+
 	it("exige import type para @supabase/supabase-js", () => {
 		expect(
 			findViolations(

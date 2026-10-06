@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { WikiConfig } from "@/lib/brain/core/config";
-import { BrainValidation } from "@/lib/brain/core/errors";
+import { BrainNotFound, BrainValidation } from "@/lib/brain/core/errors";
 import { createWikiProvider } from "@/lib/brain/core/wiki";
 import type { WikiStore } from "@/lib/brain/core/wiki-store";
 
@@ -48,5 +48,29 @@ describe("wiki provider · history", () => {
 			provider({ listRevisions }).history("../etc"),
 		).rejects.toBeInstanceOf(BrainValidation);
 		expect(listRevisions).not.toHaveBeenCalled();
+	});
+});
+
+// Value: protects=read({suggestions:false}) no dispara la busqueda de paginas parecidas cuando la pagina no existe;
+//   sin la opcion sigue sugiriendo.
+// fails_when=se ignora la opcion y la ruta raw vuelve a pagar una busqueda full-text por cada 404.
+// why_new=los tests de read no distinguen con y sin sugerencias; seam=none
+describe("wiki provider · read sin sugerencias", () => {
+	it("no busca sugerencias si se pide suggestions: false", async () => {
+		const search = vi.fn(async () => []);
+		const read = vi.fn(async () => null);
+		await expect(
+			provider({ read, search }).read("comercial/nada", { suggestions: false }),
+		).rejects.toMatchObject({ suggestions: [] });
+		expect(search).not.toHaveBeenCalled();
+	});
+
+	it("sin la opcion busca sugerencias como siempre", async () => {
+		const search = vi.fn(async () => []);
+		const read = vi.fn(async () => null);
+		await expect(
+			provider({ read, search }).read("comercial/nada"),
+		).rejects.toBeInstanceOf(BrainNotFound);
+		expect(search).toHaveBeenCalledTimes(1);
 	});
 });

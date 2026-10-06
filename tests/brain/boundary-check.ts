@@ -15,6 +15,13 @@ const TYPE_ONLY_PACKAGES = [/^@supabase\/supabase-js$/];
 
 // import("a") · require("a"): formas dinámicas que el patrón estático no ve.
 const DYNAMIC_PATTERN = /\b(?:import|require)\s*\(\s*["']([^"']+)["']\s*\)/g;
+// import(x) · import(`a${b}`): el especificador no es un literal y no se puede
+// verificar, así que cuenta como violación.
+const NON_LITERAL_DYNAMIC_PATTERN =
+	/\b(?:import|require)\s*\(\s*(?!["'\s])[^)\s]/g;
+
+// Límite conocido: el guardia mira imports, no globals de Node (Buffer,
+// process.env) ni el uso en runtime de módulos permitidos.
 
 function violation(
 	file: string,
@@ -36,19 +43,31 @@ function violation(
 		: `${specifier}: no está entre las dependencias de core`;
 }
 
+// Los comentarios pueden mencionar "import (" sin ser código. Se descartan antes
+// de escanear (el `[^:]` evita cortar una URL dentro de un string).
+function stripComments(source: string): string {
+	return source
+		.replace(/\/\*[\s\S]*?\*\//g, "")
+		.replace(/(^|[^:])\/\/.*$/gm, "$1");
+}
+
 export function findViolations(
 	file: string,
 	source: string,
 	coreDir: string,
 ): string[] {
 	const found: string[] = [];
-	for (const match of source.matchAll(IMPORT_PATTERN)) {
+	const code = stripComments(source);
+	for (const match of code.matchAll(IMPORT_PATTERN)) {
 		const result = violation(file, match[2], match[1] !== undefined, coreDir);
 		if (result) found.push(result);
 	}
-	for (const match of source.matchAll(DYNAMIC_PATTERN)) {
+	for (const match of code.matchAll(DYNAMIC_PATTERN)) {
 		const result = violation(file, match[1], false, coreDir);
 		if (result) found.push(result);
+	}
+	for (const _ of code.matchAll(NON_LITERAL_DYNAMIC_PATTERN)) {
+		found.push("import dinámico con especificador no literal");
 	}
 	return found;
 }

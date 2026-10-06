@@ -16,7 +16,7 @@ export async function GET(
 		return new Response("No encontrado", { status: 404 });
 	let page: BrainPage;
 	try {
-		page = await ctx.provider.read(slug);
+		page = await ctx.provider.read(slug, { suggestions: false });
 	} catch (error) {
 		if (error instanceof BrainNotFound)
 			return new Response("No encontrado", { status: 404 });

@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
 	// user_id -> tenants donde tiene membresia; user_id -> email
 	memberships: [] as Array<{ tenant_id: string; user_id: string }>,
 	emails: {} as Record<string, string>,
+	membershipError: null as { message: string } | null,
+	lookups: [] as string[],
 	membershipQueries: [] as Array<{
 		table: string;
 		eq: Record<string, unknown>;
@@ -57,6 +59,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 								values.includes(m.user_id),
 						)
 						.map((m) => ({ user_id: m.user_id }));
+					if (state.membershipError)
+						return Promise.resolve({
+							data: null,
+							error: state.membershipError,
+						});
 					return Promise.resolve({ data: rows, error: null });
 				},
 			};
@@ -64,9 +71,14 @@ vi.mock("@/lib/supabase/admin", () => ({
 		},
 		auth: {
 			admin: {
-				getUserById: async (id: string) => ({
-					data: { user: state.emails[id] ? { email: state.emails[id] } : null },
-				}),
+				getUserById: async (id: string) => {
+					state.lookups.push(id);
+					return {
+						data: {
+							user: state.emails[id] ? { email: state.emails[id] } : null,
+						},
+					};
+				},
 			},
 		},
 	})),
@@ -257,5 +269,61 @@ describe("loadEditorContext", () => {
 		const ctx = await loadEditorContext(`rol-${role}`);
 		expect(ctx?.kind).toBe("ok");
 		if (ctx?.kind === "ok") expect(ctx.canEdit).toBe(canEdit);
+	});
+});
+
+// Value: protects=loadRevisions deja registro cuando falla la consulta de membresias (no se ve como "autores sin
+//   cuenta") y no hace mas de 50 consultas a Auth por vista de historial.
+// fails_when=se vuelve a tragar el error de la base, o se quita el tope de autores y cada autor es una llamada mas.
+// why_new=los tests existentes solo ejercen el camino sin errores y con pocos autores; seam=none
+describe("loadRevisions · errores y tope de autores", () => {
+	function okContext(history: BrainRevision[]) {
+		return {
+			kind: "ok",
+			tenant: tenant(),
+			canEdit: true,
+			categories: ["comercial"],
+			provider: { history: vi.fn(async () => history) },
+		} as unknown as OkEditorContext;
+	}
+
+	beforeEach(() => {
+		state.memberships = [];
+		state.emails = {};
+		state.membershipError = null;
+		state.lookups = [];
+	});
+
+	it("si falla la consulta de membresias lo registra y devuelve los autores sin email", async () => {
+		state.membershipError = { message: "permiso denegado" };
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const rows = await loadRevisions(
+			okContext([revision(1, "user-1")]),
+			"comercial/icp",
+		);
+		expect(rows?.[0].authorEmail).toBeNull();
+		expect(logged).toHaveBeenCalledWith(
+			expect.stringContaining("permiso denegado"),
+		);
+		expect(state.lookups).toEqual([]);
+		logged.mockRestore();
+	});
+
+	it("resuelve como mucho 50 emails por vista y avisa", async () => {
+		const ids = Array.from({ length: 60 }, (_, i) => `user-${i}`);
+		state.memberships = ids.map((id) => ({
+			tenant_id: "tenant-a",
+			user_id: id,
+		}));
+		state.emails = Object.fromEntries(ids.map((id) => [id, `${id}@acme.test`]));
+		const warned = vi.spyOn(console, "warn").mockImplementation(() => {});
+		const rows = await loadRevisions(
+			okContext(ids.map((id, i) => revision(i + 1, id))),
+			"comercial/icp",
+		);
+		expect(state.lookups).toHaveLength(50);
+		expect(rows?.filter((r) => r.authorEmail !== null)).toHaveLength(50);
+		expect(warned).toHaveBeenCalledWith(expect.stringContaining("60 autores"));
+		warned.mockRestore();
 	});
 });

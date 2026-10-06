@@ -8,7 +8,8 @@ su propio repo.
 
 - `core/`: todo el módulo. No importa nada de afuera de `lib/brain/core`, salvo
   `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo,
-  `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`.
+  `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`, que mira
+  imports estáticos y dinámicos; no detecta globals de Node como `Buffer`.
 - `adapters/`: lo que conecta el módulo con esta plataforma (Supabase admin,
   conexiones del tenant, sesión, eve, Next). Es lo que hay que reescribir en el
   repo nuevo.
