@@ -52,6 +52,19 @@ describe("detector de frontera", () => {
 		).toHaveLength(1);
 	});
 
+	it("detecta import() dinámico y require, y acepta los permitidos", () => {
+		expect(
+			findViolations(file, 'const m = await import("@/lib/x");', CORE),
+		).toHaveLength(1);
+		expect(
+			findViolations(file, 'const e = require("eve/tools");', CORE),
+		).toHaveLength(1);
+		expect(
+			findViolations(file, 'const t = await import("./types.ts");', CORE),
+		).toEqual([]);
+		expect(findViolations(file, 'const z = require("zod");', CORE)).toEqual([]);
+	});
+
 	it("exige import type para @supabase/supabase-js", () => {
 		expect(
 			findViolations(

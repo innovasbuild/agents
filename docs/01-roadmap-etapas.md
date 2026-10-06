@@ -367,7 +367,7 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 
 ### C. Configurable por tenant y por agente
 
-- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`.
+- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/adapters/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`.
 - [x] Cada agente declara en `tenant_agents.config.brain` si usa brain y con qué alcance (`none`, `read` o `read_write`). Un agente sin brain declarado no expone ninguna tool `brain_*`, igual que hoy pasa con un tenant sin binding. Confirmado en producción: `innovas` y `prueba-conexiones` con `"brain": "read_write"`.
 
 **Cuatro desvíos sobre la spec, encontrados al implementar y al verificar:**

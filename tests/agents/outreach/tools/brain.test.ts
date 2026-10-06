@@ -1,7 +1,7 @@
 // Cablea la wiring de seguridad de brain.ts (spec brain §3 y §4.1): sin
 // binding no hay tools, solo brain_upsert lleva approval, y esa approval
 // queda atada al tenant del binding YA resuelto para esta sesión, no a
-// cualquier otro. No repite la cobertura de lib/brain/wiki.ts (tests/brain/
+// cualquier otro. No repite la cobertura de lib/brain/core/wiki.ts (tests/brain/
 // wiki.test.ts) ni de decideBrainUpsertResponse (tests/brain/approval.test.ts):
 // esto es solo la composición en brain.ts.
 

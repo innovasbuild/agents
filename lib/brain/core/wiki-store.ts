@@ -24,6 +24,22 @@ function toPage(row: Record<string, unknown>): BrainPage {
 	};
 }
 
+function toRevision(row: Record<string, unknown>): BrainRevision {
+	return {
+		revision: row.revision as number,
+		title: row.title as string,
+		category: row.category as string,
+		status: row.status as BrainStatus,
+		tags: (row.tags as string[] | null) ?? [],
+		frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
+		body: row.body as string,
+		authorKind: row.author_kind as BrainRevision["authorKind"],
+		authorUserId: (row.author_user_id as string | null) ?? null,
+		reason: row.reason as string,
+		createdAt: row.created_at as string,
+	};
+}
+
 const PAGE_COLUMNS =
 	"slug, title, category, status, tags, frontmatter, body, revision, updated_at";
 
@@ -150,19 +166,7 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 				.order("revision", { ascending: false });
 			if (error) throw storeError(error);
 
-			return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({
-				revision: row.revision as number,
-				title: row.title as string,
-				category: row.category as string,
-				status: row.status as BrainStatus,
-				tags: (row.tags as string[] | null) ?? [],
-				frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
-				body: row.body as string,
-				authorKind: row.author_kind as BrainRevision["authorKind"],
-				authorUserId: (row.author_user_id as string | null) ?? null,
-				reason: row.reason as string,
-				createdAt: row.created_at as string,
-			}));
+			return ((data ?? []) as Array<Record<string, unknown>>).map(toRevision);
 		},
 
 		async upsert(params) {

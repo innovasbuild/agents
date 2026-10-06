@@ -1,12 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
-import { createSupabaseWikiStore } from "@/lib/brain/core/wiki-store";
+import {
+	createSupabaseWikiStore,
+	WikiStoreError,
+} from "@/lib/brain/core/wiki-store";
 
 type Call = { table: string; filters: Record<string, unknown> };
 
 // Imita la cadena de PostgREST: select/eq/order devuelven la cadena, y la
 // cadena es "esperable" (devuelve todas las filas) o termina en maybeSingle.
-function fakeClient(rows: Record<string, Array<Record<string, unknown>>>) {
+type DbError = { code: string; message: string; details: string | null };
+
+function fakeClient(
+	rows: Record<string, Array<Record<string, unknown>>>,
+	errors: Record<string, DbError> = {},
+) {
 	const calls: Call[] = [];
 	const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 	const client = {
@@ -25,12 +33,18 @@ function fakeClient(rows: Record<string, Array<Record<string, unknown>>>) {
 				order: () => chain,
 				maybeSingle: async () => {
 					calls.push({ table, filters: { ...filters } });
-					return { data: rows[table]?.[0] ?? null, error: null };
+					return {
+						data: errors[table] ? null : (rows[table]?.[0] ?? null),
+						error: errors[table] ?? null,
+					};
 				},
 				// biome-ignore lint/suspicious/noThenProperty: la cadena de PostgREST es esperable
 				then: (resolve: (value: unknown) => void) => {
 					calls.push({ table, filters: { ...filters } });
-					resolve({ data: rows[table] ?? [], error: null });
+					resolve({
+						data: errors[table] ? null : (rows[table] ?? []),
+						error: errors[table] ?? null,
+					});
 				},
 			};
 			return chain;
@@ -206,5 +220,47 @@ describe("createSupabaseWikiStore.search", () => {
 				updatedAt: "2026-10-01T00:00:00Z",
 			},
 		]);
+	});
+});
+
+// Value: protects=list y listRevisions lanzan WikiStoreError cuando la base devuelve error, y una falla al buscar
+//   la pagina no cae a null (que el editor leeria como "no existe").
+// fails_when=se traga el error y se devuelve [] o null, o el store deja de propagar el codigo de la base.
+// why_new=los tests existentes solo usan error: null, asi que esas ramas nunca corrian; seam=none
+describe("createSupabaseWikiStore · errores de la base", () => {
+	const dbError: DbError = {
+		code: "42501",
+		message: "permiso denegado",
+		details: null,
+	};
+
+	it("list propaga el error de la base", async () => {
+		const { client } = fakeClient({}, { brain_pages: dbError });
+		const rejection = createSupabaseWikiStore(client).list("tenant-a");
+		await expect(rejection).rejects.toBeInstanceOf(WikiStoreError);
+		await expect(rejection).rejects.toMatchObject({ code: "42501" });
+	});
+
+	it("listRevisions propaga un error al buscar la pagina y no devuelve null", async () => {
+		const { client } = fakeClient({}, { brain_pages: dbError });
+		await expect(
+			createSupabaseWikiStore(client).listRevisions(
+				"tenant-a",
+				"comercial/icp",
+			),
+		).rejects.toBeInstanceOf(WikiStoreError);
+	});
+
+	it("listRevisions propaga un error al leer las revisiones", async () => {
+		const { client } = fakeClient(
+			{ brain_pages: [{ id: "page-1" }] },
+			{ brain_revisions: dbError },
+		);
+		await expect(
+			createSupabaseWikiStore(client).listRevisions(
+				"tenant-a",
+				"comercial/icp",
+			),
+		).rejects.toMatchObject({ code: "42501" });
 	});
 });
