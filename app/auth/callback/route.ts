@@ -7,9 +7,19 @@ export async function GET(request: Request) {
 	const code = requestUrl.searchParams.get("code");
 
 	if (!code) {
-		return NextResponse.redirect(
-			new URL("/login?error=missing_code", requestUrl.origin),
+		// Los links de invitación traen la sesión en el fragmento (#access_token),
+		// que el servidor no ve. Se sigue a una pantalla de navegador que la lee;
+		// el Location no lleva fragmento propio, así que el navegador conserva el
+		// de la URL original.
+		const next = safeNextPath(
+			requestUrl.searchParams.get("next"),
+			requestUrl.origin,
 		);
+		const target =
+			next === "/"
+				? "/auth/confirmar"
+				: `/auth/confirmar?next=${encodeURIComponent(next)}`;
+		return NextResponse.redirect(new URL(target, requestUrl.origin));
 	}
 
 	const supabase = await createServerSupabase();
