@@ -1,10 +1,11 @@
 import { safeNextPath } from "@/lib/auth/next-path";
 
 /**
- * Tokens de sesión del fragmento de un link de invitación. El cliente de
- * navegador de @supabase/ssr usa PKCE y rechaza este flujo implícito, así que
- * la pantalla los lee acá y abre la sesión con setSession. Un fragmento de
- * error (link vencido) o incompleto da null.
+ * Tokens de sesión del fragmento de un link de invitación. Supabase los
+ * devuelve ahí (#access_token=...) y no con ?code=, así que solo el navegador
+ * puede leerlos. El cliente de navegador de @supabase/ssr usa PKCE y rechaza
+ * este flujo implícito: se abre la sesión a mano con setSession. Un
+ * fragmento de error (link vencido) o incompleto da null.
  */
 export function parseSessionFragment(
 	hash: string,
@@ -18,18 +19,56 @@ export function parseSessionFragment(
 }
 
 /**
- * Decide adónde va quien llega a /auth/confirmar. Ese es el destino de los
- * links de invitación: Supabase devuelve la sesión en el fragmento de la URL
- * (#access_token=...) y no con ?code=, así que solo el navegador puede leerla.
- * El cliente de navegador la procesa al iniciar; acá se decide qué sigue.
+ * Correo del payload de un access token, SIN verificar la firma: sirve solo
+ * para mostrarle a la persona con qué cuenta está por entrar. Lo que vale es
+ * la sesión que después valida Supabase, nunca este dato.
+ */
+export function emailFromAccessToken(token: string): string | null {
+	const payload = token.split(".")[1];
+	if (!payload) return null;
+	try {
+		// atob y no Buffer: esto corre en el navegador.
+		const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+		const decoded = JSON.parse(
+			atob(base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=")),
+		);
+		return typeof decoded?.email === "string" ? decoded.email : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Landing de la empresa a la que apunta un `next` del estilo /<slug>/chat, para
+ * ofrecerla cuando el link venció. Cualquier otra cosa va al login general.
+ */
+export function landingPathFor(next: string | null): string {
+	const slug = next?.match(/^\/([a-z][a-z0-9-]{1,38})\//)?.[1];
+	return slug ? `/login/${slug}` : "/login";
+}
+
+/**
+ * Cierra el ingreso por link de invitación, cuando la persona confirmó con
+ * qué cuenta entra. No abre sesión sin tokens válidos en el fragmento: un
+ * fragmento de error no se salva por haber una sesión previa en el navegador.
  */
 export async function resolveConfirmation(params: {
-	hasSession: () => Promise<boolean>;
+	fragment: string;
+	/** Saca el fragmento de la barra y del historial; corre antes de toda espera. */
+	clearFragment: () => void;
+	openSession: (tokens: {
+		accessToken: string;
+		refreshToken: string;
+	}) => Promise<boolean>;
 	acceptInvitations: () => Promise<void>;
 	next: string | null;
 	origin: string;
 }): Promise<string> {
-	if (!(await params.hasSession())) return "/login?error=auth_failed";
+	const tokens = parseSessionFragment(params.fragment);
+	params.clearFragment();
+	if (!tokens) return "/login?error=auth_failed";
+
+	if (!(await params.openSession(tokens))) return "/login?error=auth_failed";
 
 	// Igual que /auth/callback: las invitaciones pendientes para este mail
 	// verificado se convierten en memberships acá y en ningún otro lado. Si
