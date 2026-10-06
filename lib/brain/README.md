@@ -16,7 +16,10 @@ su propio repo.
 ## Qué viaja con el módulo
 
 - `lib/brain/core/`
-- `tests/brain/`
+- `tests/brain/`, salvo los que importan de `adapters/` o de eve
+  (`agent-access.test.ts`, `tools.test.ts`, `mcp-server/bearer.test.ts`,
+  `mcp-server/handler.test.ts`, `mcp-server/production.test.ts`), que se
+  reescriben junto con los adapters.
 - Migraciones: `20260913233557_brain_tables`, `20260913234426_brain_upsert_page`,
   `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage` y, desde
   la 17.2, la de permisos.

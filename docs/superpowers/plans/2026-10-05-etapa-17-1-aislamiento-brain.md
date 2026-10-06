@@ -24,12 +24,14 @@
 
 ## Desvíos respecto de la spec
 
-Esta entrega se aparta de la spec en cuatro puntos. Todos son menores y no cambian el diseño.
+Esta entrega se aparta de la spec en seis puntos. Todos son menores y no cambian el diseño.
 
 1. **`BrainProvider` suma también `history(slug)`**, no solo `list()`. Sin ella el editor tendría que leer `brain_revisions` por fuera del proveedor, y en la 17.2 `withAccess` no podría filtrar el historial: quedaría un agujero de lectura.
 2. **El editor no tiene `core/editor/load-context.ts`**. Todo el armado del contexto del editor (tenant, rol, binding) es cableado de plataforma y vive en `adapters/editor.ts`. La 17.2 agrega la lógica de acceso donde corresponda.
 3. **Los adapters no se llaman `supabase.ts` ni `platform.ts`**. Se mantienen los nombres por archivo (`provider.ts`, `agent-access.ts`, `tools.ts`, `mcp-supabase.ts`, `mcp-production.ts`, `editor.ts`). La consolidación tiene sentido cuando la 17.2 sume `AccessRulesStore`.
 4. **Los tests se quedan en `tests/brain/`**, con los imports actualizados. Es el directorio de pruebas del módulo; mudarlo de repo es llevarse `lib/brain/core` y `tests/brain`.
+5. **El proveedor `mcp` falla con `BrainProviderError` en `list()` e `history()`**, no con una clase `BrainUnsupported` (spec §5.1): esa clase no existe y el editor ya bloquea los brains externos antes de llamar.
+6. **Los consumidores externos importan funciones de runtime de `core`** (`resolveBrainBinding`, `savePage`, `buildLinkIndex`, `diffLines`, `slugFromParams`, `parseWikiConfig`, `BRAIN_STATUSES`…), no solo tipos: la spec §6.1 dice "solo de adapters o de los tipos de core". Se mantiene así porque son funciones puras del módulo, no cableado de plataforma.
 
 ## Review Focus
 
@@ -76,10 +78,10 @@ Cada movimiento de archivo exige reescribir los imports de todo el repo, que usa
 ```bash
 rebrain() {
   # $1 = ruta vieja bajo lib/brain (sin extensión), $2 = ruta nueva bajo lib/brain
-  grep -rlZE "brain/$1(\.ts)?[\"']" app lib agents components scripts tests \
+  grep -rlE "brain/$1(\.ts)?[\"']" app lib agents components scripts tests \
     --include='*.ts' --include='*.tsx' --include='*.mts' \
     --exclude-dir=node_modules --exclude-dir=.eve --exclude-dir=.next \
-  | OLD="$1" NEW="$2" xargs -0 -r perl -pi -e \
+  | tr '\n' '\0' | OLD="$1" NEW="$2" xargs -0 perl -pi -e \
     's#((?:\@/lib/|(?:\.\./)+lib/|\.\./)brain)/\Q$ENV{OLD}\E(\.ts)?(["\x27])#$1/$ENV{NEW}$2$3#g'
 }
 ```
