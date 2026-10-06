@@ -1,7 +1,6 @@
 // Canon del tenant para redactar y reglas del gate (spec 03 §5.2 y §6.2):
 // páginas del brain por tag. Si el brain falla, o si el tenant no tiene canon
 // cargado, no se redacta ni se encola ni se envía (ver loadCanonOrMissing).
-
 import { getBrainProvider } from "../brain/adapters/provider";
 import { resolveBrainBinding } from "../brain/core/resolve";
 import type { BrainPage, BrainProvider } from "../brain/core/types";
