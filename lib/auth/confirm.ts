@@ -1,6 +1,23 @@
 import { safeNextPath } from "@/lib/auth/next-path";
 
 /**
+ * Tokens de sesión del fragmento de un link de invitación. El cliente de
+ * navegador de @supabase/ssr usa PKCE y rechaza este flujo implícito, así que
+ * la pantalla los lee acá y abre la sesión con setSession. Un fragmento de
+ * error (link vencido) o incompleto da null.
+ */
+export function parseSessionFragment(
+	hash: string,
+): { accessToken: string; refreshToken: string } | null {
+	const params = new URLSearchParams(hash.replace(/^#/, ""));
+	const accessToken = params.get("access_token");
+	const refreshToken = params.get("refresh_token");
+	if (!accessToken || !refreshToken) return null;
+
+	return { accessToken, refreshToken };
+}
+
+/**
  * Decide adónde va quien llega a /auth/confirmar. Ese es el destino de los
  * links de invitación: Supabase devuelve la sesión en el fragmento de la URL
  * (#access_token=...) y no con ?code=, así que solo el navegador puede leerla.

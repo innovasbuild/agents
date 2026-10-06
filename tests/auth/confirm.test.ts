@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { resolveConfirmation } from "@/lib/auth/confirm";
+import { parseSessionFragment, resolveConfirmation } from "@/lib/auth/confirm";
 
 const ORIGIN = "https://app.test";
 
@@ -59,5 +59,39 @@ describe("resolveConfirmation", () => {
 		const { input } = deps({ next: "//evil.test" });
 
 		expect(await resolveConfirmation(input)).toBe("/");
+	});
+});
+
+describe("parseSessionFragment", () => {
+	it("lee los dos tokens del fragmento de un link de invitación", () => {
+		expect(
+			parseSessionFragment(
+				"#access_token=AAA&expires_in=3600&refresh_token=RRR&token_type=bearer&type=invite",
+			),
+		).toEqual({ accessToken: "AAA", refreshToken: "RRR" });
+	});
+
+	it("acepta el fragmento sin el numeral", () => {
+		expect(parseSessionFragment("access_token=AAA&refresh_token=RRR")).toEqual({
+			accessToken: "AAA",
+			refreshToken: "RRR",
+		});
+	});
+
+	it("devuelve null si falta el refresh_token", () => {
+		expect(parseSessionFragment("#access_token=AAA")).toBeNull();
+	});
+
+	it("devuelve null con un fragmento de error (link vencido)", () => {
+		expect(
+			parseSessionFragment(
+				"#error=access_denied&error_code=otp_expired&error_description=expirado",
+			),
+		).toBeNull();
+	});
+
+	it("devuelve null con un fragmento vacío", () => {
+		expect(parseSessionFragment("")).toBeNull();
+		expect(parseSessionFragment("#")).toBeNull();
 	});
 });
