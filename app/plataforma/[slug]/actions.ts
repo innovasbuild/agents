@@ -93,6 +93,7 @@ export async function updateTenant(
 				self_signup_by_domain: input.selfSignupByDomain,
 				allowed_models: input.allowedModels,
 				default_model: input.defaultModel,
+				auth_methods: input.authMethods,
 				active: input.active,
 				brand: mergeBrand((current.brand ?? {}) as Record<string, unknown>, {
 					primary: input.primary,

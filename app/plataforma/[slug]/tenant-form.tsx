@@ -14,6 +14,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+	AUTH_METHOD_LABELS,
+	AUTH_METHODS,
+	type AuthMethod,
+} from "@/lib/tenants/auth-methods";
 import { parseList } from "@/lib/tenants/tenant-form";
 import { type TenantResult, updateTenant } from "./actions";
 
@@ -25,6 +30,7 @@ export interface TenantFormValues {
 	selfSignupByDomain: boolean;
 	allowedModels: string[];
 	defaultModel: string;
+	authMethods: AuthMethod[];
 	primary: string;
 	secondary: string;
 	logoSrc: string | null;
@@ -181,6 +187,27 @@ function TenantFormBody({
 					))}
 				</select>
 			</div>
+
+			<fieldset className="space-y-1">
+				<legend className="text-sm">Métodos de login</legend>
+				{AUTH_METHODS.map((method) => (
+					<label
+						key={method}
+						className="flex min-h-11 items-center gap-2 text-sm"
+					>
+						<input
+							type="checkbox"
+							name="auth_methods"
+							value={method}
+							defaultChecked={tenant.authMethods.includes(method)}
+						/>
+						{AUTH_METHOD_LABELS[method]}
+					</label>
+				))}
+				<p className="text-muted-foreground text-xs">
+					Son los que ofrece la landing de la empresa. Al menos uno.
+				</p>
+			</fieldset>
 
 			<div className="grid gap-4 sm:grid-cols-2">
 				<div className="space-y-1">

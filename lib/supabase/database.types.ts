@@ -1071,6 +1071,7 @@ export type Database = {
 					active: boolean;
 					allowed_domains: string[];
 					allowed_models: string[];
+					auth_methods: string[];
 					brand: NonNullable<Json>;
 					created_at: string;
 					default_model: string;
@@ -1083,6 +1084,7 @@ export type Database = {
 					active?: boolean;
 					allowed_domains?: string[];
 					allowed_models?: string[];
+					auth_methods?: string[];
 					brand?: NonNullable<Json>;
 					created_at?: string;
 					default_model?: string;
@@ -1095,6 +1097,7 @@ export type Database = {
 					active?: boolean;
 					allowed_domains?: string[];
 					allowed_models?: string[];
+					auth_methods?: string[];
 					brand?: NonNullable<Json>;
 					created_at?: string;
 					default_model?: string;
@@ -1323,6 +1326,16 @@ export type Database = {
 					isOneToOne: false;
 					isSetofReturn: true;
 				};
+			};
+			create_tenant: {
+				Args: {
+					p_allowed_domains: string[];
+					p_auth_methods: string[];
+					p_brand: Json;
+					p_display_name: string;
+					p_slug: string;
+				};
+				Returns: string;
 			};
 			custom_access_token_hook: { Args: { event: Json }; Returns: Json };
 			f_unaccent: { Args: { value: string }; Returns: string };

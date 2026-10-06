@@ -61,6 +61,7 @@ function form(overrides: Record<string, string | File | null> = {}) {
 		allowed_domains: "demo.test",
 		allowed_models: "anthropic/claude-sonnet-5",
 		default_model: "anthropic/claude-sonnet-5",
+		auth_methods: "email",
 		primary: "#059669",
 		secondary: "",
 		active: "on",
@@ -123,6 +124,7 @@ describe("updateTenant", () => {
 			self_signup_by_domain: false,
 			allowed_models: ["anthropic/claude-sonnet-5"],
 			default_model: "anthropic/claude-sonnet-5",
+			auth_methods: ["email"],
 			active: true,
 			brand: { primary: "#059669", logo_url: "demo/logo.png", font: "Geist" },
 		});
