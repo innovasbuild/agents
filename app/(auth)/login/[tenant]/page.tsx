@@ -25,7 +25,7 @@ export default async function TenantLoginPage({
 						<img
 							src={tenant.logoUrl}
 							alt={tenant.displayName}
-							className="mx-auto h-auto max-h-12 w-auto max-w-[200px]"
+							className="mx-auto h-auto w-auto max-w-[200px]"
 						/>
 					) : (
 						<h1 className="text-3xl leading-tight">{tenant.displayName}</h1>
