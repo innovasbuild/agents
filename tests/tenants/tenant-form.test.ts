@@ -7,8 +7,8 @@ import {
 	validateLogo,
 } from "@/lib/tenants/tenant-form";
 
-function form(overrides: Record<string, string | null> = {}) {
-	const values: Record<string, string | null> = {
+function form(overrides: Record<string, string | string[] | null> = {}) {
+	const values: Record<string, string | string[] | null> = {
 		display_name: "INNOV.AS",
 		allowed_domains: "innov.as",
 		self_signup_by_domain: "on",
@@ -16,20 +16,23 @@ function form(overrides: Record<string, string | null> = {}) {
 		default_model: "anthropic/claude-sonnet-5",
 		primary: "#1D4ED8",
 		secondary: "",
+		auth_methods: ["email", "google"],
 		active: "on",
 		...overrides,
 	};
 	const data = new FormData();
 	for (const [key, value] of Object.entries(values)) {
-		if (value !== null) data.set(key, value);
+		if (value === null) continue;
+		if (Array.isArray(value)) for (const v of value) data.append(key, v);
+		else data.set(key, value);
 	}
 	return data;
 }
 
-const parse = (overrides?: Record<string, string | null>) =>
+const parse = (overrides?: Record<string, string | string[] | null>) =>
 	tenantInputSchema.safeParse(readTenantForm(form(overrides)));
 
-const message = (overrides: Record<string, string | null>) => {
+const message = (overrides: Record<string, string | string[] | null>) => {
 	const result = parse(overrides);
 	return result.success ? null : result.error.issues[0]?.message;
 };
@@ -64,6 +67,7 @@ describe("tenantInputSchema", () => {
 			defaultModel: "anthropic/claude-sonnet-5",
 			primary: "#1D4ED8",
 			secondary: "",
+			authMethods: ["email", "google"],
 			active: true,
 		});
 	});
@@ -79,6 +83,18 @@ describe("tenantInputSchema", () => {
 
 		expect(result.data?.active).toBe(false);
 		expect(result.data?.selfSignupByDomain).toBe(false);
+	});
+
+	it("lee los métodos de login marcados", () => {
+		expect(parse({ auth_methods: ["google"] }).data?.authMethods).toEqual([
+			"google",
+		]);
+	});
+
+	it("exige al menos un método de login", () => {
+		expect(message({ auth_methods: null })).toBe(
+			"Elegí al menos un método de login.",
+		);
 	});
 
 	it("rechaza un nombre vacío", () => {
@@ -124,9 +140,7 @@ describe("tenantInputSchema", () => {
 	});
 
 	it("rechaza un color que no es #RRGGBB", () => {
-		expect(message({ primary: "azul" })).toBe(
-			"Los colores van como #RRGGBB.",
-		);
+		expect(message({ primary: "azul" })).toBe("Los colores van como #RRGGBB.");
 	});
 });
 

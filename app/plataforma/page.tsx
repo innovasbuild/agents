@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import {
 	platformOwnerSlug,
 	requirePlatformAdmin,
@@ -41,7 +42,12 @@ export default async function PlataformaPage() {
 
 	return (
 		<div className="max-w-3xl">
-			<h1 className="mb-4 text-3xl leading-tight">Empresas</h1>
+			<div className="mb-4 flex items-center justify-between gap-3">
+				<h1 className="text-3xl leading-tight">Empresas</h1>
+				<Button asChild size="lg">
+					<Link href="/plataforma/nueva">Nueva empresa</Link>
+				</Button>
+			</div>
 			{tenants.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
 					Todavía no hay empresas cargadas.

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { type AuthMethod, isAuthMethod } from "@/lib/tenants/auth-methods";
 
 // Módulo puro: lo importan la server action y el formulario del cliente.
 
@@ -23,6 +24,19 @@ const text = (formData: FormData, key: string) => {
 	return typeof value === "string" ? value : "";
 };
 
+export function readAuthMethods(formData: FormData): string[] {
+	return formData
+		.getAll("auth_methods")
+		.filter((v): v is string => typeof v === "string");
+}
+
+export const authMethodsSchema = z
+	.array(z.string())
+	.transform((values) => values.filter(isAuthMethod) as AuthMethod[])
+	.refine((values) => values.length > 0, {
+		error: "Elegí al menos un método de login.",
+	});
+
 export function readTenantForm(formData: FormData): unknown {
 	return {
 		displayName: text(formData, "display_name"),
@@ -38,6 +52,7 @@ export function readTenantForm(formData: FormData): unknown {
 		selfSignupByDomain: formData.has("self_signup_by_domain"),
 		allowedModels: parseList(text(formData, "allowed_models")),
 		defaultModel: text(formData, "default_model"),
+		authMethods: readAuthMethods(formData),
 		primary: text(formData, "primary").trim(),
 		secondary: text(formData, "secondary").trim(),
 		active: formData.has("active"),
@@ -76,6 +91,7 @@ export const tenantInputSchema = z
 			.min(1, { error: "Tiene que haber al menos un modelo permitido." })
 			.max(50),
 		defaultModel: z.string(),
+		authMethods: authMethodsSchema,
 		primary: color,
 		secondary: color,
 		active: z.boolean(),
