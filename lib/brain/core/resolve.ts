@@ -1,5 +1,8 @@
 // Qué brain tiene el tenant de la sesión (spec brain §4.1, etapa 11 §7.2). Sin
 // efectos. La base garantiza un solo brain habilitado por tenant (D9).
+import { parseWikiConfig, type WikiConfig } from "./config.ts";
+import { type McpBrainConfig, parseMcpBrainConfig } from "./mcp-config.ts";
+
 // Lo que el módulo necesita saber de una conexión del tenant. Es un subconjunto
 // de Binding de la plataforma: cualquier Binding la satisface.
 export interface BrainConnection {
@@ -10,9 +13,6 @@ export interface BrainConnection {
 	connectorUid: string | null;
 	config: Record<string, unknown>;
 }
-
-import { parseWikiConfig, type WikiConfig } from "./config.ts";
-import { type McpBrainConfig, parseMcpBrainConfig } from "./mcp-config.ts";
 
 export interface WikiBrainBinding {
 	id: string;

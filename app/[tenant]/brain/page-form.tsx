@@ -13,13 +13,13 @@ import {
 	insertWikilink,
 	wikilinkQueryAt,
 } from "@/lib/brain/core/editor/autocomplete";
+import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { pageHref } from "@/lib/brain/core/editor/slug";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
 	CANON_TAGS,
 } from "@/lib/brain/core/types";
-import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { saveBrainPage } from "./actions";
 
 export interface PageFormInitial {

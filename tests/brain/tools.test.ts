@@ -19,7 +19,8 @@ function fakeProvider(): BrainProvider {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(),
-		list: async () => [], history: async () => null,
+		list: async () => [],
+		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 	};
 }
@@ -69,7 +70,8 @@ describe("createBrainTools", () => {
 		const providerFactory = vi.fn(() => ({
 			search,
 			read,
-			list: async () => [], history: async () => null,
+			list: async () => [],
+			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
 		const tools = createBrainTools(binding, "read", { provider: providerFactory });

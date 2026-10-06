@@ -37,7 +37,8 @@ function deps(over: Partial<SaveDeps> = {}, upsert?: BrainProvider["upsert"]) {
 	const provider: BrainProvider = {
 		search: vi.fn(),
 		read: vi.fn(),
-		list: async () => [], history: async () => null,
+		list: async () => [],
+		history: async () => null,
 		upsert:
 			upsert ?? vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
 	};

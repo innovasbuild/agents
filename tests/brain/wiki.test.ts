@@ -31,7 +31,8 @@ function fakeStore(overrides: Partial<WikiStore> = {}): WikiStore {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => null),
-		list: async () => [], listRevisions: async () => null,
+		list: async () => [],
+		listRevisions: async () => null,
 		upsert: vi.fn(async (params) => ({ slug: params.slug, revision: 1 })),
 		...overrides,
 	};

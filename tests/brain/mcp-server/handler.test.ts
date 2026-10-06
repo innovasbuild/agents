@@ -40,7 +40,8 @@ function fakeProvider(): BrainProvider {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => page),
-		list: async () => [], history: async () => null,
+		list: async () => [],
+		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
 	};
 }
