@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isAllowedDomain } from "@/lib/invitations/domain";
+import { inviteToTenant } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -48,84 +48,44 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "sin permiso" }, { status: 403 });
 	}
 
-	const admin = createAdminClient();
-
-	const { data: tenant } = await admin
-		.from("tenants")
-		.select("slug, allowed_domains")
-		.eq("id", tenantId)
-		.single();
-
-	if (!tenant) {
-		return NextResponse.json({ error: "tenant inexistente" }, { status: 404 });
-	}
-
-	const external = !isAllowedDomain(email, tenant.allowed_domains);
-	if (external && !allowExternal) {
-		return NextResponse.json(
-			{ error: "dominio_no_permitido", allowedDomains: tenant.allowed_domains },
-			{ status: 422 },
-		);
-	}
-
-	const { error: insertError } = await admin.from("invitations").insert({
-		tenant_id: tenantId,
+	const outcome = await inviteToTenant({
+		admin: createAdminClient(),
+		tenantId,
 		email,
 		role,
-		invited_by: auth.user.id,
+		invitedBy: auth.user.id,
+		allowExternal: allowExternal ?? false,
+		origin: new URL(request.url).origin,
 	});
 
-	if (insertError) {
-		return NextResponse.json(
-			{ error: "ya hay una invitación pendiente" },
-			{ status: 409 },
-		);
-	}
-
-	if (external) {
-		// El evento de auditoría se registra acá, al momento de crear la
-		// invitación (que es cuando se tomó la decisión de permitir el
-		// dominio externo), no atado a que el mail de invitación salga bien:
-		// si inviteUserByEmail falla más abajo, la fila en `invitations`
-		// queda igual y la excepción de dominio tiene que quedar registrada
-		// una sola vez, sin importar el resultado del envío.
-		await admin.from("events").insert({
-			tenant_id: tenantId,
-			actor_user_id: auth.user.id,
-			type: "invitation.external",
-			summary: `Invitación fuera de los dominios del cliente: ${email}`,
-			payload: { email, role },
-		});
-	}
-
-	const origin = new URL(request.url).origin;
-	const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(
-		email,
-		{
-			redirectTo: `${origin}/auth/callback`,
-		},
-	);
-
-	if (inviteError) {
-		const alreadyExists =
-			inviteError.code === "email_exists" ||
-			inviteError.code === "user_already_exists";
-
-		if (!alreadyExists) {
-			// Fallo real (rate limit, SMTP caído, etc.), no "ya existe": no le
-			// mentimos al caller devolviendo 201 como si el mail hubiera
-			// salido. La fila en `invitations` queda pendiente igual.
-			console.error("inviteUserByEmail:", inviteError.message);
+	// Mismos códigos que antes del refactor: el InviteForm del tenant depende
+	// del 422 con allowedDomains para ofrecer "permitir correo externo".
+	switch (outcome.kind) {
+		case "tenant_inexistente":
+			return NextResponse.json(
+				{ error: "tenant inexistente" },
+				{ status: 404 },
+			);
+		case "dominio_no_permitido":
+			return NextResponse.json(
+				{
+					error: "dominio_no_permitido",
+					allowedDomains: outcome.allowedDomains,
+				},
+				{ status: 422 },
+			);
+		case "duplicada":
+			return NextResponse.json(
+				{ error: "ya hay una invitación pendiente" },
+				{ status: 409 },
+			);
+		case "mail_fallo":
 			return NextResponse.json(
 				{ error: "no se pudo enviar el mail de invitación" },
 				{ status: 502 },
 			);
-		}
-
-		// El usuario ya existe en Auth: no hace falta mail de alta, la
-		// invitación pendiente se acepta la próxima vez que entre.
-		console.warn("inviteUserByEmail:", inviteError.message);
+		case "ok":
+		case "ya_existe":
+			return NextResponse.json({ ok: true }, { status: 201 });
 	}
-
-	return NextResponse.json({ ok: true }, { status: 201 });
 }
