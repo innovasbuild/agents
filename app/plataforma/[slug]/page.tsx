@@ -1,6 +1,9 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isAuthMethod } from "@/lib/tenants/auth-methods";
+import { knownWarnings } from "@/lib/tenants/create-warnings";
+import { originFrom } from "@/lib/tenants/origin";
 import { loadPeople } from "@/lib/tenants/people";
 import {
 	platformOwnerSlug,
@@ -34,7 +37,9 @@ export default async function TenantDetailPage({
 	const { aviso } = await searchParams;
 	// Advertencias del alta: la empresa se creó pero algo no transaccional
 	// (logo, invitación) falló. Viajan en la URL porque esta página es de servidor.
-	const avisos = aviso ? (Array.isArray(aviso) ? aviso : [aviso]) : [];
+	const avisos = knownWarnings(
+		aviso ? (Array.isArray(aviso) ? aviso : [aviso]) : [],
+	);
 	const admin = await requirePlatformAdmin();
 	if (!admin) notFound();
 
@@ -90,7 +95,7 @@ export default async function TenantDetailPage({
 				<p className="mb-4 text-muted-foreground text-sm">
 					Landing de login:{" "}
 					<code className="rounded bg-muted px-1 py-0.5 text-xs">
-						/login/{tenant.slug}
+						{originFrom(await headers())}/login/{tenant.slug}
 					</code>
 				</p>
 				{avisos.length > 0 ? (

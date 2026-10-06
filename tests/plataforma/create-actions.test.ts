@@ -9,6 +9,8 @@ const state: {
 	updates: Record<string, unknown>[];
 	uploads: string[];
 	uploadError: unknown;
+	updateError: unknown;
+	inviteThrows: boolean;
 	invite: { kind: string; allowedDomains?: string[] };
 	inviteCalls: Record<string, unknown>[];
 } = {
@@ -18,6 +20,8 @@ const state: {
 	updates: [],
 	uploads: [],
 	uploadError: null,
+	updateError: null,
+	inviteThrows: false,
 	invite: { kind: "ok" },
 	inviteCalls: [],
 };
@@ -30,7 +34,7 @@ const supabase = {
 	from: () => ({
 		update(values: Record<string, unknown>) {
 			state.updates.push(values);
-			return { eq: async () => ({ error: null }) };
+			return { eq: async () => ({ error: state.updateError }) };
 		},
 	}),
 	storage: {
@@ -51,12 +55,13 @@ vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/invitations/invite", () => ({
 	inviteToTenant: async (params: Record<string, unknown>) => {
 		state.inviteCalls.push(params);
+		if (state.inviteThrows) throw new Error("boom");
 		return state.invite;
 	},
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({
-	headers: async () => new Map([["origin", "https://app.test"]]),
+	headers: async () => new Headers({ origin: "https://app.test" }),
 }));
 
 const { createTenant } = await import("@/app/plataforma/nueva/actions");
@@ -85,6 +90,8 @@ describe("createTenant", () => {
 		state.updates = [];
 		state.uploads = [];
 		state.uploadError = null;
+		state.updateError = null;
+		state.inviteThrows = false;
 		state.invite = { kind: "ok" };
 		state.inviteCalls = [];
 	});
@@ -219,5 +226,32 @@ describe("createTenant", () => {
 			message: "El logo tiene que ser PNG, SVG o WebP.",
 		});
 		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("si no se pudo guardar el logo en la marca, avisa", async () => {
+		state.updateError = { message: "boom" };
+		const logo = new File(["png"], "l.png", { type: "image/png" });
+
+		const result = await createTenant(form({ logo }));
+
+		expect(result).toEqual({
+			ok: true,
+			slug: "acme",
+			warnings: ["No se pudo subir el logo. Subilo desde esta pantalla."],
+		});
+	});
+
+	it("si algo se rompe después de crear, la empresa creada no se informa como error", async () => {
+		state.inviteThrows = true;
+
+		const result = await createTenant(form());
+
+		expect(result).toEqual({
+			ok: true,
+			slug: "acme",
+			warnings: [
+				"No se pudo mandar la invitación al administrador. Invitalo desde Usuarios.",
+			],
+		});
 	});
 });

@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { inviteToTenant } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { INVITE_WARNING, LOGO_WARNING } from "@/lib/tenants/create-warnings";
+import { originFrom } from "@/lib/tenants/origin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 import {
 	createTenantSchema,
@@ -18,10 +20,6 @@ export type CreateResult =
 
 const SIN_PERMISO: Failure = { ok: false, message: "No tenés permiso." };
 const NO_CREO: Failure = { ok: false, message: "No se pudo crear la empresa." };
-
-const LOGO_WARNING = "No se pudo subir el logo. Subilo desde esta pantalla.";
-const INVITE_WARNING =
-	"No se pudo mandar la invitación al administrador. Invitalo desde Usuarios.";
 
 /**
  * Alta de una empresa (spec alta §5). Tenant + agente son atómicos (SQL);
@@ -73,34 +71,45 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 		}
 
 		const warnings: string[] = [];
+		const created = tenantId;
 
+		// De acá en adelante la empresa YA existe: nada de esto puede devolver un
+		// error de "no se pudo crear" (un reintento chocaría con el slug). Cada
+		// paso falla aparte, como advertencia.
 		if (hasLogo && checkedLogo?.ok) {
-			const path = `${input.slug}/logo-${Date.now()}.${checkedLogo.ext}`;
-			const { error: uploadError } = await admin.supabase.storage
-				.from("brand")
-				.upload(path, logo, { contentType: logo.type });
-			if (uploadError) warnings.push(LOGO_WARNING);
-			else
-				await admin.supabase
+			try {
+				const path = `${input.slug}/logo-${Date.now()}.${checkedLogo.ext}`;
+				const { error: uploadError } = await admin.supabase.storage
+					.from("brand")
+					.upload(path, logo, { contentType: logo.type });
+				if (uploadError) throw uploadError;
+
+				const { error: brandError } = await admin.supabase
 					.from("tenants")
 					.update({ brand: mergeBrand(brand, { ...colors, logoUrl: path }) })
-					.eq("id", tenantId);
+					.eq("id", created);
+				if (brandError) throw brandError;
+			} catch {
+				warnings.push(LOGO_WARNING);
+			}
 		}
 
-		const origin =
-			(await headers()).get("origin") ?? process.env.PUBLIC_APP_URL ?? "";
-		const outcome = await inviteToTenant({
-			admin: createAdminClient(),
-			tenantId,
-			email: input.adminEmail,
-			role: "tenant_admin",
-			invitedBy: admin.userId,
-			allowExternal: input.allowExternalAdmin,
-			origin,
-			next: `/${input.slug}/chat`,
-		});
-		if (outcome.kind !== "ok" && outcome.kind !== "ya_existe")
+		try {
+			const outcome = await inviteToTenant({
+				admin: createAdminClient(),
+				tenantId: created,
+				email: input.adminEmail,
+				role: "tenant_admin",
+				invitedBy: admin.userId,
+				allowExternal: input.allowExternalAdmin,
+				origin: originFrom(await headers()),
+				next: `/${input.slug}/chat`,
+			});
+			if (outcome.kind !== "ok" && outcome.kind !== "ya_existe")
+				warnings.push(INVITE_WARNING);
+		} catch {
 			warnings.push(INVITE_WARNING);
+		}
 
 		revalidatePath("/plataforma");
 		return { ok: true, slug: input.slug, warnings };
