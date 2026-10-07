@@ -1,5 +1,5 @@
 // Servidor MCP del brain para una persona autenticada (spec etapa 11 §5.3).
-// Escribe una persona, no el agente: brain_upsert sin aprobación (D5).
+// Escribe una persona, no el agente: brain_upsert sin aprobación (D5). El permiso lo decide el proveedor que recibe (withAccess), no el rol.
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { BRAIN_TOOL_NAMES, brainContract } from "../contract.ts";
 import { BrainError, BrainValidation, toToolError } from "../errors.ts";
@@ -19,7 +19,6 @@ function result(value: Record<string, unknown>, isError = false) {
 
 export function buildBrainMcpServer(ctx: {
 	userId: string;
-	access: "read" | "read_write";
 	categories: string[];
 	provider: BrainProvider;
 	limiter: RateLimiter;
@@ -77,29 +76,27 @@ export function buildBrainMcpServer(ctx: {
 			})),
 	);
 
-	if (ctx.access === "read_write") {
-		server.registerTool(
-			BRAIN_TOOL_NAMES.upsert,
-			{
-				description: contract.upsert.description,
-				inputSchema: contract.upsert.input,
-			},
-			async (input) =>
-				run("write", async () => {
-					if (
-						new TextEncoder().encode(input.body).length >
-						MCP_MAX_UPSERT_BODY_BYTES
-					) {
-						throw new BrainValidation(["body"]);
-					}
-					const written = await ctx.provider.upsert(input, {
-						kind: "user",
-						userId: ctx.userId,
-					});
-					return { ok: true, ...written };
-				}),
-		);
-	}
+	server.registerTool(
+		BRAIN_TOOL_NAMES.upsert,
+		{
+			description: contract.upsert.description,
+			inputSchema: contract.upsert.input,
+		},
+		async (input) =>
+			run("write", async () => {
+				if (
+					new TextEncoder().encode(input.body).length >
+					MCP_MAX_UPSERT_BODY_BYTES
+				) {
+					throw new BrainValidation(["body"]);
+				}
+				const written = await ctx.provider.upsert(input, {
+					kind: "user",
+					userId: ctx.userId,
+				});
+				return { ok: true, ...written };
+			}),
+	);
 
 	return server;
 }

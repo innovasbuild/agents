@@ -48,25 +48,10 @@ async function connect(server: ReturnType<typeof buildBrainMcpServer>) {
 }
 
 describe("buildBrainMcpServer", () => {
-	it("con acceso read expone solo brain_search y brain_read", async () => {
+	it("expone siempre las tres tools: el permiso lo decide el proveedor, no el rol", async () => {
 		const provider = fakeProvider();
 		const server = buildBrainMcpServer({
 			userId: "ana",
-			access: "read",
-			categories: ["comercial"],
-			provider,
-			limiter: fakeLimiter(),
-		});
-		const client = await connect(server);
-		const names = (await client.listTools()).tools.map((t) => t.name).sort();
-		expect(names).toEqual(["brain_read", "brain_search"]);
-	});
-
-	it("con acceso read_write agrega brain_upsert", async () => {
-		const provider = fakeProvider();
-		const server = buildBrainMcpServer({
-			userId: "admin",
-			access: "read_write",
 			categories: ["comercial"],
 			provider,
 			limiter: fakeLimiter(),
@@ -80,7 +65,6 @@ describe("buildBrainMcpServer", () => {
 		const provider = fakeProvider();
 		const server = buildBrainMcpServer({
 			userId: "ana",
-			access: "read",
 			categories: ["comercial"],
 			provider,
 			limiter: fakeLimiter(),
@@ -99,7 +83,6 @@ describe("buildBrainMcpServer", () => {
 		const limiter = fakeLimiter();
 		const server = buildBrainMcpServer({
 			userId: "ana",
-			access: "read",
 			categories: ["comercial"],
 			provider,
 			limiter,
@@ -110,7 +93,6 @@ describe("buildBrainMcpServer", () => {
 
 		const writeServer = buildBrainMcpServer({
 			userId: "admin",
-			access: "read_write",
 			categories: ["comercial"],
 			provider,
 			limiter,
@@ -135,7 +117,6 @@ describe("buildBrainMcpServer", () => {
 		const provider = fakeProvider();
 		const server = buildBrainMcpServer({
 			userId: "admin",
-			access: "read_write",
 			categories: ["comercial"],
 			provider,
 			limiter: fakeLimiter(),
@@ -169,7 +150,6 @@ describe("buildBrainMcpServer", () => {
 		);
 		const server = buildBrainMcpServer({
 			userId: "ana",
-			access: "read",
 			categories: ["comercial"],
 			provider,
 			limiter: fakeLimiter(),
@@ -195,7 +175,6 @@ describe("buildBrainMcpServer", () => {
 		const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
 		const server = buildBrainMcpServer({
 			userId: "ana",
-			access: "read",
 			categories: ["comercial"],
 			provider,
 			limiter: fakeLimiter(),

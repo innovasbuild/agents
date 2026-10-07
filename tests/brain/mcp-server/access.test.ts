@@ -56,28 +56,28 @@ describe("resolveMcpAccess", () => {
 	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 	afterEach(() => warn.mockClear());
 
-	it("un miembro lee su tenant", async () => {
+	it("un miembro entra a su tenant como tenant_member", async () => {
 		expect(await access("Bearer ana")).toEqual({
 			ok: true,
 			tenantId: "tenant-a",
 			userId: "ana",
-			access: "read",
+			role: "tenant_member",
 			binding,
 		});
 	});
 
-	it("un tenant_admin escribe", async () => {
+	it("un tenant_admin entra como tenant_admin", async () => {
 		expect(await access("Bearer admin")).toMatchObject({
 			ok: true,
-			access: "read_write",
+			role: "tenant_admin",
 		});
 	});
 
-	it("un platform_admin entra a un tenant donde no tiene membresía, y escribe", async () => {
+	it("un platform_admin entra a un tenant donde no tiene membresía, como platform_admin", async () => {
 		expect(await access("Bearer root")).toMatchObject({
 			ok: true,
 			tenantId: "tenant-a",
-			access: "read_write",
+			role: "platform_admin",
 		});
 	});
 
