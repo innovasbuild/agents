@@ -9,7 +9,11 @@ import {
 	loadBrainTree,
 	loadEditorContext,
 } from "@/lib/brain/adapters/editor";
-import { editableFolders, type TreeNode } from "@/lib/brain/core/access/tree";
+import {
+	editableFolders,
+	type TreeNode,
+	withoutArchived,
+} from "@/lib/brain/core/access/tree";
 import { buildLinkIndex } from "@/lib/brain/core/links";
 import {
 	BRAIN_STATUSES,
@@ -72,7 +76,9 @@ export default async function BrainIndexPage({
 	// sueltas. Con alguna, la lista plana de resultados.
 	const browsing = !q.trim() && !tag && !folder;
 	const folders = browsing
-		? tree.children.filter((n) => n.children.length > 0)
+		? (status === "archivado" ? tree : withoutArchived(tree)).children.filter(
+				(n) => n.children.length > 0,
+			)
 		: [];
 	const countPages = (node: TreeNode): number =>
 		(node.page ? 1 : 0) +
@@ -174,7 +180,8 @@ export default async function BrainIndexPage({
 									{node.name}
 								</span>
 								<span className="text-muted-foreground text-xs">
-									{countPages(node)} páginas
+									{countPages(node)}{" "}
+									{countPages(node) === 1 ? "página" : "páginas"}
 								</span>
 							</Link>
 						</li>

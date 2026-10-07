@@ -5,6 +5,7 @@ import { loadPeople } from "@/lib/tenants/people";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import type { NodeAccessView } from "../core/access/explain";
 import { loadShareView, type ManageDeps } from "../core/access/manage";
+import { isAdminRole } from "../core/access/types";
 import type { BrainRole } from "../core/types";
 import { accessRulesStore, accessRulesWriter } from "./access-rules";
 
@@ -86,9 +87,7 @@ export async function loadShareState(
 		ok: true,
 		view: result.view,
 		people,
-		admins: shown
-			.filter((m) => m.role === "tenant_admin")
-			.map((m) => m.user_id),
+		admins: shown.filter((m) => isAdminRole(m.role)).map((m) => m.user_id),
 		candidates: shown
 			.filter((m) => m.role === "tenant_member")
 			.map((m) => m.user_id),

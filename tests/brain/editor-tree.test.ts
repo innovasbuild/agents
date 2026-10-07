@@ -29,7 +29,6 @@ describe("loadBrainTree", () => {
 	it("arma el árbol con lo que el contexto deja ver y sin cuerpos", async () => {
 		const ctx = {
 			kind: "ok",
-			canEdit: true,
 			categories: ["comercial"],
 			tenant: {},
 			access: (path: string) => (path.startsWith("legal") ? null : "lector"),

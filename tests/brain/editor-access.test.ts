@@ -1,5 +1,5 @@
 // Value: protects=el contexto del editor entrega un proveedor que filtra por los permisos del miembro y un access(path) coherente; los administradores no consultan reglas.
-// fails_when=el proveedor del contexto no esta envuelto (el miembro ve paginas ocultas) o canEdit ignora una regla de editor sobre la raiz.
+// fails_when=el proveedor del contexto no esta envuelto (el miembro ve paginas ocultas).
 // why_new=editor-adapter.test.ts no ejercita las reglas; seam=none
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AccessRule } from "@/lib/brain/core/access/types";
@@ -107,18 +107,7 @@ describe("loadEditorContext · permisos", () => {
 		]);
 		expect(ctx.access("comercial/icp")).toBe("lector");
 		expect(ctx.access("direccion/presupuesto")).toBeNull();
-		expect(ctx.canEdit).toBe(false);
 		expect(state.loads).toEqual(["tenant-a"]);
-	});
-
-	it("una regla de editor sobre la raíz habilita canEdit a un miembro", async () => {
-		state.access = tenantAccess("tenant_member");
-		state.rules = [
-			{ path: "", principal: "members", userId: null, level: "editor" },
-		];
-		const ctx = await loadEditorContext("acme-2");
-		if (ctx?.kind !== "ok") throw new Error("se esperaba un contexto ok");
-		expect(ctx.canEdit).toBe(true);
 	});
 
 	it("un tenant_admin ve todo, edita y no consulta reglas", async () => {
@@ -130,7 +119,6 @@ describe("loadEditorContext · permisos", () => {
 			"comercial/icp",
 			"direccion/presupuesto",
 		]);
-		expect(ctx.canEdit).toBe(true);
 		expect(ctx.access("direccion/presupuesto")).toBe("administrador");
 		expect(ctx.provider).toBe(raw);
 		expect(state.loads).toEqual([]);

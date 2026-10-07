@@ -2,7 +2,7 @@
 //   history null pasan como null; authorUserId no sale en las filas.
 // fails_when=se quita el filtro de membresia por tenant (fuga de email entre empresas) o se rompe el mapeo.
 // why_new=ningun test toca lib/brain/adapters/editor.ts; seam=none
-// Value: protects=loadEditorContext devuelve null/no-brain/external/ok y canEdit es false solo para tenant_member.
+// Value: protects=loadEditorContext devuelve null/no-brain/external/ok.
 // fails_when=se invierte el chequeo de rol o de proveedor (mcp se trata como wiki).
 // why_new=el contexto gatea todas las paginas del brain y nada lo prueba; seam=none
 
@@ -129,7 +129,6 @@ function ctxWith(history: BrainRevision[] | null): OkEditorContext {
 	return {
 		kind: "ok",
 		tenant: tenant(),
-		canEdit: true,
 		categories: ["comercial"],
 		provider: { history: vi.fn(async () => history) },
 	} as unknown as OkEditorContext;
@@ -258,22 +257,9 @@ describe("loadEditorContext", () => {
 		const ctx = await loadEditorContext("admin-ok");
 		expect(ctx?.kind).toBe("ok");
 		if (ctx?.kind !== "ok") return;
-		expect(ctx.canEdit).toBe(true);
 		expect(ctx.categories).toEqual(["comercial", "ventas"]);
 		expect(typeof ctx.provider.read).toBe("function");
 		expect(ctx.tenant.id).toBe("tenant-a");
-	});
-
-	it.each([
-		["platform_admin", true],
-		["tenant_admin", true],
-		["tenant_member", false],
-	] as const)("canEdit para %s es %s", async (role, canEdit) => {
-		state.access = tenant({ role });
-		state.bindings = [binding()];
-		const ctx = await loadEditorContext(`rol-${role}`);
-		expect(ctx?.kind).toBe("ok");
-		if (ctx?.kind === "ok") expect(ctx.canEdit).toBe(canEdit);
 	});
 });
 
@@ -286,7 +272,6 @@ describe("loadRevisions · errores y tope de autores", () => {
 		return {
 			kind: "ok",
 			tenant: tenant(),
-			canEdit: true,
 			categories: ["comercial"],
 			provider: { history: vi.fn(async () => history) },
 		} as unknown as OkEditorContext;

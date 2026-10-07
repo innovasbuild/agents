@@ -60,13 +60,14 @@ export function BrainTree({
 	);
 	const prefix = `/${tenantSlug}/brain/p/`;
 	const currentSlug = pathname.startsWith(prefix)
-		? decodeURIComponent(pathname.slice(prefix.length))
+		? pathname.slice(prefix.length)
 		: null;
 
 	// Lo que la persona decidió a mano gana; la ascendencia de la página actual
 	// solo abre por defecto.
 	const isFolderOpen = (path: string) =>
-		open[path] ?? (currentSlug !== null && currentSlug.startsWith(`${path}/`));
+		(Object.hasOwn(open, path) ? open[path] : undefined) ??
+		(currentSlug !== null && currentSlug.startsWith(`${path}/`));
 
 	const toggle = (path: string) => {
 		const next = { ...open, [path]: !isFolderOpen(path) };

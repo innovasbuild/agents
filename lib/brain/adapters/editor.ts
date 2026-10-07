@@ -8,13 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
 import { type TreeNode, visibleTree } from "../core/access/tree";
-import {
-	atLeast,
-	isAdminRole,
-	type Level,
-	type Principal,
-	ROOT_PATH,
-} from "../core/access/types";
+import { isAdminRole, type Level, type Principal } from "../core/access/types";
 import { withAccess } from "../core/access/with-access";
 import { resolveBrainBinding } from "../core/resolve";
 import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
@@ -25,9 +19,6 @@ export type EditorContext =
 	| {
 			kind: "ok";
 			tenant: TenantAccess;
-			// Grueso: editor o más sobre la raíz. El permiso por nodo en pantalla
-			// llega con el árbol; mientras tanto se decide con access(path).
-			canEdit: boolean;
 			categories: string[];
 			provider: BrainProvider;
 			access: (path: string) => Level | null;
@@ -60,7 +51,6 @@ export const loadEditorContext = cache(
 		return {
 			kind: "ok",
 			tenant,
-			canEdit: atLeast(access(ROOT_PATH), "editor"),
 			categories: binding.config.categories,
 			provider: withAccess(getBrainProvider(binding), principal, rules),
 			access,
