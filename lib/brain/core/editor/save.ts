@@ -1,6 +1,7 @@
-// Guardado del editor (spec editor §5.3). La escritura corre con service role
-// por provider.upsert, así que el rol se chequea acá: la RLS no protege este
-// camino. Sin Next: la server action solo arma las dependencias reales.
+// Guardado del editor (spec editor §5.3). La escritura corre con service role:
+// el permiso lo decide el proveedor que arma deps.provider (envuelto con
+// withAccess y las reglas del tenant), porque la RLS no protege este camino.
+// Sin Next: la server action solo arma las dependencias reales.
 import {
 	BrainConflict,
 	BrainForbidden,
