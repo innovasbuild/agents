@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLinkIndex, type LinkPage } from "@/lib/brain/links";
+import { buildLinkIndex, type LinkPage } from "@/lib/brain/core/links";
 
 const page = (
 	slug: string,

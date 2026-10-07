@@ -1,9 +1,9 @@
 // Tools del brain según lo que declara este agente y el binding del tenant
 // (spec etapa 11 §8.3). Sin declaración o sin binding, no hay tools brain_*.
 import { defineDynamic } from "eve/tools";
-import { loadAgentBrainAccess } from "../../../lib/brain/agent-access";
-import { resolveBrainBinding } from "../../../lib/brain/resolve";
-import { createBrainTools } from "../../../lib/brain/tools";
+import { loadAgentBrainAccess } from "../../../lib/brain/adapters/agent-access";
+import { createBrainTools } from "../../../lib/brain/adapters/tools";
+import { resolveBrainBinding } from "../../../lib/brain/core/resolve";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 
 function attribute(value: unknown): string {

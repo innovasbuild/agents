@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { pageHref } from "@/lib/brain/editor/slug";
-import type { OutgoingLink } from "@/lib/brain/links";
+import { pageHref } from "@/lib/brain/core/editor/slug";
+import type { OutgoingLink } from "@/lib/brain/core/links";
 
 export function ConnectionsPanel({
 	tenantSlug,

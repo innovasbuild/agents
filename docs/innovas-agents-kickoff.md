@@ -266,6 +266,7 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 14 · Subida de eve | ⬜ no arrancada | — |
 | 15 · Propuesta comercial | ⬜ no arrancada | — |
 | 16 · Auto-respuesta con umbral | ⬜ no arrancada — arranca por datos, no por fecha | — |
+| 17 · Permisos del brain por carpeta y por página | 🔧 17.1 (aislamiento) código listo, falta humo manual; 17.2 y 17.3 pendientes | — |
 
 **Orden de ejecución:** 5 → 12 → 13 → 7. El número de una etapa no es su orden; el detalle está en `docs/01-roadmap-etapas.md`, "Orden de ejecución".
 

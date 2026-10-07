@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseBrainAccess } from "@/lib/brain/agent-access";
+import { parseBrainAccess } from "@/lib/brain/adapters/agent-access";
 
 describe("parseBrainAccess", () => {
 	const warn = vi.spyOn(console, "warn").mockImplementation(() => {});

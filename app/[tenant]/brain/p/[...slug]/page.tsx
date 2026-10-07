@@ -3,16 +3,16 @@ import { notFound } from "next/navigation";
 import { ConnectionsPanel } from "@/components/brain/connections-panel";
 import { BrainMarkdown } from "@/components/brain/markdown";
 import { Button } from "@/components/ui/button";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import { getBrainProvider } from "@/lib/brain/adapters/provider";
 import {
 	editHref,
 	historyHref,
 	pageHref,
 	slugFromParams,
-} from "@/lib/brain/editor/slug";
-import { buildLinkIndex } from "@/lib/brain/links";
-import { getBrainProvider } from "@/lib/brain/provider";
-import { resolveBrainBinding } from "@/lib/brain/resolve";
+} from "@/lib/brain/core/editor/slug";
+import { buildLinkIndex } from "@/lib/brain/core/links";
+import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 
 const STATUS_LABEL = {
@@ -31,7 +31,7 @@ export default async function BrainPageView({
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !slug) notFound();
 
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) {
 		const binding = await resolveBrainBinding(

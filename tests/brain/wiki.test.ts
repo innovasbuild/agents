@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import type { WikiConfig } from "@/lib/brain/config";
+import type { WikiConfig } from "@/lib/brain/core/config";
 import {
 	BrainConflict,
 	BrainNotFound,
 	BrainValidation,
-} from "@/lib/brain/errors";
-import type { BrainWrite } from "@/lib/brain/types";
-import { createWikiProvider, validateWrite } from "@/lib/brain/wiki";
-import { type WikiStore, WikiStoreError } from "@/lib/brain/wiki-store";
+} from "@/lib/brain/core/errors";
+import type { BrainWrite } from "@/lib/brain/core/types";
+import { createWikiProvider, validateWrite } from "@/lib/brain/core/wiki";
+import { type WikiStore, WikiStoreError } from "@/lib/brain/core/wiki-store";
 
 const config: WikiConfig = {
 	categories: ["comercial", "marketing"],
@@ -31,6 +31,8 @@ function fakeStore(overrides: Partial<WikiStore> = {}): WikiStore {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => null),
+		list: async () => [],
+		listRevisions: async () => null,
 		upsert: vi.fn(async (params) => ({ slug: params.slug, revision: 1 })),
 		...overrides,
 	};

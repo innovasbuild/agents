@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	type AccessStore,
 	resolveMcpAccess,
-} from "@/lib/brain/mcp-server/access";
-import type { BrainBinding } from "@/lib/brain/resolve";
+} from "@/lib/brain/core/mcp-server/access";
+import type { BrainBinding } from "@/lib/brain/core/resolve";
 
 const binding: BrainBinding = {
 	id: "b1",

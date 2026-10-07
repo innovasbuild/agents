@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { toMarkdownLinks } from "@/lib/brain/editor/markdown-links";
+import { toMarkdownLinks } from "@/lib/brain/core/editor/markdown-links";
 
 const titles: Record<string, string> = { "comercial/icp": "ICP" };
 const titleFor = (slug: string) => titles[slug];

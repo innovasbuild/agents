@@ -367,7 +367,7 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 
 ### C. Configurable por tenant y por agente
 
-- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`.
+- [x] Hoy el brain se habilita por tenant (`tenant_connections`); las tools se movieron a `lib/brain/adapters/tools.ts` y cada agente las monta declarando su acceso, en vez de tenerlas cableadas dentro de `agents/outreach/tools/brain.ts`.
 - [x] Cada agente declara en `tenant_agents.config.brain` si usa brain y con qué alcance (`none`, `read` o `read_write`). Un agente sin brain declarado no expone ninguna tool `brain_*`, igual que hoy pasa con un tenant sin binding. Confirmado en producción: `innovas` y `prueba-conexiones` con `"brain": "read_write"`.
 
 **Cuatro desvíos sobre la spec, encontrados al implementar y al verificar:**
@@ -484,6 +484,24 @@ Agregada el 2026-09-20. La escucha de la Etapa 5 responde sola cuando tiene conf
 - [ ] Todo lo que sale solo queda marcado y aparece en una lista de "salió sin aprobación".
 
 **Terminado cuando:** con el interruptor prendido para un tenant y un tipo de respuesta, las que superan el umbral salen solas, las demás esperan a una persona, y todas las automáticas se pueden auditar.
+
+---
+
+## Etapa 17 · Permisos del brain por carpeta y por página — `[ ]`
+
+**Modelo Claude Code:** Fable 5.1 para la spec (hecha) y para 17.2, que toca RLS y el punto de control de acceso. Sonnet 5 en sesión nueva para 17.1 (refactor sin cambio funcional) y 17.3 (UI).
+**Modelo runtime:** n/a.
+**Spec:** `docs/superpowers/specs/2026-10-05-etapa-17-permisos-brain-design.md` · **Plan:** a escribir por entrega.
+
+Agregada el 2026-10-05. Un administrador del tenant decide quién ve y quién edita cada carpeta y cada página del brain, con herencia hacia abajo como en Drive, y eso vale en el editor web, por MCP y en el chat con el agente. El módulo `lib/brain` queda aislado en `core/` y `adapters/` para poder mudarlo a su propio repo. Por MCP, todos ven las tres tools; el acceso lo decide la configuración del brain.
+
+Tres entregas, una sesión y un PR cada una:
+
+- [x] **17.1 · Aislamiento.** `lib/brain/core` sin imports de afuera, `lib/brain/adapters` con Supabase, Next, eve y la plataforma, test de frontera, `list()` en el provider y el editor leyendo por ahí. Sin cambio visible. Plan: `docs/superpowers/plans/2026-10-05-etapa-17-1-aislamiento-brain.md`. Pendiente antes de dar por buena en producción: humo manual del editor contra una base local (índice, página, historial, edición, mapa, raw), que no se corrió por falta de `.env.local` en el worktree.
+- [ ] **17.2 · Permisos.** Tabla `brain_access_rules`, revoke del `select` de `authenticated` en `brain_pages` y `brain_revisions` (hoy un miembro puede leer toda la tabla por la API), `resolveAccess` y `withAccess` puros, cableados en editor, MCP y agente. En el chat el agente actúa en nombre de la persona. La raíz nace abierta: nadie pierde nada el día del despliegue.
+- [ ] **17.3 · Árbol y compartir.** Árbol estilo Obsidian en `/brain`, menú de tres puntos por carpeta y página, diálogo de compartir con personas, niveles y acceso general.
+
+**Terminado cuando:** en producción, un admin restringe una carpeta desde el diálogo y le da lectura a una persona; esa persona la ve en el árbol y por MCP, otro miembro no la ve en el árbol ni por `brain_search`, y tampoco se la saca al agente por el chat.
 
 ---
 

@@ -7,9 +7,9 @@ import {
 	BrainConflict,
 	BrainNotFound,
 	BrainProviderError,
-} from "@/lib/brain/errors";
-import { createMcpBrainProvider } from "@/lib/brain/mcp";
-import type { McpBrainConfig } from "@/lib/brain/mcp-config";
+} from "@/lib/brain/core/errors";
+import { createMcpBrainProvider } from "@/lib/brain/core/mcp";
+import type { McpBrainConfig } from "@/lib/brain/core/mcp-config";
 
 const page = {
 	slug: "comercial/icp",

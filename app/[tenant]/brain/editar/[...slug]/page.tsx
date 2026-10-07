@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
-import { slugFromParams } from "@/lib/brain/editor/slug";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import { slugFromParams } from "@/lib/brain/core/editor/slug";
 import { PageForm } from "../../page-form";
 
 export default async function EditBrainPage({
@@ -12,7 +12,7 @@ export default async function EditBrainPage({
 	const ctx = await loadEditorContext(tenantSlug);
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !ctx.canEdit || !slug) notFound();
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) notFound();
 	return (

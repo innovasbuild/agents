@@ -4,7 +4,7 @@ import {
 	historyHref,
 	pageHref,
 	slugFromParams,
-} from "@/lib/brain/editor/slug";
+} from "@/lib/brain/core/editor/slug";
 
 describe("slugFromParams", () => {
 	it("une segmentos válidos", () => {

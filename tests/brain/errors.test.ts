@@ -6,7 +6,7 @@ import {
 	BrainRateLimited,
 	BrainValidation,
 	toToolError,
-} from "@/lib/brain/errors";
+} from "@/lib/brain/core/errors";
 
 describe("toToolError", () => {
 	it("traduce un conflicto con la revisión vigente", () => {

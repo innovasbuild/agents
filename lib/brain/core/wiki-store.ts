@@ -5,9 +5,43 @@ import type {
 	BrainAuthor,
 	BrainPage,
 	BrainPageSummary,
+	BrainRevision,
 	BrainSearchInput,
 	BrainStatus,
 } from "./types.ts";
+
+function toPage(row: Record<string, unknown>): BrainPage {
+	return {
+		slug: row.slug as string,
+		title: row.title as string,
+		category: row.category as string,
+		status: row.status as BrainStatus,
+		tags: (row.tags as string[] | null) ?? [],
+		frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
+		body: row.body as string,
+		revision: row.revision as number,
+		updatedAt: row.updated_at as string,
+	};
+}
+
+function toRevision(row: Record<string, unknown>): BrainRevision {
+	return {
+		revision: row.revision as number,
+		title: row.title as string,
+		category: row.category as string,
+		status: row.status as BrainStatus,
+		tags: (row.tags as string[] | null) ?? [],
+		frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
+		body: row.body as string,
+		authorKind: row.author_kind as BrainRevision["authorKind"],
+		authorUserId: (row.author_user_id as string | null) ?? null,
+		reason: row.reason as string,
+		createdAt: row.created_at as string,
+	};
+}
+
+const PAGE_COLUMNS =
+	"slug, title, category, status, tags, frontmatter, body, revision, updated_at";
 
 export class WikiStoreError extends Error {
 	readonly code: string;
@@ -46,6 +80,11 @@ export interface WikiStore {
 		input: BrainSearchInput,
 	): Promise<BrainPageSummary[]>;
 	read(tenantId: string, slug: string): Promise<BrainPage | null>;
+	list(tenantId: string): Promise<BrainPage[]>;
+	listRevisions(
+		tenantId: string,
+		slug: string,
+	): Promise<BrainRevision[] | null>;
 	upsert(params: UpsertParams): Promise<{ slug: string; revision: number }>;
 }
 
@@ -89,26 +128,45 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 		async read(tenantId, slug) {
 			const { data, error } = await client
 				.from("brain_pages")
-				.select(
-					"slug, title, category, status, tags, frontmatter, body, revision, updated_at",
-				)
+				.select(PAGE_COLUMNS)
 				.eq("tenant_id", tenantId)
 				.eq("slug", slug)
 				.maybeSingle();
 			if (error) throw storeError(error);
-			if (!data) return null;
-			const row = data as Record<string, unknown>;
-			return {
-				slug: row.slug as string,
-				title: row.title as string,
-				category: row.category as string,
-				status: row.status as BrainStatus,
-				tags: (row.tags as string[] | null) ?? [],
-				frontmatter: (row.frontmatter as Record<string, unknown>) ?? {},
-				body: row.body as string,
-				revision: row.revision as number,
-				updatedAt: row.updated_at as string,
-			};
+			return data ? toPage(data as Record<string, unknown>) : null;
+		},
+
+		async list(tenantId) {
+			const { data, error } = await client
+				.from("brain_pages")
+				.select(PAGE_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.order("slug");
+			if (error) throw storeError(error);
+			return ((data ?? []) as Array<Record<string, unknown>>).map(toPage);
+		},
+
+		async listRevisions(tenantId, slug) {
+			const { data: page, error: pageError } = await client
+				.from("brain_pages")
+				.select("id")
+				.eq("tenant_id", tenantId)
+				.eq("slug", slug)
+				.maybeSingle();
+			if (pageError) throw storeError(pageError);
+			if (!page) return null;
+
+			const { data, error } = await client
+				.from("brain_revisions")
+				.select(
+					"revision, title, category, status, tags, frontmatter, body, author_kind, author_user_id, reason, created_at",
+				)
+				.eq("tenant_id", tenantId)
+				.eq("page_id", (page as { id: string }).id)
+				.order("revision", { ascending: false });
+			if (error) throw storeError(error);
+
+			return ((data ?? []) as Array<Record<string, unknown>>).map(toRevision);
 		},
 
 		async upsert(params) {

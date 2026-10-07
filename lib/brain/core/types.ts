@@ -2,6 +2,10 @@
 
 export type BrainStatus = "activo" | "borrador" | "archivado";
 
+// Rol del usuario en el tenant, tal como lo estampa la plataforma. Es el mismo
+// conjunto de literales que TenantRole: el módulo no importa de la plataforma.
+export type BrainRole = "platform_admin" | "tenant_admin" | "tenant_member";
+
 export const BRAIN_STATUSES: readonly BrainStatus[] = [
 	"activo",
 	"borrador",
@@ -51,6 +55,20 @@ export interface BrainPage {
 	updatedAt: string;
 }
 
+export interface BrainRevision {
+	revision: number;
+	title: string;
+	category: string;
+	status: BrainStatus;
+	tags: string[];
+	frontmatter: Record<string, unknown>;
+	body: string;
+	authorKind: "user" | "agent" | "import";
+	authorUserId: string | null;
+	reason: string;
+	createdAt: string;
+}
+
 export interface BrainWrite {
 	slug: string;
 	title: string;
@@ -75,7 +93,11 @@ export type BrainAuthor =
 
 export interface BrainProvider {
 	search(input: BrainSearchInput): Promise<BrainPageSummary[]>;
-	read(slug: string): Promise<BrainPage>;
+	// suggestions: false evita la búsqueda de páginas parecidas cuando no existe
+	// (quien solo necesita saber si existe, como la ruta raw, no las usa).
+	read(slug: string, options?: { suggestions?: boolean }): Promise<BrainPage>;
+	list(): Promise<BrainPage[]>;
+	history(slug: string): Promise<BrainRevision[] | null>;
 	upsert(
 		write: BrainWrite,
 		author: BrainAuthor,

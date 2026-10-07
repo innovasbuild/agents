@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { BrainRateLimited } from "@/lib/brain/errors";
+import { BrainRateLimited } from "@/lib/brain/core/errors";
 import {
 	createRateLimiter,
 	type HitFn,
-} from "@/lib/brain/mcp-server/rate-limit";
+} from "@/lib/brain/core/mcp-server/rate-limit";
 
 const limits = { readsPerMinute: 60, writesPerMinute: 10 };
 

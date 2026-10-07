@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BrainBinding } from "@/lib/brain/resolve";
-import { createBrainTools } from "@/lib/brain/tools";
-import type { BrainProvider } from "@/lib/brain/types";
+import { createBrainTools } from "@/lib/brain/adapters/tools";
+import type { BrainBinding } from "@/lib/brain/core/resolve";
+import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
 	id: "b1",
@@ -19,6 +19,8 @@ function fakeProvider(): BrainProvider {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(),
+		list: async () => [],
+		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 	};
 }
@@ -68,6 +70,8 @@ describe("createBrainTools", () => {
 		const providerFactory = vi.fn(() => ({
 			search,
 			read,
+			list: async () => [],
+			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
 		const tools = createBrainTools(binding, "read", { provider: providerFactory });

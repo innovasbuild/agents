@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { readVaultFiles } from "@/lib/brain/import/files";
+import { readVaultFiles } from "@/lib/brain/core/import/files";
 
 const root = fileURLToPath(
 	new URL("../../fixtures/brain-vault", import.meta.url),

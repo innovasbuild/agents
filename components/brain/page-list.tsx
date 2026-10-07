@@ -1,7 +1,6 @@
 import Link from "next/link";
-import type { BrainPageRow } from "@/lib/brain/editor/load";
-import { pageHref } from "@/lib/brain/editor/slug";
-import { CANON_TAGS } from "@/lib/brain/types";
+import { pageHref } from "@/lib/brain/core/editor/slug";
+import { type BrainPage, CANON_TAGS } from "@/lib/brain/core/types";
 
 const STATUS_LABEL = {
 	activo: "Activo",
@@ -14,7 +13,7 @@ export function PageList({
 	tenantSlug,
 	counts,
 }: {
-	groups: { category: string; pages: BrainPageRow[] }[];
+	groups: { category: string; pages: BrainPage[] }[];
 	tenantSlug: string;
 	counts: Map<string, { in: number; out: number }>;
 }) {

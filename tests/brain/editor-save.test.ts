@@ -3,10 +3,10 @@ import {
 	type SaveDeps,
 	type SavePageInput,
 	savePage,
-} from "@/lib/brain/editor/save";
-import { BrainConflict, BrainValidation } from "@/lib/brain/errors";
-import type { BrainBinding } from "@/lib/brain/resolve";
-import type { BrainProvider } from "@/lib/brain/types";
+} from "@/lib/brain/core/editor/save";
+import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
+import type { BrainBinding } from "@/lib/brain/core/resolve";
+import type { BrainProvider } from "@/lib/brain/core/types";
 
 const wiki = {
 	id: "b1",
@@ -37,6 +37,8 @@ function deps(over: Partial<SaveDeps> = {}, upsert?: BrainProvider["upsert"]) {
 	const provider: BrainProvider = {
 		search: vi.fn(),
 		read: vi.fn(),
+		list: async () => [],
+		history: async () => null,
 		upsert:
 			upsert ?? vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
 	};

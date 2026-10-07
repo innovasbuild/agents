@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decideBrainUpsertResponse } from "@/lib/brain/approval";
+import { decideBrainUpsertResponse } from "@/lib/brain/core/approval";
 
 describe("decideBrainUpsertResponse", () => {
 	it("acepta a un tenant_admin del mismo tenant", () => {

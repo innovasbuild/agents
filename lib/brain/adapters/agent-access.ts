@@ -1,6 +1,6 @@
 // Qué acceso al brain declara cada agente en tenant_agents.config (spec etapa
 // 11 §8.3). Sin declaración no hay tools brain_*.
-import { createAdminClient } from "../supabase/admin";
+import { createAdminClient } from "../../supabase/admin";
 
 export type BrainAccess = "none" | "read" | "read_write";
 

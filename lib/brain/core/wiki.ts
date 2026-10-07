@@ -124,11 +124,24 @@ export function createWikiProvider(
 			});
 		},
 
-		async read(slug) {
+		async read(slug, options) {
 			if (!isValidSlug(slug)) throw new BrainValidation(["slug"]);
 			const page = await store.read(tenantId, slug);
-			if (!page) throw new BrainNotFound(slug, await suggestions(slug));
+			if (!page)
+				throw new BrainNotFound(
+					slug,
+					options?.suggestions === false ? [] : await suggestions(slug),
+				);
 			return page;
+		},
+
+		async list() {
+			return store.list(tenantId);
+		},
+
+		async history(slug) {
+			if (!isValidSlug(slug)) throw new BrainValidation(["slug"]);
+			return store.listRevisions(tenantId, slug);
 		},
 
 		async upsert(write, author) {

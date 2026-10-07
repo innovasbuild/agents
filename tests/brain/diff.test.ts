@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diffLines, diffMeta } from "@/lib/brain/diff";
+import { diffLines, diffMeta } from "@/lib/brain/core/diff";
 
 describe("diffLines", () => {
 	it("textos iguales dan un solo bloque equal", () => {

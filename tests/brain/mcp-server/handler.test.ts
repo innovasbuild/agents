@@ -1,15 +1,16 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { createUnauthorizedResponse } from "eve/channels/auth";
 import { describe, expect, it, vi } from "vitest";
-import { BrainConflict } from "@/lib/brain/errors";
-import type { AccessStore } from "@/lib/brain/mcp-server/access";
+import { BrainConflict } from "@/lib/brain/core/errors";
+import type { AccessStore } from "@/lib/brain/core/mcp-server/access";
 import {
 	type BrainMcpDeps,
 	handleBrainMcp,
 	protectedResourceMetadata,
-} from "@/lib/brain/mcp-server/handler";
-import type { BrainBinding } from "@/lib/brain/resolve";
-import type { BrainProvider } from "@/lib/brain/types";
+} from "@/lib/brain/core/mcp-server/handler";
+import type { BrainBinding } from "@/lib/brain/core/resolve";
+import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
 	id: "b1",
@@ -39,6 +40,8 @@ function fakeProvider(): BrainProvider {
 	return {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => page),
+		list: async () => [],
+		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "comercial/icp", revision: 4 })),
 	};
 }
@@ -66,6 +69,7 @@ function deps(
 		provider: () => providerInstance,
 		publicUrl: "https://agents.test",
 		issuer: "https://ref.supabase.co/auth/v1",
+		unauthorized: createUnauthorizedResponse,
 		providerInstance,
 		...overrides,
 	};

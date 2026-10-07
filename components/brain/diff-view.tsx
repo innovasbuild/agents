@@ -1,4 +1,4 @@
-import type { DiffBlock } from "@/lib/brain/diff";
+import type { DiffBlock } from "@/lib/brain/core/diff";
 
 // Bloques iguales largos se colapsan dejando `context` líneas a cada lado.
 export function DiffView({

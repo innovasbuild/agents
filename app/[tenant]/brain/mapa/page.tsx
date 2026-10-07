@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BrainNotice } from "@/components/brain/brain-notice";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/editor/load";
-import { pageHref } from "@/lib/brain/editor/slug";
-import { buildLinkIndex } from "@/lib/brain/links";
+import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import { pageHref } from "@/lib/brain/core/editor/slug";
+import { buildLinkIndex } from "@/lib/brain/core/links";
 
 const HUBS_PER_CATEGORY = 5;
 
@@ -17,7 +17,7 @@ export default async function BrainMapPage({
 	if (!ctx) notFound();
 	if (ctx.kind !== "ok") return <BrainNotice kind={ctx.kind} />;
 
-	const pages = await loadBrainPages(ctx.tenant.id);
+	const pages = await loadBrainPages(ctx);
 	const index = buildLinkIndex(pages);
 	const title = new Map(pages.map((p) => [p.slug, p.title]));
 	const live = pages.filter((p) => p.status !== "archivado");

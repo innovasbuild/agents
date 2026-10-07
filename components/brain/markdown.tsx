@@ -4,9 +4,9 @@ import remarkGfm from "remark-gfm";
 import {
 	toMarkdownLinks,
 	WIKI_SCHEME,
-} from "@/lib/brain/editor/markdown-links";
-import { pageHref } from "@/lib/brain/editor/slug";
-import type { BrainStatus } from "@/lib/brain/types";
+} from "@/lib/brain/core/editor/markdown-links";
+import { pageHref } from "@/lib/brain/core/editor/slug";
+import type { BrainStatus } from "@/lib/brain/core/types";
 
 export type PageLookup = Map<string, { title: string; status: BrainStatus }>;
 

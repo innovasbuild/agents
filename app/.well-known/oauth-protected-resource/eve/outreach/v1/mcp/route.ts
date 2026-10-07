@@ -5,7 +5,7 @@
 // nunca /.well-known/*. Mismo problema que resolvió la Etapa 11 para el
 // endpoint del brain (app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts),
 // con la misma forma de respuesta.
-import { publicSettings } from "@/lib/brain/mcp-server/production";
+import { publicSettings } from "@/lib/brain/adapters/mcp-production";
 
 const CORS = {
 	"access-control-allow-origin": "*",

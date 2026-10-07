@@ -3,7 +3,7 @@ import {
 	BRAIN_TOOL_NAMES,
 	brainContract,
 	brainResultSchemas,
-} from "@/lib/brain/contract";
+} from "@/lib/brain/core/contract";
 
 describe("brainContract", () => {
 	const contract = brainContract(["comercial", "producto"]);

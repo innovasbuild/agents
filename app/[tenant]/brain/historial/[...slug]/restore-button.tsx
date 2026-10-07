@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import type { SavePageInput } from "@/lib/brain/editor/save";
+import type { SavePageInput } from "@/lib/brain/core/editor/save";
 import { saveBrainPage } from "../../actions";
 
 export function RestoreButton({ input }: { input: SavePageInput }) {
