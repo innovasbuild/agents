@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	getShareState,
 	grantAccess,
@@ -67,6 +67,9 @@ export function ShareDialog({
 }) {
 	const router = useRouter();
 	const [path, setPath] = useState(initialPath);
+	// Path vigente, actualizado en el mismo tick que goTo: una respuesta de
+	// getShareState de otra carpeta se descarta en vez de pisar el estado.
+	const currentPath = useRef(initialPath);
 	const [name, setName] = useState(initialName);
 	const [state, setState] = useState<Loaded | Failed | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -77,8 +80,10 @@ export function ShareDialog({
 	const load = useCallback(async () => {
 		try {
 			const result = await getShareState({ tenantSlug, path });
+			if (currentPath.current !== path) return;
 			setState(result.ok ? result : { error: result.message });
 		} catch {
+			if (currentPath.current !== path) return;
 			setState({ error: "No se pudo cargar. Probá de nuevo." });
 		}
 	}, [tenantSlug, path]);
@@ -109,6 +114,7 @@ export function ShareDialog({
 	}
 
 	const goTo = (next: string) => {
+		currentPath.current = next;
 		setPath(next);
 		setName(nameOf(next));
 		setState(null);
@@ -300,8 +306,9 @@ export function ShareDialog({
 									<div className="truncate text-sm">{label(rule.userId)}</div>
 									<button
 										type="button"
+										disabled={busy}
 										onClick={() => goTo(rule.from)}
-										className="text-left text-muted-foreground text-xs underline"
+										className="min-h-11 text-left text-muted-foreground text-xs underline"
 									>
 										heredado de {rule.from === "" ? "Brain" : rule.from}
 									</button>
