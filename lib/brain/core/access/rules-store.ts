@@ -2,7 +2,12 @@
 // parámetro, como wiki-store.ts. Falla cerrada: si la base no responde, lanza,
 // porque tratarlo como "sin reglas" dejaría abiertas las carpetas restringidas.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AccessRule, AccessRulesStore, RuleLevel } from "./types.ts";
+import type {
+	AccessRule,
+	AccessRulesStore,
+	AccessRulesWriter,
+	RuleLevel,
+} from "./types.ts";
 
 const LEVELS: readonly RuleLevel[] = [
 	"lector",
@@ -49,6 +54,42 @@ export function createSupabaseAccessRulesStore(
 				);
 			}
 			return ((data ?? []) as Array<Record<string, unknown>>).flatMap(toRule);
+		},
+	};
+}
+
+export function createSupabaseAccessRulesWriter(
+	client: SupabaseClient,
+): AccessRulesWriter {
+	return {
+		async set(tenantId, rule, actorUserId) {
+			const { error } = await client.rpc("brain_set_access_rule", {
+				p_tenant_id: tenantId,
+				p_path: rule.path,
+				p_principal: rule.principal,
+				p_user_id: rule.userId,
+				p_level: rule.level,
+				p_actor: actorUserId,
+			});
+			if (error) {
+				throw new Error(
+					`No pude guardar el permiso del brain: ${error.message}`,
+				);
+			}
+		},
+		async remove(tenantId, key, actorUserId) {
+			const { error } = await client.rpc("brain_remove_access_rule", {
+				p_tenant_id: tenantId,
+				p_path: key.path,
+				p_principal: key.principal,
+				p_user_id: key.userId,
+				p_actor: actorUserId,
+			});
+			if (error) {
+				throw new Error(
+					`No pude quitar el permiso del brain: ${error.message}`,
+				);
+			}
 		},
 	};
 }
