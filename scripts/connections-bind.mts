@@ -8,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { parseBindArgs } from "./connections-bind-args.ts";
 import { loadProviderConfig } from "./connections-bind-config.ts";
 import { describeBindError } from "./connections-bind-errors.ts";
+import { DUPLICATE_RULE, rootRuleRow } from "./connections-bind-rule.ts";
 
 async function main(): Promise<void> {
 	const args = parseBindArgs(process.argv.slice(2));
@@ -57,6 +58,19 @@ async function main(): Promise<void> {
 			.eq("enabled", true)
 			.maybeSingle();
 		throw new Error(describeBindError(bindError, enabled?.provider ?? null));
+	}
+
+	// El brain nace abierto: todos los miembros leen. Volver a correr el alta no
+	// pisa una regla que ya existe (ni la que un administrador haya cambiado).
+	if (args.capability === "brain") {
+		const { error: ruleError } = await admin
+			.from("brain_access_rules")
+			.insert(rootRuleRow(tenant.id));
+		if (ruleError && ruleError.code !== DUPLICATE_RULE) {
+			throw new Error(
+				`el binding quedó guardado pero no la regla de la raíz: ${ruleError.message}`,
+			);
+		}
 	}
 
 	const { error: eventError } = await admin.from("events").insert({
