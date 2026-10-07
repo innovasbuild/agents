@@ -65,7 +65,10 @@ export function TreeRowMenu({
 	if (items.length === 0) return null;
 
 	return (
-		<DropdownMenu>
+		// modal={false}: "Compartir…" abre un Dialog modal mientras el menú se
+		// cierra; con el menú modal, ambos pelean por el bloqueo del <body> y
+		// puede quedar pointer-events: none pegado.
+		<DropdownMenu modal={false}>
 			<DropdownMenuTrigger
 				aria-label={`Opciones de ${label ?? node.page?.title ?? node.name}`}
 				className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 hover:bg-muted lg:size-7 lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 data-[state=open]:opacity-100"
