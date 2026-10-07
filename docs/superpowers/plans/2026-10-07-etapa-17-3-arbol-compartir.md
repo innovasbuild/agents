@@ -490,7 +490,7 @@ export interface NodeAccessView {
 function strictAncestors(path: string): string[] {
 	const found: string[] = [];
 	for (let n = parentPath(path); n !== null; n = parentPath(n)) found.push(n);
-	return found; // del más cercano a la raíz
+	return found; // del más cercano al más lejano (la raíz queda última)
 }
 
 export function explainAccess(
@@ -527,7 +527,8 @@ export function explainAccess(
 		level: "lector",
 		from: null,
 	};
-	for (const from of ancestors) {
+	// De la raíz hacia abajo: el ancestro más cercano con regla pisa a los demás.
+	for (const from of [...ancestors].reverse()) {
 		const rule = rules.find((r) => r.principal === "members" && r.path === from);
 		if (rule) inherited = { level: rule.level, from };
 	}
@@ -582,7 +583,7 @@ Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>"
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(11);
+select plan(10);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -789,7 +790,7 @@ grant execute on function public.brain_remove_access_rule(
 - [ ] **Step 4: Correr la prueba y ver que pasa**
 
 Run: `npm run db:test`
-Expected: PASS, incluidos los 11 de `22_brain_access_rule_fns` y sin regresiones en `21_brain_access_rules`. Si `on conflict (tenant_id, path, principal, user_id)` no infiere el índice con `nulls not distinct`, el error lo dice acá: en ese caso usar `on conflict on constraint` no aplica (es un índice, no una constraint); cambiar a `delete` + `insert` dentro de la misma función y dejar el resto igual.
+Expected: PASS, incluidas las 10 pruebas de `22_brain_access_rule_fns` y sin regresiones en `21_brain_access_rules`. Si `on conflict (tenant_id, path, principal, user_id)` no infiere el índice con `nulls not distinct`, el error lo dice acá: en ese caso usar `on conflict on constraint` no aplica (es un índice, no una constraint); cambiar a `delete` + `insert` dentro de la misma función y dejar el resto igual.
 
 - [ ] **Step 5: Regenerar los tipos y quedarse solo con las dos funciones**
 
