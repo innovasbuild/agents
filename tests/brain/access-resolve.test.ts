@@ -223,4 +223,14 @@ describe("resolveAccess · bordes", () => {
 			);
 		}
 	});
+
+	it("un rol desconocido se trata como miembro común: manda la regla, no el pase libre", () => {
+		const intruso: Principal = {
+			kind: "user",
+			userId: "x",
+			role: "intruso" as never,
+		};
+		const rules = [general("", "ninguno")];
+		expect(resolveAccess(rules, intruso, "direccion/presupuesto")).toBeNull();
+	});
 });

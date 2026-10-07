@@ -9,6 +9,7 @@ import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
 import {
 	atLeast,
+	isAdminRole,
 	type Level,
 	type Principal,
 	ROOT_PATH,
@@ -50,10 +51,9 @@ export const loadEditorContext = cache(
 		};
 		// Solo un miembro común depende de las reglas; si no se pueden cargar la
 		// excepción corta la página: se falla cerrado.
-		const rules =
-			tenant.role === "tenant_member"
-				? await accessRulesStore().load(tenant.id)
-				: [];
+		const rules = isAdminRole(tenant.role)
+			? []
+			: await accessRulesStore().load(tenant.id);
 		const access = (path: string) => resolveAccess(rules, principal, path);
 
 		return {

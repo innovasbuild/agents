@@ -19,10 +19,10 @@ function toRule(row: Record<string, unknown>): AccessRule[] {
 		typeof level !== "string" ||
 		!(LEVELS as readonly string[]).includes(level)
 	) {
-		console.warn(
-			`brain: regla de acceso descartada por valores desconocidos (path ${String(row.path)})`,
+		// Descartar la fila abriría lo que ella restringe: se falla cerrado.
+		throw new Error(
+			`No pude interpretar una regla de acceso del brain (path ${String(row.path)})`,
 		);
-		return [];
 	}
 	return [
 		{

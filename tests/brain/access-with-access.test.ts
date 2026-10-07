@@ -96,6 +96,18 @@ describe("withAccess · quién queda sin envolver", () => {
 			provider,
 		);
 	});
+
+	it("un rol desconocido queda envuelto como miembro común", () => {
+		const provider = fakeProvider();
+		const intruso: Principal = {
+			kind: "user",
+			userId: "x",
+			role: "intruso" as never,
+		};
+		expect(withAccess(provider, intruso, [general("", "ninguno")])).not.toBe(
+			provider,
+		);
+	});
 });
 
 describe("withAccess · search", () => {

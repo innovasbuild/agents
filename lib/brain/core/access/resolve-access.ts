@@ -2,6 +2,7 @@
 // tenant, quién pregunta y la ruta, y devuelve el nivel o null si no lo ve.
 import {
 	type AccessRule,
+	isAdministrator,
 	type Level,
 	maxLevel,
 	type Principal,
@@ -28,9 +29,7 @@ export function resolveAccess(
 	principal: Principal,
 	path: string,
 ): Level | null {
-	// Solo un miembro común depende de las reglas (spec A9): administradores,
-	// agente, plataforma e import administran todo.
-	if (principal.kind !== "user" || principal.role !== "tenant_member") {
+	if (principal.kind !== "user" || isAdministrator(principal)) {
 		return "administrador";
 	}
 

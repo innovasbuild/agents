@@ -4,7 +4,12 @@
 import { BrainForbidden, BrainNotFound } from "../errors.ts";
 import type { BrainProvider } from "../types.ts";
 import { resolveAccess } from "./resolve-access.ts";
-import { type AccessRule, atLeast, type Principal } from "./types.ts";
+import {
+	type AccessRule,
+	atLeast,
+	isAdministrator,
+	type Principal,
+} from "./types.ts";
 
 // Tope de brain_search_pages. Se pide de más para no quedarse corto después de
 // descartar lo oculto; no se pagina: una persona muy restringida puede recibir
@@ -20,7 +25,7 @@ export function withAccess(
 ): BrainProvider {
 	// Solo un miembro común depende de las reglas: para los demás el envoltorio
 	// no filtra nada y se evita pagarlo.
-	if (principal.kind !== "user" || principal.role !== "tenant_member") {
+	if (principal.kind !== "user" || isAdministrator(principal)) {
 		return provider;
 	}
 

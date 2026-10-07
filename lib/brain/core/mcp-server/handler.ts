@@ -1,7 +1,7 @@
 // Request al endpoint del brain (spec etapa 11 §5.1, §5.2). Stateless: un
 // servidor y un transporte por request, con respuesta JSON.
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import type { AccessRulesStore } from "../access/types.ts";
+import { type AccessRulesStore, isAdminRole } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
 import type { BrainBinding } from "../resolve.ts";
 import type { BrainProvider } from "../types.ts";
@@ -130,10 +130,9 @@ async function handleBrainMcpInner(
 	// Solo un miembro común depende de las reglas: para un administrador no se
 	// consultan. Si no se pueden cargar, la excepción llega al 500 de abajo: se
 	// falla cerrado en vez de tratarlo como "sin reglas".
-	const rules =
-		access.role === "tenant_member"
-			? await deps.rules.load(access.tenantId)
-			: [];
+	const rules = isAdminRole(access.role)
+		? []
+		: await deps.rules.load(access.tenantId);
 	const provider = withAccess(
 		deps.provider(access.binding),
 		{ kind: "user", userId: access.userId, role: access.role },

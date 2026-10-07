@@ -28,6 +28,18 @@ export type Principal =
 	| { kind: "platform" }
 	| { kind: "import" };
 
+// Lista de inclusión: solo estos dos roles administran todo. Cualquier otro
+// valor (incluso uno inesperado) se trata como miembro común.
+export function isAdminRole(role: string): boolean {
+	return role === "tenant_admin" || role === "platform_admin";
+}
+
+// Solo un miembro común depende de las reglas (spec A9): administradores,
+// agente, plataforma e import administran todo.
+export function isAdministrator(principal: Principal): boolean {
+	return principal.kind !== "user" || isAdminRole(principal.role);
+}
+
 export interface AccessRule {
 	path: string;
 	principal: "user" | "members";

@@ -5,7 +5,7 @@
 // Vive en un módulo aparte porque los execute de las tools de eve se
 // recompilan y solo pueden cerrar sobre JSON y llamar a imports estables.
 
-import type { AccessRule } from "../core/access/types.ts";
+import { type AccessRule, isAdminRole } from "../core/access/types.ts";
 import { withAccess } from "../core/access/with-access.ts";
 import type { BrainBinding } from "../core/resolve.ts";
 import type { BrainProvider, BrainRole } from "../core/types.ts";
@@ -54,10 +54,9 @@ export async function resolveActingProvider(
 	if (!actor) return provider;
 	// Solo un miembro común depende de las reglas. Si no se pueden cargar, la
 	// excepción sale: se falla cerrado.
-	const rules =
-		actor.role === "tenant_member"
-			? await (deps.rules ?? loadAccessRules)(binding.tenantId)
-			: [];
+	const rules = isAdminRole(actor.role)
+		? []
+		: await (deps.rules ?? loadAccessRules)(binding.tenantId);
 	return withAccess(
 		provider,
 		{ kind: "user", userId: actor.userId, role: actor.role },
