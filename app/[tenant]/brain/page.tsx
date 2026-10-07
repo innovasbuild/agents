@@ -5,15 +5,12 @@ import { PageList } from "@/components/brain/page-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
-import { getBrainProvider } from "@/lib/brain/adapters/provider";
 import { buildLinkIndex } from "@/lib/brain/core/links";
-import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
 	CANON_TAGS,
 } from "@/lib/brain/core/types";
-import { loadTenantBindings } from "@/lib/connectors/bindings";
 
 export default async function BrainIndexPage({
 	params,
@@ -38,17 +35,11 @@ export default async function BrainIndexPage({
 	// consulta se lista todo sin buscar.
 	let visible = pages;
 	if (q.trim()) {
-		const binding = await resolveBrainBinding(
-			ctx.tenant.id,
-			loadTenantBindings,
-		);
-		const results = binding
-			? await getBrainProvider(binding).search({
-					query: q.trim(),
-					includeArchived: status === "archivado",
-					limit: 20,
-				})
-			: [];
+		const results = await ctx.provider.search({
+			query: q.trim(),
+			includeArchived: status === "archivado",
+			limit: 20,
+		});
 		const order = new Map(results.map((r, i) => [r.slug, i]));
 		visible = pages
 			.filter((p) => order.has(p.slug))

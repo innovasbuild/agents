@@ -57,16 +57,16 @@ select throws_ok(
 set local role authenticated;
 set local "request.jwt.claims" to '{"sub":"a8a8a8a8-0000-0000-0000-000000000001","role":"authenticated"}';
 
-select is(
-  (select count(*)::int from public.brain_pages),
-  1,
-  'un miembro ve solo las páginas de su tenant'
+select throws_ok(
+  $$select count(*) from public.brain_pages$$,
+  '42501', null,
+  'un miembro ya no lee las páginas directo: lee el servidor por el proveedor'
 );
 
-select is(
-  (select count(*)::int from public.brain_revisions),
-  1,
-  'un miembro ve solo las revisiones de su tenant'
+select throws_ok(
+  $$select count(*) from public.brain_revisions$$,
+  '42501', null,
+  'un miembro ya no lee las revisiones directo'
 );
 
 select throws_ok(

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getBrainProvider } from "@/lib/brain/adapters/provider";
+import { resolveActingProvider } from "@/lib/brain/adapters/acting-provider";
 import {
 	type SavePageInput,
 	type SavePageResult,
@@ -11,7 +11,6 @@ import {
 import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import { BRAIN_STATUSES } from "@/lib/brain/core/types";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
-import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
 // Una server action la invoca cualquier cliente autenticado con lo que quiera:
@@ -46,13 +45,16 @@ export async function saveBrainPage(
 		async access(tenantSlug) {
 			const tenant = await resolveTenantAccess(tenantSlug);
 			if (!tenant) return null;
-			const { data } = await (await createServerSupabase()).auth.getUser();
-			return data.user
-				? { tenantId: tenant.id, role: tenant.role, userId: data.user.id }
-				: null;
+			return { tenantId: tenant.id, role: tenant.role, userId: tenant.userId };
 		},
 		binding: (tenantId) => resolveBrainBinding(tenantId, loadTenantBindings),
-		provider: getBrainProvider,
+		// El permiso lo decide el proveedor: un miembro con rol de editor sobre
+		// esa carpeta escribe; uno sin él recibe forbidden.
+		provider: (binding, actor) =>
+			resolveActingProvider(binding, {
+				userId: actor.userId,
+				role: actor.role,
+			}),
 	});
 
 	if (result.ok) {

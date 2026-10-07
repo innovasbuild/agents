@@ -31,6 +31,10 @@ vi.mock("@/lib/connectors/bindings", () => ({
 	loadTenantBindings: vi.fn(async () => state.bindings),
 }));
 
+vi.mock("@/lib/brain/adapters/access-rules", () => ({
+	accessRulesStore: () => ({ load: async () => [] }),
+}));
+
 vi.mock("@/lib/tenants/resolve", () => ({
 	resolveTenantAccess: vi.fn(async () => state.access),
 }));
@@ -92,6 +96,7 @@ function tenant(overrides: Partial<TenantAccess> = {}): TenantAccess {
 		slug: "acme",
 		displayName: "Acme",
 		role: "tenant_admin",
+		userId: "user-1",
 		defaultModel: "m",
 		allowedModels: ["m"],
 		brand: {},

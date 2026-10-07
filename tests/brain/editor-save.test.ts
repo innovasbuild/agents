@@ -4,7 +4,12 @@ import {
 	type SavePageInput,
 	savePage,
 } from "@/lib/brain/core/editor/save";
-import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
+import {
+	BrainConflict,
+	BrainForbidden,
+	BrainNotFound,
+	BrainValidation,
+} from "@/lib/brain/core/errors";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
@@ -51,7 +56,7 @@ function deps(over: Partial<SaveDeps> = {}, upsert?: BrainProvider["upsert"]) {
 				userId: "u1",
 			}),
 			binding: async () => wiki,
-			provider: () => provider,
+			provider: async () => provider,
 			...over,
 		} satisfies SaveDeps,
 	};
@@ -84,7 +89,16 @@ describe("savePage", () => {
 		).not.toHaveProperty("baseRevision");
 	});
 
-	it("rechaza a tenant_member y a quien no tiene acceso sin llamar al provider", async () => {
+	it("sin sesión o sin acceso al tenant rechaza sin llamar al provider", async () => {
+		const nobody = deps({ access: async () => null });
+		expect(await savePage(input, nobody.deps)).toMatchObject({
+			ok: false,
+			code: "forbidden",
+		});
+		expect(nobody.provider.upsert).not.toHaveBeenCalled();
+	});
+
+	it("un tenant_member llega al proveedor: el rol por sí solo ya no decide", async () => {
 		const member = deps({
 			access: async () => ({
 				tenantId: "t1",
@@ -92,13 +106,28 @@ describe("savePage", () => {
 				userId: "u2",
 			}),
 		});
-		expect(await savePage(input, member.deps)).toMatchObject({
+		expect(await savePage(input, member.deps)).toMatchObject({ ok: true });
+		expect(member.provider.upsert).toHaveBeenCalledTimes(1);
+	});
+
+	it("el forbidden y el not_found del proveedor salen como forbidden", async () => {
+		const forbidden = deps(
+			{},
+			vi.fn(async () => {
+				throw new BrainForbidden("sin permiso");
+			}),
+		);
+		expect(await savePage(input, forbidden.deps)).toMatchObject({
 			ok: false,
 			code: "forbidden",
 		});
-		expect(member.provider.upsert).not.toHaveBeenCalled();
-		const nobody = deps({ access: async () => null });
-		expect(await savePage(input, nobody.deps)).toMatchObject({
+		const hidden = deps(
+			{},
+			vi.fn(async () => {
+				throw new BrainNotFound("comercial/icp", []);
+			}),
+		);
+		expect(await savePage(input, hidden.deps)).toMatchObject({
 			ok: false,
 			code: "forbidden",
 		});

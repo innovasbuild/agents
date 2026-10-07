@@ -1,6 +1,7 @@
 // Quién entra al brain de qué tenant por MCP (spec etapa 11 §5.2, D3, D4, D7).
 // El tenant sale de la URL y el usuario del token; nada viene de los argumentos.
 import type { BrainBinding } from "../resolve.ts";
+import type { BrainRole } from "../types.ts";
 import { extractBearer } from "./bearer.ts";
 
 export type ClaimsVerifier = (
@@ -30,7 +31,7 @@ export type McpAccess =
 			ok: true;
 			tenantId: string;
 			userId: string;
-			access: "read" | "read_write";
+			role: BrainRole;
 			binding: BrainBinding;
 	  }
 	| Denied;
@@ -90,8 +91,11 @@ export async function resolveMcpAccess(
 	if (!platformAdmin && !own)
 		return deny(403, "forbidden", "No tenés acceso a este cliente.");
 
-	const access =
-		platformAdmin || own?.role === "tenant_admin" ? "read_write" : "read";
+	const role: BrainRole = platformAdmin
+		? "platform_admin"
+		: own?.role === "tenant_admin"
+			? "tenant_admin"
+			: "tenant_member";
 
 	const binding = await deps.store.brainBinding(tenant.id);
 	if (!binding)
@@ -101,5 +105,5 @@ export async function resolveMcpAccess(
 			"Este cliente no tiene brain configurado.",
 		);
 
-	return { ok: true, tenantId: tenant.id, userId, access, binding };
+	return { ok: true, tenantId: tenant.id, userId, role, binding };
 }

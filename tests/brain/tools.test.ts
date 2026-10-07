@@ -94,4 +94,107 @@ describe("createBrainTools", () => {
 			"brain_upsert" in tools ? String(tools.brain_upsert.description) : "";
 		expect(description).toMatch(/aprueba un administrador/);
 	});
+
+	describe("con una persona como actor", () => {
+		const closeDireccion = [
+			{
+				path: "",
+				principal: "members" as const,
+				userId: null,
+				level: "lector" as const,
+			},
+			{
+				path: "direccion",
+				principal: "members" as const,
+				userId: null,
+				level: "ninguno" as const,
+			},
+		];
+		const pageOf = (slug: string) => ({
+			slug,
+			title: slug,
+			category: "comercial",
+			status: "activo" as const,
+			tags: [],
+			snippet: "",
+			updatedAt: "2026-01-01",
+		});
+		const member = { userId: "ana", role: "tenant_member" as const };
+
+		function providerWith(
+			upsert = vi.fn(async () => ({ slug: "a", revision: 2 })),
+		) {
+			return {
+				search: vi.fn(async () => [
+					pageOf("comercial/icp"),
+					pageOf("direccion/x"),
+				]),
+				read: vi.fn(),
+				list: async () => [],
+				history: async () => null,
+				upsert,
+			};
+		}
+
+		it("brain_search filtra lo que el miembro no ve", async () => {
+			const provider = providerWith();
+			const tools = createBrainTools(binding, "read", {
+				actor: member,
+				provider: () => provider,
+				rules: async () => closeDireccion,
+			});
+			const result = await tools.brain_search.execute(
+				{ query: "x" },
+				{} as never,
+			);
+			expect(result).toMatchObject({ ok: true });
+			expect(
+				"results" in result ? result.results.map((r) => r.slug) : [],
+			).toEqual(["comercial/icp"]);
+		});
+
+		it("brain_upsert de un miembro sin permiso de editor es forbidden aunque un administrador lo apruebe", async () => {
+			const upsert = vi.fn(async () => ({ slug: "a", revision: 2 }));
+			const tools = createBrainTools(binding, "read_write", {
+				actor: member,
+				provider: () => providerWith(upsert),
+				rules: async () => closeDireccion,
+			});
+			expect("brain_upsert" in tools).toBe(true);
+			if (!("brain_upsert" in tools)) return;
+			const result = await tools.brain_upsert.execute(
+				{
+					slug: "otros/x",
+					title: "t",
+					category: "comercial",
+					status: "activo",
+					tags: [],
+					body: "b",
+					reason: "r",
+					baseRevision: 1,
+				},
+				{
+					session: {
+						id: "s1",
+						auth: { initiator: { principalType: "user", principalId: "ana" } },
+					},
+				} as never,
+			);
+			expect(result).toMatchObject({ ok: false, error: "forbidden" });
+			expect(upsert).not.toHaveBeenCalled();
+		});
+
+		it("sin actor el agente desatendido conserva todo el acceso", async () => {
+			const provider = providerWith();
+			const tools = createBrainTools(binding, "read", {
+				provider: () => provider,
+				rules: async () => closeDireccion,
+			});
+			const result = await tools.brain_search.execute(
+				{ query: "x" },
+				{} as never,
+			);
+			expect("results" in result ? result.results : []).toHaveLength(2);
+		});
+	});
 });

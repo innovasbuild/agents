@@ -10,6 +10,14 @@ su propio repo.
   `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo,
   `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`, que mira
   imports estáticos y dinámicos; no detecta globals de Node como `Buffer`.
+- `core/access/`: modelo de permisos por carpeta y página (`resolveAccess`,
+  `withAccess`) y lectura de reglas. Un `tenant_member` ve y edita lo que las
+  reglas le dan; administradores, agente, plataforma e import no pasan por
+  ellas. El agente del chat actúa con los permisos de quien inició la sesión
+  (se fijan al iniciarla). Si se comparten hilos con turnos de escritura, el
+  actor tiene que derivarse dentro de execute desde
+  `toolCtx.session.auth.current` (como ya hace la tool de escritura con
+  `auth.initiator` para el autor), no fijarse al iniciar la sesión.
 - `adapters/`: lo que conecta el módulo con esta plataforma (Supabase admin,
   conexiones del tenant, sesión, eve, Next). Es lo que hay que reescribir en el
   repo nuevo.
@@ -22,9 +30,10 @@ su propio repo.
   `mcp-server/handler.test.ts`, `mcp-server/production.test.ts`), que se
   reescriben junto con los adapters.
 - Migraciones: `20260913233557_brain_tables`, `20260913234426_brain_upsert_page`,
-  `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage` y, desde
-  la 17.2, la de permisos.
-- Tests pgTAP del brain en `supabase/tests/`.
+  `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage` y
+  `20261007120000_brain_access_rules`.
+- Tests pgTAP del brain en `supabase/tests/`, incluido
+  `supabase/tests/21_brain_access_rules.test.sql`.
 
 ## Lo que el host tiene que proveer
 
@@ -34,6 +43,7 @@ su propio repo.
 | `AccessStore`, `ClaimsVerifier`, `HitFn` | `core/mcp-server/` | Roles del usuario, verificación del token y contador de llamadas del endpoint MCP |
 | `BrainMcpDeps.unauthorized` | `core/mcp-server/handler.ts` | Arma la respuesta 401 con su desafío |
 | `load` de `resolveBrainBinding` | `core/resolve.ts` | Lista las conexiones del tenant (`BrainConnection[]`) |
+| `AccessRulesStore` | `core/access/types.ts` | Reglas de acceso del tenant. `createSupabaseAccessRulesStore(client)` lee `brain_access_rules`; si falla, lanza (falla cerrada) |
 | `SaveDeps` | `core/editor/save.ts` | Sesión, binding y proveedor para guardar desde el editor |
 
 Los scripts de operación (`scripts/brain-import.mts`, `scripts/connections-bind.mts`)

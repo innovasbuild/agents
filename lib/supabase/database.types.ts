@@ -78,6 +78,50 @@ export type Database = {
 					},
 				];
 			};
+			brain_access_rules: {
+				Row: {
+					created_at: string;
+					created_by: string | null;
+					id: string;
+					level: Database["public"]["Enums"]["brain_access_level"];
+					path: string;
+					principal: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id: string;
+					updated_at: string;
+					user_id: string | null;
+				};
+				Insert: {
+					created_at?: string;
+					created_by?: string | null;
+					id?: string;
+					level: Database["public"]["Enums"]["brain_access_level"];
+					path: string;
+					principal: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id: string;
+					updated_at?: string;
+					user_id?: string | null;
+				};
+				Update: {
+					created_at?: string;
+					created_by?: string | null;
+					id?: string;
+					level?: Database["public"]["Enums"]["brain_access_level"];
+					path?: string;
+					principal?: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id?: string;
+					updated_at?: string;
+					user_id?: string | null;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "brain_access_rules_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			brain_mcp_usage: {
 				Row: {
 					reads: number;
@@ -1381,6 +1425,8 @@ export type Database = {
 			};
 		};
 		Enums: {
+			brain_access_level: "lector" | "editor" | "administrador" | "ninguno";
+			brain_access_principal: "user" | "members";
 			brain_author_kind: "user" | "agent" | "import";
 			brain_page_status: "activo" | "borrador" | "archivado";
 			config_value_kind: "segmento" | "vector" | "hook" | "idioma";
@@ -1548,6 +1594,8 @@ export const Constants = {
 	},
 	public: {
 		Enums: {
+			brain_access_level: ["lector", "editor", "administrador", "ninguno"],
+			brain_access_principal: ["user", "members"],
 			brain_author_kind: ["user", "agent", "import"],
 			brain_page_status: ["activo", "borrador", "archivado"],
 			config_value_kind: ["segmento", "vector", "hook", "idioma"],

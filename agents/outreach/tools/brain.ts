@@ -1,6 +1,7 @@
 // Tools del brain según lo que declara este agente y el binding del tenant
 // (spec etapa 11 §8.3). Sin declaración o sin binding, no hay tools brain_*.
 import { defineDynamic } from "eve/tools";
+import { brainActorFrom } from "../../../lib/brain/adapters/acting-provider";
 import { loadAgentBrainAccess } from "../../../lib/brain/adapters/agent-access";
 import { createBrainTools } from "../../../lib/brain/adapters/tools";
 import { resolveBrainBinding } from "../../../lib/brain/core/resolve";
@@ -23,7 +24,9 @@ export default defineDynamic({
 			const binding = await resolveBrainBinding(tenantId, loadTenantBindings);
 			if (!binding) return null;
 
-			return createBrainTools(binding, access);
+			// En el chat actúa en nombre de la persona; en corridas desatendidas no
+			// hay persona y el agente conserva su declaración.
+			return createBrainTools(binding, access, { actor: brainActorFrom(auth) });
 		},
 	},
 });

@@ -65,6 +65,7 @@ function deps(
 	return {
 		verify: async (token) => ({ sub: token, client_id: "claude" }),
 		store,
+		rules: { load: async () => [] },
 		hit: async () => ({ allowed: true, retryAfterSeconds: 0 }),
 		provider: () => providerInstance,
 		publicUrl: "https://agents.test",
@@ -89,11 +90,11 @@ async function connect(token: string, d: BrainMcpDeps, slug = "a") {
 }
 
 describe("handleBrainMcp", () => {
-	it("un miembro ve dos tools; un admin, tres", async () => {
+	it("todos ven las tres tools: el permiso se aplica al llamarlas", async () => {
 		const member = await connect("ana", deps());
 		expect(
 			(await member.listTools()).tools.map((tool) => tool.name).sort(),
-		).toEqual(["brain_read", "brain_search"]);
+		).toEqual(["brain_read", "brain_search", "brain_upsert"]);
 		const admin = await connect("admin", deps());
 		expect(
 			(await admin.listTools()).tools.map((tool) => tool.name).sort(),
@@ -121,7 +122,9 @@ describe("handleBrainMcp", () => {
 			name: "brain_search",
 			arguments: { query: "icp", tenantId: "tenant-b" },
 		});
-		expect(d.providerInstance.search).toHaveBeenCalledWith({ query: "icp" });
+		const [called] = vi.mocked(d.providerInstance.search).mock.calls[0];
+		expect(called).toMatchObject({ query: "icp" });
+		expect(called).not.toHaveProperty("tenantId");
 	});
 
 	it("el proveedor recibe el binding del tenant de la URL", async () => {
@@ -353,6 +356,128 @@ describe("handleBrainMcp", () => {
 		expect(body).not.toContain("password");
 		expect(JSON.parse(body)).toMatchObject({ ok: false, code: "internal" });
 		errorLog.mockRestore();
+	});
+
+	const upsertArgs = {
+		slug: "comercial/icp",
+		title: "ICP",
+		category: "comercial",
+		status: "activo",
+		tags: [],
+		body: "x",
+		reason: "ajuste",
+		baseRevision: 3,
+	};
+
+	it("un miembro que no es editor recibe forbidden al escribir, sin llegar al proveedor", async () => {
+		const d = deps();
+		const client = await connect("ana", d);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: upsertArgs,
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "forbidden",
+		});
+		expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+	});
+
+	it("un miembro con una regla de editor sobre la carpeta escribe como usuario", async () => {
+		const d = deps({
+			rules: {
+				load: async () => [
+					{
+						path: "comercial",
+						principal: "user",
+						userId: "ana",
+						level: "editor",
+					},
+				],
+			},
+		});
+		const client = await connect("ana", d);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: upsertArgs,
+		});
+		expect(result.structuredContent).toMatchObject({ ok: true, revision: 4 });
+		expect(d.providerInstance.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ slug: "comercial/icp" }),
+			{ kind: "user", userId: "ana" },
+		);
+	});
+
+	it("una página oculta para el miembro responde not_found como si no existiera", async () => {
+		const d = deps({
+			rules: {
+				load: async () => [
+					{
+						path: "comercial",
+						principal: "members",
+						userId: null,
+						level: "ninguno",
+					},
+				],
+			},
+		});
+		const client = await connect("ana", d);
+		const result = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "comercial/icp" },
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "not_found",
+			suggestions: [],
+		});
+		expect(d.providerInstance.read).not.toHaveBeenCalled();
+	});
+
+	it("un admin no consulta las reglas y su proveedor no se envuelve", async () => {
+		const load = vi.fn(async () => []);
+		const d = deps({ rules: { load } });
+		const client = await connect("admin", d);
+		await client.callTool({
+			name: "brain_search",
+			arguments: { query: "icp" },
+		});
+		expect(load).not.toHaveBeenCalled();
+		expect(d.providerInstance.search).toHaveBeenCalledWith({ query: "icp" });
+	});
+
+	it("si las reglas no se pueden cargar, falla cerrado: 500 y nada llega al proveedor", async () => {
+		const d = deps({
+			rules: {
+				load: async () => {
+					throw new Error("base caída");
+				},
+			},
+		});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const response = await handleBrainMcp(
+			new Request("https://agents.test/brain/a/mcp", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer ana",
+					"content-type": "application/json",
+					accept: "application/json, text/event-stream",
+				},
+				body: JSON.stringify({
+					jsonrpc: "2.0",
+					id: 1,
+					method: "tools/call",
+					params: { name: "brain_search", arguments: { query: "icp" } },
+				}),
+			}),
+			"a",
+			d,
+		);
+		expect(response.status).toBe(500);
+		expect(d.providerInstance.search).not.toHaveBeenCalled();
+		error.mockRestore();
 	});
 });
 
