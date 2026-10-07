@@ -242,7 +242,7 @@ describe("changeAccess", () => {
 		expect(remove).toHaveBeenCalled();
 	});
 
-	it("rechaza a quien no es miembro del tenant, a un tenant_admin y a un userId inexistente", async () => {
+	it("un grant rechaza a quien no es miembro del tenant, a un tenant_admin y a un userId inexistente", async () => {
 		const { deps, set } = setup({
 			roles: { ana: "tenant_member", adm: "tenant_admin" },
 		});
@@ -253,6 +253,50 @@ describe("changeAccess", () => {
 			await changeAccess("i", grant({ userId: "adm" }), deps),
 		).toMatchObject({ code: "invalid" });
 		expect(set).not.toHaveBeenCalled();
+	});
+
+	it("un revoke se permite para quien ya no es miembro y limpia su regla; el grant sigue rechazado", async () => {
+		const { deps, set, remove } = setup({
+			rules: [members("", "lector"), user("comercial", "ex", "editor")],
+			roles: {},
+		});
+		expect(
+			await changeAccess(
+				"i",
+				{ kind: "revoke", path: "comercial", userId: "ex" },
+				deps,
+			),
+		).toEqual({ ok: true });
+		expect(remove).toHaveBeenCalledWith(
+			"t1",
+			{ path: "comercial", principal: "user", userId: "ex" },
+			"admin1",
+		);
+		expect(
+			await changeAccess("i", grant({ userId: "ex" }), deps),
+		).toMatchObject({ code: "invalid" });
+		expect(set).not.toHaveBeenCalled();
+	});
+
+	it("un miembro administrador por un ancestro puede quitarse su propia regla de un hijo", async () => {
+		const { deps, remove } = setup({
+			role: "tenant_member",
+			userId: "beto",
+			rules: [
+				members("", "lector"),
+				user("comercial", "beto", "administrador"),
+				user("comercial/icp", "beto", "lector"),
+			],
+			paths: ["comercial/icp"],
+		});
+		expect(
+			await changeAccess(
+				"i",
+				{ kind: "revoke", path: "comercial/icp", userId: "beto" },
+				deps,
+			),
+		).toEqual({ ok: true });
+		expect(remove).toHaveBeenCalled();
 	});
 
 	it("una ruta inventada, sin páginas ni reglas debajo, responde not_found", async () => {

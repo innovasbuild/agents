@@ -158,7 +158,9 @@ export async function changeAccess(
 	const auth = await authorize(tenantSlug, change.path, deps);
 	if (!auth.ok) return auth;
 
-	if (change.kind !== "general") {
+	// Solo un grant puede escalar privilegios; un revoke se permite para
+	// cualquier userId, así se limpian las reglas de un ex-miembro.
+	if (change.kind === "grant") {
 		const role = await deps.memberRole(auth.tenantId, change.userId);
 		if (role === null) {
 			return fail("invalid", "Esa persona no es miembro de esta empresa.");
