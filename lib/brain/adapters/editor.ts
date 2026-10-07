@@ -7,6 +7,7 @@ import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
+import { type TreeNode, visibleTree } from "../core/access/tree";
 import {
 	atLeast,
 	isAdminRole,
@@ -71,6 +72,13 @@ export const loadEditorContext = cache(
 // durante todo el request, así que la lista se lee una sola vez.
 export const loadBrainPages = cache(
 	async (ctx: OkEditorContext): Promise<BrainPage[]> => ctx.provider.list(),
+);
+
+// El árbol sale de lo que el proveedor envuelto ya dejó ver, filtrado otra vez
+// por ctx.access: lo oculto no llega ni a la pantalla.
+export const loadBrainTree = cache(
+	async (ctx: OkEditorContext): Promise<TreeNode> =>
+		visibleTree(await loadBrainPages(ctx), ctx.access),
 );
 
 export interface RevisionRow extends Omit<BrainRevision, "authorUserId"> {

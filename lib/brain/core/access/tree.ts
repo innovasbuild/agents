@@ -38,7 +38,7 @@ function sortNodes(nodes: TreeNode[]): void {
 }
 
 export function visibleTree(
-	pages: Array<TreePage & Record<string, unknown>>,
+	pages: readonly TreePage[],
 	access: (path: string) => Level | null,
 ): TreeNode {
 	const root: TreeNode = {
