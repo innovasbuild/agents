@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { accessRulesStore } from "@/lib/brain/adapters/access-rules";
 import { getBrainProvider } from "@/lib/brain/adapters/provider";
+import { withAccess } from "@/lib/brain/core/access/with-access";
 import {
 	type SavePageInput,
 	type SavePageResult,
@@ -52,7 +54,16 @@ export async function saveBrainPage(
 				: null;
 		},
 		binding: (tenantId) => resolveBrainBinding(tenantId, loadTenantBindings),
-		provider: getBrainProvider,
+		// El permiso lo decide el proveedor: un miembro con rol de editor sobre
+		// esa carpeta escribe; uno sin él recibe forbidden.
+		provider: async (binding, actor) =>
+			withAccess(
+				getBrainProvider(binding),
+				{ kind: "user", userId: actor.userId, role: actor.role },
+				actor.role === "tenant_member"
+					? await accessRulesStore().load(actor.tenantId)
+					: [],
+			),
 	});
 
 	if (result.ok) {

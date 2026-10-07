@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DiffView } from "@/components/brain/diff-view";
 import { loadEditorContext, loadRevisions } from "@/lib/brain/adapters/editor";
+import { atLeast } from "@/lib/brain/core/access/types";
 import { diffLines, diffMeta } from "@/lib/brain/core/diff";
 import {
 	historyHref as historyPath,
@@ -99,7 +100,7 @@ export default async function HistoryPage({
 								: "Comparar con la vigente"}
 						</Link>
 					)}
-					{ctx.canEdit && selected !== current && (
+					{atLeast(ctx.access(slug), "editor") && selected !== current && (
 						<RestoreButton
 							input={{
 								tenantSlug,

@@ -4,7 +4,7 @@ import { ConnectionsPanel } from "@/components/brain/connections-panel";
 import { BrainMarkdown } from "@/components/brain/markdown";
 import { Button } from "@/components/ui/button";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
-import { getBrainProvider } from "@/lib/brain/adapters/provider";
+import { atLeast } from "@/lib/brain/core/access/types";
 import {
 	editHref,
 	historyHref,
@@ -12,8 +12,6 @@ import {
 	slugFromParams,
 } from "@/lib/brain/core/editor/slug";
 import { buildLinkIndex } from "@/lib/brain/core/links";
-import { resolveBrainBinding } from "@/lib/brain/core/resolve";
-import { loadTenantBindings } from "@/lib/connectors/bindings";
 
 const STATUS_LABEL = {
 	activo: "Activo",
@@ -34,17 +32,11 @@ export default async function BrainPageView({
 	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) {
-		const binding = await resolveBrainBinding(
-			ctx.tenant.id,
-			loadTenantBindings,
-		);
-		const suggestions = binding
-			? await getBrainProvider(binding).search({
-					query: slug.split("/").pop()?.replaceAll("-", " ") ?? slug,
-					includeArchived: true,
-					limit: 3,
-				})
-			: [];
+		const suggestions = await ctx.provider.search({
+			query: slug.split("/").pop()?.replaceAll("-", " ") ?? slug,
+			includeArchived: true,
+			limit: 3,
+		});
 		return (
 			<div className="max-w-xl space-y-3">
 				<h1 className="text-2xl">No existe la página</h1>
@@ -86,7 +78,7 @@ export default async function BrainPageView({
 					<Button asChild variant="outline">
 						<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
 					</Button>
-					{ctx.canEdit && (
+					{atLeast(ctx.access(slug), "editor") && (
 						<Button asChild>
 							<Link href={editHref(tenantSlug, slug)}>Editar</Link>
 						</Button>

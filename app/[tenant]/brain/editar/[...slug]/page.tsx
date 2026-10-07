@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import { atLeast } from "@/lib/brain/core/access/types";
 import { slugFromParams } from "@/lib/brain/core/editor/slug";
 import { PageForm } from "../../page-form";
 
@@ -11,7 +12,8 @@ export default async function EditBrainPage({
 	const { tenant: tenantSlug, slug: segments } = await params;
 	const ctx = await loadEditorContext(tenantSlug);
 	const slug = slugFromParams(segments);
-	if (!ctx || ctx.kind !== "ok" || !ctx.canEdit || !slug) notFound();
+	if (!ctx || ctx.kind !== "ok" || !slug) notFound();
+	if (!atLeast(ctx.access(slug), "editor")) notFound();
 	const pages = await loadBrainPages(ctx);
 	const page = pages.find((p) => p.slug === slug);
 	if (!page) notFound();

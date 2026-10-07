@@ -23,6 +23,7 @@ export interface TenantAccess {
 	slug: string;
 	displayName: string;
 	role: TenantRole;
+	userId: string;
 	defaultModel: string;
 	allowedModels: string[];
 	brand: TenantBrand;
@@ -101,6 +102,7 @@ export async function resolveTenantAccess(
 		slug: tenant.slug,
 		displayName: tenant.display_name,
 		role,
+		userId: auth.user.id,
 		defaultModel: tenant.default_model,
 		allowedModels: tenant.allowed_models,
 		brand: brandFromRow(tenant as TenantRow),

@@ -1,7 +1,12 @@
 // Guardado del editor (spec editor §5.3). La escritura corre con service role
 // por provider.upsert, así que el rol se chequea acá: la RLS no protege este
 // camino. Sin Next: la server action solo arma las dependencias reales.
-import { BrainConflict, BrainValidation } from "../errors";
+import {
+	BrainConflict,
+	BrainForbidden,
+	BrainNotFound,
+	BrainValidation,
+} from "../errors";
 import type { BrainBinding } from "../resolve";
 import type {
 	BrainProvider,
@@ -43,7 +48,10 @@ export interface SaveDeps {
 		tenantSlug: string,
 	): Promise<{ tenantId: string; role: BrainRole; userId: string } | null>;
 	binding(tenantId: string): Promise<BrainBinding | null>;
-	provider(binding: BrainBinding): BrainProvider;
+	provider(
+		binding: BrainBinding,
+		actor: { tenantId: string; role: BrainRole; userId: string },
+	): Promise<BrainProvider>;
 }
 
 export async function savePage(
@@ -51,7 +59,7 @@ export async function savePage(
 	deps: SaveDeps,
 ): Promise<SavePageResult> {
 	const access = await deps.access(input.tenantSlug);
-	if (!access || access.role === "tenant_member")
+	if (!access)
 		return {
 			ok: false,
 			code: "forbidden",
@@ -89,11 +97,21 @@ export async function savePage(
 	};
 
 	try {
-		const saved = await deps
-			.provider(binding)
-			.upsert(write, { kind: "user", userId: access.userId });
+		const provider = await deps.provider(binding, access);
+		const saved = await provider.upsert(write, {
+			kind: "user",
+			userId: access.userId,
+		});
 		return { ok: true, slug: saved.slug, revision: saved.revision };
 	} catch (error) {
+		// Sin permiso de escritura sobre esa página (o sobre algo que no ve): la
+		// pantalla muestra lo mismo, sin confirmar si existe.
+		if (error instanceof BrainForbidden || error instanceof BrainNotFound)
+			return {
+				ok: false,
+				code: "forbidden",
+				message: "No tenés permiso para editar esta parte del brain.",
+			};
 		if (error instanceof BrainConflict) {
 			// Al crear (baseRevision null), brain_upsert_page devuelve en el
 			// conflicto la revisión de la página EXISTENTE, no la de esta. No hay

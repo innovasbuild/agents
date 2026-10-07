@@ -1,22 +1,34 @@
 // Lecturas del editor (spec editor §4.3 y §6; etapa 17 §5.2). Todo se lee por
-// el proveedor del brain: el editor deja de tocar brain_pages y brain_revisions
-// con el cliente de sesión. El tenant sale de resolveTenantAccess, que ya
-// verificó la membresía; el proveedor filtra siempre por ese tenant.
+// el proveedor del brain, ahora envuelto con los permisos de la persona: el
+// editor deja de tocar brain_pages y brain_revisions con el cliente de sesión.
+// El tenant sale de resolveTenantAccess, que ya verificó la membresía.
 import { cache } from "react";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
+import { resolveAccess } from "../core/access/resolve-access";
+import {
+	atLeast,
+	type Level,
+	type Principal,
+	ROOT_PATH,
+} from "../core/access/types";
+import { withAccess } from "../core/access/with-access";
 import { resolveBrainBinding } from "../core/resolve";
 import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
+import { accessRulesStore } from "./access-rules";
 import { getBrainProvider } from "./provider";
 
 export type EditorContext =
 	| {
 			kind: "ok";
 			tenant: TenantAccess;
+			// Grueso: editor o más sobre la raíz. El permiso por nodo en pantalla
+			// llega con el árbol; mientras tanto se decide con access(path).
 			canEdit: boolean;
 			categories: string[];
 			provider: BrainProvider;
+			access: (path: string) => Level | null;
 	  }
 	| { kind: "no-brain"; tenant: TenantAccess }
 	| { kind: "external"; tenant: TenantAccess };
@@ -30,12 +42,27 @@ export const loadEditorContext = cache(
 		const binding = await resolveBrainBinding(tenant.id, loadTenantBindings);
 		if (!binding) return { kind: "no-brain", tenant };
 		if (binding.provider !== "wiki") return { kind: "external", tenant };
+
+		const principal: Principal = {
+			kind: "user",
+			userId: tenant.userId,
+			role: tenant.role,
+		};
+		// Solo un miembro común depende de las reglas; si no se pueden cargar la
+		// excepción corta la página: se falla cerrado.
+		const rules =
+			tenant.role === "tenant_member"
+				? await accessRulesStore().load(tenant.id)
+				: [];
+		const access = (path: string) => resolveAccess(rules, principal, path);
+
 		return {
 			kind: "ok",
 			tenant,
-			canEdit: tenant.role !== "tenant_member",
+			canEdit: atLeast(access(ROOT_PATH), "editor"),
 			categories: binding.config.categories,
-			provider: getBrainProvider(binding),
+			provider: withAccess(getBrainProvider(binding), principal, rules),
+			access,
 		};
 	},
 );

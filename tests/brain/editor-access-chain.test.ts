@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
 	tenants: [] as Row[],
 	memberships: [] as Row[],
 	pages: [] as Row[],
+	rules: [] as Row[],
 	pageQueries: [] as Array<Record<string, unknown>>,
 }));
 
@@ -57,6 +58,14 @@ vi.mock("@/lib/supabase/admin", () => ({
 						Object.entries(filters).every(([key, value]) => row[key] === value),
 					);
 					return { data: hit ?? null, error: null };
+				},
+				// biome-ignore lint/suspicious/noThenProperty: la cadena de PostgREST es esperable
+				then: (resolve: (value: unknown) => void) => {
+					const rows =
+						table === "brain_access_rules"
+							? state.rules.filter((row) => row.tenant_id === filters.tenant_id)
+							: [];
+					resolve({ data: rows, error: null });
 				},
 			};
 			return chain;
@@ -138,6 +147,7 @@ describe("lectura raw del brain · cadena real de acceso", () => {
 			pageRow("tenant-b", "cuerpo de globex"),
 		];
 		state.pageQueries = [];
+		state.rules = [];
 	});
 
 	it("un miembro lee su tenant y la consulta lleva el tenant_id de ese tenant", async () => {
@@ -172,5 +182,42 @@ describe("lectura raw del brain · cadena real de acceso", () => {
 		const response = await call("dormida");
 		expect(response.status).toBe(404);
 		expect(state.pageQueries).toEqual([]);
+	});
+
+	it("un miembro con la raíz restringida recibe 404 aunque sea del tenant", async () => {
+		state.rules = [
+			{
+				tenant_id: "tenant-a",
+				path: "",
+				principal: "members",
+				user_id: null,
+				level: "ninguno",
+			},
+		];
+		const response = await call("acme");
+		expect(response.status).toBe(404);
+		expect(state.pageQueries).toEqual([]);
+	});
+
+	it("una regla por persona le devuelve el acceso a esa carpeta", async () => {
+		state.rules = [
+			{
+				tenant_id: "tenant-a",
+				path: "",
+				principal: "members",
+				user_id: null,
+				level: "ninguno",
+			},
+			{
+				tenant_id: "tenant-a",
+				path: "comercial",
+				principal: "user",
+				user_id: "user-a",
+				level: "lector",
+			},
+		];
+		const response = await call("acme");
+		expect(response.status).toBe(200);
+		expect(await response.text()).toBe("cuerpo de acme");
 	});
 });
