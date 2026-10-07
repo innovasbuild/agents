@@ -4,12 +4,18 @@ import { BrainNotice } from "@/components/brain/brain-notice";
 import { PageList } from "@/components/brain/page-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import {
+	loadBrainPages,
+	loadBrainTree,
+	loadEditorContext,
+} from "@/lib/brain/adapters/editor";
+import { editableFolders, type TreeNode } from "@/lib/brain/core/access/tree";
 import { buildLinkIndex } from "@/lib/brain/core/links";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
 	CANON_TAGS,
+	SLUG_PATTERN,
 } from "@/lib/brain/core/types";
 
 export default async function BrainIndexPage({
@@ -17,10 +23,15 @@ export default async function BrainIndexPage({
 	searchParams,
 }: {
 	params: Promise<{ tenant: string }>;
-	searchParams: Promise<{ q?: string; estado?: string; tag?: string }>;
+	searchParams: Promise<{
+		q?: string;
+		estado?: string;
+		tag?: string;
+		carpeta?: string;
+	}>;
 }) {
 	const { tenant: slug } = await params;
-	const { q = "", estado, tag } = await searchParams;
+	const { q = "", estado, tag, carpeta } = await searchParams;
 	const ctx = await loadEditorContext(slug);
 	if (!ctx) notFound();
 	if (ctx.kind !== "ok") return <BrainNotice kind={ctx.kind} />;
@@ -50,6 +61,27 @@ export default async function BrainIndexPage({
 	);
 	if (tag) visible = visible.filter((p) => p.tags.includes(tag));
 
+	const folder = carpeta && SLUG_PATTERN.test(carpeta) ? carpeta : null;
+	if (folder)
+		visible = visible.filter(
+			(p) => p.slug === folder || p.slug.startsWith(`${folder}/`),
+		);
+
+	const tree = await loadBrainTree(ctx);
+	// Sin consulta, carpeta ni etiqueta: las carpetas de primer nivel y las páginas
+	// sueltas. Con alguna, la lista plana de resultados.
+	const browsing = !q.trim() && !tag && !folder;
+	const folders = browsing
+		? tree.children.filter((n) => n.children.length > 0)
+		: [];
+	const countPages = (node: TreeNode): number =>
+		(node.page ? 1 : 0) +
+		node.children.reduce((sum, c) => sum + countPages(c), 0);
+	const listed = browsing
+		? visible.filter((p) => !p.slug.includes("/"))
+		: visible;
+	if (!q.trim()) listed.sort((a, b) => a.slug.localeCompare(b.slug));
+
 	const counts = new Map(
 		pages.map((p) => [
 			p.slug,
@@ -59,16 +91,13 @@ export default async function BrainIndexPage({
 			},
 		]),
 	);
-	const groups = ctx.categories.map((category) => ({
-		category,
-		pages: visible.filter((p) => p.category === category),
-	}));
 	const href = (next: Record<string, string | undefined>) => {
 		const sp = new URLSearchParams();
 		for (const [k, v] of Object.entries({
 			q: q || undefined,
 			estado,
 			tag,
+			carpeta: folder ?? undefined,
 			...next,
 		}))
 			if (v) sp.set(k, v);
@@ -79,16 +108,26 @@ export default async function BrainIndexPage({
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
-				<h1 className="mr-auto text-3xl leading-tight">Brain</h1>
+				<h1 className="mr-auto text-3xl leading-tight">
+					Brain{folder ? ` / ${folder}` : ""}
+				</h1>
 				<Button asChild variant="outline">
 					<Link href={`/${slug}/brain/mapa`}>Mapa de conexiones</Link>
 				</Button>
-				{ctx.canEdit && (
-					<Button asChild>
+				{editableFolders(tree).length > 0 && (
+					<Button asChild className="lg:hidden">
 						<Link href={`/${slug}/brain/nueva`}>Nueva página</Link>
 					</Button>
 				)}
 			</div>
+			{folder && (
+				<Link
+					href={href({ carpeta: undefined })}
+					className="inline-flex min-h-11 items-center text-muted-foreground text-sm underline"
+				>
+					Quitar filtro de carpeta
+				</Link>
+			)}
 			<form className="flex flex-wrap gap-2" action={`/${slug}/brain`}>
 				<Input
 					name="q"
@@ -107,6 +146,7 @@ export default async function BrainIndexPage({
 					<option value="archivado">Archivadas</option>
 				</select>
 				{tag && <input type="hidden" name="tag" value={tag} />}
+				{folder && <input type="hidden" name="carpeta" value={folder} />}
 				<Button type="submit" variant="secondary">
 					Buscar
 				</Button>
@@ -122,7 +162,28 @@ export default async function BrainIndexPage({
 					</Link>
 				))}
 			</div>
-			<PageList groups={groups} tenantSlug={slug} counts={counts} />
+			{folders.length > 0 && (
+				<ul className="divide-y rounded-lg border">
+					{folders.map((node) => (
+						<li key={node.path}>
+							<Link
+								href={href({ carpeta: node.path })}
+								className="flex min-h-11 items-center gap-3 px-4 py-2 hover:bg-muted/50"
+							>
+								<span className="min-w-0 flex-1 truncate font-medium">
+									{node.name}
+								</span>
+								<span className="text-muted-foreground text-xs">
+									{countPages(node)} páginas
+								</span>
+							</Link>
+						</li>
+					))}
+				</ul>
+			)}
+			{(listed.length > 0 || folders.length === 0) && (
+				<PageList pages={listed} tenantSlug={slug} counts={counts} />
+			)}
 		</div>
 	);
 }
