@@ -1296,6 +1296,16 @@ export type Database = {
 					retry_after_seconds: number;
 				}[];
 			};
+			brain_remove_access_rule: {
+				Args: {
+					p_actor: string;
+					p_path: string;
+					p_principal: Database["public"]["Enums"]["brain_access_principal"];
+					p_tenant_id: string;
+					p_user_id: string;
+				};
+				Returns: undefined;
+			};
 			brain_search_pages: {
 				Args: {
 					p_category?: string;
@@ -1314,6 +1324,17 @@ export type Database = {
 					title: string;
 					updated_at: string;
 				}[];
+			};
+			brain_set_access_rule: {
+				Args: {
+					p_actor: string;
+					p_level: Database["public"]["Enums"]["brain_access_level"];
+					p_path: string;
+					p_principal: Database["public"]["Enums"]["brain_access_principal"];
+					p_tenant_id: string;
+					p_user_id: string;
+				};
+				Returns: undefined;
 			};
 			brain_upsert_page: {
 				Args: {

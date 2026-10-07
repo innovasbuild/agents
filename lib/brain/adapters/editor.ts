@@ -7,13 +7,8 @@ import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
-import {
-	atLeast,
-	isAdminRole,
-	type Level,
-	type Principal,
-	ROOT_PATH,
-} from "../core/access/types";
+import { type TreeNode, visibleTree } from "../core/access/tree";
+import { isAdminRole, type Level, type Principal } from "../core/access/types";
 import { withAccess } from "../core/access/with-access";
 import { resolveBrainBinding } from "../core/resolve";
 import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
@@ -24,9 +19,6 @@ export type EditorContext =
 	| {
 			kind: "ok";
 			tenant: TenantAccess;
-			// Grueso: editor o más sobre la raíz. El permiso por nodo en pantalla
-			// llega con el árbol; mientras tanto se decide con access(path).
-			canEdit: boolean;
 			categories: string[];
 			provider: BrainProvider;
 			access: (path: string) => Level | null;
@@ -59,7 +51,6 @@ export const loadEditorContext = cache(
 		return {
 			kind: "ok",
 			tenant,
-			canEdit: atLeast(access(ROOT_PATH), "editor"),
 			categories: binding.config.categories,
 			provider: withAccess(getBrainProvider(binding), principal, rules),
 			access,
@@ -71,6 +62,13 @@ export const loadEditorContext = cache(
 // durante todo el request, así que la lista se lee una sola vez.
 export const loadBrainPages = cache(
 	async (ctx: OkEditorContext): Promise<BrainPage[]> => ctx.provider.list(),
+);
+
+// El árbol sale de lo que el proveedor envuelto ya dejó ver, filtrado otra vez
+// por ctx.access: lo oculto no llega ni a la pantalla.
+export const loadBrainTree = cache(
+	async (ctx: OkEditorContext): Promise<TreeNode> =>
+		visibleTree(await loadBrainPages(ctx), ctx.access),
 );
 
 export interface RevisionRow extends Omit<BrainRevision, "authorUserId"> {

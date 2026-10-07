@@ -51,6 +51,24 @@ export interface AccessRulesStore {
 	load(tenantId: string): Promise<AccessRule[]>;
 }
 
+// Identifica una regla sin su nivel: lo que hace falta para quitarla.
+export interface AccessRuleKey {
+	path: string;
+	principal: "user" | "members";
+	userId: string | null;
+}
+
+// Escritura de reglas (spec etapa 17 §7.4). Cada cambio deja también su
+// evento brain.access_changed, en la misma transacción.
+export interface AccessRulesWriter {
+	set(tenantId: string, rule: AccessRule, actorUserId: string): Promise<void>;
+	remove(
+		tenantId: string,
+		key: AccessRuleKey,
+		actorUserId: string,
+	): Promise<void>;
+}
+
 // La raíz nace abierta: todos los miembros leen (spec A3).
 export const DEFAULT_ROOT_RULE: AccessRule = {
 	path: ROOT_PATH,

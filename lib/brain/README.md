@@ -22,6 +22,30 @@ su propio repo.
   conexiones del tenant, sesión, eve, Next). Es lo que hay que reescribir en el
   repo nuevo.
 
+## Cambiar permisos
+
+- `core/access/manage.ts` es el único camino que cambia reglas desde la app.
+  Exige administrador del nodo, valida la membresía y que la ruta exista, y
+  aplica el chequeo de autoexclusión. Dar acceso (grant) solo se puede a un
+  `tenant_member` simple del tenant; quitarlo (revoke) se permite para
+  cualquier `userId`. Autoexclusión (`lockout`): si quien cambia no es
+  administrador del tenant (es un miembro que administra el nodo), se simula
+  el cambio con `applyChange` y, si después ya no resuelve a `administrador`
+  sobre ese nodo, devuelve `lockout`. Los administradores del tenant quedan
+  exentos.
+- `core/access/rules-store.ts` (`createSupabaseAccessRulesWriter`) implementa
+  `AccessRulesWriter` llamando por RPC a las funciones SQL
+  `brain_set_access_rule` y `brain_remove_access_rule` (migración
+  `20261008120000_brain_access_rule_fns`), que escriben regla y evento en una
+  sola transacción. `adapters/access-rules.ts` (`accessRulesWriter()`) solo lo
+  cablea con el cliente admin; `adapters/access-admin.ts` arma `ManageDeps`
+  (`manageDeps()`) y el `ShareState` del diálogo.
+- `app/[tenant]/brain/access-actions.ts` son las server actions que llama el
+  diálogo de compartir.
+- `core/access/tree.ts` (`visibleTree`, `editableFolders`) y
+  `core/access/explain.ts` (`explainAccess`) son puras. El árbol que llega al
+  navegador no lleva cuerpos ni reglas, solo estructura y qué se puede hacer.
+
 ## Qué viaja con el módulo
 
 - `lib/brain/core/`
@@ -30,10 +54,10 @@ su propio repo.
   `mcp-server/handler.test.ts`, `mcp-server/production.test.ts`), que se
   reescriben junto con los adapters.
 - Migraciones: `20260913233557_brain_tables`, `20260913234426_brain_upsert_page`,
-  `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage` y
-  `20261007120000_brain_access_rules`.
+  `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage`,
+  `20261007120000_brain_access_rules` y `20261008120000_brain_access_rule_fns`.
 - Tests pgTAP del brain en `supabase/tests/`, incluido
-  `supabase/tests/21_brain_access_rules.test.sql`.
+  `supabase/tests/21_brain_access_rules.test.sql` y `22_brain_access_rule_fns`.
 
 ## Lo que el host tiene que proveer
 
