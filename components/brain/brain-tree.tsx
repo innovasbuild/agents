@@ -11,18 +11,23 @@ import { pageHref } from "@/lib/brain/core/editor/slug";
 
 // El plegado vive en localStorage por tenant (§7.1). Puede fallar (ventana
 // privada, datos bloqueados): se envuelve y la pantalla anda igual.
-function readOpen(key: string): Set<string> | null {
+type OpenState = Record<string, boolean>;
+
+function readOpen(key: string): OpenState | null {
 	try {
 		const raw = localStorage.getItem(key);
 		const parsed = raw ? JSON.parse(raw) : null;
-		return Array.isArray(parsed) ? new Set(parsed.map(String)) : null;
+		if (Array.isArray(parsed)) {
+			return Object.fromEntries(parsed.map((p) => [String(p), true]));
+		}
+		return parsed && typeof parsed === "object" ? (parsed as OpenState) : null;
 	} catch {
 		return null;
 	}
 }
-function writeOpen(key: string, open: Set<string>) {
+function writeOpen(key: string, open: OpenState) {
 	try {
-		localStorage.setItem(key, JSON.stringify([...open]));
+		localStorage.setItem(key, JSON.stringify(open));
 	} catch {
 		// sin almacenamiento: el plegado dura lo que dure la pantalla
 	}
@@ -39,7 +44,7 @@ export function BrainTree({
 }) {
 	const pathname = usePathname();
 	const storageKey = `brain-tree:${tenantSlug}`;
-	const [open, setOpen] = useState<Set<string>>(new Set());
+	const [open, setOpen] = useState<OpenState>({});
 	const [showArchived, setShowArchived] = useState(false);
 	const [sharing, setSharing] = useState<{ path: string; name: string } | null>(
 		null,
@@ -58,10 +63,13 @@ export function BrainTree({
 		? decodeURIComponent(pathname.slice(prefix.length))
 		: null;
 
+	// Lo que la persona decidió a mano gana; la ascendencia de la página actual
+	// solo abre por defecto.
+	const isFolderOpen = (path: string) =>
+		open[path] ?? (currentSlug !== null && currentSlug.startsWith(`${path}/`));
+
 	const toggle = (path: string) => {
-		const next = new Set(open);
-		if (next.has(path)) next.delete(path);
-		else next.add(path);
+		const next = { ...open, [path]: !isFolderOpen(path) };
 		setOpen(next);
 		writeOpen(storageKey, next);
 	};
@@ -69,9 +77,7 @@ export function BrainTree({
 	const renderNode = (node: TreeNode, depth: number) => {
 		const hasChildren = node.children.length > 0;
 		// La carpeta de la página actual se muestra abierta aunque no se haya plegado a mano.
-		const isOpen =
-			open.has(node.path) ||
-			(currentSlug !== null && currentSlug.startsWith(`${node.path}/`));
+		const isOpen = isFolderOpen(node.path);
 		const label = node.page?.title ?? node.name;
 		const isCurrent = node.page !== null && node.page.slug === currentSlug;
 		return (
@@ -128,7 +134,7 @@ export function BrainTree({
 
 	return (
 		<nav aria-label="Archivos del brain" className="space-y-2 text-sm">
-			<div className="flex items-center gap-2">
+			<div className="group flex items-center gap-2">
 				<Link
 					href={`/${tenantSlug}/brain`}
 					className="min-w-0 flex-1 truncate font-medium"
@@ -138,6 +144,7 @@ export function BrainTree({
 				<TreeRowMenu
 					tenantSlug={tenantSlug}
 					node={root}
+					label="Brain"
 					onShare={() => setSharing({ path: "", name: "Brain" })}
 				/>
 			</div>

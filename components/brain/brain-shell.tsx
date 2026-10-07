@@ -1,7 +1,8 @@
 "use client";
 
 import { MenuIcon } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { usePathname } from "next/navigation";
+import { type ReactNode, useEffect, useState } from "react";
 import { BrainTree } from "@/components/brain/brain-tree";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,9 @@ export function BrainShell({
 	children: ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
+	const pathname = usePathname();
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cierra el panel al navegar
+	useEffect(() => setOpen(false), [pathname]);
 	const tree = (
 		<BrainTree tenantSlug={tenantSlug} root={root} canCreate={canCreate} />
 	);

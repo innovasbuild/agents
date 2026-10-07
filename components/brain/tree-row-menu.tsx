@@ -17,10 +17,12 @@ export function TreeRowMenu({
 	tenantSlug,
 	node,
 	onShare,
+	label,
 }: {
 	tenantSlug: string;
 	node: TreeNode;
 	onShare: () => void;
+	label?: string;
 }) {
 	const isFolder = node.children.length > 0;
 	const canEdit = atLeast(node.level, "editor");
@@ -65,8 +67,8 @@ export function TreeRowMenu({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger
-				aria-label={`Opciones de ${node.page?.title ?? node.name}`}
-				className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 hover:bg-muted lg:size-7 lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover:opacity-100 data-[state=open]:opacity-100"
+				aria-label={`Opciones de ${label ?? node.page?.title ?? node.name}`}
+				className="inline-flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-100 hover:bg-muted lg:size-7 lg:opacity-0 lg:focus-visible:opacity-100 lg:group-hover:opacity-100 lg:group-focus-within:opacity-100 data-[state=open]:opacity-100"
 			>
 				<MoreHorizontalIcon aria-hidden className="size-4" />
 			</DropdownMenuTrigger>
