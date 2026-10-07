@@ -46,6 +46,7 @@ export type Database = {
 					researched_at: string;
 					tenant_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					domain: string;
 					expires_at: string;
@@ -78,6 +79,51 @@ export type Database = {
 					},
 				];
 			};
+			brain_access_rules: {
+				Row: {
+					created_at: string;
+					created_by: string | null;
+					id: string;
+					level: Database["public"]["Enums"]["brain_access_level"];
+					path: string;
+					principal: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id: string;
+					updated_at: string;
+					user_id: string | null;
+				};
+				ComputedFields: never;
+				Insert: {
+					created_at?: string;
+					created_by?: string | null;
+					id?: string;
+					level: Database["public"]["Enums"]["brain_access_level"];
+					path: string;
+					principal: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id: string;
+					updated_at?: string;
+					user_id?: string | null;
+				};
+				Update: {
+					created_at?: string;
+					created_by?: string | null;
+					id?: string;
+					level?: Database["public"]["Enums"]["brain_access_level"];
+					path?: string;
+					principal?: Database["public"]["Enums"]["brain_access_principal"];
+					tenant_id?: string;
+					updated_at?: string;
+					user_id?: string | null;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "brain_access_rules_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			brain_mcp_usage: {
 				Row: {
 					reads: number;
@@ -86,6 +132,7 @@ export type Database = {
 					window_start: string;
 					writes: number;
 				};
+				ComputedFields: never;
 				Insert: {
 					reads?: number;
 					tenant_id: string;
@@ -130,6 +177,7 @@ export type Database = {
 					updated_at: string;
 					updated_by: string | null;
 				};
+				ComputedFields: never;
 				Insert: {
 					body: string;
 					category: string;
@@ -197,6 +245,7 @@ export type Database = {
 					tenant_id: string;
 					title: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					approved_by_user_id?: string | null;
 					author_kind: Database["public"]["Enums"]["brain_author_kind"];
@@ -262,6 +311,7 @@ export type Database = {
 					updated_at: string;
 					value: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					active?: boolean;
 					created_at?: string;
@@ -327,6 +377,7 @@ export type Database = {
 					updated_at: string;
 					vector: string | null;
 				};
+				ComputedFields: never;
 				Insert: {
 					account_id?: string | null;
 					company?: string | null;
@@ -434,6 +485,7 @@ export type Database = {
 					title: string | null;
 					user_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					agent: string;
 					created_at?: string;
@@ -480,6 +532,7 @@ export type Database = {
 					tenant_id: string;
 					type: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					actor_user_id?: string | null;
 					channel?: string | null;
@@ -537,6 +590,7 @@ export type Database = {
 					title: string | null;
 					user_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					created_at?: string;
 					crm_owner_id?: string | null;
@@ -586,6 +640,7 @@ export type Database = {
 					status: Database["public"]["Enums"]["invitation_status"];
 					tenant_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					accepted_at?: string | null;
 					accepted_user_id?: string | null;
@@ -628,6 +683,7 @@ export type Database = {
 					tenant_id: string;
 					user_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					created_at?: string;
 					id?: string;
@@ -683,6 +739,7 @@ export type Database = {
 					updated_at: string;
 					vector: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					ancla?: Json | null;
 					approval_call_id?: string | null;
@@ -788,6 +845,7 @@ export type Database = {
 					trigger: Database["public"]["Enums"]["run_trigger"];
 					workflow: string | null;
 				};
+				ComputedFields: never;
 				Insert: {
 					agent: string;
 					conversation_id?: string | null;
@@ -864,6 +922,7 @@ export type Database = {
 					updated_at: string;
 					vector: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					accounts_found?: number;
 					contacts_found?: number;
@@ -927,6 +986,7 @@ export type Database = {
 					model: string | null;
 					tenant_id: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					agent: string;
 					config?: NonNullable<Json>;
@@ -963,6 +1023,7 @@ export type Database = {
 					updated_at: string;
 					updated_by: string | null;
 				};
+				ComputedFields: never;
 				Insert: {
 					daily_limit: number;
 					resource: string;
@@ -999,6 +1060,7 @@ export type Database = {
 					tenant_id: string;
 					updated_at: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					capability: Database["public"]["Enums"]["connector_capability"];
 					config?: NonNullable<Json>;
@@ -1040,6 +1102,7 @@ export type Database = {
 					tenant_id: string;
 					workflow: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					config?: NonNullable<Json>;
 					created_at?: string;
@@ -1080,6 +1143,7 @@ export type Database = {
 					self_signup_by_domain: boolean;
 					slug: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					active?: boolean;
 					allowed_domains?: string[];
@@ -1121,6 +1185,7 @@ export type Database = {
 					unit: string;
 					workflow: string | null;
 				};
+				ComputedFields: never;
 				Insert: {
 					amount: number;
 					created_at?: string;
@@ -1180,6 +1245,7 @@ export type Database = {
 					updated_at: string;
 					workflow: string;
 				};
+				ComputedFields: never;
 				Insert: {
 					attempts?: number;
 					created_at?: string;
@@ -1381,6 +1447,8 @@ export type Database = {
 			};
 		};
 		Enums: {
+			brain_access_level: "lector" | "editor" | "administrador" | "ninguno";
+			brain_access_principal: "user" | "members";
 			brain_author_kind: "user" | "agent" | "import";
 			brain_page_status: "activo" | "borrador" | "archivado";
 			config_value_kind: "segmento" | "vector" | "hook" | "idioma";
@@ -1548,6 +1616,8 @@ export const Constants = {
 	},
 	public: {
 		Enums: {
+			brain_access_level: ["lector", "editor", "administrador", "ninguno"],
+			brain_access_principal: ["user", "members"],
 			brain_author_kind: ["user", "agent", "import"],
 			brain_page_status: ["activo", "borrador", "archivado"],
 			config_value_kind: ["segmento", "vector", "hook", "idioma"],
