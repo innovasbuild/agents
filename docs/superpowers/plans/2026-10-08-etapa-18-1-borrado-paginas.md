@@ -794,6 +794,7 @@ import {
 	previewDelete,
 } from "@/lib/brain/core/editor/delete";
 import type { AccessRule } from "@/lib/brain/core/access/types";
+import type { DeleteParams } from "@/lib/brain/core/delete-store";
 import type { BrainPage, BrainRole } from "@/lib/brain/core/types";
 import { WikiStoreError } from "@/lib/brain/core/wiki-store";
 
@@ -839,7 +840,7 @@ function setup(opts: {
 	hasBinding?: boolean;
 	deleterError?: unknown;
 } = {}) {
-	const del = vi.fn(async () => {
+	const del = vi.fn(async (_params: DeleteParams) => {
 		if (opts.deleterError) throw opts.deleterError;
 		return { deletedRevisions: 4, cleaned: 2, rulesRemoved: 0 };
 	});
