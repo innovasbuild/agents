@@ -142,13 +142,24 @@ describe("savePage", () => {
 		).toMatchObject({ code: "unsupported" });
 	});
 
-	it("exige motivo", async () => {
-		const { deps: d, provider } = deps();
-		expect(await savePage({ ...input, reason: "  " }, d)).toMatchObject({
-			code: "validation",
-			fields: ["reason"],
+	it("sin motivo usa el de la web; con motivo, lo respeta recortado", async () => {
+		const empty = deps();
+		expect(
+			await savePage({ ...input, reason: "  " }, empty.deps),
+		).toMatchObject({
+			ok: true,
 		});
-		expect(provider.upsert).not.toHaveBeenCalled();
+		expect(empty.provider.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ reason: "Edición desde la web" }),
+			expect.anything(),
+		);
+
+		const given = deps();
+		await savePage({ ...input, reason: "  ajusto precios  " }, given.deps);
+		expect(given.provider.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ reason: "ajusto precios" }),
+			expect.anything(),
+		);
 	});
 
 	it("traduce conflicto y validación", async () => {
