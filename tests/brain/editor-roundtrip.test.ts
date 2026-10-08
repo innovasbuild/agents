@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { Editor } from "@tiptap/core";
+import { Editor, generateJSON } from "@tiptap/core";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ReactMarkdown from "react-markdown";
@@ -101,5 +101,31 @@ describe("HTML crudo: nunca se vuelve elemento (spec V10)", () => {
 		expect(markdown.replace(/\\/g, "")).toContain(
 			md.replace(/\\/g, "").split("\n")[0].slice(0, 12),
 		);
+	});
+});
+
+describe("HTML crudo: sobrevive a releer el HTML del editor (copiar, pegar)", () => {
+	const extensions = buildExtensions({
+		titleFor: () => undefined,
+		exists: () => true,
+	});
+	const reread = (html: string) => {
+		const again = new Editor({
+			extensions,
+			content: generateJSON(html, extensions),
+		});
+		const result = { markdown: again.getMarkdown(), html: again.getHTML() };
+		again.destroy();
+		return result;
+	};
+	it.each(HOSTILE.filter(({ md }) => md.includes("<")))("$name", ({ md }) => {
+		const { html, markdown } = roundtrip(md);
+		expect(html).toContain("&lt;");
+		expect(markdown).toBe(md);
+		expect(reread(html).markdown).toBe(md);
+	});
+	it("el link javascript: nunca vuelve con href, ni al releer", () => {
+		const { html } = roundtrip("[clic](javascript:alert(1))");
+		expect(reread(html).html.toLowerCase()).not.toContain("javascript:");
 	});
 });

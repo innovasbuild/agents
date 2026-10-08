@@ -17,7 +17,14 @@ export const RawHtml = Node.create({
 	},
 
 	parseHTML() {
-		return [{ tag: "span[data-raw-html]" }];
+		// El texto del span es el `raw`: sin esto, releer el HTML (copiar, pegar,
+		// arrastrar) lo vaciaba. Siempre texto, nunca innerHTML.
+		return [
+			{
+				tag: "span[data-raw-html]",
+				getAttrs: (el) => ({ raw: (el as HTMLElement).textContent ?? "" }),
+			},
+		];
 	},
 
 	renderHTML({ node }) {

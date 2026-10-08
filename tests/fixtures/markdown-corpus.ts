@@ -40,6 +40,19 @@ export const CORPUS: CorpusCase[] = [
 		md: "Mirá [la web](https://innov.as) y ![logo](https://innov.as/logo.png).",
 	},
 	{
+		name: "url suelta con guion bajo",
+		exact: true,
+		md: "ver https://innov.as/a_b hoy",
+	},
+	{ name: "email suelto", exact: true, md: "escribinos a x@y.com" },
+	{ name: "www suelto", exact: true, md: "www.innov.as" },
+	{
+		name: "titulo con corchetes",
+		exact: false,
+		note: "el corchete del título sale escapado (\\[ y \\]); la vista de lectura es la misma",
+		md: "## [2026-10-08] update | texto",
+	},
+	{
 		name: "codigo con lenguaje",
 		exact: true,
 		md: j("```ts", "const a = 1;", "```"),
@@ -57,7 +70,7 @@ export const CORPUS: CorpusCase[] = [
 	{
 		name: "tabla con alineacion",
 		exact: false,
-		note: "las columnas se re-rellenan con espacios y los guiones de la fila separadora se alargan; las alineaciones y las celdas quedan iguales, y la segunda pasada no cambia nada",
+		note: "las columnas se re-rellenan con espacios y los guiones de la fila separadora se alargan; el serializador agrega un salto de línea antes de la tabla y deja dos líneas en blanco alrededor de una tabla en medio del documento; las alineaciones y las celdas quedan iguales, y la segunda pasada no cambia nada",
 		md: j(
 			"| Nombre | Precio | Nota |",
 			"| :--- | ---: | :---: |",
@@ -84,7 +97,7 @@ export const CORPUS: CorpusCase[] = [
 	{
 		name: "wikilink en lista y en tabla",
 		exact: false,
-		note: "solo cambia el relleno de la tabla (columnas alineadas con espacios); los links, con su | adentro, salen byte a byte iguales",
+		note: "cambia el relleno de la tabla (columnas alineadas con espacios) y el salto de línea extra antes y después de la tabla; los links, con su | adentro, salen byte a byte iguales",
 		md: j(
 			"- [[comercial/icp|ICP]]",
 			"- [[legal/contrato]]",

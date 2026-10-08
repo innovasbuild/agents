@@ -11,6 +11,7 @@ import { TaskList } from "@tiptap/extension-task-list";
 import { Markdown } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
 import { Marked, type marked, Tokenizer, type Tokens } from "marked";
+import { CODE_PATTERN } from "@/lib/brain/core/wikilinks";
 import { RawHtml } from "./raw-html-node";
 import {
 	protectWikilinkPipes,
@@ -84,6 +85,46 @@ const BrainTable = Table.extend({
 		),
 });
 
+// Tiptap escribe una URL, un www. o un email sueltos como [x](x) o
+// [x](mailto:x), y escapa los _ del texto. Eso ensucia el markdown que leen el
+// agente y el MCP y los diffs del historial. Si el texto del link es el mismo
+// destino, se escribe pelado: GFM lo vuelve a autolinkear al releer. Código y
+// bloques de código no se tocan; las imágenes (![...]) tampoco.
+const BARE_TARGET =
+	/^(?:https?:\/\/\S+|www\.\S+|[^\s@()[\]]+@[^\s@()[\]]+\.[^\s@()[\]]+)$/;
+const LINK_PATTERN = /(?<!!)\[((?:\\.|[^\]\\])+)\]\(([^)\s]+)\)/g;
+
+function bareLinks(chunk: string): string {
+	return chunk.replace(LINK_PATTERN, (whole, escaped: string, href: string) => {
+		const text = escaped.replace(/\\([\\`*_[\]~])/g, "$1");
+		if (!BARE_TARGET.test(text)) return whole;
+		const same =
+			text === href ||
+			href === `mailto:${text}` ||
+			(text.startsWith("www.") && href === `http://${text}`);
+		return same ? text : whole;
+	});
+}
+
+export function bareAutolinks(markdown: string): string {
+	let out = "";
+	let cursor = 0;
+	for (const match of markdown.matchAll(CODE_PATTERN)) {
+		const start = match.index ?? 0;
+		out += bareLinks(markdown.slice(cursor, start)) + match[0];
+		cursor = start + match[0].length;
+	}
+	return out + bareLinks(markdown.slice(cursor));
+}
+
+const BrainMarkdown = Markdown.extend({
+	onBeforeCreate(props) {
+		this.parent?.(props);
+		const original = this.editor.getMarkdown;
+		this.editor.getMarkdown = () => bareAutolinks(original());
+	},
+});
+
 export function buildExtensions(lookups: EditorLookups): Extensions {
 	return [
 		StarterKit.configure({
@@ -99,6 +140,8 @@ export function buildExtensions(lookups: EditorLookups): Extensions {
 		TaskItem.configure({ nested: true }),
 		WikiLink.configure(lookups),
 		RawHtml,
-		Markdown.configure({ marked: brainMarked as unknown as typeof marked }),
+		BrainMarkdown.configure({
+			marked: brainMarked as unknown as typeof marked,
+		}),
 	];
 }
