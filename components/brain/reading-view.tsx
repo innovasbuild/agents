@@ -30,7 +30,7 @@ export function ReadingView({
 			<div className="flex flex-wrap items-center gap-3">
 				<Link
 					href={`/${tenantSlug}/brain`}
-					className="mr-auto text-muted-foreground text-sm"
+					className="mr-auto inline-flex min-h-11 items-center text-muted-foreground text-sm lg:min-h-0"
 				>
 					← Brain · <span className="capitalize">{page.category}</span>
 				</Link>

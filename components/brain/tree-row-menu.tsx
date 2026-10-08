@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { TreeNode } from "@/lib/brain/core/access/tree";
 import { atLeast } from "@/lib/brain/core/access/types";
-import { editHref, historyHref } from "@/lib/brain/core/editor/slug";
+import { historyHref } from "@/lib/brain/core/editor/slug";
 
 // Ítems según §7.2: lo que no corresponde no se muestra.
 export function TreeRowMenu({
@@ -36,13 +36,6 @@ export function TreeRowMenu({
 				<Link href={`/${tenantSlug}/brain/nueva?en=${node.path}`}>
 					Nueva página acá
 				</Link>
-			</DropdownMenuItem>,
-		);
-	}
-	if (node.page && canEdit) {
-		items.push(
-			<DropdownMenuItem asChild key="edit" className="min-h-11 lg:min-h-0">
-				<Link href={editHref(tenantSlug, node.page.slug)}>Editar</Link>
 			</DropdownMenuItem>,
 		);
 	}

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { DeletePageButton } from "@/components/brain/delete-page-button";
+import { PageWorkspace } from "@/components/brain/editor/page-workspace";
+import { PageFacts } from "@/components/brain/page-facts";
 import { ReadingView } from "@/components/brain/reading-view";
 import { Button } from "@/components/ui/button";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
-import { atLeast } from "@/lib/brain/core/access/types";
+import { entryMode } from "@/lib/brain/core/editor/entry-mode";
 import {
-	editHref,
 	historyHref,
 	pageHref,
 	slugFromParams,
@@ -57,31 +57,59 @@ export default async function BrainPageView({
 		pages.map((p) => [p.slug, { title: p.title, status: p.status }]),
 	);
 
+	const level = ctx.access(slug);
+	const outgoing = index.outgoing.get(slug) ?? [];
+	const incoming = index.incoming.get(slug) ?? [];
+
+	// Sin `key` derivada de la revisión: remontaría el editor tras cada
+	// router.refresh() y perdería su historial de deshacer.
+	if (entryMode(level) === "edit") {
+		return (
+			<PageWorkspace
+				mode="edit"
+				tenantSlug={tenantSlug}
+				categories={ctx.categories}
+				knownTags={[...new Set(pages.flatMap((p) => p.tags))]}
+				pages={pages.map(({ slug: s, title, status }) => ({
+					slug: s,
+					title,
+					status,
+				}))}
+				initial={{
+					slug: page.slug,
+					title: page.title,
+					category: page.category,
+					status: page.status,
+					tags: page.tags,
+					frontmatter: page.frontmatter,
+					body: page.body,
+					revision: page.revision,
+				}}
+				canDelete={level === "administrador"}
+				facts={
+					<PageFacts
+						tenantSlug={tenantSlug}
+						page={page}
+						outgoing={outgoing}
+						incoming={incoming}
+						titleFor={(s) => lookup.get(s)?.title ?? s}
+					/>
+				}
+			/>
+		);
+	}
+
 	return (
 		<ReadingView
 			tenantSlug={tenantSlug}
 			page={page}
 			lookup={lookup}
-			outgoing={index.outgoing.get(slug) ?? []}
-			incoming={index.incoming.get(slug) ?? []}
+			outgoing={outgoing}
+			incoming={incoming}
 			actions={
-				<>
-					<Button asChild variant="outline">
-						<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
-					</Button>
-					{ctx.access(slug) === "administrador" && (
-						<DeletePageButton
-							tenantSlug={tenantSlug}
-							slug={slug}
-							title={page.title}
-						/>
-					)}
-					{atLeast(ctx.access(slug), "editor") && (
-						<Button asChild>
-							<Link href={editHref(tenantSlug, slug)}>Editar</Link>
-						</Button>
-					)}
-				</>
+				<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
+					<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
+				</Button>
 			}
 		/>
 	);

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PageWorkspace } from "@/components/brain/editor/page-workspace";
 import {
 	loadBrainPages,
 	loadBrainTree,
@@ -6,7 +7,6 @@ import {
 } from "@/lib/brain/adapters/editor";
 import { editableFolders } from "@/lib/brain/core/access/tree";
 import { resolveNewPagePrefix } from "@/lib/brain/core/editor/new-page";
-import { PageForm } from "../page-form";
 
 export default async function NewBrainPage({
 	params,
@@ -32,7 +32,7 @@ export default async function NewBrainPage({
 					Podés crear páginas en: {folders.join(", ")}.
 				</p>
 			)}
-			<PageForm
+			<PageWorkspace
 				mode="new"
 				tenantSlug={tenantSlug}
 				categories={ctx.categories}
