@@ -2,6 +2,8 @@
 // el permiso lo decide el proveedor que arma deps.provider (envuelto con
 // withAccess y las reglas del tenant), porque la RLS no protege este camino.
 // Sin Next: la server action solo arma las dependencias reales.
+// El motivo es opcional desde la web: vacío se registra como "Edición desde la
+// web" (spec 18.2 V3); el agente y el MCP lo siguen dando siempre.
 import {
 	BrainConflict,
 	BrainForbidden,
@@ -55,6 +57,8 @@ export interface SaveDeps {
 	): Promise<BrainProvider>;
 }
 
+export const DEFAULT_WEB_REASON = "Edición desde la web";
+
 export async function savePage(
 	input: SavePageInput,
 	deps: SaveDeps,
@@ -75,14 +79,6 @@ export async function savePage(
 			message: "Este brain no se edita desde la plataforma.",
 		};
 
-	if (input.reason.trim().length === 0)
-		return {
-			ok: false,
-			code: "validation",
-			fields: ["reason"],
-			message: "Falta el motivo del cambio.",
-		};
-
 	const write: BrainWrite = {
 		slug: input.slug,
 		title: input.title,
@@ -91,7 +87,7 @@ export async function savePage(
 		tags: input.tags,
 		frontmatter: input.frontmatter,
 		body: input.body,
-		reason: input.reason.trim(),
+		reason: input.reason.trim() || DEFAULT_WEB_REASON,
 		...(input.baseRevision === null
 			? {}
 			: { baseRevision: input.baseRevision }),

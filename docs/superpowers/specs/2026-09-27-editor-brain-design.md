@@ -118,6 +118,8 @@ Resultados:
 | `BrainValidation` | `{ ok: false, code: "validation", fields }` | Marca los campos |
 | Otro | `{ ok: false, code: "internal" }` y log con un id | "No se pudo guardar (id)" |
 
+> **Nota (etapa 18.2):** la entrega 18.2 reemplaza la pantalla `/editar` por la edición en el lugar con un editor visual (la ruta redirige a la página) y deja de exigir el motivo del cambio desde la web: vacío se registra como "Edición desde la web". Agente y MCP siguen obligados a darlo. Ver `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md`.
+
 ### 5.4 Archivar
 
 Es cambiar el estado a `archivado` por el mismo formulario. No hay borrado.

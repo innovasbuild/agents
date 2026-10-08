@@ -95,6 +95,11 @@
 	--sidebar-accent-foreground: #1c1c1c;
 	--sidebar-border: #eceae4;
 	--sidebar-ring: #1c1c1c;
+	--paper: #ffffff;
+	--paper-foreground: #1c1c1c;
+	--paper-muted: #f4f2ec;
+	--paper-muted-foreground: #6b6b6b;
+	--paper-border: #e4e1d8;
 }
 
 .dark {
@@ -129,6 +134,11 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+	--paper: #ffffff;
+	--paper-foreground: #1c1c1c;
+	--paper-muted: #f4f2ec;
+	--paper-muted-foreground: #6b6b6b;
+	--paper-border: #e4e1d8;
 }
 
 @layer base {
@@ -214,4 +224,80 @@
 .brain-prose :where(th, td) {
 	border: 1px solid var(--border);
 	padding: 0.4em 0.6em;
+}
+
+/* Contenido del editor visual (Tiptap): mismo aspecto que la lectura. */
+.ProseMirror.brain-prose {
+	outline: none;
+}
+.ProseMirror.brain-prose table {
+	display: table;
+	width: 100%;
+}
+.brain-prose :where(th) {
+	background: var(--muted);
+	text-align: left;
+}
+.brain-prose :where(td) {
+	text-align: left;
+	vertical-align: top;
+}
+.brain-prose ul[data-type="taskList"] {
+	list-style: none;
+	padding-left: 0.2em;
+}
+.brain-prose ul[data-type="taskList"] li {
+	align-items: flex-start;
+	display: flex;
+	gap: 0.5em;
+}
+.brain-wikilink {
+	background: color-mix(in oklab, var(--primary) 10%, transparent);
+	border-radius: 4px;
+	color: var(--primary);
+	cursor: pointer;
+	padding: 0 0.25em;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.brain-wikilink[data-broken="true"] {
+	background: color-mix(in oklab, var(--destructive) 10%, transparent);
+	color: var(--destructive);
+	text-decoration-style: dotted;
+}
+.ProseMirror-selectednode.brain-wikilink {
+	outline: 2px solid var(--ring);
+}
+
+/* Hoja de papel del brain (spec 18.2 §6): blanca en los dos temas, con borde
+   sutil. Re-escribe los tokens adentro para que el texto, el código y las tablas
+   se vean bien también con el tema oscuro del sistema. */
+.brain-paper {
+	--foreground: var(--paper-foreground);
+	--muted: var(--paper-muted);
+	--muted-foreground: var(--paper-muted-foreground);
+	--border: var(--paper-border);
+	--primary: var(--paper-foreground);
+	--primary-foreground: var(--paper);
+	--background: var(--paper);
+	--destructive: #dc2626;
+	background: var(--paper);
+	color: var(--paper-foreground);
+	border: 1px solid var(--paper-border);
+	border-radius: var(--radius-md);
+	box-shadow: 0 1px 2px oklch(0 0 0 / 5%);
+	margin-inline: auto;
+	max-width: 46rem;
+	padding: 1.25rem;
+}
+@media (min-width: 768px) {
+	.brain-paper {
+		padding: 3rem;
+	}
+}
+@media (max-width: 639px) {
+	.brain-paper {
+		border-inline-width: 0;
+		border-radius: 0;
+	}
 }

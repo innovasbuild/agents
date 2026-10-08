@@ -1,24 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ConnectionsPanel } from "@/components/brain/connections-panel";
-import { DeletePageButton } from "@/components/brain/delete-page-button";
-import { BrainMarkdown } from "@/components/brain/markdown";
+import { PageWorkspace } from "@/components/brain/editor/page-workspace";
+import { PageFacts } from "@/components/brain/page-facts";
+import { ReadingView } from "@/components/brain/reading-view";
 import { Button } from "@/components/ui/button";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
-import { atLeast } from "@/lib/brain/core/access/types";
+import { entryMode } from "@/lib/brain/core/editor/entry-mode";
 import {
-	editHref,
 	historyHref,
 	pageHref,
 	slugFromParams,
 } from "@/lib/brain/core/editor/slug";
 import { buildLinkIndex } from "@/lib/brain/core/links";
-
-const STATUS_LABEL = {
-	activo: "Activo",
-	borrador: "Borrador",
-	archivado: "Archivado",
-} as const;
 
 export default async function BrainPageView({
 	params,
@@ -63,76 +56,61 @@ export default async function BrainPageView({
 	const lookup = new Map(
 		pages.map((p) => [p.slug, { title: p.title, status: p.status }]),
 	);
-	const titleFor = (s: string) => lookup.get(s)?.title ?? s;
+
+	const level = ctx.access(slug);
+	const outgoing = index.outgoing.get(slug) ?? [];
+	const incoming = index.incoming.get(slug) ?? [];
+
+	// Sin `key` derivada de la revisión: remontaría el editor tras cada
+	// router.refresh() y perdería su historial de deshacer.
+	if (entryMode(level) === "edit") {
+		return (
+			<PageWorkspace
+				mode="edit"
+				tenantSlug={tenantSlug}
+				categories={ctx.categories}
+				knownTags={[...new Set(pages.flatMap((p) => p.tags))]}
+				pages={pages.map(({ slug: s, title, status }) => ({
+					slug: s,
+					title,
+					status,
+				}))}
+				initial={{
+					slug: page.slug,
+					title: page.title,
+					category: page.category,
+					status: page.status,
+					tags: page.tags,
+					frontmatter: page.frontmatter,
+					body: page.body,
+					revision: page.revision,
+				}}
+				canDelete={level === "administrador"}
+				facts={
+					<PageFacts
+						tenantSlug={tenantSlug}
+						page={page}
+						outgoing={outgoing}
+						incoming={incoming}
+						titleFor={(s) => lookup.get(s)?.title ?? s}
+					/>
+				}
+			/>
+		);
+	}
 
 	return (
-		<div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_280px]">
-			<article className="min-w-0">
-				<Link
-					href={`/${tenantSlug}/brain`}
-					className="text-muted-foreground text-sm"
-				>
-					← Brain · <span className="capitalize">{page.category}</span>
-				</Link>
-				<div className="mb-6 flex flex-wrap items-start gap-3">
-					<h1 className="mr-auto text-3xl leading-tight">{page.title}</h1>
-					<Button asChild variant="outline">
-						<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
-					</Button>
-					{ctx.access(slug) === "administrador" && (
-						<DeletePageButton
-							tenantSlug={tenantSlug}
-							slug={slug}
-							title={page.title}
-						/>
-					)}
-					{atLeast(ctx.access(slug), "editor") && (
-						<Button asChild>
-							<Link href={editHref(tenantSlug, slug)}>Editar</Link>
-						</Button>
-					)}
-				</div>
-				<BrainMarkdown
-					body={page.body}
-					tenantSlug={tenantSlug}
-					pages={lookup}
-				/>
-			</article>
-			<aside className="space-y-6 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
-				<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
-					<dt className="text-muted-foreground">Estado</dt>
-					<dd>{STATUS_LABEL[page.status]}</dd>
-					<dt className="text-muted-foreground">Categoría</dt>
-					<dd className="capitalize">{page.category}</dd>
-					<dt className="text-muted-foreground">Revisión</dt>
-					<dd>{page.revision}</dd>
-					<dt className="text-muted-foreground">Editada</dt>
-					<dd>{new Date(page.updatedAt).toLocaleDateString("es-AR")}</dd>
-					<dt className="text-muted-foreground">Slug</dt>
-					<dd className="break-all">
-						<code>{page.slug}</code>
-					</dd>
-				</dl>
-				{page.tags.length > 0 && (
-					<div className="flex flex-wrap gap-1">
-						{page.tags.map((t) => (
-							<Link
-								key={t}
-								href={`/${tenantSlug}/brain?tag=${encodeURIComponent(t)}`}
-								className="rounded-full border px-2 py-0.5 text-xs"
-							>
-								{t}
-							</Link>
-						))}
-					</div>
-				)}
-				<ConnectionsPanel
-					tenantSlug={tenantSlug}
-					outgoing={index.outgoing.get(slug) ?? []}
-					incoming={index.incoming.get(slug) ?? []}
-					titleFor={titleFor}
-				/>
-			</aside>
-		</div>
+		<ReadingView
+			tenantSlug={tenantSlug}
+			page={page}
+			lookup={lookup}
+			outgoing={outgoing}
+			incoming={incoming}
+			actions={
+				<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
+					<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
+				</Button>
+			}
+		/>
 	);
 }
