@@ -56,6 +56,7 @@ const store: AccessStore = {
 			? [{ tenantId: "tenant-a", role: "tenant_admin" }]
 			: [{ tenantId: "tenant-a", role: "tenant_member" }],
 	brainBinding: async () => binding,
+	platformOwnerTenantId: async () => null,
 };
 
 function deps(
