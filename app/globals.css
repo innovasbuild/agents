@@ -234,6 +234,8 @@
 	--muted: var(--paper-muted);
 	--muted-foreground: var(--paper-muted-foreground);
 	--border: var(--paper-border);
+	--primary: var(--paper-foreground);
+	--destructive: #dc2626;
 	background: var(--paper);
 	color: var(--paper-foreground);
 	border: 1px solid var(--paper-border);
