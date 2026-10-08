@@ -140,7 +140,7 @@ Antes de escribir SQL: cargar `supabase-postgres-best-practices`. Esta migració
 - Único `(tenant_id, path, principal, user_id)` con `nulls not distinct`, para que haya una sola fila `members` por nodo.
 - Índice `(tenant_id, path)`.
 - RLS habilitada **sin políticas** y `revoke all ... from anon, authenticated`: se lee y escribe solo con `service_role`, desde el servidor, después de `resolveAccess` en código.
-- Al borrar una `membership`, las reglas `user` de esa persona en ese tenant se borran en la misma server action que hoy quita la membership (no hay FK a `memberships` porque la clave es `(tenant_id, user_id)` y la membership puede recrearse; una regla huérfana no da acceso porque `withAccess` solo evalúa personas con membership vigente).
+- Al borrar una `membership` (o cambiarle el tenant o la persona), las reglas `user` de esa persona en ese tenant se borran. **Cambio del 2026-10-10:** lo hace el trigger `memberships_brain_rules_cleanup` en la base (migración `20261010120000`), no la server action, y deja un `brain.access_changed` por regla; la versión original dependía de la server action, no cubría otros caminos y dejaba huérfanas que *reaparecían* al reinvitar a la persona (no hay FK a `memberships` porque la clave es `(tenant_id, user_id)` y la membership puede recrearse).
 
 ### 4.2 Cierre del agujero de lectura
 

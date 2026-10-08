@@ -9,6 +9,7 @@ import {
 } from "../../auth/oauth-principal";
 import { loadTenantBindings } from "../../connectors/bindings";
 import { createAdminClient } from "../../supabase/admin";
+import { platformOwnerSlug } from "../../tenants/platform-owner";
 import type { AccessStore, ClaimsVerifier } from "../core/mcp-server/access.ts";
 import type { HitFn } from "../core/mcp-server/rate-limit.ts";
 import { resolveBrainBinding } from "../core/resolve.ts";
@@ -23,6 +24,12 @@ export function supabaseAccessStore(): AccessStore {
 		rolesOf: loadMemberships,
 		brainBinding: (tenantId) =>
 			resolveBrainBinding(tenantId, loadTenantBindings),
+		// Sin PLATFORM_OWNER_TENANT_SLUG no hay dueño y nadie entra como plataforma.
+		async platformOwnerTenantId() {
+			const slug = platformOwnerSlug();
+			if (!slug) return null;
+			return (await loadTenantBySlug(slug))?.id ?? null;
+		},
 	};
 }
 

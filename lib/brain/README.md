@@ -42,6 +42,24 @@ su propio repo.
   (`manageDeps()`) y el `ShareState` del diálogo.
 - `app/[tenant]/brain/access-actions.ts` son las server actions que llama el
   diálogo de compartir.
+- **Las reglas por persona se van con la membresía.** El trigger
+  `memberships_brain_rules_cleanup` (migración
+  `20261010120000_brain_rules_membership_cleanup`) borra de
+  `brain_access_rules` las reglas `user` de ese tenant y esa persona cuando se
+  borra su membresía, y deja un `brain.access_changed` (`reason:
+  membership_removed`) por cada una; reinvitar a alguien no revive nada. La
+  misma migración limpió lo que ya estaba huérfano
+  (`brain_cleanup_orphan_access_rules()`, `reason: orphan_cleanup`, solo
+  `service_role`); cada evento guarda el `previous_level` de la regla borrada. El acceso general (`members`) no se toca. Quien pasa a
+  `tenant_admin` conserva sus reglas por persona (inertes mientras sea admin;
+  si lo bajan a miembro, vuelven a aplicar). También se limpia si a la
+  membresía le cambian el tenant o la persona.
+- **`platform_admin` por MCP:** `core/mcp-server/access.ts` solo reconoce a un
+  `platform_admin` si su fila es del tenant dueño (`PLATFORM_OWNER_TENANT_SLUG`,
+  resuelto por `AccessStore.platformOwnerTenantId()`); una fila así en otro
+  tenant vale como `tenant_admin` de ese tenant, igual que en la aplicación, y
+  sin la variable nadie entra como plataforma. El canal MCP del agente
+  (`lib/agents/mcp-channel-auth.ts`) todavía no está alineado.
 - `core/access/tree.ts` (`visibleTree`, `editableFolders`) y
   `core/access/explain.ts` (`explainAccess`) son puras. El árbol que llega al
   navegador no lleva cuerpos ni reglas, solo estructura y qué se puede hacer.

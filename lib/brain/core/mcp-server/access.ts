@@ -12,6 +12,10 @@ export interface AccessStore {
 	tenantBySlug(slug: string): Promise<{ id: string; active: boolean } | null>;
 	rolesOf(userId: string): Promise<{ tenantId: string; role: string }[]>;
 	brainBinding(tenantId: string): Promise<BrainBinding | null>;
+	// Id del tenant dueño de la plataforma, o null si no hay uno configurado.
+	// Una fila platform_admin solo cuenta como plataforma si es de ese tenant,
+	// igual que en la aplicación (lib/tenants/resolve.ts).
+	platformOwnerTenantId(): Promise<string | null>;
 }
 
 type Denied = {
@@ -78,7 +82,17 @@ export async function resolveMcpAccess(
 	// Los roles van antes que el tenant: quien tiene un token no tiene que poder
 	// averiguar qué slugs de clientes existen. Solo un platform_admin ve el 404.
 	const roles = await deps.store.rolesOf(userId);
-	const platformAdmin = roles.some((row) => row.role === "platform_admin");
+	// Una fila platform_admin fuera del tenant dueño no es rol de plataforma
+	// (spec consola §3): vale como tenant_admin de ese tenant. El tenant dueño
+	// solo se consulta a quien tiene alguna fila así.
+	const ownerTenantId = roles.some((row) => row.role === "platform_admin")
+		? await deps.store.platformOwnerTenantId()
+		: null;
+	const platformAdmin =
+		ownerTenantId !== null &&
+		roles.some(
+			(row) => row.role === "platform_admin" && row.tenantId === ownerTenantId,
+		);
 
 	const tenant = await deps.store.tenantBySlug(input.slug);
 	if (!tenant || !tenant.active) {
@@ -93,7 +107,7 @@ export async function resolveMcpAccess(
 
 	const role: BrainRole = platformAdmin
 		? "platform_admin"
-		: own?.role === "tenant_admin"
+		: own?.role === "tenant_admin" || own?.role === "platform_admin"
 			? "tenant_admin"
 			: "tenant_member";
 

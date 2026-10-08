@@ -32,9 +32,13 @@ function store(overrides: Partial<AccessStore> = {}): AccessStore {
 					? [{ tenantId: "tenant-a", role: "tenant_admin" }]
 					: userId === "root"
 						? [{ tenantId: "tenant-x", role: "platform_admin" }]
-						: [],
+						: userId === "falso"
+							? [{ tenantId: "tenant-a", role: "platform_admin" }]
+							: [],
 		brainBinding: async (tenantId) =>
 			tenantId === "tenant-a" ? binding : null,
+		// El tenant dueño de la plataforma es tenant-x (donde vive "root").
+		platformOwnerTenantId: async () => "tenant-x",
 		...overrides,
 	};
 }
@@ -130,6 +134,42 @@ describe("resolveMcpAccess", () => {
 		expect(warn).not.toHaveBeenCalledWith(
 			expect.stringContaining("ana@a.test"),
 		);
+	});
+
+	it("una fila platform_admin fuera del tenant dueño vale como tenant_admin de ese tenant, no como plataforma", async () => {
+		expect(await access("Bearer falso")).toMatchObject({
+			ok: true,
+			tenantId: "tenant-a",
+			role: "tenant_admin",
+		});
+	});
+
+	it("esa misma fila no da acceso a otro tenant ni deja ver qué tenants existen", async () => {
+		expect(await access("Bearer falso", "b")).toMatchObject({
+			ok: false,
+			status: 403,
+			code: "forbidden",
+		});
+		expect(await access("Bearer falso", "zzz")).toMatchObject({
+			ok: false,
+			status: 403,
+			code: "forbidden",
+		});
+	});
+
+	it("sin tenant dueño configurado nadie es plataforma, ni siquiera quien tiene la fila", async () => {
+		const sinDueno = store({ platformOwnerTenantId: async () => null });
+		expect(await access("Bearer root", "a", { store: sinDueno })).toMatchObject(
+			{ ok: false, status: 403, code: "forbidden" },
+		);
+	});
+
+	it("no consulta el tenant dueño a quien no tiene ninguna fila platform_admin", async () => {
+		const platformOwnerTenantId = vi.fn(async () => "tenant-x");
+		await access("Bearer ana", "a", {
+			store: store({ platformOwnerTenantId }),
+		});
+		expect(platformOwnerTenantId).not.toHaveBeenCalled();
 	});
 
 	it("para quien no es platform_admin, un tenant inexistente o inactivo es 403 como uno ajeno", async () => {

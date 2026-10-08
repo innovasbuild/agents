@@ -35,7 +35,7 @@ Pedido de Matías: usar el label de rol de arriba a la derecha como botón hacia
 
 `resolveTenantAccess` usa el mismo criterio para decidir el rol que muestra el badge: un `platform_admin` de otro tenant no ve el link a la consola.
 
-**Límite conocido:** la RLS sigue usando `is_platform_admin()`, que acepta una membership `platform_admin` de cualquier tenant. Lo mismo `lib/agents/mcp-channel-auth.ts` y `lib/brain/mcp-server/access.ts`. Una fila así, creada por SQL fuera del tenant dueño, no entra a la consola pero conserva el acceso de plataforma a nivel de datos. Se acepta porque solo un platform_admin o alguien con acceso a la base puede crear esa fila. Si más adelante la app ofrece dar el rol, esa pantalla tiene que rechazarlo fuera del tenant dueño.
+**Límite conocido:** la RLS sigue usando `is_platform_admin()`, que acepta una membership `platform_admin` de cualquier tenant. Lo mismo `lib/agents/mcp-channel-auth.ts`. (`lib/brain/core/mcp-server/access.ts` ya se alineó con la aplicación el 2026-10-10: una fila `platform_admin` fuera del tenant dueño vale ahí como `tenant_admin` de ese tenant.) Una fila así, creada por SQL fuera del tenant dueño, no entra a la consola pero conserva el acceso de plataforma a nivel de datos. Se acepta porque solo un platform_admin o alguien con acceso a la base puede crear esa fila. Si más adelante la app ofrece dar el rol, esa pantalla tiene que rechazarlo fuera del tenant dueño.
 
 ## 4. Base de datos
 
