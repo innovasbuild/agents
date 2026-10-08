@@ -17,11 +17,13 @@ export function TreeRowMenu({
 	tenantSlug,
 	node,
 	onShare,
+	onDelete,
 	label,
 }: {
 	tenantSlug: string;
 	node: TreeNode;
 	onShare: () => void;
+	onDelete: () => void;
 	label?: string;
 }) {
 	const isFolder = node.children.length > 0;
@@ -59,6 +61,17 @@ export function TreeRowMenu({
 				onSelect={onShare}
 			>
 				Compartir…
+			</DropdownMenuItem>,
+		);
+	}
+	if (node.page && node.level === "administrador") {
+		items.push(
+			<DropdownMenuItem
+				key="delete"
+				className="min-h-11 text-destructive focus:text-destructive lg:min-h-0"
+				onSelect={onDelete}
+			>
+				Borrar…
 			</DropdownMenuItem>,
 		);
 	}

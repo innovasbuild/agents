@@ -4,6 +4,7 @@ import { ChevronRightIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { DeletePageDialog } from "@/components/brain/delete-page-dialog";
 import { ShareDialog } from "@/components/brain/share-dialog";
 import { TreeRowMenu } from "@/components/brain/tree-row-menu";
 import { type TreeNode, withoutArchived } from "@/lib/brain/core/access/tree";
@@ -49,6 +50,10 @@ export function BrainTree({
 	const [sharing, setSharing] = useState<{ path: string; name: string } | null>(
 		null,
 	);
+	const [deleting, setDeleting] = useState<{
+		slug: string;
+		title: string;
+	} | null>(null);
 	useEffect(() => {
 		const saved = readOpen(storageKey);
 		if (saved) setOpen(saved);
@@ -124,6 +129,10 @@ export function BrainTree({
 						tenantSlug={tenantSlug}
 						node={node}
 						onShare={() => setSharing({ path: node.path, name: label })}
+						onDelete={() =>
+							node.page &&
+							setDeleting({ slug: node.page.slug, title: node.page.title })
+						}
 					/>
 				</div>
 				{hasChildren && isOpen && (
@@ -147,6 +156,7 @@ export function BrainTree({
 					node={root}
 					label="Brain"
 					onShare={() => setSharing({ path: "", name: "Brain" })}
+					onDelete={() => {}}
 				/>
 			</div>
 			{canCreate && (
@@ -176,6 +186,14 @@ export function BrainTree({
 					path={sharing.path}
 					name={sharing.name}
 					onClose={() => setSharing(null)}
+				/>
+			)}
+			{deleting && (
+				<DeletePageDialog
+					tenantSlug={tenantSlug}
+					slug={deleting.slug}
+					title={deleting.title}
+					onClose={() => setDeleting(null)}
 				/>
 			)}
 		</nav>
