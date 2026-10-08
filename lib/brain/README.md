@@ -72,6 +72,52 @@ su propio repo.
   cliente admin; `app/[tenant]/brain/delete-actions.ts` son las server actions
   que llama el diálogo (`components/brain/delete-page-dialog.tsx`).
 
+## Editor visual
+
+- La página abre sola en edición para quien es `editor` o más sobre esa página;
+  el resto ve la hoja de lectura. Lo decide `core/editor/entry-mode.ts`
+  (`entryMode`: `hidden`, `read` o `edit`). `/brain/editar/<slug>` redirige de
+  forma permanente (`permanentRedirect`) a `/brain/p/<slug>`, así que los links
+  viejos siguen andando; `/brain/nueva` usa el mismo espacio de trabajo.
+- El editor es Tiptap 3 con `@tiptap/markdown` y vive en
+  `components/brain/editor/`, **fuera de `core`**: `core` no importa Tiptap.
+- El markdown sigue siendo la fuente de verdad; nada se guarda en otro formato.
+  El editor lee el markdown y lo vuelve a escribir, y a veces lo normaliza.
+  `core/editor/body-to-save.ts` (`chooseBodyToSave`) compara lo que serializa
+  ahora el editor con lo que serializaba el cuerpo original al cargarlo: si es
+  igual, la persona no tocó el texto y se guarda el cuerpo original tal cual.
+  Abrir una página del agente y cambiar solo una etiqueta no reescribe el cuerpo.
+- El nodo `WikiLink` (`wikilink-node.ts`) lee y escribe `[[slug]]`,
+  `[[slug|alias]]` y `[[slug#ancla|alias]]`, y guarda el texto original en
+  `raw`: mientras no se edite el nodo, sale carácter por carácter igual. Los `|`
+  de un link dentro de una tabla se protegen antes de que `marked` parta las
+  celdas.
+- El HTML crudo nunca se interpreta. El nodo `RawHtml` (`raw-html-node.ts`) lo
+  guarda como un átomo con el texto original (`raw`), lo muestra como texto y lo
+  devuelve igual al guardar; es lo mismo que hace la vista de lectura.
+- Las URL y los emails sueltos se escriben sueltos, sin `<...>`: lo hace
+  `bareAutolinks` (`extensions.ts`), que envuelve `getMarkdown()` y no toca el
+  código.
+- El motivo del cambio es opcional desde la web: vacío se registra como
+  `DEFAULT_WEB_REASON` ("Edición desde la web", `core/editor/save.ts`). Para el
+  agente y el MCP sigue siendo obligatorio (`reason` con `min(1)` en
+  `core/contract.ts` y el chequeo de `core/wiki.ts`).
+- Prueba de ida y vuelta: `npx vitest run tests/brain/editor-roundtrip.test.ts`
+  (corre en `happy-dom`). Recorre el corpus sintético
+  (`tests/fixtures/markdown-corpus.ts`) más las páginas reales que haya en
+  `tests/fixtures/brain-real/`. Para sumar páginas reales, copiar ahí archivos
+  `.md` del brain de un tenant. Esa carpeta está en `.gitignore` y **no se
+  commitea**: el repo es público y las páginas son de clientes. Por cada caso se
+  exige que la vista de lectura sea la misma, que los `[[...]]` salgan byte a
+  byte iguales y que una segunda pasada no cambie nada; los casos `exact: true`
+  además exigen markdown idéntico.
+- Normalizaciones aceptadas (casos `exact: false`): el relleno de las tablas
+  (columnas alineadas con espacios, guiones de la fila separadora más largos) y
+  las líneas en blanco alrededor de una tabla; el escape `\[` y `\]` en un
+  título con corchetes; y las líneas en blanco consecutivas, que pueden colapsar.
+  El contenido visible es el mismo. Por V6 solo alcanzan a una página que una
+  persona edita de verdad: si no toca el cuerpo, se guarda el original.
+
 ## Qué viaja con el módulo
 
 - `lib/brain/core/`
