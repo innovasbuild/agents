@@ -5,8 +5,9 @@
 -- Antes de tocar SQL: supabase-postgres-best-practices (security definer con
 -- search_path vacío, objetos con esquema, privilegios mínimos).
 
--- Trigger: al borrar una membresía se borran las reglas por persona de ese
--- tenant. security definer porque la tabla de reglas no admite escritura desde
+-- Trigger: al borrar una membresía (o al cambiarle el tenant o la persona, que
+-- para las reglas es lo mismo que sacar a la persona anterior) se borran las
+-- reglas por persona de ese tenant. security definer porque la tabla de reglas no admite escritura desde
 -- la sesión. El evento se omite si el tenant ya no existe (borrado en cascada
 -- del tenant entero: el evento no tendría a quién colgarse).
 create or replace function public.brain_access_rules_on_membership_delete()
@@ -16,17 +17,26 @@ security definer
 set search_path = ''
 as $$
 begin
+  -- Un update que no cambia el tenant ni la persona no saca a nadie.
+  if tg_op = 'UPDATE'
+     and old.tenant_id = new.tenant_id
+     and old.user_id = new.user_id then
+    return new;
+  end if;
+
   with removed as (
     delete from public.brain_access_rules
     where tenant_id = old.tenant_id
       and principal = 'user'
       and user_id = old.user_id
-    returning path
+    returning path, level
   )
   insert into public.events (tenant_id, actor_user_id, type, summary, payload)
   select
     old.tenant_id,
-    (select auth.uid()),
+    -- Si la persona que se va es quien está operando (borrado de su propia
+    -- cuenta), su fila ya no existe y no puede figurar como autora.
+    nullif((select auth.uid()), old.user_id),
     'brain.access_changed',
     coalesce(nullif(path, ''), '(raíz)'),
     jsonb_build_object(
@@ -34,6 +44,7 @@ begin
       'principal', 'user',
       'user_id', old.user_id,
       'level', null,
+      'previous_level', level,
       'action', 'remove',
       'reason', 'membership_removed'
     )
@@ -48,7 +59,7 @@ revoke execute on function public.brain_access_rules_on_membership_delete()
   from public, anon, authenticated;
 
 create trigger memberships_brain_rules_cleanup
-  after delete on public.memberships
+  after delete or update of tenant_id, user_id on public.memberships
   for each row
   execute function public.brain_access_rules_on_membership_delete();
 
@@ -70,7 +81,7 @@ begin
         select 1 from public.memberships m
         where m.tenant_id = r.tenant_id and m.user_id = r.user_id
       )
-    returning r.tenant_id, r.path, r.user_id
+    returning r.tenant_id, r.path, r.user_id, r.level
   ), logged as (
     insert into public.events (tenant_id, actor_user_id, type, summary, payload)
     select
@@ -83,6 +94,7 @@ begin
         'principal', 'user',
         'user_id', user_id,
         'level', null,
+        'previous_level', level,
         'action', 'remove',
         'reason', 'orphan_cleanup'
       )

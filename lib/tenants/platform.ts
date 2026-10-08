@@ -2,15 +2,9 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 export type ServerSupabase = Awaited<ReturnType<typeof createServerSupabase>>;
 
-/**
- * Slug del tenant dueño de la plataforma. Sale solo de la variable de
- * entorno: nada específico de un tenant vive en código. Sin la variable no
- * hay dueño y la consola queda cerrada para todos.
- */
-export function platformOwnerSlug(): string | null {
-	const slug = process.env.PLATFORM_OWNER_TENANT_SLUG?.trim();
-	return slug ? slug : null;
-}
+import { platformOwnerSlug } from "./platform-owner";
+
+export { platformOwnerSlug };
 
 /**
  * Un platform_admin cuenta como tal solo si su membership es del tenant
