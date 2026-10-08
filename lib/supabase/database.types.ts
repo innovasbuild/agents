@@ -1284,6 +1284,10 @@ export type Database = {
 				Args: Record<PropertyKey, never>;
 				Returns: number;
 			};
+			brain_cleanup_orphan_access_rules: {
+				Args: Record<PropertyKey, never>;
+				Returns: number;
+			};
 			brain_delete_page: {
 				Args: {
 					p_actor: string;
