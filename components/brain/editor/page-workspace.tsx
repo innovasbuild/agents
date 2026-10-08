@@ -128,46 +128,59 @@ export function PageWorkspace({
 	function submit(event: FormEvent) {
 		event.preventDefault();
 		startTransition(async () => {
-			const outcome = await saveBrainPage({
-				tenantSlug,
-				slug: form.slug,
-				title: form.title,
-				category: form.category,
-				status: form.status,
-				tags,
-				frontmatter: form.frontmatter,
-				body,
-				reason,
-				baseRevision,
-			});
-			setResult(outcome);
-			if (outcome.ok) {
-				if (mode === "new") {
-					router.replace(pageHref(tenantSlug, outcome.slug));
+			try {
+				const sentReason = reason;
+				const outcome = await saveBrainPage({
+					tenantSlug,
+					slug: form.slug,
+					title: form.title,
+					category: form.category,
+					status: form.status,
+					tags,
+					frontmatter: form.frontmatter,
+					body,
+					reason: sentReason,
+					baseRevision,
+				});
+				setResult(outcome);
+				if (outcome.ok) {
+					if (mode === "new") {
+						router.replace(pageHref(tenantSlug, outcome.slug));
+						return;
+					}
+					// Sigue en edición sobre la revisión nueva. Si el cuerpo cambió, el
+					// nuevo original es lo guardado; `serialized` no se toca: si la persona
+					// siguió escribiendo durante el guardado, conserva lo más nuevo. Si solo
+					// cambiaron metadatos, el original y la línea de base quedan.
+					if (body !== original) setBaseline(body);
+					setOriginal(body);
+					setSaved({ ...form, tags, body, revision: outcome.revision });
+					setBaseRevision(outcome.revision);
+					// No borra un motivo escrito mientras se guardaba.
+					setReason((current) => (current === sentReason ? "" : current));
+					setResult(null);
+					setServerBody(null);
+					router.refresh();
 					return;
 				}
-				// Sigue en edición sobre la revisión nueva. Si el cuerpo cambió, el
-				// nuevo original es lo guardado y el editor ya lo serializa igual; si
-				// no cambió (solo metadatos), el original y la línea de base quedan.
-				if (body !== original) {
-					setBaseline(body);
-					setSerialized(body);
+				if (outcome.code === "conflict" && outcome.currentRevision !== null) {
+					// Se trae la vigente para mostrar el diff; el texto de la persona queda.
+					try {
+						const response = await fetch(
+							`/${tenantSlug}/brain/raw/${form.slug}`,
+							{ cache: "no-store" },
+						);
+						setServerBody(response.ok ? await response.text() : null);
+					} catch {
+						setServerBody(null);
+					}
 				}
-				setOriginal(body);
-				setSaved({ ...form, tags, body, revision: outcome.revision });
-				setBaseRevision(outcome.revision);
-				setReason("");
-				setResult(null);
-				setServerBody(null);
-				router.refresh();
-				return;
-			}
-			if (outcome.code === "conflict" && outcome.currentRevision !== null) {
-				// Se trae la vigente para mostrar el diff; el texto de la persona queda.
-				const response = await fetch(`/${tenantSlug}/brain/raw/${form.slug}`, {
-					cache: "no-store",
+			} catch {
+				setResult({
+					ok: false,
+					code: "internal",
+					message: "No se pudo guardar. Revisá la conexión y reintentá.",
 				});
-				setServerBody(response.ok ? await response.text() : null);
 			}
 		});
 	}
