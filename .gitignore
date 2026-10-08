@@ -43,3 +43,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# páginas reales del brain para la prueba de ida y vuelta (no se versionan)
+tests/fixtures/brain-real/
