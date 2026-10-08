@@ -1284,6 +1284,21 @@ export type Database = {
 				Args: Record<PropertyKey, never>;
 				Returns: number;
 			};
+			brain_delete_page: {
+				Args: {
+					p_actor: string;
+					p_binding_id: string;
+					p_cleanups: Json;
+					p_expected_revision: number;
+					p_slug: string;
+					p_tenant_id: string;
+				};
+				Returns: {
+					cleaned: number;
+					deleted_revisions: number;
+					rules_removed: number;
+				}[];
+			};
 			brain_mcp_hit: {
 				Args: {
 					p_kind: string;
