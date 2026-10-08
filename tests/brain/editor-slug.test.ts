@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	editHref,
 	historyHref,
 	pageHref,
 	slugFromParams,
@@ -34,12 +33,9 @@ describe("slugFromParams", () => {
 });
 
 describe("pageHref", () => {
-	it("arma las rutas de vista, edición e historial", () => {
+	it("arma las rutas de vista e historial", () => {
 		expect(pageHref("innovas", "comercial/icp")).toBe(
 			"/innovas/brain/p/comercial/icp",
-		);
-		expect(editHref("innovas", "comercial/icp")).toBe(
-			"/innovas/brain/editar/comercial/icp",
 		);
 		expect(historyHref("innovas", "comercial/icp")).toBe(
 			"/innovas/brain/historial/comercial/icp",

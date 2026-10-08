@@ -18,10 +18,6 @@ export function pageHref(tenantSlug: string, pageSlug: string): string {
 	return `/${tenantSlug}/brain/p/${pageSlug}`;
 }
 
-export function editHref(tenantSlug: string, pageSlug: string): string {
-	return `/${tenantSlug}/brain/editar/${pageSlug}`;
-}
-
 export function historyHref(tenantSlug: string, pageSlug: string): string {
 	return `/${tenantSlug}/brain/historial/${pageSlug}`;
 }
