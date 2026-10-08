@@ -19,7 +19,7 @@ export function DeletePageButton({
 			<Button
 				type="button"
 				variant="outline"
-				className="min-h-11 text-destructive"
+				className="min-h-11 text-destructive lg:min-h-0"
 				onClick={() => setOpen(true)}
 			>
 				Borrar página

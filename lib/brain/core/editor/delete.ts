@@ -143,7 +143,12 @@ export async function previewDelete(
 			revision: auth.page.revision,
 			linkers: visible.map(({ slug: s, title }) => ({ slug: s, title })),
 			hiddenLinkers: plan.length - visible.length,
-			hasChildren: auth.pages.some((p) => p.slug.startsWith(`${slug}/`)),
+			// Solo hijas visibles: no revela que existen otras ocultas.
+			hasChildren: auth.pages.some(
+				(p) =>
+					p.slug.startsWith(`${slug}/`) &&
+					resolveAccess(auth.rules, auth.principal, p.slug) !== null,
+			),
 			canonTags: auth.page.tags.filter((tag) =>
 				(CANON_TAGS as readonly string[]).includes(tag),
 			),

@@ -89,7 +89,7 @@ export function DeletePageDialog({
 
 	return (
 		<AlertDialog open onOpenChange={(open) => !open && !busy && onClose()}>
-			<AlertDialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+			<AlertDialogContent className="max-h-[85vh] overflow-y-auto data-[size=default]:sm:max-w-lg">
 				<AlertDialogHeader>
 					<AlertDialogTitle>Borrar "{title}"</AlertDialogTitle>
 					<AlertDialogDescription>
@@ -158,7 +158,7 @@ export function DeletePageDialog({
 					<Button
 						type="button"
 						variant="destructive"
-						className="min-h-11"
+						className="min-h-11 bg-destructive text-white hover:bg-destructive/90"
 						disabled={busy || !preview}
 						onClick={() => preview && confirm(preview)}
 					>

@@ -63,4 +63,26 @@ describe("planLinkCleanup", () => {
 	it("sin links al destino, el plan queda vacío", () => {
 		expect(planLinkCleanup([page("a", "hola")], T)).toEqual([]);
 	});
+
+	it("saca corchetes y colapsa espacios del título usado como texto", () => {
+		const plan = planLinkCleanup(
+			[
+				page(T, "x", { title: "Perfil [[x]]\nICP" }),
+				page("legal/a", "Ver [[comercial/icp]]."),
+			],
+			T,
+		);
+		expect(plan[0].body).toBe("Ver Perfil x ICP.");
+	});
+
+	it("si el título queda vacío usa el slug", () => {
+		const plan = planLinkCleanup(
+			[
+				page(T, "x", { title: "[[ ]]" }),
+				page("legal/a", "Ver [[comercial/icp]]."),
+			],
+			T,
+		);
+		expect(plan[0].body).toBe("Ver comercial/icp.");
+	});
 });

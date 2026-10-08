@@ -14,7 +14,11 @@ export function planLinkCleanup(
 	pages: BrainPage[],
 	target: string,
 ): CleanupItem[] {
-	const fallbackText = pages.find((p) => p.slug === target)?.title ?? target;
+	// El título lo controla un admin del nodo y se escribe en cuerpos de páginas
+	// que quizá no ve: sin corchetes no puede fabricar un link nuevo.
+	const title = pages.find((p) => p.slug === target)?.title ?? "";
+	const fallbackText =
+		title.replace(/[[\]]/g, "").replace(/\s+/g, " ").trim() || target;
 	const plan: CleanupItem[] = [];
 	for (const page of pages) {
 		// Incluye las archivadas (se pueden desarchivar) y excluye la propia.

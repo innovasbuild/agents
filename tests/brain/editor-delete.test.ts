@@ -192,6 +192,51 @@ describe("previewDelete", () => {
 		);
 	});
 
+	it("hasChildren cuenta solo las hijas que la persona ve", async () => {
+		const rules = [
+			members("", "lector"),
+			members("comercial/icp", "administrador"),
+			members("comercial/icp/secreta", "ninguno"),
+		];
+		const base = [page("comercial/icp", "texto", { title: "ICP" })];
+		const onlyHidden = setup({
+			role: "tenant_member",
+			userId: "ana",
+			rules,
+			pages: [...base, page("comercial/icp/secreta", "oculta")],
+		});
+		const hidden = await previewDelete("i", "comercial/icp", onlyHidden.deps);
+		expect(hidden).toMatchObject({
+			ok: true,
+			preview: { hasChildren: false },
+		});
+		const withVisible = setup({
+			role: "tenant_member",
+			userId: "ana",
+			rules,
+			pages: [
+				...base,
+				page("comercial/icp/secreta", "oculta"),
+				page("comercial/icp/objeciones", "hijo"),
+			],
+		});
+		expect(
+			await previewDelete("i", "comercial/icp", withVisible.deps),
+		).toMatchObject({ ok: true, preview: { hasChildren: true } });
+	});
+
+	it("quien administra solo otro nodo recibe forbidden", async () => {
+		const { deps } = setup({
+			role: "tenant_member",
+			userId: "beto",
+			rules: [members("", "lector"), user("legal", "beto", "administrador")],
+		});
+		expect(await previewDelete("i", "comercial/icp", deps)).toMatchObject({
+			ok: false,
+			code: "forbidden",
+		});
+	});
+
 	it("una página sin hijos ni etiquetas de canon lo dice", async () => {
 		const { deps } = setup();
 		const result = await previewDelete("i", "suelta", deps);
@@ -239,6 +284,32 @@ describe("deletePage", () => {
 		expect(await deletePage("i", "comercial/icp", 3, deps)).toMatchObject({
 			ok: false,
 			code: "forbidden",
+		});
+		expect(del).not.toHaveBeenCalled();
+	});
+
+	it("quien administra solo otro nodo no borra nada", async () => {
+		const { deps, del } = setup({
+			role: "tenant_member",
+			userId: "beto",
+			rules: [members("", "lector"), user("legal", "beto", "administrador")],
+		});
+		expect(await deletePage("i", "comercial/icp", 3, deps)).toMatchObject({
+			ok: false,
+			code: "forbidden",
+		});
+		expect(del).not.toHaveBeenCalled();
+	});
+
+	it("una página que la persona no ve responde not_found y no borra", async () => {
+		const { deps, del } = setup({
+			role: "tenant_member",
+			userId: "ana",
+			rules: [members("", "lector"), members("comercial", "ninguno")],
+		});
+		expect(await deletePage("i", "comercial/icp", 3, deps)).toMatchObject({
+			ok: false,
+			code: "not_found",
 		});
 		expect(del).not.toHaveBeenCalled();
 	});

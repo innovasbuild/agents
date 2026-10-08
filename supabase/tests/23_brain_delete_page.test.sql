@@ -2,13 +2,14 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(22);
+select plan(28);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values ('a4a4a4a4-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'ana@del-a.test', now());
 
 insert into public.tenants (id, slug, display_name)
-values ('b4b4b4b4-0000-0000-0000-00000000000a', 'del-a', 'Del A');
+values ('b4b4b4b4-0000-0000-0000-00000000000a', 'del-a', 'Del A'),
+       ('b4b4b4b4-0000-0000-0000-00000000000b', 'del-b', 'Del B');
 
 -- Las páginas se crean por brain_upsert_page para que tengan su revisión 1.
 select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'comercial/icp', 'ICP', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'texto del icp', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000001');
@@ -17,8 +18,16 @@ select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'legal/c
 select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'legal/viejo', 'Viejo', 'legal', 'archivado', '{}'::text[], '{}'::jsonb, 'Ver [[comercial/icp]].', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000001');
 select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'solo', 'Solo', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'sola', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000001');
 
+-- Otro tenant con una página del MISMO slug y una regla en la misma ruta.
+select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000b', 'comercial/icp', 'ICP de B', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'texto de b', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000002');
+-- Un hermano por prefijo: solo2-viejo no cuelga de solo2.
+select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'solo2', 'Solo 2', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'sola', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000001');
+select public.brain_upsert_page('b4b4b4b4-0000-0000-0000-00000000000a', 'solo2-viejo', 'Solo 2 viejo', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'hermana', 'alta', null, 'user', 'a4a4a4a4-0000-0000-0000-000000000001', null, 'c4c4c4c4-0000-0000-0000-000000000001');
+
 insert into public.brain_access_rules (tenant_id, path, principal, level)
 values
+  ('b4b4b4b4-0000-0000-0000-00000000000b', 'comercial/icp', 'members', 'ninguno'),
+  ('b4b4b4b4-0000-0000-0000-00000000000a', 'solo2', 'members', 'ninguno'),
   ('b4b4b4b4-0000-0000-0000-00000000000a', 'comercial/icp', 'members', 'ninguno'),
   ('b4b4b4b4-0000-0000-0000-00000000000a', 'solo', 'members', 'ninguno');
 
@@ -40,7 +49,7 @@ select throws_ok(
   $$select * from public.brain_delete_page('b4b4b4b4-0000-0000-0000-00000000000a', 'comercial/icp', 99, 'a4a4a4a4-0000-0000-0000-000000000001', 'c4c4c4c4-0000-0000-0000-000000000001', '[]'::jsonb)$$,
   'BR409', null, 'una revisión esperada distinta aborta con conflicto');
 select is(
-  (select count(*)::int from public.brain_pages where slug = 'comercial/icp'), 1,
+  (select count(*)::int from public.brain_pages where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000a' and slug = 'comercial/icp'), 1,
   'tras el conflicto la página sigue');
 
 -- 6: página inexistente → BR404
@@ -58,7 +67,7 @@ select is(
   'Ver [[comercial/icp|el ICP]] y [[otra]].',
   'la primera limpieza se deshizo con el conflicto');
 select is(
-  (select count(*)::int from public.brain_pages where slug = 'comercial/icp'), 1,
+  (select count(*)::int from public.brain_pages where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000a' and slug = 'comercial/icp'), 1,
   'la página a borrar sigue tras el conflicto de una limpieza');
 
 -- 10-19: borrado real con dos limpiezas. Quedan páginas debajo: las reglas se conservan.
@@ -68,7 +77,7 @@ select results_eq(
   $$values (1::integer, 2::integer, 0::integer)$$,
   'borra y devuelve revisiones borradas, páginas limpiadas y reglas borradas');
 select is(
-  (select count(*)::int from public.brain_pages where slug = 'comercial/icp'), 0,
+  (select count(*)::int from public.brain_pages where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000a' and slug = 'comercial/icp'), 0,
   'la página ya no existe');
 select is(
   (select count(*)::int from public.brain_revisions where title = 'ICP'), 0,
@@ -91,7 +100,7 @@ select is(
   (select body from public.brain_pages where slug = 'legal/viejo'),
   'Ver ICP.', 'también se limpió la página archivada');
 select is(
-  (select count(*)::int from public.brain_access_rules where path = 'comercial/icp'), 1,
+  (select count(*)::int from public.brain_access_rules where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000a' and path = 'comercial/icp'), 1,
   'las reglas se conservan mientras queden páginas debajo');
 select is(
   (select count(*)::int from public.events where type = 'brain.page_deleted' and summary = 'comercial/icp'), 1,
@@ -109,6 +118,33 @@ select is(
   (select jsonb_array_length(payload -> 'cleaned') from public.events
     where type = 'brain.page_deleted' and summary = 'comercial/icp'),
   2, 'el evento lista las páginas limpiadas');
+
+-- 23-26: el borrado del tenant A no toca al tenant B, que tiene el mismo slug.
+select is(
+  (select count(*)::int from public.brain_pages
+    where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000b' and slug = 'comercial/icp'), 1,
+  'la página del otro tenant con el mismo slug sigue');
+select is(
+  (select count(*)::int from public.brain_revisions r join public.brain_pages p on p.id = r.page_id
+    where p.tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000b' and p.slug = 'comercial/icp'), 1,
+  'las revisiones del otro tenant están intactas');
+select is(
+  (select count(*)::int from public.brain_access_rules
+    where tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000b' and path = 'comercial/icp'), 1,
+  'la regla del otro tenant sigue');
+select is(
+  (select count(*)::int from public.events
+    where type = 'brain.page_deleted' and tenant_id = 'b4b4b4b4-0000-0000-0000-00000000000b'), 0,
+  'el otro tenant no recibe evento de borrado');
+
+-- 27-28: una página hermana por prefijo (solo2-viejo) no cuenta como hija de solo2.
+select results_eq(
+  $$select rules_removed from public.brain_delete_page('b4b4b4b4-0000-0000-0000-00000000000a', 'solo2', 1, 'a4a4a4a4-0000-0000-0000-000000000001', 'c4c4c4c4-0000-0000-0000-000000000001', '[]'::jsonb)$$,
+  $$values (1::integer)$$,
+  'la regla de solo2 se borra aunque exista solo2-viejo');
+select is(
+  (select count(*)::int from public.brain_pages where slug = 'solo2-viejo'), 1,
+  'la hermana por prefijo sigue');
 
 select * from finish();
 rollback;
