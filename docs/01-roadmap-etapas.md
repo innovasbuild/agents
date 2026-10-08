@@ -491,7 +491,7 @@ Agregada el 2026-09-20. La escucha de la Etapa 5 responde sola cuando tiene conf
 
 **Modelo Claude Code:** Fable 5.1 para la spec (hecha) y para 17.2, que toca RLS y el punto de control de acceso. Sonnet 5 en sesión nueva para 17.1 (refactor sin cambio funcional) y 17.3 (UI).
 **Modelo runtime:** n/a.
-**Spec:** `docs/superpowers/specs/2026-10-05-etapa-17-permisos-brain-design.md` · **Plan:** por entrega (18.1: `docs/superpowers/plans/2026-10-08-etapa-18-1-borrado-paginas.md`; 18.2 a escribir).
+**Spec:** `docs/superpowers/specs/2026-10-05-etapa-17-permisos-brain-design.md` · **Plan:** a escribir por entrega.
 
 Agregada el 2026-10-05. Un administrador del tenant decide quién ve y quién edita cada carpeta y cada página del brain, con herencia hacia abajo como en Drive, y eso vale en el editor web, por MCP y en el chat con el agente. El módulo `lib/brain` queda aislado en `core/` y `adapters/` para poder mudarlo a su propio repo. Por MCP, todos ven las tres tools; el acceso lo decide la configuración del brain.
 
@@ -509,7 +509,7 @@ Tres entregas, una sesión y un PR cada una:
 
 **Modelo Claude Code:** Sonnet 5 en sesión nueva por entrega.
 **Modelo runtime:** n/a.
-**Specs:** `docs/superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md` y `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md` · **Plan:** a escribir por entrega.
+**Specs:** `docs/superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md` y `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md` · **Plan:** por entrega (18.1: `docs/superpowers/plans/2026-10-08-etapa-18-1-borrado-paginas.md`; 18.2 a escribir).
 
 Agregada el 2026-10-08. Dos entregas, una sesión y un PR cada una:
 
