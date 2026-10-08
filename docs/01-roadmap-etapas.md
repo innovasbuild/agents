@@ -505,6 +505,19 @@ Tres entregas, una sesión y un PR cada una:
 
 ---
 
+## Etapa 18 · Borrado de páginas y editor visual del brain — `[ ]`
+
+**Modelo Claude Code:** Sonnet 5 en sesión nueva por entrega.
+**Modelo runtime:** n/a.
+**Specs:** `docs/superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md` y `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md` · **Plan:** por entrega (18.1: `docs/superpowers/plans/2026-10-08-etapa-18-1-borrado-paginas.md`; 18.2 a escribir).
+
+Agregada el 2026-10-08. Dos entregas, una sesión y un PR cada una:
+
+- [x] **18.1 · Borrado de páginas.** Un administrador del nodo borra una página desde la web (menú del árbol y vista de la página), con limpieza de los links entrantes y sin papelera; el agente y el MCP no pueden borrar. Plan: `docs/superpowers/plans/2026-10-08-etapa-18-1-borrado-paginas.md`. **Antes de desplegar:** aplicar la migración `20261009120000_brain_delete_page` a producción primero (corriendo `npx supabase migration list` antes: `db push` aplica todas las pendientes) y recién después desplegar el código; al revés, el diálogo falla al borrar. Sin verificar en navegador (no se pudo por falta de `.env.local` y login sembrado en el worktree): orden y color del ítem en el menú, contenido del diálogo, redirección tras borrar, la vista de un miembro que no es administrador, 375 px y que el `AlertDialog` abierto desde el menú de la fila no deje `pointer-events` trabado. Ese recorrido, borrando una página enlazada desde otras dos, lo hace una persona en producción después del despliegue.
+- [ ] **18.2 · Editor visual y vista de papel.** Spec: `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md`.
+
+---
+
 ## Fuera de etapas · Sync entrante de HubSpot — `[ ]`
 
 Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué. Implementado y revisado; falta su primera corrida real en producción y correr `npm run db:reset`/`npm run db:types` (necesitan Docker, no disponible en el entorno donde se construyó esto).

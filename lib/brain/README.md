@@ -46,6 +46,32 @@ su propio repo.
   `core/access/explain.ts` (`explainAccess`) son puras. El árbol que llega al
   navegador no lleva cuerpos ni reglas, solo estructura y qué se puede hacer.
 
+## Borrar páginas
+
+- `core/editor/delete.ts` (`previewDelete`, `deletePage`) es el único camino
+  que borra. Exige administrador del nodo, rechaza con `unsupported` si el
+  brain es externo (`mcp`) y arma el plan de limpieza en el servidor, con las
+  páginas de `deps.pages()` sin envolver con permisos: al confirmar se rehace,
+  lo que mandó o vio el navegador no cuenta. `previewDelete` nombra solo las
+  páginas que enlazan y que la persona ve; las ocultas solo se cuentan
+  (`hiddenLinkers`). Un conflicto de revisión (`BR409`) o un deadlock de
+  Postgres (`40P01`) se devuelven como `conflict`.
+- `core/wikilinks.ts` (`removeWikilinks`) y `core/links-cleanup.ts`
+  (`planLinkCleanup`) son puras: quitan los links a la página borrada y
+  planean qué páginas reescribir.
+- `core/delete-store.ts` (`createSupabasePageDeleter`) implementa `PageDeleter`
+  llamando por RPC a la función SQL `brain_delete_page` (migración
+  `20261009120000_brain_delete_page`), que limpia las páginas que enlazan,
+  borra la página (sus revisiones caen por la clave foránea), quita las reglas
+  de acceso de la ruta solo si no queda ninguna página debajo y deja el evento
+  `brain.page_deleted`, todo en una transacción. Las limpiezas viajan ordenadas
+  por slug para que dos borrados concurrentes no se traben.
+- El borrado no pasa por `BrainProvider` ni por `core/contract.ts`: el agente y
+  el MCP no tienen cómo borrar.
+- `adapters/delete-page.ts` (`deleteDeps()`) cablea sesión, binding, reglas y
+  cliente admin; `app/[tenant]/brain/delete-actions.ts` son las server actions
+  que llama el diálogo (`components/brain/delete-page-dialog.tsx`).
+
 ## Qué viaja con el módulo
 
 - `lib/brain/core/`
@@ -55,9 +81,11 @@ su propio repo.
   reescriben junto con los adapters.
 - Migraciones: `20260913233557_brain_tables`, `20260913234426_brain_upsert_page`,
   `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage`,
-  `20261007120000_brain_access_rules` y `20261008120000_brain_access_rule_fns`.
+  `20261007120000_brain_access_rules`, `20261008120000_brain_access_rule_fns` y
+  `20261009120000_brain_delete_page`.
 - Tests pgTAP del brain en `supabase/tests/`, incluido
-  `supabase/tests/21_brain_access_rules.test.sql` y `22_brain_access_rule_fns`.
+  `supabase/tests/21_brain_access_rules.test.sql`, `22_brain_access_rule_fns` y
+  `23_brain_delete_page.test.sql`.
 
 ## Lo que el host tiene que proveer
 

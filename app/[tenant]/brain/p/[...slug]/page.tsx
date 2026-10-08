@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ConnectionsPanel } from "@/components/brain/connections-panel";
+import { DeletePageButton } from "@/components/brain/delete-page-button";
 import { BrainMarkdown } from "@/components/brain/markdown";
 import { Button } from "@/components/ui/button";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
@@ -78,6 +79,13 @@ export default async function BrainPageView({
 					<Button asChild variant="outline">
 						<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
 					</Button>
+					{ctx.access(slug) === "administrador" && (
+						<DeletePageButton
+							tenantSlug={tenantSlug}
+							slug={slug}
+							title={page.title}
+						/>
+					)}
 					{atLeast(ctx.access(slug), "editor") && (
 						<Button asChild>
 							<Link href={editHref(tenantSlug, slug)}>Editar</Link>
