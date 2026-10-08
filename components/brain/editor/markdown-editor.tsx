@@ -133,15 +133,17 @@ export function MarkdownEditor({
 		editor?.setEditable(!disabled);
 	}, [editor, disabled]);
 
-	const suggestions = query
-		? pages
-				.filter((p) =>
-					`${p.slug} ${p.title}`
-						.toLowerCase()
-						.includes(query.query.toLowerCase()),
-				)
-				.slice(0, MAX_SUGGESTIONS)
+	const matches = query
+		? pages.filter((p) =>
+				`${p.slug} ${p.title}`
+					.toLowerCase()
+					.includes(query.query.toLowerCase()),
+			)
 		: [];
+	// Con texto seleccionado, si el filtro no encuentra nada se muestran las primeras.
+	const suggestions = (
+		query && matches.length === 0 && query.alias !== undefined ? pages : matches
+	).slice(0, MAX_SUGGESTIONS);
 
 	function insertWiki(target: string) {
 		if (!editor || disabled) return;
@@ -188,12 +190,8 @@ export function MarkdownEditor({
 			editor.chain().focus().insertContent("[[").run();
 			return;
 		}
-		setQuery({
-			query: "",
-			from,
-			to,
-			alias: editor.state.doc.textBetween(from, to, " "),
-		});
+		const selected = sanitizeAlias(editor.state.doc.textBetween(from, to, " "));
+		setQuery({ query: selected, from, to, alias: selected });
 	}
 
 	return (

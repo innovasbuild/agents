@@ -169,3 +169,48 @@ describe("link pegado desde HTML", () => {
 		}
 	});
 });
+
+describe("anchor y alias pegados", () => {
+	const md = (html: string) => {
+		const editor = new Editor({
+			extensions: buildExtensions({
+				titleFor: () => undefined,
+				exists: () => true,
+			}),
+			content: html,
+		});
+		const out = editor.getMarkdown().trim();
+		editor.destroy();
+		return out;
+	};
+
+	it("un anchor con texto oculto no se escribe", () => {
+		expect(
+			md(
+				'<p><span data-wikilink target="x" anchor="a]]\n\nOCULTO [[y">x</span></p>',
+			),
+		).toBe("[[x]]");
+	});
+
+	it("un alias con texto oculto no se escribe", () => {
+		expect(
+			md(
+				'<p><span data-wikilink target="x" alias="a]]\n\nOCULTO [[y">x</span></p>',
+			),
+		).toBe("[[x]]");
+	});
+
+	it("un link legítimo sale igual", () => {
+		expect(
+			md(
+				'<p><span data-wikilink target="x" anchor="ancla" alias="alias" raw="[[x#ancla|alias]]">z</span></p>',
+			),
+		).toBe("[[x#ancla|alias]]");
+	});
+
+	it("los valores numéricos quedan como string", () => {
+		expect(
+			md('<p><span data-wikilink target="123" alias="456">z</span></p>'),
+		).toBe("[[123|456]]");
+	});
+});

@@ -11,6 +11,14 @@ export interface WikiLinkOptions {
 }
 
 const INVALID_TARGET = /[[\]|#\n\r]/;
+const INVALID_ANCHOR = /[[\]|#\n\r]/;
+const INVALID_ALIAS = /[[\]|\n\r]/;
+
+// Valor de un atributo pegado como string recortado; null si está vacío o es inválido.
+function cleanAttr(el: HTMLElement, name: string, invalid: RegExp | null) {
+	const value = String(el.getAttribute(name) ?? "").trim();
+	return !value || invalid?.test(value) ? null : value;
+}
 const WIKILINK_AT_START = /^\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]+))?\]\]/;
 
 // GFM parte las celdas de una tabla por cada `|` antes de mirar el contenido, y
@@ -44,8 +52,13 @@ export function canonicalWikiLink(attrs: {
 	anchor: string | null;
 	alias: string | null;
 }): string {
-	const anchor = attrs.anchor ? `#${attrs.anchor}` : "";
-	const alias = attrs.alias ? `|${attrs.alias}` : "";
+	// Defensa en profundidad: lo que rompería el link o metería texto se descarta.
+	const anchor =
+		attrs.anchor && !INVALID_ANCHOR.test(attrs.anchor)
+			? `#${attrs.anchor}`
+			: "";
+	const alias =
+		attrs.alias && !INVALID_ALIAS.test(attrs.alias) ? `|${attrs.alias}` : "";
 	return `[[${attrs.target}${anchor}${alias}]]`;
 }
 
@@ -62,9 +75,18 @@ export const WikiLink = Node.create<WikiLinkOptions>({
 
 	addAttributes() {
 		return {
-			target: { default: "" },
-			anchor: { default: null },
-			alias: { default: null },
+			target: {
+				default: "",
+				parseHTML: (el: HTMLElement) => cleanAttr(el, "target", null),
+			},
+			anchor: {
+				default: null,
+				parseHTML: (el: HTMLElement) => cleanAttr(el, "anchor", INVALID_ANCHOR),
+			},
+			alias: {
+				default: null,
+				parseHTML: (el: HTMLElement) => cleanAttr(el, "alias", INVALID_ALIAS),
+			},
 			// Solo se conserva el raw pegado si es exactamente el link que dicen los
 			// demás atributos; si no, se escribe la forma canónica.
 			raw: {
@@ -76,9 +98,9 @@ export const WikiLink = Node.create<WikiLinkOptions>({
 					const same =
 						m[1].trim() === (el.getAttribute("target") ?? "").trim() &&
 						(m[2] ? m[2].slice(1).trim() || null : null) ===
-							(el.getAttribute("anchor") || null) &&
+							cleanAttr(el, "anchor", INVALID_ANCHOR) &&
 						(m[3] ? m[3].trim() || null : null) ===
-							(el.getAttribute("alias") || null);
+							cleanAttr(el, "alias", INVALID_ALIAS);
 					return same ? raw : null;
 				},
 			},
