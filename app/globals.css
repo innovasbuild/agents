@@ -227,10 +227,10 @@
 }
 
 /* Contenido del editor visual (Tiptap): mismo aspecto que la lectura. */
-.brain-prose .ProseMirror {
+.ProseMirror.brain-prose {
 	outline: none;
 }
-.brain-prose .ProseMirror table {
+.ProseMirror.brain-prose table {
 	display: table;
 	width: 100%;
 }

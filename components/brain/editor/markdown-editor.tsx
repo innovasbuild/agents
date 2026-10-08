@@ -132,7 +132,7 @@ export function MarkdownEditor({
 		: [];
 
 	function insertWiki(target: string) {
-		if (!editor) return;
+		if (!editor || disabled) return;
 		const range = query ?? undefined;
 		const chain = editor.chain().focus();
 		if (range) chain.deleteRange({ from: range.from, to: range.to });
@@ -146,7 +146,7 @@ export function MarkdownEditor({
 	}
 
 	function toggleSource() {
-		if (!editor) return;
+		if (!editor || disabled) return;
 		if (!source) {
 			setSource(true);
 			return;
@@ -166,6 +166,7 @@ export function MarkdownEditor({
 				<Toolbar
 					editor={editor}
 					source={source}
+					disabled={disabled}
 					onToggleSource={toggleSource}
 					onWikiLink={() => {
 						editor?.chain().focus().insertContent("[[").run();
@@ -186,7 +187,7 @@ export function MarkdownEditor({
 				) : (
 					<EditorContent editor={editor} />
 				)}
-				{!source && suggestions.length > 0 && (
+				{!source && !disabled && suggestions.length > 0 && (
 					<ul className="absolute right-0 bottom-0 left-0 z-10 max-h-60 overflow-auto rounded-md border bg-popover text-popover-foreground text-sm shadow-md">
 						{suggestions.map((p) => (
 							<li key={p.slug}>

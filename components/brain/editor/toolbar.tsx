@@ -68,17 +68,19 @@ export function Toolbar({
 	onWikiLink,
 	onToggleSource,
 	source,
+	disabled,
 }: {
 	editor: Editor | null;
 	onWikiLink: () => void;
 	onToggleSource: () => void;
 	source: boolean;
+	disabled?: boolean;
 }) {
 	const [linkOpen, setLinkOpen] = useState(false);
 	const [url, setUrl] = useState("");
 
 	if (!editor) return <div className="h-11 lg:h-10" />;
-	const off = source;
+	const off = source || !!disabled;
 	const can = editor.can();
 	const inTable = editor.isActive("table");
 
@@ -263,6 +265,7 @@ export function Toolbar({
 				type="button"
 				variant={source ? "secondary" : "outline"}
 				aria-pressed={source}
+				disabled={disabled}
 				onClick={onToggleSource}
 				className="min-h-11 shrink-0 lg:min-h-8"
 			>
@@ -274,6 +277,7 @@ export function Toolbar({
 						type="button"
 						variant="ghost"
 						size="sm"
+						className="min-h-11 lg:min-h-8"
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => editor.chain().focus().addColumnAfter().run()}
 					>
@@ -283,6 +287,7 @@ export function Toolbar({
 						type="button"
 						variant="ghost"
 						size="sm"
+						className="min-h-11 lg:min-h-8"
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => editor.chain().focus().deleteColumn().run()}
 					>
@@ -292,6 +297,7 @@ export function Toolbar({
 						type="button"
 						variant="ghost"
 						size="sm"
+						className="min-h-11 lg:min-h-8"
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => editor.chain().focus().addRowAfter().run()}
 					>
@@ -301,6 +307,7 @@ export function Toolbar({
 						type="button"
 						variant="ghost"
 						size="sm"
+						className="min-h-11 lg:min-h-8"
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => editor.chain().focus().deleteRow().run()}
 					>
@@ -310,6 +317,7 @@ export function Toolbar({
 						type="button"
 						variant="ghost"
 						size="sm"
+						className="min-h-11 lg:min-h-8"
 						onMouseDown={(e) => e.preventDefault()}
 						onClick={() => editor.chain().focus().deleteTable().run()}
 					>
