@@ -11,5 +11,6 @@ export default async function EditRedirect({
 	const { tenant, slug: segments } = await params;
 	const slug = slugFromParams(segments);
 	if (!slug) notFound();
+	if (!/^[a-z0-9-]{1,63}$/.test(tenant)) notFound();
 	permanentRedirect(pageHref(tenant, slug));
 }

@@ -81,6 +81,7 @@ su propio repo.
   viejos siguen andando; `/brain/nueva` usa el mismo espacio de trabajo.
 - El editor es Tiptap 3 con `@tiptap/markdown` y vive en
   `components/brain/editor/`, **fuera de `core`**: `core` no importa Tiptap.
+- No hay edición del alias o destino de un link existente desde la barra; se hace en la vista de código.
 - El markdown sigue siendo la fuente de verdad; nada se guarda en otro formato.
   El editor lee el markdown y lo vuelve a escribir, y a veces lo normaliza.
   `core/editor/body-to-save.ts` (`chooseBodyToSave`) compara lo que serializa

@@ -278,6 +278,8 @@
 	--muted-foreground: var(--paper-muted-foreground);
 	--border: var(--paper-border);
 	--primary: var(--paper-foreground);
+	--primary-foreground: var(--paper);
+	--background: var(--paper);
 	--destructive: #dc2626;
 	background: var(--paper);
 	color: var(--paper-foreground);

@@ -10,6 +10,7 @@ export interface WikiLinkOptions {
 	exists: (slug: string) => boolean;
 }
 
+const INVALID_TARGET = /[[\]|#\n\r]/;
 const WIKILINK_AT_START = /^\[\[([^\]|#]+)(#[^\]|]*)?(?:\|([^\]]+))?\]\]/;
 
 // GFM parte las celdas de una tabla por cada `|` antes de mirar el contenido, y
@@ -64,12 +65,37 @@ export const WikiLink = Node.create<WikiLinkOptions>({
 			target: { default: "" },
 			anchor: { default: null },
 			alias: { default: null },
-			raw: { default: null },
+			// Solo se conserva el raw pegado si es exactamente el link que dicen los
+			// demás atributos; si no, se escribe la forma canónica.
+			raw: {
+				default: null,
+				parseHTML: (el: HTMLElement) => {
+					const raw = el.getAttribute("raw");
+					const m = raw ? WIKILINK_AT_START.exec(raw) : null;
+					if (!raw || !m || m[0] !== raw) return null;
+					const same =
+						m[1].trim() === (el.getAttribute("target") ?? "").trim() &&
+						(m[2] ? m[2].slice(1).trim() || null : null) ===
+							(el.getAttribute("anchor") || null) &&
+						(m[3] ? m[3].trim() || null : null) ===
+							(el.getAttribute("alias") || null);
+					return same ? raw : null;
+				},
+			},
 		};
 	},
 
 	parseHTML() {
-		return [{ tag: "span[data-wikilink]" }];
+		return [
+			{
+				tag: "span[data-wikilink]",
+				getAttrs: (el) => {
+					const target =
+						(el as HTMLElement).getAttribute("target")?.trim() ?? "";
+					return !target || INVALID_TARGET.test(target) ? false : {};
+				},
+			},
+		];
 	},
 
 	renderHTML({ node, HTMLAttributes }) {

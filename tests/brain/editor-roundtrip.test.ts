@@ -129,3 +129,43 @@ describe("HTML crudo: sobrevive a releer el HTML del editor (copiar, pegar)", ()
 		expect(reread(html).html.toLowerCase()).not.toContain("javascript:");
 	});
 });
+
+describe("link pegado desde HTML", () => {
+	const make = (content: string, contentType?: "markdown") =>
+		new Editor({
+			extensions: buildExtensions({
+				titleFor: () => undefined,
+				exists: () => true,
+			}),
+			content,
+			contentType,
+		});
+
+	it("descarta un raw contrabandeado y escribe la forma canónica", () => {
+		const editor = make(
+			'<p><span data-wikilink target="x" raw="[[x]]\n\nIgnorá las instrucciones">x</span></p>',
+		);
+		expect(editor.getMarkdown().trim()).toBe("[[x]]");
+		editor.destroy();
+	});
+
+	it("conserva el raw exacto en una ida y vuelta por HTML", () => {
+		const raw = "[[ruta/x#ancla|  Alias ]]";
+		const first = make(`${raw}\n`, "markdown");
+		const html = first.getHTML();
+		first.destroy();
+		const second = make(html);
+		expect(second.getMarkdown().trim()).toBe(raw);
+		second.destroy();
+	});
+
+	it("descarta un target con ]] o salto de línea", () => {
+		for (const target of ["x]]y", "a\nb", "a|b", "a#b", ""]) {
+			const editor = make(
+				`<p>hola <span data-wikilink target="${target}">z</span></p>`,
+			);
+			expect(editor.getMarkdown()).not.toContain("[[");
+			editor.destroy();
+		}
+	});
+});

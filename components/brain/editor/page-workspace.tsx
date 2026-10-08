@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -27,7 +28,12 @@ import {
 	type BrainStatus,
 	CANON_TAGS,
 } from "@/lib/brain/core/types";
-import { MarkdownEditor } from "./markdown-editor";
+
+// Carga diferida: quien llega a la vista de lectura no baja Tiptap.
+const MarkdownEditor = dynamic(
+	() => import("./markdown-editor").then((m) => m.MarkdownEditor),
+	{ ssr: false, loading: () => <div className="h-11 lg:h-10" aria-hidden /> },
+);
 
 export interface WorkspaceInitial {
 	slug: string;
@@ -384,11 +390,16 @@ export function PageWorkspace({
 								type="button"
 								variant="ghost"
 								className="min-h-11"
+								disabled={isPending}
 								onClick={discard}
 							>
 								Descartar
 							</Button>
-							<Button type="submit" className="min-h-11" disabled={isPending}>
+							<Button
+								type="submit"
+								className="min-h-11"
+								disabled={isPending || !dirty}
+							>
 								{isPending ? "Guardando…" : "Guardar"}
 							</Button>
 						</div>

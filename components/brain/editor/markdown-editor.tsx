@@ -1,9 +1,13 @@
 "use client";
 
+import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
-import { wikilinkQueryAt } from "@/lib/brain/core/editor/autocomplete";
+import {
+	sanitizeAlias,
+	wikilinkQueryAt,
+} from "@/lib/brain/core/editor/autocomplete";
 import { pageHref } from "@/lib/brain/core/editor/slug";
 import type { BrainStatus } from "@/lib/brain/core/types";
 import { buildExtensions } from "./extensions";
@@ -47,6 +51,8 @@ export function MarkdownEditor({
 		query: string;
 		from: number;
 		to: number;
+		// Con texto seleccionado: lo seleccionado pasa a ser el alias del link.
+		alias?: string;
 	} | null>(null);
 	const titles = useMemo(
 		() => new Map(pages.map((p) => [p.slug, p.title])),
@@ -84,13 +90,8 @@ export function MarkdownEditor({
 		[],
 	);
 
-	const editor = useEditor({
-		extensions,
-		content: initialMarkdown,
-		contentType: "markdown",
-		immediatelyRender: false,
-		editable: !disabled,
-		editorProps: {
+	const editorProps = useMemo<EditorProps>(
+		() => ({
 			attributes: {
 				class: "brain-prose min-h-[40vh] focus:outline-none",
 				"aria-label": "Contenido de la página",
@@ -108,7 +109,18 @@ export function MarkdownEditor({
 				}
 				return false;
 			},
-		},
+		}),
+		[tenantSlug, invalid],
+	);
+
+	const editor = useEditor({
+		extensions,
+		content: initialMarkdown,
+		contentType: "markdown",
+		immediatelyRender: false,
+		editable: !disabled,
+		editorProps,
+		shouldRerenderOnTransaction: true,
 		onCreate: ({ editor: ed }) => onBaseline(ed.getMarkdown()),
 		onUpdate: ({ editor: ed }) => {
 			onChangeRef.current(ed.getMarkdown());
@@ -139,7 +151,12 @@ export function MarkdownEditor({
 		chain
 			.insertContent({
 				type: "wikiLink",
-				attrs: { target, anchor: null, alias: null, raw: null },
+				attrs: {
+					target,
+					anchor: null,
+					alias: range?.alias ? sanitizeAlias(range.alias) || null : null,
+					raw: null,
+				},
 			})
 			.run();
 		setQuery(null);
@@ -147,6 +164,7 @@ export function MarkdownEditor({
 
 	function toggleSource() {
 		if (!editor || disabled) return;
+		setQuery(null);
 		if (!source) {
 			setSource(true);
 			return;
@@ -157,7 +175,25 @@ export function MarkdownEditor({
 			emitUpdate: false,
 		});
 		setSource(false);
-		onChangeRef.current(editor.getMarkdown());
+		// Sin cambios respecto del original: la línea de base pasa a lo que el
+		// editor serializa ahora, para no quedar sucio sin que nadie escriba.
+		if (value === initialMarkdown) onBaseline(editor.getMarkdown());
+		else onChangeRef.current(editor.getMarkdown());
+	}
+
+	function linkToPage() {
+		if (!editor) return;
+		const { from, to, empty } = editor.state.selection;
+		if (empty) {
+			editor.chain().focus().insertContent("[[").run();
+			return;
+		}
+		setQuery({
+			query: "",
+			from,
+			to,
+			alias: editor.state.doc.textBetween(from, to, " "),
+		});
 	}
 
 	return (
@@ -168,9 +204,7 @@ export function MarkdownEditor({
 					source={source}
 					disabled={disabled}
 					onToggleSource={toggleSource}
-					onWikiLink={() => {
-						editor?.chain().focus().insertContent("[[").run();
-					}}
+					onWikiLink={linkToPage}
 				/>
 			</div>
 			<div className="relative">
