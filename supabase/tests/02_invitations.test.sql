@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(5);
+select plan(6);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -44,6 +44,13 @@ select is(
     where user_id = '44444444-4444-4444-4444-444444444444'),
   1,
   'y quedó una sola membership'
+);
+
+select is(
+  (select count(*)::int from public.events
+    where actor_user_id = '44444444-4444-4444-4444-444444444444' and type = 'invitation.accepted'),
+  1,
+  'aceptar la invitación dejó su evento de auditoría'
 );
 
 -- La invitación vencida no crea nada.

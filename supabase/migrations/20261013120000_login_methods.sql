@@ -122,6 +122,10 @@ begin
     values (r.tenant_id, v_user, r.role)
     on conflict (tenant_id, user_id) do nothing;
 
+    insert into public.events (tenant_id, actor_user_id, type, summary, payload)
+    values (r.tenant_id, v_user, 'invitation.accepted', 'Invitación aceptada',
+            jsonb_build_object('invitation_id', r.id, 'role', r.role));
+
     v_count := v_count + 1;
   end loop;
 
