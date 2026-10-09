@@ -16,8 +16,14 @@ const { publicUrl, issuer } = publicSettings();
 // la metadata OAuth la sirve Next.js a mano (app/.well-known/...).
 const resource = `${publicUrl}/eve/outreach/v1/mcp`;
 
+// El agente de este canal es el de esta carpeta. Función con nombre a nivel
+// de módulo, igual que el `verifyToken` de la guía de eve (channels/mcp.mdx).
+function verifyOutreachToken(request: Request) {
+	return verifyMcpChannelToken(request, "outreach");
+}
+
 export default mcpChannel({
-	auth: oauthResource(verifyMcpChannelToken, {
+	auth: oauthResource(verifyOutreachToken, {
 		issuer,
 		resource,
 		// El servidor OAuth de Supabase solo publica openid, profile, email y

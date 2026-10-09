@@ -8,6 +8,8 @@ Cada tenant usa la misma URL del agente, con el tenant como parámetro de conexi
 
 Entrás con tu cuenta de la plataforma — la misma que usás para el brain o el dashboard.
 
+El agente tiene que estar habilitado para tu empresa. Las instrucciones por cliente, con la URL de tu empresa ya puesta, están en la plataforma: menú **Conectar** (`/<cliente>/conectar`). Este archivo queda como referencia.
+
 ## Claude Code
 
     claude mcp add --transport http outreach-<cliente> "https://agentes.innov.as/eve/outreach/v1/mcp?tenant=<cliente>"
@@ -36,3 +38,4 @@ Un `agent_start` no es para reintentar solo: si se corta la respuesta, preguntal
 - **403 sin mensaje sobre el tenant:** revisá que la URL tenga `?tenant=<slug>` — sin eso, no hay forma de saber a qué cliente te conectás.
 - **403 "no tenés acceso a ese cliente":** tu cuenta no tiene membresía ahí. Pedile a un administrador que te invite.
 - **No se abre el login:** la URL tiene que apuntar a `/eve/outreach/v1/mcp`, con el `?tenant=` de tu cliente.
+- **403 "Ese agente no está habilitado para este cliente":** el agente está apagado para tu empresa. Pedile a un administrador de la plataforma que lo habilite.
