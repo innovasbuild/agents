@@ -147,7 +147,8 @@ function TenantFormBody({
 					name="self_signup_by_domain"
 					defaultChecked={tenant.selfSignupByDomain}
 				/>
-				Permitir el alta a quien tenga un correo de esos dominios
+				Ingreso abierto: entra sin invitación quien tenga un correo de esos
+				dominios
 			</label>
 
 			<div className="space-y-1">

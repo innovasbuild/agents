@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { type AuthMethod, isAuthMethod } from "@/lib/tenants/auth-methods";
+import { isPublicEmailDomain } from "@/lib/tenants/public-email-domains";
 
 // Módulo puro: lo importan la server action y el formulario del cliente.
 
@@ -104,6 +105,17 @@ export const tenantInputSchema = z
 				message:
 					"Para permitir el alta por dominio hace falta al menos un dominio.",
 			});
+		}
+		if (input.selfSignupByDomain) {
+			for (const domain of input.allowedDomains) {
+				if (isPublicEmailDomain(domain)) {
+					context.addIssue({
+						code: "custom",
+						path: ["allowedDomains"],
+						message: `"${domain}" es un correo público: no puede abrir el ingreso.`,
+					});
+				}
+			}
 		}
 		if (!input.allowedModels.includes(input.defaultModel)) {
 			context.addIssue({

@@ -15,3 +15,12 @@ export function isAllowedDomain(
 		(domain) => domain.trim().toLowerCase() === parts[1],
 	);
 }
+
+/** Dominio en minúsculas de `algo@dominio`; null si no tiene esa forma. */
+export function emailDomain(email: string): string | null {
+	const parts = email.trim().toLowerCase().split("@");
+	if (parts.length !== 2 || parts[0].length === 0 || parts[1].length === 0) {
+		return null;
+	}
+	return parts[1];
+}

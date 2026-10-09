@@ -52,6 +52,19 @@ describe("parseList", () => {
 });
 
 describe("tenantInputSchema", () => {
+	it("rechaza un dominio de correo público cuando el ingreso está abierto", () => {
+		expect(message({ allowed_domains: "innov.as\ngmail.com" })).toContain(
+			'"gmail.com" es un correo público',
+		);
+	});
+
+	it("acepta un dominio público si el ingreso está cerrado", () => {
+		expect(
+			parse({ allowed_domains: "gmail.com", self_signup_by_domain: null })
+				.success,
+		).toBe(true);
+	});
+
 	it("acepta un formulario válido", () => {
 		const result = parse();
 
