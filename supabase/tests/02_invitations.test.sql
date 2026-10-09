@@ -24,7 +24,7 @@ values
 
 -- El invitado acepta.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select is(
   (select public.accept_pending_invitations()),
@@ -48,7 +48,7 @@ select is(
 
 -- La invitación vencida no crea nada.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select is(
   (select public.accept_pending_invitations()),

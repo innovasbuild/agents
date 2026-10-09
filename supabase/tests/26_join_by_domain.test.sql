@@ -38,7 +38,7 @@ select ok(
 
 -- Ana: dominio exacto, entra a las dos empresas abiertas y a ninguna más.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000001","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000001","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 2, 'Ana entra a las dos empresas abiertas con su dominio');
 reset role;
 
@@ -63,7 +63,7 @@ select is(
 
 -- Segunda llamada: idempotente.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000001","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000001","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 0, 'la segunda llamada no crea nada');
 reset role;
 select is(
@@ -74,19 +74,19 @@ select is(
 
 -- Beto: correo sin confirmar.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000002","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000002","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 0, 'un correo sin confirmar no se une a nada');
 
 -- Cami: subdominio.
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000003","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000003","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 0, 'un subdominio no coincide');
 
 -- Dani: correo en mayúsculas contra un dominio guardado en mayúsculas.
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000004","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000004","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 2, 'mayúsculas en el correo y en la tabla no importan');
 
 -- Eva: ya es tenant_admin de jd-a; solo suma jd-b.
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000005","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000005","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select is((select public.join_tenants_by_domain()), 1, 'quien ya es miembro no se cuenta de nuevo');
 reset role;
 select is(
@@ -105,7 +105,7 @@ reset role;
 
 -- Candado de columnas: tenant_admin de jd-a (Adm).
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000006","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000006","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 update public.tenants set default_model = 'anthropic/claude-haiku-4.5' where slug = 'jd-a';
 select is((select default_model from public.tenants where slug = 'jd-a'),
@@ -135,7 +135,7 @@ select throws_ok($$update public.tenants set display_name = 'Otro' where slug = 
   '42501', null, 'un tenant_admin no cambia display_name');
 
 -- El admin de plataforma sí cambia todo.
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000007","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000007","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 update public.tenants set allowed_domains = '{dom-a.test,dom-z.test}' where slug = 'jd-a';
 select is((select cardinality(allowed_domains) from public.tenants where slug = 'jd-a'),
   2, 'el admin de plataforma cambia allowed_domains');
@@ -165,7 +165,7 @@ values
   ('d7d7d7d7-0000-0000-0000-00000000000e', 'c7c7c7c7-0000-0000-0000-000000000007', 'platform_admin');
 
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000006","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000006","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 select throws_ok($$update public.tenants set self_signup_by_domain = true where slug = 'jd-e'$$,
   '42501', null, 'un tenant_admin no abre el ingreso con un dominio público cargado');
 update public.tenants set self_signup_by_domain = true where slug = 'jd-f';
@@ -174,7 +174,7 @@ select is((select self_signup_by_domain from public.tenants where slug = 'jd-f')
 update public.tenants set default_model = 'anthropic/claude-haiku-4.5' where slug = 'jd-f';
 select is((select default_model from public.tenants where slug = 'jd-f'),
   'anthropic/claude-haiku-4.5', 'con el modo ya abierto, cambiar el modelo no re-chequea dominios');
-set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000007","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000007","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 update public.tenants set self_signup_by_domain = true where slug = 'jd-e';
 select is((select self_signup_by_domain from public.tenants where slug = 'jd-e'),
   true, 'el admin de plataforma abre el ingreso aun con un dominio público');
