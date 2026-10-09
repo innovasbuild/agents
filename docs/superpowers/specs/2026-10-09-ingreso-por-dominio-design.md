@@ -47,6 +47,8 @@ Función `public.tenants_guard_columns()` (invoker, `search_path = ''`) y trigge
 - Si `(select public.is_platform_admin())`: pasa.
 - Si no: `new` tiene que ser igual a `old` en todas las columnas salvo `default_model` y `self_signup_by_domain`. Se compara `to_jsonb(new) - 'default_model' - 'self_signup_by_domain'` contra lo mismo de `old`, así una columna que se agregue a `tenants` más adelante nace cerrada. Si difieren: `raise exception ... using errcode = '42501'`.
 
+Además, en la rama de quien no es admin de plataforma, abrir el modo (`self_signup_by_domain` pasa de `false` a `true`) con algún dominio público en `allowed_domains` falla con `42501`; la lista vive en `public.is_public_email_domain()` y un test compara su contenido con `PUBLIC_EMAIL_DOMAINS`.
+
 `tenants_update` no cambia: sigue decidiendo sobre qué filas puede escribir cada uno. El trigger decide qué columnas.
 
 ### 3.3 `join_tenants_by_domain()`
@@ -96,7 +98,7 @@ Action `updateSignupMode(tenantId, open, slug)` en `app/[tenant]/settings/action
 
 ### 5.2 `/plataforma/[slug]`
 
-`lib/tenants/tenant-form.ts`: con `selfSignupByDomain` en `true`, cada dominio de `allowedDomains` que esté en la lista de públicos agrega un error en `allowedDomains`: `"<dominio>" es un correo público: no puede abrir el ingreso.` El rótulo del tilde pasa a "Ingreso abierto para estos dominios (sin invitación)".
+`lib/tenants/tenant-form.ts`: con `selfSignupByDomain` en `true`, cada dominio de `allowedDomains` que esté en la lista de públicos agrega un error en `allowedDomains`: `"<dominio>" es un correo público: no puede abrir el ingreso.` El rótulo del tilde pasa a "Ingreso abierto: entra sin invitación quien tenga un correo de esos dominios".
 
 La lista vive en `lib/tenants/public-email-domains.ts` (`PUBLIC_EMAIL_DOMAINS`, `isPublicEmailDomain`): gmail.com, googlemail.com, outlook.com, hotmail.com, live.com, msn.com, yahoo.com, yahoo.com.ar, icloud.com, me.com, proton.me, protonmail.com, aol.com, gmx.com, zoho.com, yandex.com, fibertel.com.ar, arnet.com.ar, speedy.com.ar.
 
@@ -113,6 +115,9 @@ La lista vive en `lib/tenants/public-email-domains.ts` (`PUBLIC_EMAIL_DOMAINS`, 
 - `is_platform_admin()` en la base acepta el rol en cualquier tenant (límite ya conocido de la consola); el candado de columnas hereda esa definición.
 - Cerrar el modo no saca a quienes ya entraron.
 - En producción hay que confirmar que Supabase Auth permite el alta de usuarios por mail.
+- La garantía de "correo verificado" depende de que en Supabase Auth de producción esté prendido "Confirm email" (en local `enable_confirmations = false`). Si está apagado, alguien puede registrarse por la API con el correo de otro y entrar al próximo login. Es CONDICIÓN DE DEPLOY verificarlo antes del `db push`. Mismo cuidado al sumar proveedores (Microsoft/Azure) que pueden emitir correos no verificados (nOAuth).
+- Si `accept_pending_invitations` falla y el ingreso por dominio corre, la persona queda `tenant_member` y la invitación como admin se marca aceptada en el login siguiente sin cambiar el rol (`on conflict do nothing`). Se resuelve cambiándole el rol a mano.
+- La regla de dominios públicos también queda aplicada en la base al ABRIR el modo (trigger), no solo en la app.
 
 ## 7. Pruebas
 
