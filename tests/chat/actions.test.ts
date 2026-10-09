@@ -10,6 +10,31 @@ const state = vi.hoisted(() => ({
 	deletes: 0,
 	selected: null as string | null,
 	revalidated: [] as string[],
+	/** La fila del hilo que la RLS deja ver; null = no se ve. */
+	row: { tenant_id: "11111111-1111-4111-8111-111111111111" } as {
+		tenant_id: string;
+	} | null,
+	readError: null as { message: string } | null,
+	reads: [] as { column: string; value: unknown }[],
+	inserts: [] as unknown[],
+	updates: [] as { values: unknown; column: string; value: unknown }[],
+}));
+
+// El chequeo del método tiene su propio test (tests/tenants/login-check-server);
+// acá se controla su respuesta y se mira contra qué empresa se preguntó.
+const gate = vi.hoisted(() => ({
+	allows: true,
+	calls: [] as { userId: string; tenantId: string }[],
+}));
+vi.mock("@/lib/tenants/login-check-server", () => ({
+	actionAllowsLogin: async (
+		_supabase: unknown,
+		userId: string,
+		tenantId: string,
+	) => {
+		gate.calls.push({ userId, tenantId });
+		return gate.allows;
+	},
 }));
 
 vi.mock("next/cache", () => ({
@@ -37,6 +62,30 @@ vi.mock("../../lib/supabase/server", () => {
 			from(table: string) {
 				state.table = table;
 				return {
+					// La lectura previa del tenant del hilo va por su propia cadena:
+					// `filters` sigue siendo solo lo que filtra el DELETE.
+					select: () => ({
+						eq: (column: string, value: unknown) => ({
+							maybeSingle: async () => {
+								state.reads.push({ column, value });
+								return { data: state.row, error: state.readError };
+							},
+						}),
+					}),
+					insert(values: unknown) {
+						state.inserts.push(values);
+						return {
+							select: () => ({
+								single: async () => ({ data: { id: "nuevo" }, error: null }),
+							}),
+						};
+					},
+					update: (values: unknown) => ({
+						eq: async (column: string, value: unknown) => {
+							state.updates.push({ values, column, value });
+							return { error: null };
+						},
+					}),
 					delete() {
 						state.deletes += 1;
 						return chain;
@@ -47,7 +96,10 @@ vi.mock("../../lib/supabase/server", () => {
 	};
 });
 
-const { deleteConversation } = await import("@/app/[tenant]/chat/actions");
+const { createConversation, deleteConversation, renameConversation } =
+	await import("@/app/[tenant]/chat/actions");
+
+const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
 // La action valida uuid: un id de fantasía se rechaza antes de la base.
 const CONV = "6f1f1e2a-9b3c-4d5e-8f70-1a2b3c4d5e6f";
@@ -61,6 +113,13 @@ beforeEach(() => {
 	state.deletes = 0;
 	state.selected = null;
 	state.revalidated = [];
+	state.row = { tenant_id: TENANT_ID };
+	state.readError = null;
+	state.reads = [];
+	state.inserts = [];
+	state.updates = [];
+	gate.allows = true;
+	gate.calls = [];
 });
 
 describe("deleteConversation", () => {
@@ -134,5 +193,121 @@ describe("deleteConversation", () => {
 		expect(result).toEqual({ ok: false, error: "No se pudo borrar el hilo." });
 		expect(state.deletes).toBe(0);
 		expect(state.revalidated).toEqual([]);
+	});
+});
+
+describe("el método de la sesión en las actions del chat", () => {
+	describe("createConversation", () => {
+		it("con el método permitido chequea contra el tenant de la acción y crea el hilo", async () => {
+			const id = await createConversation(TENANT_ID, "acme", "modelo");
+
+			expect(id).toBe("nuevo");
+			expect(gate.calls).toEqual([{ userId: "user-1", tenantId: TENANT_ID }]);
+			expect(state.inserts).toEqual([
+				{
+					tenant_id: TENANT_ID,
+					user_id: "user-1",
+					agent: "outreach",
+					model: "modelo",
+				},
+			]);
+		});
+
+		it("no crea nada si la empresa no permite el método", async () => {
+			gate.allows = false;
+
+			expect(await createConversation(TENANT_ID, "acme", "modelo")).toBeNull();
+			expect(state.inserts).toHaveLength(0);
+			expect(state.revalidated).toEqual([]);
+		});
+	});
+
+	describe("renameConversation", () => {
+		it("con el método permitido chequea contra la empresa del hilo y renombra", async () => {
+			await renameConversation(CONV, "Título", "acme");
+
+			expect(state.reads).toEqual([{ column: "id", value: CONV }]);
+			expect(gate.calls).toEqual([{ userId: "user-1", tenantId: TENANT_ID }]);
+			expect(state.updates).toHaveLength(1);
+			expect(state.updates[0]).toMatchObject({
+				values: { title: "Título" },
+				column: "id",
+				value: CONV,
+			});
+			expect(state.revalidated).toEqual(["/acme/chat"]);
+		});
+
+		it("no renombra si la empresa del hilo no permite el método", async () => {
+			gate.allows = false;
+
+			await renameConversation(CONV, "Título", "acme");
+
+			expect(gate.calls).toEqual([{ userId: "user-1", tenantId: TENANT_ID }]);
+			expect(state.updates).toHaveLength(0);
+		});
+
+		it("no renombra un hilo que no se ve, ni sin sesión, ni si la lectura falla", async () => {
+			state.row = null;
+			await renameConversation(CONV, "Título", "acme");
+
+			state.row = { tenant_id: TENANT_ID };
+			state.user = null;
+			await renameConversation(CONV, "Título", "acme");
+
+			state.user = { id: "user-1" };
+			state.readError = { message: "boom" };
+			await renameConversation(CONV, "Título", "acme");
+
+			expect(gate.calls).toHaveLength(0);
+			expect(state.updates).toHaveLength(0);
+		});
+	});
+
+	describe("deleteConversation", () => {
+		it("con el método permitido chequea contra la empresa del hilo antes de borrar", async () => {
+			const result = await deleteConversation(CONV, "acme");
+
+			expect(result).toEqual({ ok: true });
+			expect(state.reads).toEqual([{ column: "id", value: CONV }]);
+			expect(gate.calls).toEqual([{ userId: "user-1", tenantId: TENANT_ID }]);
+			expect(state.deletes).toBe(1);
+		});
+
+		it("no borra si la empresa del hilo no permite el método", async () => {
+			gate.allows = false;
+
+			const result = await deleteConversation(CONV, "acme");
+
+			expect(result).toEqual({
+				ok: false,
+				error: "No se pudo borrar el hilo.",
+			});
+			expect(state.deletes).toBe(0);
+			expect(state.revalidated).toEqual([]);
+		});
+
+		it("un hilo que no se ve contesta como hoy y no borra", async () => {
+			state.row = null;
+
+			const result = await deleteConversation(CONV, "acme");
+
+			expect(result).toEqual({ ok: false, error: "Ese hilo ya no está." });
+			expect(gate.calls).toHaveLength(0);
+			expect(state.deletes).toBe(0);
+		});
+
+		it("si la lectura del hilo falla no borra", async () => {
+			state.readError = { message: "boom" };
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			const result = await deleteConversation(CONV, "acme");
+
+			expect(result).toEqual({
+				ok: false,
+				error: "No se pudo borrar el hilo.",
+			});
+			expect(state.deletes).toBe(0);
+			error.mockRestore();
+		});
 	});
 });

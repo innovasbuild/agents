@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
 import { isPublicEmailDomain } from "@/lib/tenants/public-email-domains";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
@@ -20,6 +21,20 @@ const INVALIDO: SettingsResult = {
 };
 
 /**
+ * La RLS mira el rol; esto mira el método con el que se abrió la sesión, que
+ * la empresa tiene que permitir igual que en sus páginas (spec etapa 20, L10
+ * a L12). Sin sesión también es no.
+ */
+async function sessionAllowed(
+	supabase: Awaited<ReturnType<typeof createServerSupabase>>,
+	tenantId: string,
+): Promise<boolean> {
+	const { data: auth } = await supabase.auth.getUser();
+	if (!auth.user) return false;
+	return actionAllowsLogin(supabase, auth.user.id, tenantId);
+}
+
+/**
  * Cambia el modelo default del tenant. La RLS `tenants_update` ya exige
  * `tenant_admin` o `platform_admin`; acá no se repite ese chequeo, se lee su
  * resultado: sin fila devuelta, no hubo permiso.
@@ -33,7 +48,13 @@ export async function updateDefaultModel(
 	if (!modelSchema.safeParse(model).success) return INVALIDO;
 	if (!slugSchema.safeParse(slug).success) return INVALIDO;
 
+	const sinPermiso: SettingsResult = {
+		ok: false,
+		message: "No tenés permiso para cambiar el modelo.",
+	};
 	const supabase = await createServerSupabase();
+	if (!(await sessionAllowed(supabase, tenantId))) return sinPermiso;
+
 	const { data, error } = await supabase
 		.from("tenants")
 		.update({ default_model: model })
@@ -50,8 +71,7 @@ export async function updateDefaultModel(
 		};
 	// Un update que la RLS filtró entero no devuelve error, devuelve cero filas:
 	// el select().maybeSingle() es lo único que lo distingue de un éxito.
-	if (!data)
-		return { ok: false, message: "No tenés permiso para cambiar el modelo." };
+	if (!data) return sinPermiso;
 
 	revalidatePath(`/${slug}/settings`);
 	return { ok: true };
@@ -78,6 +98,7 @@ export async function updateSignupMode(
 		message: "No tenés permiso para cambiar el ingreso.",
 	};
 	const supabase = await createServerSupabase();
+	if (!(await sessionAllowed(supabase, tenantId))) return sinPermiso;
 
 	if (open) {
 		const { data: current } = await supabase

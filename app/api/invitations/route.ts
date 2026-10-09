@@ -3,6 +3,7 @@ import { z } from "zod";
 import { inviteToTenant } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
 
 const bodySchema = z.object({
 	tenantId: z.uuid(),
@@ -45,6 +46,12 @@ export async function POST(request: Request) {
 	const { data: isPlatformAdmin } = await supabase.rpc("is_platform_admin");
 
 	if (!membership && !isPlatformAdmin) {
+		return NextResponse.json({ error: "sin permiso" }, { status: 403 });
+	}
+
+	// El rol no alcanza: la sesión tiene que haberse abierto con un método que
+	// esa empresa permite, igual que en sus páginas (spec etapa 20, L10 a L12).
+	if (!(await actionAllowsLogin(supabase, auth.user.id, tenantId))) {
 		return NextResponse.json({ error: "sin permiso" }, { status: 403 });
 	}
 

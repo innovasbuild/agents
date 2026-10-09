@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(5);
+select plan(6);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -24,7 +24,7 @@ values
 
 -- El invitado acepta.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"44444444-4444-4444-4444-444444444444","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select is(
   (select public.accept_pending_invitations()),
@@ -46,9 +46,16 @@ select is(
   'y quedó una sola membership'
 );
 
+select is(
+  (select count(*)::int from public.events
+    where actor_user_id = '44444444-4444-4444-4444-444444444444' and type = 'invitation.accepted'),
+  1,
+  'aceptar la invitación dejó su evento de auditoría'
+);
+
 -- La invitación vencida no crea nada.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select is(
   (select public.accept_pending_invitations()),

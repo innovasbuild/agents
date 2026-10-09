@@ -29,9 +29,12 @@ const tenant = (openDomains: string[]) => ({
 	openDomains,
 });
 
-const render = async () =>
+const render = async (error?: string) =>
 	renderToStaticMarkup(
-		await TenantLoginPage({ params: Promise.resolve({ tenant: "acme" }) }),
+		await TenantLoginPage({
+			params: Promise.resolve({ tenant: "acme" }),
+			searchParams: Promise.resolve(error ? { error } : {}),
+		}),
 	);
 
 describe("landing de la empresa", () => {
@@ -52,5 +55,21 @@ describe("landing de la empresa", () => {
 
 		expect(html).toContain("Entrá con tu correo de @acme.com o @acme.com.ar.");
 		expect(html).toContain("Si te invitaron con otro correo, usá ese.");
+	});
+
+	it("con error=metodo avisa que ese método no está permitido", async () => {
+		expect(await render("metodo")).toContain(
+			"Tu empresa no permite entrar con ese método. Usá una de estas opciones.",
+		);
+	});
+
+	it("sin error no muestra ningún aviso", async () => {
+		expect(await render()).not.toContain('role="alert"');
+	});
+
+	it("un error desconocido no se muestra", async () => {
+		const html = await render("<b>hola</b>");
+		expect(html).not.toContain('role="alert"');
+		expect(html).not.toContain("hola");
 	});
 });

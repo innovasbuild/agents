@@ -67,7 +67,7 @@ describe("createTenantSchema", () => {
 	});
 
 	it("rechaza un método desconocido", () => {
-		expect(message({ auth_methods: ["microsoft"] })).toBe(
+		expect(message({ auth_methods: ["saml"] })).toBe(
 			"Elegí al menos un método de login.",
 		);
 	});

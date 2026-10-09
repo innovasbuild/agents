@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { allowsLogin } from "../tenants/login-check";
 
 /**
  * Parsea el header `cookie` crudo de un `Request` en pares { name, value }.
@@ -37,9 +38,12 @@ function parseCookieHeader(
  * etc.) para que el auth walk de eve avance al siguiente autenticador —
  * nunca tira.
  */
-export async function verifyCaller(
-	request: Request,
-): Promise<{ userId: string; email: string } | null> {
+export async function verifyCaller(request: Request): Promise<{
+	userId: string;
+	email: string;
+	/** ¿Esta empresa permite el método con el que se abrió la sesión? */
+	allowsLogin: (tenantId: string) => Promise<boolean>;
+} | null> {
 	try {
 		const cookies = parseCookieHeader(request.headers.get("cookie"));
 
@@ -72,7 +76,13 @@ export async function verifyCaller(
 		if (claimsError || !claimsData?.claims) return null;
 		if (claimsData.claims.client_id) return null;
 
-		return { userId: data.user.id, email: data.user.email };
+		return {
+			userId: data.user.id,
+			email: data.user.email,
+			// Se devuelve la función y no el cliente: quien llama solo puede
+			// preguntar esto con la sesión de la persona.
+			allowsLogin: (tenantId) => allowsLogin(supabase, tenantId),
+		};
 	} catch {
 		return null;
 	}

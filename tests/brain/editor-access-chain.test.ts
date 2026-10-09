@@ -20,6 +20,8 @@ const state = vi.hoisted(() => ({
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
 		auth: { getUser: async () => ({ data: { user: state.user } }) },
+		// El chequeo del método de login (etapa 20): acá la empresa lo permite.
+		rpc: async () => ({ data: true, error: null }),
 		from: (table: string) => {
 			const filters: Record<string, unknown> = {};
 			const chain = {

@@ -84,7 +84,14 @@ vi.mock("../../lib/supabase/admin", () => ({
 	}),
 }));
 
-const { resolveChannelContext } = await import("@/lib/agents/channel-context");
+const channelContext = await import("@/lib/agents/channel-context");
+
+// Los tests de antes no hablan del método: entran con uno permitido.
+const resolveChannelContext = (
+	request: Request,
+	userId: string,
+	allowsLogin: (tenantId: string) => Promise<boolean> = async () => true,
+) => channelContext.resolveChannelContext(request, userId, allowsLogin);
 
 const CONVERSATION = {
 	id: "cccccccc-0000-0000-0000-000000000001",
@@ -132,6 +139,58 @@ beforeEach(() => {
 });
 
 describe("resolveChannelContext", () => {
+	describe("método de la sesión (spec etapa 20, L10)", () => {
+		const create = () =>
+			createRequest(
+				"https://app.test/eve/outreach/v1/session",
+				CONVERSATION.id,
+			);
+
+		it("se consulta con el tenant de la conversación", async () => {
+			const allowsLogin = vi.fn(async () => true);
+
+			await resolveChannelContext(create(), CONVERSATION.user_id, allowsLogin);
+
+			expect(allowsLogin).toHaveBeenCalledWith(CONVERSATION.tenant_id);
+		});
+
+		it("método no permitido: sin acceso", async () => {
+			expect(
+				await resolveChannelContext(
+					create(),
+					CONVERSATION.user_id,
+					async () => false,
+				),
+			).toBeNull();
+		});
+
+		it("si el chequeo tira: sin acceso", async () => {
+			expect(
+				await resolveChannelContext(
+					create(),
+					CONVERSATION.user_id,
+					async () => {
+						throw new Error("red");
+					},
+				),
+			).toBeNull();
+		});
+
+		it("quien no es miembro no dispara el chequeo", async () => {
+			rows.membership = null;
+			const allowsLogin = vi.fn(async () => true);
+
+			expect(
+				await resolveChannelContext(
+					create(),
+					CONVERSATION.user_id,
+					allowsLogin,
+				),
+			).toBeNull();
+			expect(allowsLogin).not.toHaveBeenCalled();
+		});
+	});
+
 	it("toma el id de sesión también de la ruta raíz /eve/v1", async () => {
 		const context = await resolveChannelContext(
 			createRequest("https://app.test/eve/v1/session/wrun_A"),

@@ -31,6 +31,22 @@ vi.mock("@/lib/supabase/server", () => ({
 		};
 	},
 }));
+// El chequeo del método tiene su propio test (tests/tenants/login-check-server);
+// acá se controla su respuesta y se mira contra qué empresa se preguntó.
+const gate = vi.hoisted(() => ({
+	allows: true,
+	calls: [] as { userId: string; tenantId: string }[],
+}));
+vi.mock("@/lib/tenants/login-check-server", () => ({
+	actionAllowsLogin: async (
+		_supabase: unknown,
+		userId: string,
+		tenantId: string,
+	) => {
+		gate.calls.push({ userId, tenantId });
+		return gate.allows;
+	},
+}));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/invitations/invite", () => ({
 	inviteToTenant: async (params: Record<string, unknown>) => {
@@ -60,6 +76,8 @@ describe("POST /api/invitations", () => {
 		state.platformAdmin = false;
 		state.outcome = { kind: "ok" };
 		state.calls = [];
+		gate.allows = true;
+		gate.calls = [];
 	});
 
 	it("401 sin sesión", async () => {
@@ -90,6 +108,32 @@ describe("POST /api/invitations", () => {
 		state.platformAdmin = true;
 
 		expect((await POST(request(valid))).status).toBe(201);
+	});
+
+	it("403 y no invita si la empresa no permite el método de la sesión", async () => {
+		gate.allows = false;
+
+		const response = await POST(request(valid));
+
+		expect(response.status).toBe(403);
+		expect(await response.json()).toEqual({ error: "sin permiso" });
+		expect(gate.calls).toEqual([{ userId: "u1", tenantId: TENANT_ID }]);
+		expect(state.calls).toHaveLength(0);
+	});
+
+	it("tampoco invita un platform_admin con un método no permitido", async () => {
+		state.membership = null;
+		state.platformAdmin = true;
+		gate.allows = false;
+
+		expect((await POST(request(valid))).status).toBe(403);
+		expect(state.calls).toHaveLength(0);
+	});
+
+	it("con el método permitido chequea contra el tenant del pedido e invita", async () => {
+		expect((await POST(request(valid))).status).toBe(201);
+		expect(gate.calls).toEqual([{ userId: "u1", tenantId: TENANT_ID }]);
+		expect(state.calls).toHaveLength(1);
 	});
 
 	it("le pasa al helper el correo normalizado, el origen y quién invita", async () => {

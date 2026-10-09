@@ -11,7 +11,11 @@ function supabaseAuth(): AuthFn<Request> {
 
 		// eve no valida ownership de sesión: lo hacemos acá, que es el único
 		// punto capaz de rechazar (los hooks son observe-only).
-		const context = await resolveChannelContext(request, caller.userId);
+		const context = await resolveChannelContext(
+			request,
+			caller.userId,
+			caller.allowsLogin,
+		);
 		if (context === null) return null;
 
 		return {

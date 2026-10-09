@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { closeLocalSession } from "@/lib/auth/close-session";
 import {
 	emailFromAccessToken,
 	landingPathFor,
@@ -9,6 +10,7 @@ import {
 	resolveConfirmation,
 } from "@/lib/auth/confirm";
 import { joinOnLogin } from "@/lib/auth/join-on-login";
+import { gateLogin } from "@/lib/auth/login-gate";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 type Phase =
@@ -61,6 +63,8 @@ export function Confirmar({ next }: { next: string | null }) {
 				return !error;
 			},
 			acceptInvitations: () => joinOnLogin(supabase),
+			gate: () => gateLogin(supabase),
+			closeSession: () => closeLocalSession(supabase),
 			next,
 			origin: window.location.origin,
 		})

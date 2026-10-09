@@ -545,16 +545,12 @@ Agregada el 2026-10-09 (plan de cierre del gap, G2 y G6). Una página por usuari
 
 **Modelo Claude Code:** Opus 5 para la spec (es auth); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** n/a.
-**Spec/Plan:** a escribir. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** `docs/superpowers/specs/2026-10-09-etapa-20-login-design.md` · 20.1: `docs/superpowers/plans/2026-10-09-etapa-20-1-login.md` · 20.2: plan a escribir.
 
 Agregada el 2026-10-09 (resto del G3 tras el PR #81). Completa el ingreso por dominio para un cliente del universo Microsoft y cierra los límites declarados en la spec del ingreso por dominio §6.
 
-- [ ] Microsoft (Entra ID) como tercer valor de `auth_methods`: proveedor en Supabase Auth, botón, check ampliado. El join por dominio exige correo verificado también con este proveedor (nOAuth).
-- [ ] Imposición de `auth_methods` en el servidor en `/auth/callback` y `/auth/confirmar`; la spec decide qué pasa con una membresía existente que entra por un método ahora prohibido.
-- [ ] Bloqueo por persona que `join_tenants_by_domain()` respeta, con botón en `/settings/usuarios` y evento.
-- [ ] Cambio de rol de un miembro y reenvío de invitación desde `/settings/usuarios`.
-- [ ] Dejar escrito qué pasa con Gmail para un cliente solo-Microsoft (proveedor Outlook es otra etapa).
-- [ ] `/ship` + `/context-save`.
+- [x] **20.1 · Login.** Microsoft como método (`microsoft`, proveedor `azure`), el método de la sesión derivado en la base (`current_login_method`), corte al entrar (`login_gate`) y chequeo en cada página, en la consola y en el chat (`tenant_allows_login`). **Antes de desplegar:** aplicar la migración `20261013120000_login_methods` a producción primero (corriendo `npx supabase migration list` antes: `db push` aplica todas las pendientes) y recién después desplegar el código; al revés, `login_gate` no existe y nadie puede entrar. Antes de desplegar, confirmar en producción que `auth_methods` del tenant dueño incluye el método con el que hoy entran los administradores de plataforma, y avisar que quien entraba por Google a una empresa que solo permite correo va a ser rebotado a su landing. Microsoft queda apagado hasta completar el anexo A de la spec (app en Entra con el claim `xms_edov`). Verificado en navegador contra la base local: ingreso por dominio abierto, corte al entrar con la sesión cerrada, corte en cada página con el aviso, y Microsoft visible en `/login` solo cuando una empresa lo tiene. Sin verificar: Google y Microsoft de punta a punta, que necesitan proveedor real; el rechazo del chat por HTTP, porque en desarrollo el canal acepta todo; y el chequeo de un administrador de plataforma en navegador.
+- [ ] **20.2 · Operación de usuarios.** Bloqueo por persona, cambio de rol y reenvío de invitación.
 
 **Terminado cuando:** en producción, una empresa de prueba con `auth_methods = {microsoft}` y modo abierto recibe a una persona con cuenta Microsoft de su dominio sin invitación; esa persona no puede entrar por Google desde `/login`; y una persona bloqueada no vuelve a entrar aunque el modo siga abierto.
 

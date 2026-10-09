@@ -30,7 +30,7 @@ values ('a6a6a6a6-0000-0000-0000-000000000004', 'authenticated', 'authenticated'
 
 -- Sesión del tenant_admin de A.
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"a6a6a6a6-0000-0000-0000-000000000001","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"a6a6a6a6-0000-0000-0000-000000000001","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select throws_ok(
   $$insert into public.memberships (tenant_id, user_id, role)
@@ -78,7 +78,7 @@ select is(
 -- El alta por invitación no depende del grant de la sesión.
 reset role;
 set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"a6a6a6a6-0000-0000-0000-000000000004","role":"authenticated"}';
+set local "request.jwt.claims" to '{"sub":"a6a6a6a6-0000-0000-0000-000000000004","role":"authenticated","amr":[{"method":"otp","timestamp":1}]}';
 
 select is((select public.accept_pending_invitations()), 1, 'aceptar la invitación sigue funcionando');
 select is(

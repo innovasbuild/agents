@@ -1,5 +1,44 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { loadPublicTenant } from "@/lib/tenants/public";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { loadOfferedMethods, loadPublicTenant } from "@/lib/tenants/public";
+
+const admin: {
+	result: { data: unknown; error: unknown };
+	throws: boolean;
+	filters: [string, unknown][];
+	columns: string[];
+} = {
+	result: { data: [], error: null },
+	throws: false,
+	filters: [],
+	columns: [],
+};
+
+vi.mock("@/lib/supabase/admin", () => ({
+	createAdminClient: () => ({
+		from: (table: string) => {
+			if (admin.throws) throw new Error("sin conexión");
+			admin.columns.push(table);
+			const builder = {
+				select: (columns: string) => {
+					admin.columns.push(columns);
+					return builder;
+				},
+				eq(column: string, value: unknown) {
+					admin.filters.push([column, value]);
+					return Promise.resolve(admin.result);
+				},
+			};
+			return builder;
+		},
+	}),
+}));
+
+const withRows = (rows: unknown) => {
+	admin.result = { data: rows, error: null };
+	admin.throws = false;
+	admin.filters = [];
+	admin.columns = [];
+};
 
 function clientWith(row: unknown) {
 	const filters: [string, unknown][] = [];
@@ -96,11 +135,62 @@ describe("loadPublicTenant", () => {
 			slug: "acme",
 			display_name: "Acme",
 			brand: {},
-			auth_methods: ["microsoft"],
+			auth_methods: ["saml"],
 		});
 
 		expect((await loadPublicTenant("acme", fake.client))?.authMethods).toEqual([
 			"email",
 		]);
+	});
+});
+
+describe("loadOfferedMethods", () => {
+	beforeEach(() => withRows([]));
+
+	it("consulta solo auth_methods de las empresas activas", async () => {
+		withRows([{ auth_methods: ["email"] }]);
+
+		await loadOfferedMethods();
+
+		expect(admin.columns).toEqual(["tenants", "auth_methods"]);
+		expect(admin.filters).toEqual([["active", true]]);
+	});
+
+	it("une los métodos de las empresas activas en el orden de AUTH_METHODS", async () => {
+		withRows([
+			{ auth_methods: ["google"] },
+			{ auth_methods: ["microsoft", "email"] },
+		]);
+
+		expect(await loadOfferedMethods()).toEqual([
+			"email",
+			"google",
+			"microsoft",
+		]);
+	});
+
+	it("no ofrece Microsoft si ninguna empresa lo tiene", async () => {
+		withRows([{ auth_methods: ["email", "google"] }]);
+
+		expect(await loadOfferedMethods()).toEqual(["email", "google"]);
+	});
+
+	it("ignora valores desconocidos", async () => {
+		withRows([{ auth_methods: ["saml", "google"] }]);
+
+		expect(await loadOfferedMethods()).toEqual(["google"]);
+	});
+
+	it("sin empresas, con error o si la consulta tira, ofrece solo correo", async () => {
+		withRows([]);
+		expect(await loadOfferedMethods()).toEqual(["email"]);
+
+		withRows(null);
+		admin.result = { data: null, error: { message: "x" } };
+		expect(await loadOfferedMethods()).toEqual(["email"]);
+
+		withRows([{ auth_methods: ["google"] }]);
+		admin.throws = true;
+		expect(await loadOfferedMethods()).toEqual(["email"]);
 	});
 });

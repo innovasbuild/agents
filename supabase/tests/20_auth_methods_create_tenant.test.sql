@@ -30,7 +30,7 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$update public.tenants set auth_methods = '{email,microsoft}' where slug = 'innovas'$$,
+  $$update public.tenants set auth_methods = '{email,saml}' where slug = 'innovas'$$,
   '23514', null, 'auth_methods rechaza un método desconocido'
 );
 
