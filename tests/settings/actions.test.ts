@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const calls: { updates: unknown[]; eqArgs: unknown[]; result: unknown } = {
+const calls: {
+	user: { id: string } | null;
+	updates: unknown[];
+	eqArgs: unknown[];
+	result: unknown;
+} = {
+	user: { id: "u1" },
 	updates: [],
 	eqArgs: [],
 	result: { data: { id: "t1" }, error: null },
@@ -8,6 +14,7 @@ const calls: { updates: unknown[]; eqArgs: unknown[]; result: unknown } = {
 
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
+		auth: { getUser: async () => ({ data: { user: calls.user } }) },
 		from(_table: string) {
 			return {
 				update(values: unknown) {
@@ -27,6 +34,22 @@ vi.mock("@/lib/supabase/server", () => ({
 		},
 	}),
 }));
+// El chequeo del método tiene su propio test (tests/tenants/login-check-server);
+// acá se controla su respuesta y se mira contra qué empresa se preguntó.
+const gate = vi.hoisted(() => ({
+	allows: true,
+	calls: [] as { userId: string; tenantId: string }[],
+}));
+vi.mock("@/lib/tenants/login-check-server", () => ({
+	actionAllowsLogin: async (
+		_supabase: unknown,
+		userId: string,
+		tenantId: string,
+	) => {
+		gate.calls.push({ userId, tenantId });
+		return gate.allows;
+	},
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const { updateDefaultModel } = await import("@/app/[tenant]/settings/actions");
@@ -35,9 +58,53 @@ const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("updateDefaultModel", () => {
 	beforeEach(() => {
+		calls.user = { id: "u1" };
 		calls.updates = [];
 		calls.eqArgs = [];
 		calls.result = { data: { id: TENANT_ID }, error: null };
+		gate.allows = true;
+		gate.calls = [];
+	});
+
+	it("no guarda si la empresa no permite el método de la sesión", async () => {
+		gate.allows = false;
+
+		const result = await updateDefaultModel(
+			TENANT_ID,
+			"anthropic/claude-sonnet-5",
+			"innovas",
+		);
+
+		expect(result).toEqual({
+			ok: false,
+			message: "No tenés permiso para cambiar el modelo.",
+		});
+		expect(gate.calls).toEqual([{ userId: "u1", tenantId: TENANT_ID }]);
+		expect(calls.updates).toHaveLength(0);
+	});
+
+	it("sin sesión no guarda ni pregunta por el método", async () => {
+		calls.user = null;
+
+		const result = await updateDefaultModel(
+			TENANT_ID,
+			"anthropic/claude-sonnet-5",
+			"innovas",
+		);
+
+		expect(result).toEqual({
+			ok: false,
+			message: "No tenés permiso para cambiar el modelo.",
+		});
+		expect(gate.calls).toHaveLength(0);
+		expect(calls.updates).toHaveLength(0);
+	});
+
+	it("con el método permitido chequea contra el tenant de la acción", async () => {
+		await updateDefaultModel(TENANT_ID, "anthropic/claude-sonnet-5", "innovas");
+
+		expect(gate.calls).toEqual([{ userId: "u1", tenantId: TENANT_ID }]);
+		expect(calls.updates).toHaveLength(1);
 	});
 
 	it("rechaza un tenantId que no es uuid sin tocar la base", async () => {

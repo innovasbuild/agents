@@ -3,12 +3,32 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
 // argumentos que quiera: se validan en el borde, igual que el inputSchema de
 // las tools (agents/outreach/tools/*.ts).
 const conversationIdSchema = z.uuid();
 const slugSchema = z.string().regex(/^[a-z0-9-]{1,63}$/);
+
+type Supabase = Awaited<ReturnType<typeof createServerSupabase>>;
+
+/**
+ * Empresa de un hilo, leída con el cliente de la sesión (la RLS aplica).
+ * `null` si el hilo no se ve; `error` si no se pudo leer.
+ */
+async function conversationTenant(
+	supabase: Supabase,
+	conversationId: string,
+): Promise<{ tenantId: string | null; error: boolean }> {
+	const { data, error } = await supabase
+		.from("conversations")
+		.select("tenant_id")
+		.eq("id", conversationId)
+		.maybeSingle();
+	if (error) return { tenantId: null, error: true };
+	return { tenantId: data?.tenant_id ?? null, error: false };
+}
 
 export async function createConversation(
 	tenantId: string,
@@ -18,6 +38,10 @@ export async function createConversation(
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) return null;
+
+	// Las páginas ya chequean el método de la sesión; una action se puede
+	// invocar directo, así que lo chequea ella (spec etapa 20, L10 a L12).
+	if (!(await actionAllowsLogin(supabase, auth.user.id, tenantId))) return null;
 
 	// La fila se crea ANTES de send(): el canal valida contra ella y el hook
 	// bind-session le escribe después el eve_session_id.
@@ -44,13 +68,25 @@ export async function renameConversation(
 	slug: string,
 ) {
 	const supabase = await createServerSupabase();
-	await supabase
-		.from("conversations")
-		.update({
-			title: title.slice(0, 80),
-			last_message_at: new Date().toISOString(),
-		})
-		.eq("id", conversationId);
+	const { data: auth } = await supabase.auth.getUser();
+	// Sin sesión, sin hilo a la vista o con un método que la empresa del hilo
+	// no permite, no se escribe; se revalida igual, como siempre.
+	const tenantId = auth.user
+		? (await conversationTenant(supabase, conversationId)).tenantId
+		: null;
+	if (
+		auth.user &&
+		tenantId &&
+		(await actionAllowsLogin(supabase, auth.user.id, tenantId))
+	) {
+		await supabase
+			.from("conversations")
+			.update({
+				title: title.slice(0, 80),
+				last_message_at: new Date().toISOString(),
+			})
+			.eq("id", conversationId);
+	}
 	revalidatePath(`/${slug}/chat`);
 }
 
@@ -76,6 +112,16 @@ export async function deleteConversation(
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) return { ok: false, error: "Volvé a entrar: no hay sesión." };
+
+	// El método de la sesión se chequea contra la empresa del hilo. Un hilo
+	// que no se ve contesta lo mismo que un borrado que no tocó filas.
+	const conversation = await conversationTenant(supabase, conversationId);
+	if (conversation.error)
+		return { ok: false, error: "No se pudo borrar el hilo." };
+	if (!conversation.tenantId)
+		return { ok: false, error: "Ese hilo ya no está." };
+	if (!(await actionAllowsLogin(supabase, auth.user.id, conversation.tenantId)))
+		return { ok: false, error: "No se pudo borrar el hilo." };
 
 	// El `select` no es cosmético: un DELETE que RLS filtra entero no devuelve
 	// error, devuelve cero filas. Sin esto, borrar el hilo de otro contestaba
