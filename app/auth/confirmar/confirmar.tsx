@@ -9,6 +9,7 @@ import {
 	resolveConfirmation,
 } from "@/lib/auth/confirm";
 import { joinOnLogin } from "@/lib/auth/join-on-login";
+import { gateLogin } from "@/lib/auth/login-gate";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 type Phase =
@@ -61,6 +62,10 @@ export function Confirmar({ next }: { next: string | null }) {
 				return !error;
 			},
 			acceptInvitations: () => joinOnLogin(supabase),
+			gate: () => gateLogin(supabase),
+			closeSession: async () => {
+				await supabase.auth.signOut();
+			},
 			next,
 			origin: window.location.origin,
 		})

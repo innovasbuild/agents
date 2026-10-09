@@ -15,6 +15,9 @@ function deps(
 		opens?: boolean;
 		acceptThrows?: boolean;
 		next?: string | null;
+		gate?: { ok: true } | { ok: false; landing: string };
+		gateThrows?: boolean;
+		closeThrows?: boolean;
 	} = {},
 ) {
 	const calls: string[] = [];
@@ -33,6 +36,15 @@ function deps(
 				calls.push("accept");
 				if (overrides.acceptThrows) throw new Error("boom");
 			},
+			gate: async () => {
+				calls.push("gate");
+				if (overrides.gateThrows) throw new Error("boom");
+				return overrides.gate ?? { ok: true as const };
+			},
+			closeSession: async () => {
+				calls.push("close");
+				if (overrides.closeThrows) throw new Error("boom");
+			},
 			next: overrides.next === undefined ? "/acme/chat" : overrides.next,
 			origin: ORIGIN,
 		},
@@ -44,7 +56,7 @@ describe("resolveConfirmation", () => {
 		const { input, calls } = deps();
 
 		expect(await resolveConfirmation(input)).toBe("/acme/chat");
-		expect(calls).toEqual(["clear", "open", "accept"]);
+		expect(calls).toEqual(["clear", "open", "accept", "gate"]);
 	});
 
 	it("saca el fragmento de la URL ANTES de cualquier espera de red", async () => {
@@ -107,6 +119,39 @@ describe("resolveConfirmation", () => {
 		expect(await resolveConfirmation(deps({ next: "//evil.test" }).input)).toBe(
 			"/",
 		);
+	});
+	it("si el método no está permitido cierra la sesión y devuelve la landing", async () => {
+		const { input, calls } = deps({
+			gate: { ok: false, landing: "/login/acme?error=metodo" },
+		});
+
+		expect(await resolveConfirmation(input)).toBe("/login/acme?error=metodo");
+		expect(calls).toEqual(["clear", "open", "accept", "gate", "close"]);
+	});
+
+	it("si el chequeo tira, corta y cierra la sesión", async () => {
+		const { input, calls } = deps({ gateThrows: true });
+
+		expect(await resolveConfirmation(input)).toBe("/login?error=auth_failed");
+		expect(calls.at(-1)).toBe("close");
+	});
+
+	it("si cerrar la sesión falla, igual devuelve la landing", async () => {
+		const { input } = deps({
+			gate: { ok: false, landing: "/login/acme?error=metodo" },
+			closeThrows: true,
+		});
+
+		expect(await resolveConfirmation(input)).toBe("/login/acme?error=metodo");
+	});
+
+	it("sin sesión abierta no se chequea ni se cierra nada", async () => {
+		const { input, calls } = deps({ opens: false });
+
+		await resolveConfirmation(input);
+
+		expect(calls).not.toContain("gate");
+		expect(calls).not.toContain("close");
 	});
 });
 

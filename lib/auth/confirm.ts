@@ -1,3 +1,4 @@
+import type { GateResult } from "@/lib/auth/login-gate";
 import { safeNextPath } from "@/lib/auth/next-path";
 
 /**
@@ -61,6 +62,9 @@ export async function resolveConfirmation(params: {
 		refreshToken: string;
 	}) => Promise<boolean>;
 	acceptInvitations: () => Promise<void>;
+	/** El corte por método, después de aceptar invitaciones. */
+	gate: () => Promise<GateResult>;
+	closeSession: () => Promise<void>;
 	next: string | null;
 	origin: string;
 }): Promise<string> {
@@ -77,6 +81,22 @@ export async function resolveConfirmation(params: {
 		await params.acceptInvitations();
 	} catch (error) {
 		console.error("No se pudieron aceptar las invitaciones:", error);
+	}
+
+	let gate: GateResult;
+	try {
+		gate = await params.gate();
+	} catch (error) {
+		console.error("No se pudo chequear el método de ingreso:", error);
+		gate = { ok: false, landing: "/login?error=auth_failed" };
+	}
+	if (!gate.ok) {
+		try {
+			await params.closeSession();
+		} catch (error) {
+			console.error("No se pudo cerrar la sesión tras el corte:", error);
+		}
+		return gate.landing;
 	}
 
 	return safeNextPath(params.next, params.origin);
