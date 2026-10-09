@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { closeLocalSession } from "@/lib/auth/close-session";
 import { joinOnLogin } from "@/lib/auth/join-on-login";
 import { gateLogin } from "@/lib/auth/login-gate";
 import { safeNextPath } from "@/lib/auth/next-path";
@@ -41,11 +42,7 @@ export async function GET(request: Request) {
 	// este método. Si ninguna lo permite, la sesión no queda abierta.
 	const gate = await gateLogin(supabase);
 	if (!gate.ok) {
-		try {
-			await supabase.auth.signOut();
-		} catch (error) {
-			console.error("signOut tras el corte falló:", error);
-		}
+		await closeLocalSession(supabase);
 		return NextResponse.redirect(new URL(gate.landing, requestUrl.origin));
 	}
 

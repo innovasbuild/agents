@@ -4,12 +4,16 @@ const state: {
 	exchange: { data: { session: unknown; user: unknown }; error: unknown };
 	gate: unknown;
 	signOutThrows: boolean;
+	signOutError: unknown;
+	signOutArgs: unknown[];
 	calls: string[];
 	exchangedCodes: string[];
 } = {
 	exchange: { data: { session: {}, user: {} }, error: null },
 	gate: { allowed: true, landing: null },
 	signOutThrows: false,
+	signOutError: null,
+	signOutArgs: [],
 	calls: [],
 	exchangedCodes: [],
 };
@@ -21,10 +25,11 @@ vi.mock("@/lib/supabase/server", () => ({
 				state.exchangedCodes.push(code);
 				return state.exchange;
 			},
-			signOut: async () => {
+			signOut: async (options?: unknown) => {
 				state.calls.push("signOut");
+				state.signOutArgs.push(options);
 				if (state.signOutThrows) throw new Error("boom");
-				return { error: null };
+				return { error: state.signOutError };
 			},
 		},
 		rpc: async (fn: string) => {
@@ -46,6 +51,8 @@ describe("GET /auth/callback", () => {
 		state.exchange = { data: { session: {}, user: {} }, error: null };
 		state.gate = { allowed: true, landing: null };
 		state.signOutThrows = false;
+		state.signOutError = null;
+		state.signOutArgs = [];
 		state.calls = [];
 		state.exchangedCodes = [];
 	});
@@ -103,6 +110,27 @@ describe("GET /auth/callback", () => {
 			"login_gate",
 			"signOut",
 		]);
+	});
+
+	it("el corte cierra solo la sesión recién abierta (scope local), no las de otros dispositivos", async () => {
+		state.gate = { allowed: false, landing: "acme" };
+
+		await call("?code=abc&next=%2Facme%2Fchat");
+
+		expect(state.signOutArgs).toEqual([{ scope: "local" }]);
+	});
+
+	it("si signOut devuelve un error lo deja en el log e igual manda a la landing", async () => {
+		state.gate = { allowed: false, landing: "acme" };
+		state.signOutError = { message: "no se pudo revocar" };
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const response = await call("?code=abc&next=%2Facme%2Fchat");
+
+		expect(location(response)).toBe("https://app.test/login/acme?error=metodo");
+		expect(error).toHaveBeenCalledTimes(1);
+		expect(error.mock.calls[0]).toContain(state.signOutError);
+		error.mockRestore();
 	});
 
 	it("si cerrar la sesión falla, igual manda a la landing", async () => {

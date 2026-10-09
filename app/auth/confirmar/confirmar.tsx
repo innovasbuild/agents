@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { closeLocalSession } from "@/lib/auth/close-session";
 import {
 	emailFromAccessToken,
 	landingPathFor,
@@ -63,9 +64,7 @@ export function Confirmar({ next }: { next: string | null }) {
 			},
 			acceptInvitations: () => joinOnLogin(supabase),
 			gate: () => gateLogin(supabase),
-			closeSession: async () => {
-				await supabase.auth.signOut();
-			},
+			closeSession: () => closeLocalSession(supabase),
 			next,
 			origin: window.location.origin,
 		})
