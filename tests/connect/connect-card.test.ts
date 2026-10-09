@@ -54,6 +54,12 @@ describe("ConnectCard", () => {
 		);
 	});
 
+	it("la pestaña activa se distingue: Radix marca data-state, no data-active", () => {
+		const html = render(agent);
+		expect(html).toContain("data-[state=active]:bg-background");
+		expect(html).not.toMatch(/(^|[\s:"])data-active:/);
+	});
+
 	it("la tarjeta de herramientas no tiene URL ni pestañas", () => {
 		const html = render({
 			kind: "tools",
