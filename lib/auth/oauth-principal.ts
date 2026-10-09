@@ -3,6 +3,7 @@
 // agente (Etapa 6). Sin nada específico de ninguno de los dos.
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "../supabase/admin";
+import { platformOwnerSlug } from "../tenants/platform-owner";
 
 export function createOAuthClaimsVerifier(): (
 	token: string,
@@ -48,4 +49,16 @@ export async function loadTenantBySlug(
 	return data
 		? { id: data.id as string, active: data.active as boolean }
 		: null;
+}
+
+/**
+ * Id del tenant dueño de la plataforma, o null si no hay uno configurado.
+ * Una fila platform_admin solo cuenta como plataforma si es de ese tenant,
+ * igual que en la aplicación (lib/tenants/resolve.ts). Sin
+ * PLATFORM_OWNER_TENANT_SLUG no hay dueño y nadie entra como plataforma.
+ */
+export async function loadPlatformOwnerTenantId(): Promise<string | null> {
+	const slug = platformOwnerSlug();
+	if (!slug) return null;
+	return (await loadTenantBySlug(slug))?.id ?? null;
 }
