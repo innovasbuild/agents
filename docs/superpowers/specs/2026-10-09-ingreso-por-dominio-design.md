@@ -23,7 +23,7 @@ Que cada empresa elija entre dos modos de ingreso: **solo por invitación** (com
 | D6 | Candado de columnas en `tenants` por trigger: una sesión que no es admin de plataforma solo cambia `default_model` y `self_signup_by_domain` | `tenants_update` hoy deja al `tenant_admin` escribir cualquier columna por la API (`allowed_domains`, `active`, `slug`, `allowed_models`, `auth_methods`, `brand`). Sin esto D1 no se cumple. Grants por columna no sirven: la consola escribe con el mismo rol `authenticated` |
 | D7 | El modo abierto exige al menos un dominio, como restricción de la tabla | Hoy solo lo valida el formulario de plataforma |
 | D8 | Dominios de correo públicos rechazados en el formulario de plataforma cuando el modo está abierto, y también al activar el modo desde settings | Red contra el error humano. La lista vive en un solo módulo |
-| D9 | El ingreso por mail crea la cuenta solo si el dominio está abierto en alguna empresa; lo decide una server action | Hoy `shouldCreateUser: false` deja sin link a quien nunca fue invitado. El mensaje en pantalla no cambia según el resultado |
+| D9 | El ingreso por mail crea la cuenta solo si el dominio está abierto en alguna empresa; lo decide una server action | Hoy `shouldCreateUser: false` deja sin link a quien nunca fue invitado. El mensaje en pantalla no cambia según el resultado: `requestMagicLink` resuelve igual con o sin acceso (antes, Supabase respondía 422 a un correo sin cuenta y la pantalla no mostraba nada, lo que dejaba distinguir qué correos existen) |
 | D10 | Cada alta deja `membership.joined_by_domain` en `events` | Se tiene que poder ver quién entró sin invitación |
 
 ## 3. Base

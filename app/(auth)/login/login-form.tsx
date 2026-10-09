@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { requestMagicLink } from "@/lib/auth/magic-link";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { AuthMethod } from "@/lib/tenants/auth-methods";
 import { canSignUpByDomain } from "./actions";
@@ -42,19 +43,14 @@ export function LoginForm({
 
 	async function entrarConMagicLink(event: React.FormEvent) {
 		event.preventDefault();
-		// Solo un mail de un dominio abierto en alguna empresa puede crear
-		// cuenta al pedir el link. Un invitado real ya tiene su fila; a
-		// cualquier otro mail no se le crea una ni se le manda nada.
-		const shouldCreateUser = await canSignUpByDomain(email).catch(() => false);
-		const { error } = await supabase.auth.signInWithOtp({
-			email: email.trim().toLowerCase(),
-			options: {
-				emailRedirectTo: callbackUrl(next),
-				shouldCreateUser,
-			},
+		await requestMagicLink({
+			email,
+			redirectTo: callbackUrl(next),
+			canSignUpByDomain,
+			signInWithOtp: (args) => supabase.auth.signInWithOtp(args),
 		});
-		// No distingue mail existente de inexistente: no confirmamos quién tiene cuenta.
-		setSent(!error);
+		// El mensaje es el mismo con o sin acceso: no confirmamos quién tiene cuenta.
+		setSent(true);
 	}
 
 	return (
