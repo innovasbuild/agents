@@ -9,10 +9,10 @@ Que una empresa del universo Microsoft entre con su cuenta corporativa, que los 
 
 Dos entregas, una sesión y un PR cada una:
 
-- **20.1 · Login.** Microsoft como método y corte en el login cuando el método no está permitido.
+- **20.1 · Login.** Microsoft como método, corte en el login cuando el método no está permitido y el mismo chequeo en cada página y en el chat.
 - **20.2 · Operación de usuarios.** Bloqueo por persona, cambio de rol y reenvío de invitación.
 
-**Terminado cuando (20.1):** en producción, una empresa de prueba con `auth_methods = {microsoft}` y modo abierto recibe sin invitación a una persona con cuenta Microsoft de su dominio; esa misma persona, entrando por Google desde `/login`, queda sin sesión y cae en `/login/<slug>` con el aviso; y un miembro de una empresa que solo permite correo no puede entrar por Google.
+**Terminado cuando (20.1):** en producción, una empresa de prueba con `auth_methods = {microsoft}` y modo abierto recibe sin invitación a una persona con cuenta Microsoft de su dominio; esa misma persona, entrando por Google desde `/login`, queda sin sesión y cae en `/login/<slug>` con el aviso; un miembro de una empresa que solo permite correo no puede entrar por Google; y una persona con dos empresas, logueada por un método que solo una permite, entra a esa y al abrir la otra cae en su landing con el aviso.
 
 **Terminado cuando (20.2):** un administrador bloquea a un miembro de un dominio abierto y esa persona no vuelve a entrar aunque el modo siga abierto; le cambia el rol a otro miembro y el cambio se ve al recargar; y reenvía una invitación pendiente que llega de nuevo por mail.
 
@@ -36,6 +36,10 @@ Antes de diseñar se probó una sesión por link contra la base local (GoTrue v2
 | L6 | El corte se decide en SQL, en `public.login_gate()`, y la app solo actúa | Una sola regla, probada con pgTAP. La usan `/auth/callback` y `/auth/confirmar` |
 | L7 | Se corta cuando la persona tiene alguna empresa (membresía, invitación pendiente o dominio abierto) y ninguna de sus membresías permite el método. Con una empresa que lo permita alcanza | Opción elegida por Matías: cortar en el login. Quien no tiene ninguna empresa sigue a `/sin-acceso`, como hoy |
 | L8 | Si `login_gate` falla, se corta | Es un control de acceso: ante la duda no se entra. Obliga a aplicar la migración antes de desplegar el código (§9) |
+| L10 | Además del corte, cada request chequea el método contra la empresa que se está abriendo: `resolveTenantAccess`, `requirePlatformAdmin` y el canal del chat web | Pedido de Matías tras la prueba. El corte del login deja pasar a quien tiene dos empresas y un método que solo una permite, y a quien evita el paso de corte. La sesión la guarda el navegador; el chequeo por request es lo que vale |
+| L11 | El chequeo es una función SQL, `public.tenant_allows_login(p_tenant uuid)`, que usa `current_login_method()` | La misma regla que el corte, en un solo lugar |
+| L12 | Un administrador de plataforma se chequea contra los métodos del tenant dueño, no contra los de la empresa que visita | Opera empresas ajenas con la cuenta de su propia empresa. Si se le exigiera el método de cada cliente no podría entrar a uno solo Microsoft |
+| L13 | Método no permitido en una página: redirect a `/login/<slug>?error=metodo`, sin cerrar la sesión. En el chat: se rechaza como sin acceso | La sesión puede ser válida para otra empresa de la misma persona. El aviso explica qué pasó, cosa que un 404 no hace |
 | L9 | El link de una invitación es un login por correo y se le aplica la misma regla | Una empresa solo Microsoft invita por mail; la persona hace clic, queda cortada y cae en la landing con el botón de Microsoft. Al entrar por Microsoft la invitación se acepta, porque se busca por el correo verificado. Dos pasos, sin excepción en la regla |
 | U1 | El bloqueo es una tabla `membership_blocks` por empresa y persona, escrita solo por funciones `security definer` | Mismo patrón que las altas de membresía desde el PR 80 |
 | U2 | Bloquear borra la membresía y anota el bloqueo en una transacción. `join_tenants_by_domain` salta a los bloqueados | "Sacar" sigue siendo una baja que el dominio revierte; "Bloquear" es la que no |
@@ -81,6 +85,10 @@ El check de `tenants.auth_methods` pasa a aceptar `email`, `google` y `microsoft
 
 El correo verificado se lee igual que en `join_tenants_by_domain` (`email_confirmed_at is not null`).
 
+### 4.5 `public.tenant_allows_login(p_tenant uuid)`
+
+`returns boolean language sql stable security definer set search_path = ''`. `grant execute` a `authenticated`. Verdadero si el tenant existe, está activo y `public.current_login_method() = any (auth_methods)`. Con método `null` o tenant inexistente: falso.
+
 ## 5. Entrega 20.1 · Aplicación
 
 - **`lib/tenants/auth-methods.ts`:** `AUTH_METHODS = ["email", "google", "microsoft"]`, rótulo "Microsoft". Los formularios de la consola ya iteran la lista.
@@ -90,6 +98,14 @@ El correo verificado se lee igual que en `join_tenants_by_domain` (`email_confir
 - **`/auth/confirmar`:** `resolveConfirmation` recibe un paso `gate` que corre después de aceptar invitaciones. Si no es `ok`, cierra la sesión del navegador y devuelve `landing` como destino.
 - **`/login` y `/login/[tenant]`:** con `?error=metodo` muestran arriba del formulario "Tu empresa no permite entrar con ese método. Usá una de estas opciones." Con `?error=auth_failed`, "No pudimos abrir tu sesión. Probá de nuevo."
 - **Orden fijo en los dos puntos de entrada:** abrir sesión, `joinOnLogin`, `gateLogin`, redirigir.
+
+### 5.1 Chequeo por request
+
+- **`lib/tenants/platform.ts`:** `platformOwnerAdminTenantId(supabase, userId): Promise<string | null>` devuelve el id del tenant dueño si la persona es su `platform_admin`. `isPlatformOwnerAdmin` pasa a ser `(await platformOwnerAdminTenantId(...)) !== null`.
+- **`resolveTenantAccess(slug)`:** después de resolver el rol, llama `rpc("tenant_allows_login", { p_tenant })` con el id del tenant dueño si es administrador de plataforma (L12) y con el del tenant de la URL si no. Si devuelve falso o falla: `redirect("/login/<slug>?error=metodo")`, donde `<slug>` es el del tenant contra el que se chequeó. Sin sesión, sin tenant o sin rol sigue devolviendo `null`, como hoy.
+- **`requirePlatformAdmin()`:** mismo chequeo contra el tenant dueño y mismo redirect.
+- **Canal del chat web:** `verifyCaller` devuelve también el cliente de Supabase de esa sesión. `resolveChannelContext` recibe una función `allowsLogin(tenantId)` y devuelve `null` si da falso o tira. El canal la arma con `rpc("tenant_allows_login")` sobre ese cliente.
+- **Costo:** una consulta más por llamada. El layout y la página llaman a `resolveTenantAccess` por separado; se envuelve en `cache()` de React para que el mismo request la resuelva una sola vez.
 
 ## 6. Entrega 20.2 · Base
 
@@ -121,22 +137,13 @@ Server actions en `actions.ts`, todas con resultado `{ ok: true } | { ok: false;
 
 ## 8. Límites declarados
 
-- **La imposición es del login de la app.** Quien ya tiene una sesión abierta por un método permitido y la empresa después lo prohíbe, sigue adentro hasta que la sesión venza. Y la sesión la guarda el navegador: un miembro que evite el paso de corte conserva una sesión de Supabase válida. Ver la decisión pendiente de §8.1.
-- **La API de datos no aplica la regla.** La RLS sigue mirando membresía, no método.
+- **Una sesión abierta sobrevive al cambio de métodos de la empresa solo hasta el próximo request**: el chequeo por request (L10) la frena en la web y en el chat.
+- **La API de datos no aplica la regla.** La RLS sigue mirando membresía, no método: quien llame a PostgREST directo con su token no pasa por el chequeo.
 - **Los canales MCP** piden consentimiento con una sesión web, así que pasan por el corte al entrar, pero un token ya emitido no se revisa.
 - **`xms_edov` es condición de despliegue**, no algo que el código pueda garantizar solo (anexo A, paso 3). L4 limita el daño a "no entra", pero la vinculación de identidades la hace GoTrue antes de que corra nuestro código.
 - **Un cliente solo Microsoft no puede usar el agente de outreach** para mandar o leer correo: sigue dependiendo de Gmail. El proveedor Outlook es otra etapa.
 - **El método de Microsoft acepta cualquier tenant de Entra** (`common`). La pertenencia a la empresa la decide el dominio del correo o la invitación, igual que con Google.
 - **Dos identidades OAuth vinculadas** (Google y Microsoft con el mismo correo): gana la del `last_sign_in_at` más nuevo. Dos logins casi simultáneos podrían cruzarse; el efecto es un corte de más, no un acceso de más.
-
-### 8.1 Decisión pendiente de Matías
-
-La prueba mostró que el método se puede calcular en SQL con el token de cada request. Eso hace barata la opción que se había descartado por difícil: que `resolveTenantAccess`, que ya corre en cada página, compare el método de la sesión con los `auth_methods` de la empresa y responda 404 si no está permitido.
-
-- **Tal como está aprobado (opción 1):** se corta al entrar. Es lo que describe esta spec.
-- **Recomendado sumar:** el chequeo en `resolveTenantAccess`, además del corte. Cierra el primer límite de arriba para toda la web, cuesta una consulta más por página y una tarea más en la 20.1.
-
-La spec se implementa con la opción 1 salvo que Matías pida sumar el chequeo.
 
 ## 9. Despliegue
 
@@ -152,6 +159,7 @@ La spec se implementa con la opción 1 salvo que Matías pida sumar el chequeo.
 - El check acepta `microsoft` y sigue rechazando valores desconocidos.
 - `join_tenants_by_domain` no une a una empresa que no permite el método, y sí a otra que lo permite, en la misma llamada.
 - `accept_pending_invitations` deja pendiente la invitación de una empresa que no permite el método y de una inactiva.
+- `tenant_allows_login`: permitido; no permitido; tenant inactivo; tenant inexistente; método `null`.
 - `login_gate`: miembro con método permitido; miembro sin método permitido (devuelve su slug); miembro de dos empresas donde una lo permite; sin empresas; solo con invitación pendiente a una empresa que no lo permite; solo con dominio abierto en una empresa que no lo permite; método `null`.
 
 Archivo `28_member_blocks.test.sql`:
@@ -169,6 +177,9 @@ Archivo `28_member_blocks.test.sql`:
 - `gateLogin`: permitido; cortado con landing; RPC con error; RPC que tira; respuesta sin forma.
 - Callback: con el gate cortado cierra la sesión y redirige a la landing; el orden es unir y después chequear; con el gate permitido sigue al `next`.
 - `resolveConfirmation`: con el gate cortado cierra la sesión y devuelve la landing; si el gate tira, corta.
+- `resolveTenantAccess`: método no permitido redirige a la landing de esa empresa; un administrador de plataforma se chequea contra el tenant dueño y entra a una empresa que no permite su método; si el RPC falla, redirige; sin sesión o sin rol sigue dando `null` sin llamar al RPC.
+- `requirePlatformAdmin`: método no permitido en el tenant dueño redirige.
+- Canal del chat: `allowsLogin` en falso o tirando da `null`; se consulta con el tenant de la conversación.
 - `LoginForm`: qué botones aparecen para cada combinación de los tres métodos; Microsoft usa el proveedor `azure`.
 - Landing y `/login`: los dos avisos de `error`.
 - `auth-methods`: los tres valores en orden y sus rótulos.
@@ -181,7 +192,7 @@ Archivo `28_member_blocks.test.sql`:
 
 - Proveedor de correo Outlook para el agente.
 - SSO por SAML y restringir Microsoft a un tenant de Entra por empresa.
-- Imponer el método en la RLS o en los tokens MCP ya emitidos.
+- Imponer el método en la RLS, en la API de datos o en los tokens MCP ya emitidos.
 - Dominio propio por cliente.
 - Cerrar las sesiones abiertas cuando una empresa cambia sus métodos.
 
