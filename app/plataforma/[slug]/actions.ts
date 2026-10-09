@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
 	platformOwnerSlug,
 	requirePlatformAdmin,
+	type ServerSupabase,
 } from "@/lib/tenants/platform";
 import {
 	mergeBrand,
@@ -29,6 +30,35 @@ const NO_GUARDO: Failure = {
 	message: "No se pudieron guardar los cambios.",
 };
 
+const SIN_EL_METODO_PROPIO: Failure = {
+	ok: false,
+	message:
+		"No podés sacarle al tenant dueño el método con el que entraste: te quedarías sin acceso a la consola.",
+};
+
+/**
+ * Método con el que se abrió la sesión de quien edita, según la base (nunca
+ * llega por parámetro). `null` ante cualquier duda: error, excepción o un
+ * valor que no es un texto. Los tipos generados dicen `string`, pero la
+ * función devuelve null cuando no reconoce el método.
+ */
+async function sessionLoginMethod(
+	supabase: ServerSupabase,
+): Promise<string | null> {
+	try {
+		const { data, error } = await supabase.rpc("current_login_method");
+		if (error) {
+			console.error("current_login_method falló:", error);
+			return null;
+		}
+		const method: unknown = data;
+		return typeof method === "string" && method !== "" ? method : null;
+	} catch (error) {
+		console.error("current_login_method falló:", error);
+		return null;
+	}
+}
+
 /**
  * Edita un tenant desde la consola de plataforma. El gate de la aplicación es
  * `requirePlatformAdmin`; la RLS `tenants_update` es la segunda puerta: un
@@ -38,9 +68,12 @@ export async function updateTenant(
 	tenantId: string,
 	formData: FormData,
 ): Promise<TenantResult> {
+	// Fuera del try: puede tirar el redirect a la landing (método no permitido)
+	// y un catch lo taparía con un error genérico.
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
+
 	try {
-		const admin = await requirePlatformAdmin();
-		if (!admin) return SIN_PERMISO;
 		if (!idSchema.safeParse(tenantId).success) return INVALIDO;
 
 		const parsed = tenantInputSchema.safeParse(readTenantForm(formData));
@@ -66,6 +99,15 @@ export async function updateTenant(
 				ok: false,
 				message: "El tenant dueño de la plataforma no se puede desactivar.",
 			};
+
+		// Lo mismo con los métodos: si el dueño se queda sin el método con el
+		// que entró quien edita, desde el próximo request la consola rebota a
+		// todos a una landing que no pueden usar. Solo se arregla por SQL.
+		if (current.slug === platformOwnerSlug()) {
+			const method = await sessionLoginMethod(admin.supabase);
+			if (method === null || !(input.authMethods as string[]).includes(method))
+				return SIN_EL_METODO_PROPIO;
+		}
 
 		let logoUrl: string | undefined;
 		const logo = formData.get("logo");

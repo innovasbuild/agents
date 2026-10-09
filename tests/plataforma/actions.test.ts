@@ -4,6 +4,10 @@ const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
 const state: {
 	admin: boolean;
+	adminRedirects: boolean;
+	loginMethod: { data: unknown; error: unknown };
+	loginMethodThrows: boolean;
+	rpcCalls: string[];
 	current: unknown;
 	updateResult: { data: unknown; error: unknown };
 	uploadError: unknown;
@@ -11,6 +15,10 @@ const state: {
 	uploads: { path: string; contentType?: string }[];
 } = {
 	admin: true,
+	adminRedirects: false,
+	loginMethod: { data: "email", error: null },
+	loginMethodThrows: false,
+	rpcCalls: [],
 	current: null,
 	updateResult: { data: { id: TENANT_ID }, error: null },
 	uploadError: null,
@@ -18,7 +26,17 @@ const state: {
 	uploads: [],
 };
 
+// Lo que tira `redirect()` de Next: no es una falla, es el control de flujo.
+const REDIRECT = Object.assign(new Error("NEXT_REDIRECT"), {
+	digest: "NEXT_REDIRECT;replace;/login/innovas?error=metodo;307;",
+});
+
 const supabase = {
+	rpc: async (fn: string) => {
+		state.rpcCalls.push(fn);
+		if (state.loginMethodThrows) throw new Error("red");
+		return state.loginMethod;
+	},
 	from: () => ({
 		select: () => ({
 			eq: () => ({ maybeSingle: async () => ({ data: state.current }) }),
@@ -47,8 +65,10 @@ const supabase = {
 };
 
 vi.mock("@/lib/tenants/platform", () => ({
-	requirePlatformAdmin: async () =>
-		state.admin ? { supabase, userId: "u1" } : null,
+	requirePlatformAdmin: async () => {
+		if (state.adminRedirects) throw REDIRECT;
+		return state.admin ? { supabase, userId: "u1" } : null;
+	},
 	platformOwnerSlug: () => "innovas",
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -77,6 +97,10 @@ function form(overrides: Record<string, string | File | null> = {}) {
 describe("updateTenant", () => {
 	beforeEach(() => {
 		state.admin = true;
+		state.adminRedirects = false;
+		state.loginMethod = { data: "email", error: null };
+		state.loginMethodThrows = false;
+		state.rpcCalls = [];
 		state.current = {
 			id: TENANT_ID,
 			slug: "demo",
@@ -224,6 +248,105 @@ describe("updateTenant", () => {
 		expect(result).toEqual({
 			ok: false,
 			message: "No se pudieron guardar los cambios.",
+		});
+	});
+
+	it("deja pasar el redirect de requirePlatformAdmin en vez de taparlo con un error genérico", async () => {
+		state.adminRedirects = true;
+
+		await expect(updateTenant(TENANT_ID, form())).rejects.toBe(REDIRECT);
+		expect(state.updates).toHaveLength(0);
+	});
+
+	describe("métodos de ingreso del tenant dueño", () => {
+		const SIN_EL_PROPIO = {
+			ok: false,
+			message:
+				"No podés sacarle al tenant dueño el método con el que entraste: te quedarías sin acceso a la consola.",
+		};
+		const owner = () => {
+			state.current = { id: TENANT_ID, slug: "innovas", brand: {} };
+		};
+
+		it("no guarda si la lista nueva deja afuera el método de la sesión", async () => {
+			owner();
+			state.loginMethod = { data: "google", error: null };
+
+			const result = await updateTenant(
+				TENANT_ID,
+				form({ auth_methods: "microsoft" }),
+			);
+
+			expect(result).toEqual(SIN_EL_PROPIO);
+			expect(state.rpcCalls).toEqual(["current_login_method"]);
+			expect(state.updates).toHaveLength(0);
+		});
+
+		it("no sube el logo si después no va a guardar", async () => {
+			owner();
+			state.loginMethod = { data: "google", error: null };
+			const logo = new File(["png"], "marca.png", { type: "image/png" });
+
+			await updateTenant(TENANT_ID, form({ auth_methods: "email", logo }));
+
+			expect(state.uploads).toHaveLength(0);
+		});
+
+		it("guarda si la lista nueva conserva el método de la sesión", async () => {
+			owner();
+			state.loginMethod = { data: "google", error: null };
+			const data = form({ auth_methods: "microsoft" });
+			data.append("auth_methods", "google");
+
+			const result = await updateTenant(TENANT_ID, data);
+
+			expect(result).toEqual({ ok: true });
+			expect(state.updates[0]?.auth_methods).toEqual(["microsoft", "google"]);
+		});
+
+		it("no guarda si no se puede saber el método: error del RPC", async () => {
+			owner();
+			state.loginMethod = { data: "email", error: { message: "boom" } };
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			expect(await updateTenant(TENANT_ID, form())).toEqual(SIN_EL_PROPIO);
+			expect(state.updates).toHaveLength(0);
+			expect(error).toHaveBeenCalled();
+			error.mockRestore();
+		});
+
+		it("no guarda si no se puede saber el método: el RPC tira", async () => {
+			owner();
+			state.loginMethodThrows = true;
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			expect(await updateTenant(TENANT_ID, form())).toEqual(SIN_EL_PROPIO);
+			expect(state.updates).toHaveLength(0);
+			error.mockRestore();
+		});
+
+		it.each([null, undefined, "", 7])(
+			"no guarda si el método de la sesión no se reconoce (%s)",
+			async (data) => {
+				owner();
+				state.loginMethod = { data, error: null };
+
+				expect(await updateTenant(TENANT_ID, form())).toEqual(SIN_EL_PROPIO);
+				expect(state.updates).toHaveLength(0);
+			},
+		);
+
+		it("en otro tenant no consulta el método y guarda", async () => {
+			state.loginMethod = { data: "google", error: null };
+
+			const result = await updateTenant(
+				TENANT_ID,
+				form({ auth_methods: "microsoft" }),
+			);
+
+			expect(result).toEqual({ ok: true });
+			expect(state.rpcCalls).toHaveLength(0);
+			expect(state.updates[0]?.auth_methods).toEqual(["microsoft"]);
 		});
 	});
 });

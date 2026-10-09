@@ -4,6 +4,7 @@ const NEW_ID = "22222222-2222-4222-8222-222222222222";
 
 const state: {
 	admin: boolean;
+	adminRedirects: boolean;
 	rpc: { data: unknown; error: { code?: string; message: string } | null };
 	rpcCalls: { fn: string; args: Record<string, unknown> }[];
 	updates: Record<string, unknown>[];
@@ -15,6 +16,7 @@ const state: {
 	inviteCalls: Record<string, unknown>[];
 } = {
 	admin: true,
+	adminRedirects: false,
 	rpc: { data: NEW_ID, error: null },
 	rpcCalls: [],
 	updates: [],
@@ -25,6 +27,11 @@ const state: {
 	invite: { kind: "ok" },
 	inviteCalls: [],
 };
+
+// Lo que tira `redirect()` de Next: no es una falla, es el control de flujo.
+const REDIRECT = Object.assign(new Error("NEXT_REDIRECT"), {
+	digest: "NEXT_REDIRECT;replace;/login/innovas?error=metodo;307;",
+});
 
 const supabase = {
 	rpc: async (fn: string, args: Record<string, unknown>) => {
@@ -48,8 +55,10 @@ const supabase = {
 };
 
 vi.mock("@/lib/tenants/platform", () => ({
-	requirePlatformAdmin: async () =>
-		state.admin ? { supabase, userId: "u1" } : null,
+	requirePlatformAdmin: async () => {
+		if (state.adminRedirects) throw REDIRECT;
+		return state.admin ? { supabase, userId: "u1" } : null;
+	},
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 vi.mock("@/lib/invitations/invite", () => ({
@@ -85,6 +94,7 @@ function form(overrides: Record<string, string | File | null> = {}) {
 describe("createTenant", () => {
 	beforeEach(() => {
 		state.admin = true;
+		state.adminRedirects = false;
 		state.rpc = { data: NEW_ID, error: null };
 		state.rpcCalls = [];
 		state.updates = [];
@@ -103,6 +113,13 @@ describe("createTenant", () => {
 			ok: false,
 			message: "No tenés permiso.",
 		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("deja pasar el redirect de requirePlatformAdmin en vez de taparlo con un error genérico", async () => {
+		state.adminRedirects = true;
+
+		await expect(createTenant(form())).rejects.toBe(REDIRECT);
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 

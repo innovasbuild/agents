@@ -26,10 +26,12 @@ const NO_CREO: Failure = { ok: false, message: "No se pudo crear la empresa." };
  * logo e invitación no: si fallan, la empresa queda creada y se informa.
  */
 export async function createTenant(formData: FormData): Promise<CreateResult> {
-	try {
-		const admin = await requirePlatformAdmin();
-		if (!admin) return SIN_PERMISO;
+	// Fuera del try: puede tirar el redirect a la landing (método no permitido)
+	// y un catch lo taparía con un error genérico.
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
 
+	try {
 		const parsed = createTenantSchema.safeParse(readCreateForm(formData));
 		if (!parsed.success)
 			return {
