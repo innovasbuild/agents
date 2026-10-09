@@ -62,14 +62,20 @@ export default async function SettingsPage({
 
 			<section>
 				<h2 className="mb-3 text-lg">Ingreso</h2>
-				<IngresoForm
-					tenantId={tenant.id}
-					slug={slug}
-					open={signupResult.data?.self_signup_by_domain ?? false}
-					domains={
-						(signupResult.data?.allowed_domains as string[] | undefined) ?? []
-					}
-				/>
+				{signupResult.error ? (
+					<p className="text-muted-foreground text-sm">
+						No se pudo leer la configuración de ingreso. Recargá la página.
+					</p>
+				) : (
+					<IngresoForm
+						tenantId={tenant.id}
+						slug={slug}
+						open={signupResult.data?.self_signup_by_domain ?? false}
+						domains={
+							(signupResult.data?.allowed_domains as string[] | undefined) ?? []
+						}
+					/>
+				)}
 			</section>
 
 			<section>

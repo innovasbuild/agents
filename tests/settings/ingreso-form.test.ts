@@ -17,14 +17,27 @@ const render = (props: { open: boolean; domains: string[] }) =>
 		}),
 	);
 
+const radioDeTodos = (html: string) => {
+	const label = html
+		.split("<label")
+		.find((l) => l.includes("Todos los del dominio"));
+	return label?.match(/<input[^>]*type="radio"[^>]*>/)?.[0] ?? "";
+};
+
 describe("IngresoForm", () => {
 	it("sin dominios deshabilita la opción abierta y explica por qué", () => {
 		const html = render({ open: false, domains: [] });
 
 		expect(html).toContain("Solo por invitación");
 		expect(html).toContain("Todos los del dominio");
-		expect(html).toContain("disabled");
+		expect(radioDeTodos(html)).toMatch(/disabled/);
 		expect(html).toContain("hola@innov.as");
+	});
+
+	it("con dominios y modo cerrado, la opción abierta no está deshabilitada", () => {
+		const html = render({ open: false, domains: ["acme.com"] });
+
+		expect(radioDeTodos(html)).not.toMatch(/disabled/);
 	});
 
 	it("con dominios muestra cuáles son, en solo lectura", () => {
