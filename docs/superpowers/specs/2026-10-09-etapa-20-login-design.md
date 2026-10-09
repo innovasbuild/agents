@@ -93,6 +93,7 @@ El correo verificado se lee igual que en `join_tenants_by_domain` (`email_confir
 
 - **`lib/tenants/auth-methods.ts`:** `AUTH_METHODS = ["email", "google", "microsoft"]`, rótulo "Microsoft". Los formularios de la consola ya iteran la lista.
 - **`LoginForm`:** botón "Entrar con Microsoft" cuando `methods` incluye `microsoft`. Llama `signInWithOAuth({ provider: "azure", options: { scopes: "email", redirectTo } })`. El orden de los botones es Microsoft, Google, correo.
+- **`/login` general:** deja de mostrar todos los métodos de `AUTH_METHODS`. Muestra los que tiene habilitados al menos una empresa activa (`loadOfferedMethods()` en `lib/tenants/public.ts`, con el cliente admin; si falla, solo correo). Así el botón de Microsoft no aparece hasta que plataforma lo marque en alguna empresa.
 - **`lib/auth/login-gate.ts`:** `gateLogin(supabase): Promise<{ ok: true } | { ok: false; landing: string }>`. Llama `rpc("login_gate")`. Con `allowed` en `true` devuelve `ok`. Con `false` devuelve `/login/<slug>?error=metodo`. Si el RPC falla, tira o devuelve algo sin la forma esperada: `{ ok: false, landing: "/login?error=auth_failed" }`.
 - **`/auth/callback`:** después de `joinOnLogin`, `gateLogin`. Si no es `ok`: `supabase.auth.signOut()` y redirect a `landing`.
 - **`/auth/confirmar`:** `resolveConfirmation` recibe un paso `gate` que corre después de aceptar invitaciones. Si no es `ok`, cierra la sesión del navegador y devuelve `landing` como destino.
@@ -180,6 +181,7 @@ Archivo `28_member_blocks.test.sql`:
 - `resolveTenantAccess`: método no permitido redirige a la landing de esa empresa; un administrador de plataforma se chequea contra el tenant dueño y entra a una empresa que no permite su método; si el RPC falla, redirige; sin sesión o sin rol sigue dando `null` sin llamar al RPC.
 - `requirePlatformAdmin`: método no permitido en el tenant dueño redirige.
 - Canal del chat: `allowsLogin` en falso o tirando da `null`; se consulta con el tenant de la conversación.
+- `loadOfferedMethods`: une los métodos de las empresas activas en el orden de `AUTH_METHODS`; ignora valores desconocidos; con error o sin empresas devuelve solo correo.
 - `LoginForm`: qué botones aparecen para cada combinación de los tres métodos; Microsoft usa el proveedor `azure`.
 - Landing y `/login`: los dos avisos de `error`.
 - `auth-methods`: los tres valores en orden y sus rótulos.
