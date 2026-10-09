@@ -29,6 +29,8 @@ Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` c
 
 **5 → 12 → 13 → 7**, y después el resto.
 
+**Enmienda 2026-10-09:** las etapas 19 a 23 salen de `docs/2026-10-09-plan-cierre-gap-plataforma.md` y van en ese orden: **19 → 20 → 21 → 22 → 23**, con 19 y 20 en paralelo si hay dos sesiones. La 7 se corre dentro de la 21.
+
 - La **12** (orquestación) y la **13** (pipeline de GTM) van **antes** del segundo tenant. La prueba de la Etapa 7 es "corre sin tocar `agents/` ni `lib/`"; hacerla antes validaría con el cliente nuevo la corrida manejada desde el chat, que es justo lo que la 12 y la 13 reemplazan.
 - La **9** (observabilidad) conviene después de la 12, que es la que le genera los datos (`runs` con conteos, `usage_entries`).
 - La **14** (subida de eve) es independiente de la 12 y la 13: se puede correr en paralelo con cualquiera.
@@ -516,6 +518,103 @@ Agregada el 2026-10-08. Dos entregas, una sesión y un PR cada una:
 
 - [x] **18.1 · Borrado de páginas.** Un administrador del nodo borra una página desde la web (menú del árbol y vista de la página), con limpieza de los links entrantes y sin papelera; el agente y el MCP no pueden borrar. Plan: `docs/superpowers/plans/2026-10-08-etapa-18-1-borrado-paginas.md`. **Antes de desplegar:** aplicar la migración `20261009120000_brain_delete_page` a producción primero (corriendo `npx supabase migration list` antes: `db push` aplica todas las pendientes) y recién después desplegar el código; al revés, el diálogo falla al borrar. Sin verificar en navegador (no se pudo por falta de `.env.local` y login sembrado en el worktree): orden y color del ítem en el menú, contenido del diálogo, redirección tras borrar, la vista de un miembro que no es administrador, 375 px y que el `AlertDialog` abierto desde el menú de la fila no deje `pointer-events` trabado. Ese recorrido, borrando una página enlazada desde otras dos, lo hace una persona en producción después del despliegue.
 - [x] **18.2 · Editor visual y vista de papel.** Spec: `docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md`. Plan: `docs/superpowers/plans/2026-10-08-etapa-18-2-editor-visual.md`. **Sin migración:** se despliega solo el código. Dependencias nuevas: paquetes de Tiptap 3.31.4, `marked` exacto y `happy-dom` (solo desarrollo). Prueba de ida y vuelta (`tests/brain/editor-roundtrip.test.ts`): pasaron 13 páginas reales y el corpus sintético; se aceptaron normalizaciones de estilo estables (relleno y líneas en blanco alrededor de las tablas, el escape `\[`, líneas en blanco consecutivas) que solo alcanzan a una página que una persona edita (si no toca el cuerpo, se guarda el original). Sin verificar en navegador (no se pudo por falta de `.env.local` y login sembrado en el worktree): entrada en edición o lectura según el rol, la barra de herramientas y su offset sticky `top-28`, las sugerencias de `[[` y la inserción del nodo, el menú de tabla, el interruptor de Markdown, la barra de guardado y su lugar junto al árbol, el flujo de conflicto y diff, Descartar, el layout a 375 px y el scroll de la barra, la hoja blanca en modo oscuro y la sensación de carga de `/brain/p` (medido con `next build`: JS inicial sin comprimir de 1,19 MB contra 0,65 MB del índice `/brain`, unos 540 KB más por Tiptap). No hay edición del alias o destino de un link existente desde la barra; se hace en la vista de código. Ese recorrido (los seis puntos del criterio de cierre de la spec §1) lo hace una persona en producción después del despliegue.
+
+---
+
+## Etapa 19 · "Conectá tus herramientas" y cierre en producción — `[ ]`
+
+**Modelo Claude Code:** Sonnet 5 (UI y docs); Opus 5 solo si la verificación en producción destapa un defecto de permisos.
+**Modelo runtime:** n/a.
+**Spec/Plan:** a escribir (`docs/superpowers/specs/2026-10-XX-etapa-19-conectar-design.md`). Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+
+Agregada el 2026-10-09 (plan de cierre del gap, G2 y G6). Una página por usuario con lo que tiene disponible para conectar a Claude, ChatGPT, Claude Code, Codex o Cursor, con instrucciones copiables; y la verificación en producción que las etapas 17, 18 e ingreso por dominio dejaron pendiente.
+
+- [ ] Página `/<slug>/conectar` (nombre a decidir): brain, agentes habilitados, lugar reservado para el MCP de herramientas (Etapa 23). Solo lo que la persona puede usar.
+- [ ] Instrucciones por cliente MCP (Claude Code, claude.ai, ChatGPT, Codex, Cursor) con botón de copiar. Sin tokens: autentica el OAuth de Supabase.
+- [ ] Probar claude.ai y ChatGPT contra el brain de `innovas` en producción; decidir si el brain expone `search`/`fetch` para ChatGPT.
+- [ ] Corregir `docs/brain-mcp-conexion.md` (ya no es "solo admins escriben") y `docs/agente-mcp-conexion.md`.
+- [ ] Verificación en producción: criterio de cierre de la 17, recorrido de la 18, ingreso por dominio con una persona nunca invitada, "Confirm email" prendido en Supabase Auth, `PLATFORM_OWNER_TENANT_SLUG` en Vercel. Marcar 17 y 18 como `[x]`.
+- [ ] El canal MCP del agente chequea `tenant_agents.enabled` como el canal web.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** un `tenant_member` de `innovas` entra a la página, copia las instrucciones, conecta el brain desde claude.ai y desde ChatGPT y `brain_search` le responde su canon; y las etapas 17 y 18 figuran cerradas con su verificación en producción anotada.
+
+---
+
+## Etapa 20 · Login: Microsoft, imposición de métodos y bloqueo por persona — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec (es auth); Sonnet 5 en sesión nueva para implementar.
+**Modelo runtime:** n/a.
+**Spec/Plan:** a escribir. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+
+Agregada el 2026-10-09 (resto del G3 tras el PR #81). Completa el ingreso por dominio para un cliente del universo Microsoft y cierra los límites declarados en la spec del ingreso por dominio §6.
+
+- [ ] Microsoft (Entra ID) como tercer valor de `auth_methods`: proveedor en Supabase Auth, botón, check ampliado. El join por dominio exige correo verificado también con este proveedor (nOAuth).
+- [ ] Imposición de `auth_methods` en el servidor en `/auth/callback` y `/auth/confirmar`; la spec decide qué pasa con una membresía existente que entra por un método ahora prohibido.
+- [ ] Bloqueo por persona que `join_tenants_by_domain()` respeta, con botón en `/settings/usuarios` y evento.
+- [ ] Cambio de rol de un miembro y reenvío de invitación desde `/settings/usuarios`.
+- [ ] Dejar escrito qué pasa con Gmail para un cliente solo-Microsoft (proveedor Outlook es otra etapa).
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** en producción, una empresa de prueba con `auth_methods = {microsoft}` y modo abierto recibe a una persona con cuenta Microsoft de su dominio sin invitación; esa persona no puede entrar por Google desde `/login`; y una persona bloqueada no vuelve a entrar aunque el modo siga abierto.
+
+---
+
+## Etapa 21 · Configuración de la empresa desde la UI y segundo tenant — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec (decide la frontera plataforma/tenant); Sonnet 5 en sesión nueva para implementar.
+**Modelo runtime:** el que defina el tenant.
+**Spec/Plan:** a escribir. Alcance y propuesta de frontera en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+
+Agregada el 2026-10-09 (G4 y G7). Dar de alta y operar un cliente sin terminal: agentes, conectores, ejecutores y brain desde la consola de plataforma o el settings del tenant. La **Etapa 7** se corre dentro de esta como prueba.
+
+- [ ] Spec: qué configura platform_admin en `/plataforma/<slug>` (agentes, acceso al brain de cada agente, conectores, binding del brain) y qué configura tenant_admin en `/<slug>/settings` (aprobaciones de nivel 2, cupos, ejecutores); y cómo se abre la escritura de `tenant_connections` y `executors` (RLS por rol o funciones `security definer`).
+- [ ] Pantallas que reemplazan a `connections:bind`, `executors:set` y el alta de brain, con Vercel Connect para api-key u OAuth.
+- [ ] `create_tenant` deja de hardcodear `outreach`: el alta elige agentes de un catálogo mínimo.
+- [ ] Sección "Mis cuentas" para autorizar o reautorizar Gmail y HubSpot sin esperar a que falle una acción de la cola.
+- [ ] **Etapa 7 como prueba:** segundo tenant con otro CRM o ninguno, configurado entero desde la UI, piloto de 5 contactos sin tocar `agents/` ni `lib/`; medir horas contra la Etapa 3.
+- [ ] La página de la Etapa 19 muestra lo habilitado.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** un platform_admin da de alta una empresa, le habilita agentes y conectores, y un tenant_admin de esa empresa configura ejecutores y aprobaciones, todo desde el navegador; y el piloto del segundo tenant corre sin cambios de código.
+
+---
+
+## Etapa 22 · Catálogo de agentes y permisos de uso por agente — `[ ]`
+
+**Modelo Claude Code:** Opus 5 para la spec (toca el modelo de permisos); Sonnet 5 en sesión nueva para implementar.
+**Modelo runtime:** el del tenant; el segundo agente define los suyos en su spec.
+**Spec/Plan:** a escribir. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+
+Agregada el 2026-10-09 (G5). Más de un agente, catálogo por empresa, selector en el chat, y permisos de quién puede usar cada agente. Decisión central: generalizar las reglas del brain a reglas de acceso a recursos (`brain | agent | connection`), que la Etapa 23 reusa.
+
+- [ ] Registro de agentes en código (nombre, descripción, capacidades, nivel máximo de efecto) con test que falla si una carpeta de `agents/` no está registrada.
+- [ ] Segundo agente real (candidato: inbound de la Etapa 10, o el que tenga un cliente esperándolo; se elige en el brainstorming).
+- [ ] Chat con selector de agente e hilos por agente.
+- [ ] Reglas de acceso generalizadas y permisos de uso por agente (persona o todos los miembros; usar o ninguno). El agente como principal con reglas propias sobre el brain reemplaza `config.brain` (pendiente de la spec 17 §9).
+- [ ] Página de la 19, chat y canal MCP muestran y aceptan solo los agentes permitidos.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** una empresa tiene dos agentes habilitados; un admin le da uso de uno solo a una persona; esa persona lo ve en el chat, en la página de conexión y por MCP, y el otro no aparece ni responde por ningún canal.
+
+---
+
+## Etapa 23 · MCP de herramientas por tenant con permisos — `[ ]`
+
+**Modelo Claude Code:** Fable 5.1 u Opus 5 `high` para la spec (auth, credenciales, efectos); Sonnet 5 en sesión nueva para implementar.
+**Modelo runtime:** n/a (no hay modelo del lado de la plataforma; las tools las llama el cliente MCP de la persona).
+**Spec/Plan:** a escribir. Decisiones a cerrar en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+
+Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, construida como la del brain sobre `@modelcontextprotocol/sdk` y el mismo emisor OAuth, que publica las tools de las conexiones del tenant que la persona tiene permitidas, ejecuta con su propia cuenta cuando el proveedor es OAuth (subject `tenant:usuario` de Vercel Connect) y respeta los niveles de efecto. `mcpChannel` de eve no sirve para esto: expone solo `agent_*` por diseño.
+
+- [ ] Spec con las cinco decisiones: dónde vive, cómo ejecuta (directo contra los proveedores o vía definiciones de eve), qué tools se publican y con qué nivel de efecto (nivel 3 no se expone; nivel 2 solo con política `auto`), credenciales por persona con link de autorización, uso en `usage_entries` y rate limit.
+- [ ] Endpoint, metadata OAuth en `.well-known`, consentimiento reusado.
+- [ ] Reglas de acceso por conexión desde la UI (diálogo de compartir del brain, adaptado).
+- [ ] Página de la 19 completa con el MCP de herramientas y las tools que esa persona va a ver.
+- [ ] Tests de aislamiento entre tenants y entre personas, como los del brain.
+- [ ] `/ship` + `/context-save`.
+
+**Terminado cuando:** desde su claude.ai, una persona de `innovas` conecta el MCP de herramientas, ve solo las tools de HubSpot de lectura que le dieron, busca un contacto con su propia cuenta de HubSpot, y otra persona sin ese permiso no ve esas tools; cada llamada aparece en `usage_entries`.
 
 ---
 
