@@ -37,6 +37,16 @@ function commandId(value: string): string {
 		.replace(/^-+|-+$/g, "");
 }
 
+// Los ids nombran el servidor en el cliente MCP de la persona: si dos
+// conectables comparten uno, el segundo reemplaza al primero. El primero que
+// llega se queda con el id limpio; los repetidos suman -2, -3...
+function uniqueId(base: string, used: Set<string>): string {
+	let id = base;
+	for (let n = 2; used.has(id); n++) id = `${base}-${n}`;
+	used.add(id);
+	return id;
+}
+
 export function buildConnectables(input: {
 	slug: string;
 	publicUrl: string;
@@ -46,11 +56,12 @@ export function buildConnectables(input: {
 	const origin = input.publicUrl.replace(/\/+$/, "");
 	const slug = encodeURIComponent(input.slug);
 	const list: Connectable[] = [];
+	const usedIds = new Set<string>();
 
 	if (input.hasBrain) {
 		list.push({
 			kind: "brain",
-			id: `brain-${commandId(input.slug)}`,
+			id: uniqueId(`brain-${commandId(input.slug)}`, usedIds),
 			name: "Brain",
 			description:
 				"El conocimiento de tu empresa: buscar, leer y escribir páginas según tus permisos.",
@@ -66,7 +77,12 @@ export function buildConnectables(input: {
 		list.push({
 			kind: "agent",
 			agent,
-			id: `${commandId(agent)}-${commandId(input.slug)}`,
+			// Sin letras ni números el nombre se sanea a vacío y el id empezaría con
+			// guion, que los comandos leen como una opción.
+			id: uniqueId(
+				`${commandId(agent) || "agente"}-${commandId(input.slug)}`,
+				usedIds,
+			),
 			name: copy.name,
 			description: copy.description,
 			url: `${origin}/eve/${encodeURIComponent(agent)}/v1/mcp?tenant=${slug}`,

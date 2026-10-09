@@ -95,4 +95,31 @@ describe("buildConnectables", () => {
 			url: "https://app.test/eve/Post%20Venta%20%222%22/v1/mcp?tenant=acme",
 		});
 	});
+	it("un agente cuyo nombre se sanea a vacío no deja un id que empiece con guion", () => {
+		const ids = buildConnectables({
+			...base,
+			hasBrain: false,
+			enabledAgents: ["!!!", "ñandú"],
+		}).flatMap((c) => (c.kind === "agent" ? [c.id] : []));
+
+		for (const id of ids) expect(id).toMatch(/^[a-z0-9][a-z0-9-]*$/);
+	});
+
+	it("dos agentes que se sanean igual no comparten id", () => {
+		const ids = buildConnectables({
+			...base,
+			hasBrain: false,
+			enabledAgents: ["Ventas", "ventas"],
+		}).flatMap((c) => (c.kind === "agent" ? [c.id] : []));
+
+		expect(new Set(ids).size).toBe(2);
+	});
+
+	it("un agente llamado brain no pisa el id del brain", () => {
+		const list = buildConnectables({ ...base, enabledAgents: ["brain"] });
+		const ids = list.flatMap((c) => (c.kind === "tools" ? [] : [c.id]));
+
+		expect(ids[0]).toBe("brain-acme");
+		expect(new Set(ids).size).toBe(ids.length);
+	});
 });
