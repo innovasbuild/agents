@@ -9,6 +9,7 @@ export interface PublicTenant {
 	brand: TenantBrand;
 	authMethods: AuthMethod[];
 	logoUrl: string | null;
+	openDomains: string[];
 }
 
 /**
@@ -22,7 +23,9 @@ export async function loadPublicTenant(
 ): Promise<PublicTenant | null> {
 	const { data } = await client
 		.from("tenants")
-		.select("slug, display_name, brand, auth_methods")
+		.select(
+			"slug, display_name, brand, auth_methods, self_signup_by_domain, allowed_domains",
+		)
 		.eq("slug", slug)
 		.eq("active", true)
 		.maybeSingle();
@@ -41,5 +44,8 @@ export async function loadPublicTenant(
 		logoUrl: brand.logoUrl
 			? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${brand.logoUrl}`
 			: null,
+		openDomains: data.self_signup_by_domain
+			? (data.allowed_domains as string[])
+			: [],
 	};
 }

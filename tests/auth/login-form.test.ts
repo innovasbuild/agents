@@ -6,6 +6,10 @@ vi.mock("@/lib/supabase/browser", () => ({
 	createBrowserSupabase: () => ({}),
 }));
 
+vi.mock("@/app/(auth)/login/actions", () => ({
+	canSignUpByDomain: async () => false,
+}));
+
 const { LoginForm } = await import("@/app/(auth)/login/login-form");
 
 const render = (methods: ("email" | "google")[]) =>

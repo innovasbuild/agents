@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { brandStyle } from "@/lib/brand/contrast";
+import { domainsPhrase } from "@/lib/tenants/domains-phrase";
 import { loadPublicTenant } from "@/lib/tenants/public";
 import { LoginForm } from "../login-form";
 
@@ -31,7 +32,9 @@ export default async function TenantLoginPage({
 						<h1 className="text-3xl leading-tight">{tenant.displayName}</h1>
 					)}
 					<p className="text-muted-foreground">
-						Entrá con la cuenta con la que te invitaron a {tenant.displayName}.
+						{tenant.openDomains.length > 0
+							? `Entrá con tu correo de ${domainsPhrase(tenant.openDomains)}. Si te invitaron con otro correo, usá ese.`
+							: `Entrá con la cuenta con la que te invitaron a ${tenant.displayName}.`}
 					</p>
 				</div>
 				<LoginForm methods={tenant.authMethods} next={`/${tenant.slug}/chat`} />
