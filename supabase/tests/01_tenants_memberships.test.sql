@@ -51,12 +51,15 @@ select throws_ok(
   'un tenant_admin no puede ascenderse a platform_admin'
 );
 
--- Ana sí puede sumar un tenant_member a su tenant.
-select lives_ok(
+-- Ana no puede sumar miembros por su cuenta: las altas pasan por funciones
+-- security definer (invitaciones), no por INSERT de la sesión.
+select throws_ok(
   $$insert into public.memberships (tenant_id, user_id, role)
     values ('aaaaaaaa-0000-0000-0000-000000000002',
             '33333333-3333-3333-3333-333333333333', 'tenant_member')$$,
-  'un tenant_admin puede sumar miembros a su tenant'
+  '42501',
+  null,
+  'un tenant_admin no puede insertar membresías con la sesión'
 );
 
 -- El platform_admin ve todo.
