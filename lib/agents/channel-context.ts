@@ -88,6 +88,7 @@ async function bindStillPossible(
 export async function resolveChannelContext(
 	request: Request,
 	userId: string,
+	allowsLogin: (tenantId: string) => Promise<boolean>,
 ): Promise<ChannelContext | null> {
 	const admin = createAdminClient();
 	const sessionId = new URL(request.url).pathname.match(SESSION_PATH)?.[1];
@@ -143,6 +144,16 @@ export async function resolveChannelContext(
 		.maybeSingle();
 
 	if (!tenantAgent?.enabled) return null;
+
+	// El método con el que se abrió la sesión tiene que estar permitido en la
+	// empresa de esta conversación (spec etapa 20, L10). Último chequeo: solo
+	// se pregunta por alguien que ya probó ser miembro. Falla cerrado.
+	try {
+		if (!(await allowsLogin(conversation.tenant_id))) return null;
+	} catch (error) {
+		console.error("canal del chat: no pude chequear el método", error);
+		return null;
+	}
 
 	return {
 		tenantId: conversation.tenant_id,
