@@ -8,6 +8,7 @@ import {
 	parseSessionFragment,
 	resolveConfirmation,
 } from "@/lib/auth/confirm";
+import { joinOnLogin } from "@/lib/auth/join-on-login";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 
 type Phase =
@@ -59,10 +60,7 @@ export function Confirmar({ next }: { next: string | null }) {
 				});
 				return !error;
 			},
-			acceptInvitations: async () => {
-				const { error } = await supabase.rpc("accept_pending_invitations");
-				if (error) throw error;
-			},
+			acceptInvitations: () => joinOnLogin(supabase),
 			next,
 			origin: window.location.origin,
 		})

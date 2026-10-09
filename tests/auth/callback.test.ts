@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state: {
 	exchange: { data: { session: unknown; user: unknown }; error: unknown };
-	accepted: number;
+	rpcCalls: string[];
 	exchangedCodes: string[];
 } = {
 	exchange: { data: { session: {}, user: {} }, error: null },
-	accepted: 0,
+	rpcCalls: [],
 	exchangedCodes: [],
 };
 
@@ -18,8 +18,8 @@ vi.mock("@/lib/supabase/server", () => ({
 				return state.exchange;
 			},
 		},
-		rpc: async () => {
-			state.accepted += 1;
+		rpc: async (fn: string) => {
+			state.rpcCalls.push(fn);
 			return { error: null };
 		},
 	}),
@@ -35,16 +35,19 @@ const location = (response: Response) => response.headers.get("location");
 describe("GET /auth/callback", () => {
 	beforeEach(() => {
 		state.exchange = { data: { session: {}, user: {} }, error: null };
-		state.accepted = 0;
+		state.rpcCalls = [];
 		state.exchangedCodes = [];
 	});
 
-	it("con code válido acepta las invitaciones y va al next", async () => {
+	it("con code válido acepta las invitaciones, une por dominio y va al next", async () => {
 		const response = await call("?code=abc&next=%2Facme%2Fchat");
 
 		expect(location(response)).toBe("https://app.test/acme/chat");
 		expect(state.exchangedCodes).toEqual(["abc"]);
-		expect(state.accepted).toBe(1);
+		expect(state.rpcCalls).toEqual([
+			"accept_pending_invitations",
+			"join_tenants_by_domain",
+		]);
 	});
 
 	it("con code que no canjea manda al login con el error", async () => {
@@ -53,7 +56,7 @@ describe("GET /auth/callback", () => {
 		expect(location(await call("?code=mala"))).toBe(
 			"https://app.test/login?error=auth_failed",
 		);
-		expect(state.accepted).toBe(0);
+		expect(state.rpcCalls).toEqual([]);
 	});
 
 	it("sin code (link de invitación: la sesión viaja en el fragmento) va a la confirmación con el next", async () => {

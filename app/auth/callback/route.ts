@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { joinOnLogin } from "@/lib/auth/join-on-login";
 import { safeNextPath } from "@/lib/auth/next-path";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -31,17 +32,9 @@ export async function GET(request: Request) {
 		);
 	}
 
-	// Alta solo por invitación: si hay invitaciones pendientes para este mail
-	// verificado, se convierten en memberships acá y en ningún otro lado.
-	const { error: acceptError } = await supabase.rpc(
-		"accept_pending_invitations",
-	);
-	if (acceptError) {
-		console.error(
-			"No se pudieron aceptar las invitaciones:",
-			acceptError.message,
-		);
-	}
+	// Las invitaciones pendientes y el ingreso por dominio de este mail
+	// verificado se convierten en memberships acá y en ningún otro lado.
+	await joinOnLogin(supabase);
 
 	const next = safeNextPath(
 		requestUrl.searchParams.get("next"),
