@@ -12,7 +12,7 @@ vi.mock("@/app/(auth)/login/actions", () => ({
 
 const { LoginForm } = await import("@/app/(auth)/login/login-form");
 
-const render = (methods: ("email" | "google")[]) =>
+const render = (methods: ("email" | "google" | "microsoft")[]) =>
 	renderToStaticMarkup(createElement(LoginForm, { methods, next: null }));
 
 describe("LoginForm", () => {
@@ -38,5 +38,33 @@ describe("LoginForm", () => {
 		expect(html).toContain("Entrar con Google");
 		expect(html).toContain("bg-border");
 		expect(html).toContain("Mandarme un link");
+	});
+
+	it("con solo Microsoft no dibuja Google, el formulario ni el separador", () => {
+		const html = render(["microsoft"]);
+
+		expect(html).toContain("Entrar con Microsoft");
+		expect(html).not.toContain("Entrar con Google");
+		expect(html).not.toContain("Mandarme un link");
+		expect(html).not.toContain("bg-border");
+	});
+
+	it("con los tres, Microsoft va antes que Google y el separador antes del correo", () => {
+		const html = render(["email", "google", "microsoft"]);
+
+		expect(html.indexOf("Entrar con Microsoft")).toBeGreaterThan(-1);
+		expect(html.indexOf("Entrar con Microsoft")).toBeLessThan(
+			html.indexOf("Entrar con Google"),
+		);
+		expect(html.indexOf("Entrar con Google")).toBeLessThan(
+			html.indexOf("bg-border"),
+		);
+		expect(html.indexOf("bg-border")).toBeLessThan(
+			html.indexOf("Mandarme un link"),
+		);
+	});
+
+	it("sin Microsoft en los métodos, el botón no aparece", () => {
+		expect(render(["email", "google"])).not.toContain("Entrar con Microsoft");
 	});
 });

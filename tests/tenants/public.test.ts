@@ -96,7 +96,7 @@ describe("loadPublicTenant", () => {
 			slug: "acme",
 			display_name: "Acme",
 			brand: {},
-			auth_methods: ["microsoft"],
+			auth_methods: ["saml"],
 		});
 
 		expect((await loadPublicTenant("acme", fake.client))?.authMethods).toEqual([

@@ -4,11 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { requestMagicLink } from "@/lib/auth/magic-link";
+import { OAUTH_PROVIDERS, type OAuthMethod } from "@/lib/auth/oauth-providers";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { AuthMethod } from "@/lib/tenants/auth-methods";
 import { canSignUpByDomain } from "./actions";
-
-const SCOPES = "openid email profile";
 
 function callbackUrl(next: string | null): string {
 	const base = `${window.location.origin}/auth/callback`;
@@ -31,13 +30,17 @@ export function LoginForm({
 	const [email, setEmail] = useState("");
 	const [sent, setSent] = useState(false);
 
-	const showGoogle = methods.includes("google");
+	// Microsoft primero: es el método de quien llega con cuenta corporativa.
+	const oauthMethods = (["microsoft", "google"] as const).filter((method) =>
+		methods.includes(method),
+	);
 	const showEmail = methods.includes("email");
 
-	async function entrarConGoogle() {
+	async function entrarCon(method: OAuthMethod) {
+		const { provider, scopes } = OAUTH_PROVIDERS[method];
 		await supabase.auth.signInWithOAuth({
-			provider: "google",
-			options: { scopes: SCOPES, redirectTo: callbackUrl(next) },
+			provider,
+			options: { scopes, redirectTo: callbackUrl(next) },
 		});
 	}
 
@@ -55,18 +58,20 @@ export function LoginForm({
 
 	return (
 		<div className="space-y-6 rounded-lg border bg-card p-6">
-			{showGoogle ? (
+			{oauthMethods.map((method, index) => (
 				<Button
 					className="w-full"
-					onClick={entrarConGoogle}
+					key={method}
+					onClick={() => entrarCon(method)}
 					size="lg"
 					type="button"
+					variant={index === 0 ? "default" : "outline"}
 				>
-					Entrar con Google
+					{OAUTH_PROVIDERS[method].label}
 				</Button>
-			) : null}
+			))}
 
-			{showGoogle && showEmail ? (
+			{oauthMethods.length > 0 && showEmail ? (
 				<div className="flex items-center gap-3 text-muted-foreground text-xs">
 					<span className="h-px flex-1 bg-border" />o
 					<span className="h-px flex-1 bg-border" />
@@ -90,7 +95,7 @@ export function LoginForm({
 					<Button
 						className="w-full"
 						type="submit"
-						variant={showGoogle ? "outline" : "default"}
+						variant={oauthMethods.length > 0 ? "outline" : "default"}
 					>
 						Mandarme un link
 					</Button>
