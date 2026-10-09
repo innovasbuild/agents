@@ -1,7 +1,8 @@
 /**
- * `allowed_domains` valida al invitar; no es puerta de entrada. Quien deja el
- * cliente pierde acceso cuando se le saca la membership, no cuando le cierran
- * el mail. Lista vacía significa sin restricción.
+ * `allowed_domains` valida al invitar. Con `self_signup_by_domain` en true
+ * además es puerta de entrada (join_tenants_by_domain); cerrado, no lo es.
+ * Quien deja el cliente pierde acceso cuando se le saca la membership, no
+ * cuando le cierran el mail. Lista vacía significa sin restricción.
  */
 export function isAllowedDomain(
 	email: string,
