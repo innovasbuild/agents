@@ -6,6 +6,7 @@ import {
 } from "@/lib/outreach/settings-query";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import { IngresoForm } from "./ingreso-form";
 import { ModeloForm } from "./modelo-form";
 
 const fecha = (value: string | null) =>
@@ -25,7 +26,7 @@ export default async function SettingsPage({
 	if (tenant.role === "tenant_member") notFound();
 
 	const supabase = await createServerSupabase();
-	const [executorsResult, connectionsResult] = await Promise.all([
+	const [executorsResult, connectionsResult, signupResult] = await Promise.all([
 		supabase
 			.from("executors")
 			.select("user_id, slug, daily_quota, gmail_authorized_at")
@@ -34,6 +35,11 @@ export default async function SettingsPage({
 			.from("tenant_connections")
 			.select("id, capability, provider, enabled")
 			.eq("tenant_id", tenant.id),
+		supabase
+			.from("tenants")
+			.select("allowed_domains, self_signup_by_domain")
+			.eq("id", tenant.id)
+			.maybeSingle(),
 	]);
 
 	const executors = toExecutorRows(executorsResult.data ?? []);
@@ -51,6 +57,18 @@ export default async function SettingsPage({
 					slug={slug}
 					defaultModel={tenant.defaultModel}
 					allowedModels={tenant.allowedModels}
+				/>
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Ingreso</h2>
+				<IngresoForm
+					tenantId={tenant.id}
+					slug={slug}
+					open={signupResult.data?.self_signup_by_domain ?? false}
+					domains={
+						(signupResult.data?.allowed_domains as string[] | undefined) ?? []
+					}
 				/>
 			</section>
 

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { isPublicEmailDomain } from "@/lib/tenants/public-email-domains";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
 // argumentos que quiera: se validan en el borde, igual que en las otras
@@ -51,6 +52,65 @@ export async function updateDefaultModel(
 	// el select().maybeSingle() es lo único que lo distingue de un éxito.
 	if (!data)
 		return { ok: false, message: "No tenés permiso para cambiar el modelo." };
+
+	revalidatePath(`/${slug}/settings`);
+	return { ok: true };
+}
+
+/**
+ * Abre o cierra el ingreso por dominio. Los dominios los carga plataforma;
+ * acá solo se elige el modo. Abrirlo exige dominios propios (nada vacío ni de
+ * correo público: el candado de la base ya impide lo primero, esto da el
+ * mensaje). La RLS y el trigger tenants_guard_columns dejan escribir a un
+ * tenant_admin solo default_model y self_signup_by_domain.
+ */
+export async function updateSignupMode(
+	tenantId: string,
+	open: boolean,
+	slug: string,
+): Promise<SettingsResult> {
+	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
+	if (typeof open !== "boolean") return INVALIDO;
+	if (!slugSchema.safeParse(slug).success) return INVALIDO;
+
+	const sinPermiso: SettingsResult = {
+		ok: false,
+		message: "No tenés permiso para cambiar el ingreso.",
+	};
+	const supabase = await createServerSupabase();
+
+	if (open) {
+		const { data: current } = await supabase
+			.from("tenants")
+			.select("allowed_domains")
+			.eq("id", tenantId)
+			.maybeSingle();
+		if (!current) return sinPermiso;
+
+		const domains = current.allowed_domains as string[];
+		if (domains.length === 0)
+			return {
+				ok: false,
+				message:
+					"Este cliente no tiene dominios cargados. Escribinos a hola@innov.as para que los carguemos.",
+			};
+		const publico = domains.find(isPublicEmailDomain);
+		if (publico)
+			return {
+				ok: false,
+				message: `"${publico}" es un correo público: no puede abrir el ingreso. Escribinos a hola@innov.as.`,
+			};
+	}
+
+	const { data, error } = await supabase
+		.from("tenants")
+		.update({ self_signup_by_domain: open })
+		.eq("id", tenantId)
+		.select("id")
+		.maybeSingle();
+
+	if (error) return { ok: false, message: "No se pudo guardar el ingreso." };
+	if (!data) return sinPermiso;
 
 	revalidatePath(`/${slug}/settings`);
 	return { ok: true };
