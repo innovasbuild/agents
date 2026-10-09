@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { AuthMethod } from "@/lib/tenants/auth-methods";
+import { canSignUpByDomain } from "./actions";
 
 const SCOPES = "openid email profile";
 
@@ -41,13 +42,15 @@ export function LoginForm({
 
 	async function entrarConMagicLink(event: React.FormEvent) {
 		event.preventDefault();
+		// Solo un mail de un dominio abierto en alguna empresa puede crear
+		// cuenta al pedir el link. Un invitado real ya tiene su fila; a
+		// cualquier otro mail no se le crea una ni se le manda nada.
+		const shouldCreateUser = await canSignUpByDomain(email).catch(() => false);
 		const { error } = await supabase.auth.signInWithOtp({
 			email: email.trim().toLowerCase(),
 			options: {
 				emailRedirectTo: callbackUrl(next),
-				// Sin esto, un mail nunca invitado crea igual una fila en auth.users
-				// y recibe un link. Un invitado real ya tiene su fila.
-				shouldCreateUser: false,
+				shouldCreateUser,
 			},
 		});
 		// No distingue mail existente de inexistente: no confirmamos quién tiene cuenta.

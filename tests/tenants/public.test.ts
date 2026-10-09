@@ -46,6 +46,8 @@ describe("loadPublicTenant", () => {
 			display_name: "Acme",
 			brand: { primary: "#112233", logo_url: "acme/logo-1.png" },
 			auth_methods: ["email"],
+			self_signup_by_domain: false,
+			allowed_domains: ["acme.com"],
 		});
 
 		expect(await loadPublicTenant("acme", fake.client)).toEqual({
@@ -54,7 +56,39 @@ describe("loadPublicTenant", () => {
 			brand: { primary: "#112233", logoUrl: "acme/logo-1.png" },
 			authMethods: ["email"],
 			logoUrl: "https://sb.test/storage/v1/object/public/brand/acme/logo-1.png",
+			openDomains: [],
 		});
+	});
+
+	it("con el ingreso abierto expone los dominios", async () => {
+		const fake = clientWith({
+			slug: "acme",
+			display_name: "Acme",
+			brand: {},
+			auth_methods: ["email"],
+			self_signup_by_domain: true,
+			allowed_domains: ["acme.com", "acme.com.ar"],
+		});
+
+		expect((await loadPublicTenant("acme", fake.client))?.openDomains).toEqual([
+			"acme.com",
+			"acme.com.ar",
+		]);
+	});
+
+	it("con el ingreso cerrado no expone los dominios", async () => {
+		const fake = clientWith({
+			slug: "acme",
+			display_name: "Acme",
+			brand: {},
+			auth_methods: ["email"],
+			self_signup_by_domain: false,
+			allowed_domains: ["acme.com"],
+		});
+
+		expect((await loadPublicTenant("acme", fake.client))?.openDomains).toEqual(
+			[],
+		);
 	});
 
 	it("descarta métodos desconocidos y cae a email si no queda ninguno", async () => {

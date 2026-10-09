@@ -103,6 +103,7 @@ Tareas:
 - [x] Definir visibilidad por rol: `cost_usd` es costo interno y lo ve solo `platform_admin`. La RLS por `tenant_id` no alcanza porque esto es visibilidad por columna, no por fila.
 - [x] **Enmienda 2026-09-12 (D5):** `conversations` (`tenant_id`, `user_id`, `agent`, `eve_session_id`, `title`, `last_message_at`) para hilos múltiples por usuario y ownership de sesión; `tenant_agents` (`tenant_id`, `agent`, `enabled`, override de modelo, cupos, `config` jsonb); `tenants.self_signup_by_domain` default `false`; `tenants.brand` (`primary`, `secondary`, `logo_url`). `tenant.json` deja de llevar `default_model` y conexiones.
 - [x] **Enmienda 2026-09-12 (D4):** alta de usuarios solo por invitación por mail (magic link de Supabase); `allowed_domains` valida al invitar, no es puerta. Providers: Google + magic link; Microsoft cuando un cliente lo pida. Sin contraseñas.
+- [x] **Enmienda 2026-10-09 (ingreso por dominio):** D4 sigue siendo el modo por defecto. Cada empresa puede abrir el ingreso a quien tenga un correo verificado de sus `allowed_domains` (`self_signup_by_domain`): el admin de la empresa elige el modo en settings, plataforma carga los dominios, el alta es `join_tenants_by_domain()` y deja `membership.joined_by_domain`. Spec: `docs/superpowers/specs/2026-10-09-ingreso-por-dominio-design.md`.
 - [x] `/ship` + `/context-save`.
 
 **Terminado cuando:** dos usuarios de tenants distintos no ven filas ajenas (test automatizado), y el selector cambia el modelo de la sesión sin deploy.
