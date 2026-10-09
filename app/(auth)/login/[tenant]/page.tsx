@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { loginErrorMessage } from "@/lib/auth/login-error";
 import { brandStyle } from "@/lib/brand/contrast";
 import { domainsPhrase } from "@/lib/tenants/domains-phrase";
 import { loadPublicTenant } from "@/lib/tenants/public";
@@ -6,13 +7,16 @@ import { LoginForm } from "../login-form";
 
 export default async function TenantLoginPage({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ tenant: string }>;
+	searchParams: Promise<{ error?: string }>;
 }) {
 	const { tenant: slug } = await params;
 	const tenant = await loadPublicTenant(slug);
 	// Inexistente o inactiva: 404. Una activa sí se muestra (spec alta A4).
 	if (!tenant) notFound();
+	const notice = loginErrorMessage((await searchParams).error);
 
 	return (
 		<main
@@ -37,6 +41,11 @@ export default async function TenantLoginPage({
 							: `Entrá con la cuenta con la que te invitaron a ${tenant.displayName}.`}
 					</p>
 				</div>
+				{notice ? (
+					<p className="rounded-md border px-3 py-2 text-sm" role="alert">
+						{notice}
+					</p>
+				) : null}
 				<LoginForm methods={tenant.authMethods} next={`/${tenant.slug}/chat`} />
 			</div>
 		</main>
