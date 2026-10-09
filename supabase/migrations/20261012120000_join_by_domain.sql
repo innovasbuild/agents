@@ -17,6 +17,19 @@ alter table public.tenants
   add constraint tenants_self_signup_needs_domain
   check (not self_signup_by_domain or cardinality(allowed_domains) >= 1);
 
+create or replace function public.is_public_email_domain(p_domain text)
+returns boolean language sql immutable set search_path = '' as $$
+  select regexp_replace(lower(btrim(p_domain)), '^@', '') = any (array[
+    'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
+    'msn.com', 'yahoo.com', 'yahoo.com.ar', 'icloud.com', 'me.com',
+    'proton.me', 'protonmail.com', 'aol.com', 'gmx.com', 'zoho.com',
+    'yandex.com', 'fibertel.com.ar', 'arnet.com.ar', 'speedy.com.ar'
+  ]);
+$$;
+
+revoke execute on function public.is_public_email_domain(text) from public;
+grant execute on function public.is_public_email_domain(text) to authenticated;
+
 create or replace function public.tenants_guard_columns()
 returns trigger language plpgsql set search_path = '' as $$
 begin
@@ -25,6 +38,14 @@ begin
   end if;
   if (select public.is_platform_admin()) then
     return new;
+  end if;
+  if new.self_signup_by_domain and not old.self_signup_by_domain
+     and exists (
+       select 1 from unnest(new.allowed_domains) d
+       where public.is_public_email_domain(d)
+     ) then
+    raise exception 'no se puede abrir el ingreso con un dominio de correo público'
+      using errcode = '42501';
   end if;
   if (to_jsonb(new) - 'default_model' - 'self_signup_by_domain')
      is distinct from (to_jsonb(old) - 'default_model' - 'self_signup_by_domain') then

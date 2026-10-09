@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(34);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -152,6 +152,33 @@ select throws_ok($$update public.tenants set allowed_domains = '{}' where slug =
 update public.tenants set allowed_domains = '{}' where slug = 'jd-c';
 select is((select cardinality(allowed_domains) from public.tenants where slug = 'jd-c'),
   0, 'con el ingreso cerrado se puede vaciar la lista');
+
+-- D8 en la base: abrir el modo con un dominio público.
+insert into public.tenants (id, slug, display_name, allowed_domains, self_signup_by_domain, active)
+values
+  ('d7d7d7d7-0000-0000-0000-00000000000e', 'jd-e', 'JD E', '{Gmail.com}', false, true),
+  ('d7d7d7d7-0000-0000-0000-00000000000f', 'jd-f', 'JD F', '{dom-f.test}', false, true);
+insert into public.memberships (tenant_id, user_id, role)
+values
+  ('d7d7d7d7-0000-0000-0000-00000000000e', 'c7c7c7c7-0000-0000-0000-000000000006', 'tenant_admin'),
+  ('d7d7d7d7-0000-0000-0000-00000000000f', 'c7c7c7c7-0000-0000-0000-000000000006', 'tenant_admin'),
+  ('d7d7d7d7-0000-0000-0000-00000000000e', 'c7c7c7c7-0000-0000-0000-000000000007', 'platform_admin');
+
+set local role authenticated;
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000006","role":"authenticated"}';
+select throws_ok($$update public.tenants set self_signup_by_domain = true where slug = 'jd-e'$$,
+  '42501', null, 'un tenant_admin no abre el ingreso con un dominio público cargado');
+update public.tenants set self_signup_by_domain = true where slug = 'jd-f';
+select is((select self_signup_by_domain from public.tenants where slug = 'jd-f'),
+  true, 'un tenant_admin abre el ingreso con dominios propios');
+update public.tenants set default_model = 'anthropic/claude-haiku-4.5' where slug = 'jd-f';
+select is((select default_model from public.tenants where slug = 'jd-f'),
+  'anthropic/claude-haiku-4.5', 'con el modo ya abierto, cambiar el modelo no re-chequea dominios');
+set local "request.jwt.claims" to '{"sub":"c7c7c7c7-0000-0000-0000-000000000007","role":"authenticated"}';
+update public.tenants set self_signup_by_domain = true where slug = 'jd-e';
+select is((select self_signup_by_domain from public.tenants where slug = 'jd-e'),
+  true, 'el admin de plataforma abre el ingreso aun con un dominio público');
+reset role;
 
 select * from finish();
 rollback;
