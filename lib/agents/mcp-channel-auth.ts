@@ -16,6 +16,7 @@ import {
 	loadTenantBySlug,
 } from "../auth/oauth-principal";
 import { tenantSubjectId } from "../connectors/auth";
+import { loadAgentEnabled } from "./agent-enabled";
 
 type SessionAuthContext = Exclude<
 	Awaited<ReturnType<AuthFn<Request>>>,
@@ -34,6 +35,9 @@ export interface McpChannelAuthDeps {
 	// Una fila platform_admin solo cuenta como plataforma si es de ese tenant,
 	// igual que en la web y en el endpoint MCP del brain.
 	platformOwnerTenantId: () => Promise<string | null>;
+	// ¿El agente de este canal está habilitado para ese tenant? Se pregunta
+	// recién cuando la persona ya probó que pertenece al tenant.
+	agentEnabled: (tenantId: string) => Promise<boolean>;
 }
 
 export type McpChannelAuth =
@@ -115,6 +119,28 @@ export async function resolveMcpChannelAuth(
 		return deny("forbidden", "No tenés acceso a ese cliente.");
 	}
 
+	// Después del guard de membresía a propósito: quien no pertenece al tenant
+	// nunca llega acá, así que este mensaje no le dice nada a un extraño.
+	let enabled: boolean;
+	try {
+		enabled = await deps.agentEnabled(tenant.id);
+	} catch (error) {
+		console.error(
+			"canal mcp: no pude leer si el agente está habilitado",
+			error,
+		);
+		return deny(
+			"forbidden",
+			"No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+		);
+	}
+	if (!enabled) {
+		return deny(
+			"forbidden",
+			"Ese agente no está habilitado para este cliente.",
+		);
+	}
+
 	// Mismo mapeo que el brain (access.ts): el administrador de plataforma lo es
 	// en todos los tenants; una fila platform_admin ajena al dueño es admin del
 	// tenant al que pertenece.
@@ -155,6 +181,7 @@ let cachedVerify:
 
 export async function verifyMcpChannelToken(
 	request: Request,
+	agent: string,
 ): Promise<SessionAuthContext> {
 	if (!cachedVerify) cachedVerify = createOAuthClaimsVerifier();
 	const result = await resolveMcpChannelAuth(request, {
@@ -162,6 +189,7 @@ export async function verifyMcpChannelToken(
 		tenantBySlug: loadTenantBySlug,
 		membershipsOf: loadMemberships,
 		platformOwnerTenantId: loadPlatformOwnerTenantId,
+		agentEnabled: (tenantId) => loadAgentEnabled(tenantId, agent),
 	});
 	if (result.ok) return result.sessionAuth;
 	if (result.kind === "unauthenticated") {

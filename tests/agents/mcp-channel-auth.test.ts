@@ -26,6 +26,7 @@ function deps(overrides: Partial<McpChannelAuthDeps> = {}): McpChannelAuthDeps {
 							: [],
 		// tenant-x es el dueño de la plataforma en estas pruebas.
 		platformOwnerTenantId: async () => "tenant-x",
+		agentEnabled: async () => true,
 		...overrides,
 	};
 }
@@ -301,6 +302,73 @@ describe("resolveMcpChannelAuth", () => {
 
 			expect(result).toMatchObject({ ok: false, kind: "forbidden" });
 			expect(JSON.stringify(result)).not.toContain("conexión a postgres");
+			error.mockRestore();
+		});
+	});
+	describe("el agente tiene que estar habilitado para el cliente (spec etapa 19 §5)", () => {
+		const APAGADO = "Ese agente no está habilitado para este cliente.";
+
+		it("apagado: un miembro no entra y el mensaje dice por qué", async () => {
+			expect(
+				await resolveMcpChannelAuth(
+					request("ana", "a"),
+					deps({ agentEnabled: async () => false }),
+				),
+			).toEqual({ ok: false, kind: "forbidden", message: APAGADO });
+		});
+
+		it("apagado: tampoco entra un administrador de plataforma", async () => {
+			expect(
+				await resolveMcpChannelAuth(
+					request("root", "a"),
+					deps({ agentEnabled: async () => false }),
+				),
+			).toEqual({ ok: false, kind: "forbidden", message: APAGADO });
+		});
+
+		it("se consulta con el id del tenant de la URL", async () => {
+			const agentEnabled = vi.fn(async () => true);
+			await resolveMcpChannelAuth(request("ana", "a"), deps({ agentEnabled }));
+			expect(agentEnabled).toHaveBeenCalledWith("tenant-a");
+		});
+
+		it("sin membresía no se consulta: el mensaje no revela si el agente está prendido", async () => {
+			const agentEnabled = vi.fn(async () => false);
+			const sinMembresia = deps({
+				agentEnabled,
+				tenantBySlug: async (slug) =>
+					slug === "b" ? { id: "tenant-b", active: true } : null,
+			});
+
+			const result = await resolveMcpChannelAuth(
+				request("ana", "b"),
+				sinMembresia,
+			);
+
+			expect(result).toMatchObject({
+				ok: false,
+				message: "No tenés acceso a ese cliente.",
+			});
+			expect(agentEnabled).not.toHaveBeenCalled();
+		});
+
+		it("si la consulta falla, no deja pasar ni filtra el motivo", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const result = await resolveMcpChannelAuth(
+				request("ana", "a"),
+				deps({
+					agentEnabled: async () => {
+						throw new Error("conexión a postgres perdida");
+					},
+				}),
+			);
+
+			expect(result).toEqual({
+				ok: false,
+				kind: "forbidden",
+				message: "No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+			});
+			expect(JSON.stringify(result)).not.toContain("postgres");
 			error.mockRestore();
 		});
 	});
