@@ -4,7 +4,9 @@ Cada cliente tiene su brain en una URL propia:
 
     https://agentes.innov.as/brain/<cliente>/mcp
 
-Entrás con tu cuenta de la plataforma. Si sos administrador del cliente podés leer y escribir; si no, solo leer.
+Entrás con tu cuenta de la plataforma. Qué podés leer y dónde podés escribir lo deciden los permisos del brain por carpeta y por página: los administradores del cliente pueden todo; el resto, lo que cada carpeta o página le dé.
+
+Las instrucciones por cliente, con la URL de tu empresa ya puesta, están en la plataforma: menú **Conectar** (`/<cliente>/conectar`). Este archivo queda como referencia.
 
 ## Claude Code
 
@@ -24,7 +26,9 @@ Codex: no probado todavía.
 
 - `brain_search`: buscar por texto, categoría o tag.
 - `brain_read`: leer una página completa con su revisión.
-- `brain_upsert` (solo administradores): crear o actualizar una página. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
+- `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
+
+Las tres tools aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
 
 Hay un límite de 60 lecturas y 10 escrituras por minuto por persona. Si lo pasás, la respuesta dice cuántos segundos esperar.
 

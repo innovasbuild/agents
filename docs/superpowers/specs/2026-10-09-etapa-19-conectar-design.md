@@ -138,7 +138,7 @@ Cada punto indica quién lo hace y qué se espera. Al terminar, se tildan en el 
 3. Una cuenta `tenant_member` real en `innovas` y otra cuenta sin membresía.
 
 **Esta etapa**
-4. `/innovas/conectar` con la cuenta miembro: aparecen el brain y el agente de outreach; las URLs copiadas coinciden con las de los markdown.
+4. `/innovas/conectar` con la cuenta miembro: aparecen el brain y el agente de outreach; las URLs copiadas coinciden con las de los markdown. Apretar **Copiar** en un navegador normal y pegar: tiene que copiar la URL y el botón dice "Copiado" (en el navegador integrado de la herramienta de desarrollo el permiso de portapapeles está negado, así que el caso de éxito no se vio; el aviso "No se pudo copiar" sí).
 5. Con la cuenta sin membresía: 404.
 6. Apagar `outreach` en `tenant_agents` de un tenant de prueba: desaparece la tarjeta y el canal MCP responde "Ese agente no está habilitado para este cliente.". Volver a prenderlo.
 7. Conectar el brain desde claude.ai con los pasos de la página. Si anda, `tested: true` para claude.ai.

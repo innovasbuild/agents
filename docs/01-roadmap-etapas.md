@@ -525,16 +525,16 @@ Agregada el 2026-10-08. Dos entregas, una sesión y un PR cada una:
 
 **Modelo Claude Code:** Sonnet 5 (UI y docs); Opus 5 solo si la verificación en producción destapa un defecto de permisos.
 **Modelo runtime:** n/a.
-**Spec/Plan:** a escribir (`docs/superpowers/specs/2026-10-XX-etapa-19-conectar-design.md`). Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** `docs/superpowers/specs/2026-10-09-etapa-19-conectar-design.md` · `docs/superpowers/plans/2026-10-09-etapa-19-conectar.md`. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
 
 Agregada el 2026-10-09 (plan de cierre del gap, G2 y G6). Una página por usuario con lo que tiene disponible para conectar a Claude, ChatGPT, Claude Code, Codex o Cursor, con instrucciones copiables; y la verificación en producción que las etapas 17, 18 e ingreso por dominio dejaron pendiente.
 
-- [ ] Página `/<slug>/conectar` (nombre a decidir): brain, agentes habilitados, lugar reservado para el MCP de herramientas (Etapa 23). Solo lo que la persona puede usar.
-- [ ] Instrucciones por cliente MCP (Claude Code, claude.ai, ChatGPT, Codex, Cursor) con botón de copiar. Sin tokens: autentica el OAuth de Supabase.
-- [ ] Probar claude.ai y ChatGPT contra el brain de `innovas` en producción; decidir si el brain expone `search`/`fetch` para ChatGPT.
-- [ ] Corregir `docs/brain-mcp-conexion.md` (ya no es "solo admins escriben") y `docs/agente-mcp-conexion.md`.
-- [ ] Verificación en producción: criterio de cierre de la 17, recorrido de la 18, ingreso por dominio con una persona nunca invitada, "Confirm email" prendido en Supabase Auth, `PLATFORM_OWNER_TENANT_SLUG` en Vercel. Marcar 17 y 18 como `[x]`.
-- [ ] El canal MCP del agente chequea `tenant_agents.enabled` como el canal web.
+- [x] Página `/<slug>/conectar`: brain, agentes habilitados, lugar reservado para el MCP de herramientas (Etapa 23). Solo lo que la persona puede usar.
+- [x] Instrucciones por cliente MCP (Claude Code, claude.ai, ChatGPT, Codex, Cursor) con botón de copiar. Sin tokens: autentica el OAuth de Supabase.
+- [ ] Probar claude.ai y ChatGPT contra el brain de `innovas` en producción; decidir si el brain expone `search`/`fetch` para ChatGPT. Lo corre una persona: anexo A de la spec.
+- [x] Corregir `docs/brain-mcp-conexion.md` (ya no es "solo admins escriben") y `docs/agente-mcp-conexion.md`.
+- [ ] Verificación en producción: criterio de cierre de la 17, recorrido de la 18, ingreso por dominio con una persona nunca invitada, "Confirm email" prendido en Supabase Auth, `PLATFORM_OWNER_TENANT_SLUG` en Vercel. Marcar 17 y 18 como `[x]`. Lo corre una persona: anexo A de la spec.
+- [x] El canal MCP del agente chequea `tenant_agents.enabled` como el canal web.
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** un `tenant_member` de `innovas` entra a la página, copia las instrucciones, conecta el brain desde claude.ai y desde ChatGPT y `brain_search` le responde su canon; y las etapas 17 y 18 figuran cerradas con su verificación en producción anotada.
