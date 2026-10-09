@@ -12,6 +12,7 @@ import {
 import {
 	createOAuthClaimsVerifier,
 	loadMemberships,
+	loadPlatformOwnerTenantId,
 	loadTenantBySlug,
 } from "../auth/oauth-principal";
 import { tenantSubjectId } from "../connectors/auth";
@@ -29,6 +30,10 @@ export interface McpChannelAuthDeps {
 	membershipsOf: (
 		userId: string,
 	) => Promise<{ tenantId: string; role: string }[]>;
+	// Id del tenant dueño de la plataforma, o null si no hay uno configurado.
+	// Una fila platform_admin solo cuenta como plataforma si es de ese tenant,
+	// igual que en la web y en el endpoint MCP del brain.
+	platformOwnerTenantId: () => Promise<string | null>;
 }
 
 export type McpChannelAuth =
@@ -73,8 +78,15 @@ export async function resolveMcpChannelAuth(
 
 	let roles: { tenantId: string; role: string }[];
 	let tenant: { id: string; active: boolean } | null;
+	let ownerTenantId: string | null = null;
 	try {
 		roles = await deps.membershipsOf(userId);
+		// Una fila platform_admin fuera del tenant dueño no es rol de plataforma
+		// (spec consola §3): vale como tenant_admin de ese tenant. El tenant
+		// dueño solo se consulta a quien tiene alguna fila así.
+		if (roles.some((row) => row.role === "platform_admin")) {
+			ownerTenantId = await deps.platformOwnerTenantId();
+		}
 		tenant = await deps.tenantBySlug(slug);
 	} catch (error) {
 		console.error("canal mcp: no pude resolver el acceso", error);
@@ -83,7 +95,11 @@ export async function resolveMcpChannelAuth(
 			"No pude verificar tu acceso a ese cliente. Probá de nuevo.",
 		);
 	}
-	const platformAdmin = roles.some((row) => row.role === "platform_admin");
+	const platformAdmin =
+		ownerTenantId !== null &&
+		roles.some(
+			(row) => row.role === "platform_admin" && row.tenantId === ownerTenantId,
+		);
 
 	if (!tenant || !tenant.active) {
 		return deny(
@@ -99,7 +115,15 @@ export async function resolveMcpChannelAuth(
 		return deny("forbidden", "No tenés acceso a ese cliente.");
 	}
 
-	const role = own?.role ?? "platform_admin";
+	// Mismo mapeo que el brain (access.ts): el administrador de plataforma lo es
+	// en todos los tenants; una fila platform_admin ajena al dueño es admin del
+	// tenant al que pertenece.
+	const role = platformAdmin
+		? "platform_admin"
+		: own?.role === "platform_admin"
+			? "tenant_admin"
+			: // Inalcanzable sin `own`: el guard de arriba ya respondió forbidden.
+				(own?.role ?? "tenant_member");
 
 	return {
 		ok: true,
@@ -137,6 +161,7 @@ export async function verifyMcpChannelToken(
 		verify: cachedVerify,
 		tenantBySlug: loadTenantBySlug,
 		membershipsOf: loadMemberships,
+		platformOwnerTenantId: loadPlatformOwnerTenantId,
 	});
 	if (result.ok) return result.sessionAuth;
 	if (result.kind === "unauthenticated") {

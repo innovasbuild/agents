@@ -21,7 +21,11 @@ function deps(overrides: Partial<McpChannelAuthDeps> = {}): McpChannelAuthDeps {
 					? [{ tenantId: "tenant-a", role: "tenant_admin" }]
 					: userId === "root"
 						? [{ tenantId: "tenant-x", role: "platform_admin" }]
-						: [],
+						: userId === "falso"
+							? [{ tenantId: "tenant-b", role: "platform_admin" }]
+							: [],
+		// tenant-x es el dueño de la plataforma en estas pruebas.
+		platformOwnerTenantId: async () => "tenant-x",
 		...overrides,
 	};
 }
@@ -61,7 +65,7 @@ describe("resolveMcpChannelAuth", () => {
 		});
 	});
 
-	it("un platform_admin sin fila propia en ese tenant igual entra, con role platform_admin", async () => {
+	it("un platform_admin del tenant dueño, sin fila propia en ese tenant, igual entra, con role platform_admin", async () => {
 		const result = await resolveMcpChannelAuth(request("root", "a"), deps());
 		expect(result).toMatchObject({
 			ok: true,
@@ -146,7 +150,10 @@ describe("resolveMcpChannelAuth", () => {
 			request("ana", "b"),
 			sinMembresiaAhi,
 		);
-		const inexistente = await resolveMcpChannelAuth(request("ana", "zzz"), deps());
+		const inexistente = await resolveMcpChannelAuth(
+			request("ana", "zzz"),
+			deps(),
+		);
 		expect(sinMembresia).toMatchObject({ ok: false, kind: "forbidden" });
 		expect((sinMembresia as { message: string }).message).toBe(
 			(inexistente as { message: string }).message,
@@ -199,5 +206,102 @@ describe("resolveMcpChannelAuth", () => {
 		expect(subjectA).not.toBe(subjectB);
 		expect(enA).toMatchObject({ sessionAuth: { principalId: "ana" } });
 		expect(enB).toMatchObject({ sessionAuth: { principalId: "ana" } });
+	});
+	describe("el rol de plataforma solo vale en el tenant dueño (spec consola §3)", () => {
+		const conTenantB = (overrides: Partial<McpChannelAuthDeps> = {}) =>
+			deps({
+				tenantBySlug: async (slug) =>
+					slug === "a"
+						? { id: "tenant-a", active: true }
+						: slug === "b"
+							? { id: "tenant-b", active: true }
+							: null,
+				...overrides,
+			});
+
+		it("una fila platform_admin fuera del tenant dueño no abre otros tenants", async () => {
+			const result = await resolveMcpChannelAuth(
+				request("falso", "a"),
+				conTenantB(),
+			);
+			expect(result).toMatchObject({ ok: false, kind: "forbidden" });
+		});
+
+		it("esa fila vale como tenant_admin de su propio tenant, nunca como platform_admin", async () => {
+			const result = await resolveMcpChannelAuth(
+				request("falso", "b"),
+				conTenantB(),
+			);
+			expect(result).toMatchObject({
+				ok: true,
+				sessionAuth: {
+					attributes: { tenantId: "tenant-b", role: "tenant_admin" },
+				},
+			});
+		});
+
+		it("quien no es de plataforma recibe el mismo mensaje exista o no el cliente (sin oráculo)", async () => {
+			const existe = await resolveMcpChannelAuth(
+				request("falso", "a"),
+				conTenantB(),
+			);
+			const noExiste = await resolveMcpChannelAuth(
+				request("falso", "zzz"),
+				conTenantB(),
+			);
+			expect((existe as { message: string }).message).toBe(
+				(noExiste as { message: string }).message,
+			);
+		});
+
+		it("sin tenant dueño configurado nadie entra como plataforma", async () => {
+			const sinDueno = deps({ platformOwnerTenantId: async () => null });
+			const entra = await resolveMcpChannelAuth(request("root", "a"), sinDueno);
+			const inexistente = await resolveMcpChannelAuth(
+				request("root", "zzz"),
+				sinDueno,
+			);
+			const comun = await resolveMcpChannelAuth(
+				request("ana", "zzz"),
+				sinDueno,
+			);
+
+			expect(entra).toMatchObject({ ok: false, kind: "forbidden" });
+			expect((inexistente as { message: string }).message).toBe(
+				(comun as { message: string }).message,
+			);
+		});
+
+		it("el tenant dueño solo se consulta si el usuario tiene alguna fila platform_admin", async () => {
+			const platformOwnerTenantId = vi.fn(async () => "tenant-x");
+
+			await resolveMcpChannelAuth(
+				request("ana", "a"),
+				deps({ platformOwnerTenantId }),
+			);
+			expect(platformOwnerTenantId).not.toHaveBeenCalled();
+
+			await resolveMcpChannelAuth(
+				request("root", "a"),
+				deps({ platformOwnerTenantId }),
+			);
+			expect(platformOwnerTenantId).toHaveBeenCalledTimes(1);
+		});
+
+		it("un error al leer el tenant dueño da forbidden, sin filtrar el motivo", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			const result = await resolveMcpChannelAuth(
+				request("root", "a"),
+				deps({
+					platformOwnerTenantId: async () => {
+						throw new Error("conexión a postgres perdida");
+					},
+				}),
+			);
+
+			expect(result).toMatchObject({ ok: false, kind: "forbidden" });
+			expect(JSON.stringify(result)).not.toContain("conexión a postgres");
+			error.mockRestore();
+		});
 	});
 });
