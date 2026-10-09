@@ -9,32 +9,9 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { brandStyle } from "@/lib/brand/contrast";
-import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { visibleNav } from "@/lib/tenants/nav";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
-
-type NavLink = { href: string; label: string; adminOnly?: boolean };
-// Una entrada con `items` es un desplegable: agrupa destinos de un mismo
-// dominio para que la tira no ponga todo al mismo nivel.
-type NavEntry = NavLink | { label: string; items: NavLink[] };
-
-const NAV: NavEntry[] = [
-	{ href: "/chat", label: "Chat" },
-	{
-		label: "Outreach",
-		items: [
-			{ href: "/cola", label: "Cola" },
-			{ href: "/pipeline", label: "Pipeline" },
-			{ href: "/contactos", label: "Contactos" },
-			{ href: "/cuentas", label: "Cuentas" },
-			{ href: "/focos", label: "Focos" },
-		],
-	},
-	{ href: "/brain", label: "Brain" },
-	{ href: "/metricas", label: "Métricas" },
-	// /settings hace notFound() para tenant_member: el link no se muestra,
-	// no tiene sentido ofrecer una ruta que va a 404.
-	{ href: "/settings", label: "Configuración", adminOnly: true },
-];
+import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 
 export default async function TenantLayout({
 	children,
@@ -107,12 +84,7 @@ export default async function TenantLayout({
 				    esta tira, no de la página. */}
 				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
 					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
-						{NAV.filter(
-							(item) =>
-								"items" in item ||
-								!item.adminOnly ||
-								tenant.role !== "tenant_member",
-						).map((item) =>
+						{visibleNav(tenant.role).map((item) =>
 							"items" in item ? (
 								<li key={item.label}>
 									<DropdownMenu>
