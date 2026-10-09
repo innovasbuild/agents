@@ -95,8 +95,9 @@ El correo verificado se lee igual que en `join_tenants_by_domain` (`email_confir
 - **`LoginForm`:** botón "Entrar con Microsoft" cuando `methods` incluye `microsoft`. Llama `signInWithOAuth({ provider: "azure", options: { scopes: "email", redirectTo } })`. El orden de los botones es Microsoft, Google, correo.
 - **`/login` general:** deja de mostrar todos los métodos de `AUTH_METHODS`. Muestra los que tiene habilitados al menos una empresa activa (`loadOfferedMethods()` en `lib/tenants/public.ts`, con el cliente admin; si falla, solo correo). Así el botón de Microsoft no aparece hasta que plataforma lo marque en alguna empresa.
 - **`lib/auth/login-gate.ts`:** `gateLogin(supabase): Promise<{ ok: true } | { ok: false; landing: string }>`. Llama `rpc("login_gate")`. Con `allowed` en `true` devuelve `ok`. Con `false` devuelve `/login/<slug>?error=metodo`. Si el RPC falla, tira o devuelve algo sin la forma esperada: `{ ok: false, landing: "/login?error=auth_failed" }`.
-- **`/auth/callback`:** después de `joinOnLogin`, `gateLogin`. Si no es `ok`: `supabase.auth.signOut()` y redirect a `landing`.
-- **`/auth/confirmar`:** `resolveConfirmation` recibe un paso `gate` que corre después de aceptar invitaciones. Si no es `ok`, cierra la sesión del navegador y devuelve `landing` como destino.
+- **`/auth/callback`:** después de `joinOnLogin`, `gateLogin`. Si no es `ok`: `closeLocalSession(supabase)` y redirect a `landing`.
+- **`/auth/confirmar`:** `resolveConfirmation` recibe un paso `gate` que corre después de aceptar invitaciones. Si no es `ok`, cierra la sesión del navegador con `closeLocalSession` y devuelve `landing` como destino.
+- **`lib/auth/close-session.ts`:** `closeLocalSession(supabase)` llama `signOut({ scope: "local" })`. El corte cierra solo la sesión recién abierta: sin scope, `signOut` es global y revocaría también la que la persona tenga en otro dispositivo, abierta por un método permitido. Si `signOut` devuelve `{ error }` o tira, queda en el log y el redirect a la landing sale igual.
 - **`/login` y `/login/[tenant]`:** con `?error=metodo` muestran arriba del formulario "Tu empresa no permite entrar con ese método. Usá una de estas opciones." Con `?error=auth_failed`, "No pudimos abrir tu sesión. Probá de nuevo."
 - **Orden fijo en los dos puntos de entrada:** abrir sesión, `joinOnLogin`, `gateLogin`, redirigir.
 
@@ -106,6 +107,8 @@ El correo verificado se lee igual que en `join_tenants_by_domain` (`email_confir
 - **`resolveTenantAccess(slug)`:** después de resolver el rol, llama `rpc("tenant_allows_login", { p_tenant })` con el id del tenant dueño si es administrador de plataforma (L12) y con el del tenant de la URL si no. Si devuelve falso o falla: `redirect("/login/<slug>?error=metodo")`, donde `<slug>` es el del tenant contra el que se chequeó. Sin sesión, sin tenant o sin rol sigue devolviendo `null`, como hoy.
 - **`requirePlatformAdmin()`:** mismo chequeo contra el tenant dueño y mismo redirect.
 - **Canal del chat web:** `verifyCaller` devuelve también el cliente de Supabase de esa sesión. `resolveChannelContext` recibe una función `allowsLogin(tenantId)` y devuelve `null` si da falso o tira. El canal la arma con `rpc("tenant_allows_login")` sobre ese cliente.
+- **Server actions y API:** lo que no pasa por una página aplica el mismo chequeo con `actionAllowsLogin(supabase, userId, tenantId)` (`lib/tenants/login-check-server.ts`), que es `allowsLogin` contra el tenant dueño si quien llama es administrador de plataforma (L12) y contra la empresa de la acción si no. Lo usan `POST /api/invitations`, `updateDefaultModel` y `updateSignupMode` (`app/[tenant]/settings/actions.ts`), `revokeMembership` y `revokeInvitation` (`app/[tenant]/settings/usuarios/actions.ts`) y crear, renombrar y borrar un hilo (`app/[tenant]/chat/actions.ts`). Las que reciben el id de una fila leen primero su `tenant_id` con el cliente de la sesión; si la fila no se ve, no escriben. Con el método no permitido no redirigen: contestan su "sin permiso" de siempre (403 en la API) y no escriben nada.
+- **Guarda del tenant dueño:** `updateTenant` (consola) no guarda los `auth_methods` del tenant dueño si la lista nueva deja afuera el método de la sesión de quien edita (`current_login_method()`), ni si ese método no se puede determinar. Sin esa guarda, sacarlo deja a `requirePlatformAdmin` rebotando a todos a una landing que no pueden usar, y solo se arregla por SQL. Editar cualquier otra empresa no cambia.
 - **Costo:** una consulta más por llamada. El layout y la página llaman a `resolveTenantAccess` por separado; se envuelve en `cache()` de React para que el mismo request la resuelva una sola vez.
 
 ## 6. Entrega 20.2 · Base
@@ -151,6 +154,7 @@ Server actions en `actions.ts`, todas con resultado `{ ok: true } | { ok: false;
 1. Aplicar la migración de la entrega **antes** de desplegar su código (`npx supabase migration list` primero: `db push` aplica todas las pendientes). Al revés, `login_gate` no existe y nadie puede entrar (L8).
 2. La 20.1 se puede desplegar sin Microsoft configurado: el botón solo aparece en empresas que tengan `microsoft` en `auth_methods`, y ninguna lo tiene hasta que plataforma lo marque.
 3. Antes de marcar `microsoft` en una empresa: anexo A completo.
+4. Antes de desplegar, confirmar en producción que `auth_methods` del tenant dueño incluye el método con el que hoy entran los administradores de plataforma, y avisar que quien entraba por Google a una empresa que solo permite correo va a ser rebotado a su landing.
 
 ## 10. Pruebas
 
