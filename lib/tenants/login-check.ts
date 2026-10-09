@@ -18,8 +18,15 @@ export async function allowsLogin(
 		const { data, error } = await supabase.rpc("tenant_allows_login", {
 			p_tenant: tenantId,
 		});
-		return !error && data === true;
-	} catch {
+		if (error) {
+			// Sin esto, un RPC roto se ve igual que "tu empresa no permite ese
+			// método" en todas las pantallas y no queda rastro.
+			console.error("tenant_allows_login falló:", error);
+			return false;
+		}
+		return data === true;
+	} catch (error) {
+		console.error("tenant_allows_login falló:", error);
 		return false;
 	}
 }
