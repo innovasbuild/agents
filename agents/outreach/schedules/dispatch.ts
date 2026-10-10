@@ -13,7 +13,11 @@ import { defineSchedule } from "eve/schedules";
 import { apiKeyValues } from "../../../lib/connectors/auth";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 import { createApolloAdapter } from "../../../lib/connectors/leads/apollo-adapter";
-import { brainForTenant, loadCanon } from "../../../lib/outreach/canon";
+import {
+	brainForTenant,
+	loadCanon,
+	loadIcpLevels,
+} from "../../../lib/outreach/canon";
 import { isFichaVigente } from "../../../lib/outreach/ficha";
 import { refuse } from "../../../lib/outreach/result";
 import { draftMessage } from "../../../lib/outreach/services/draft";
@@ -110,11 +114,26 @@ export default defineSchedule({
 			);
 		};
 
+		// El ICP se lee una vez por pasada, no una vez por contacto (spec 21.3
+		// §3.4). La clave lleva la corrida: una pasada nueva lo vuelve a leer.
+		const icpByRun = new Map<string, ReturnType<typeof loadIcpLevels>>();
+		const loadIcpOnce = (tenantId: string, runId: string) => {
+			const key = `${tenantId}:${runId}`;
+			let pending = icpByRun.get(key);
+			if (!pending) {
+				if (icpByRun.size >= 50) icpByRun.clear();
+				pending = brainForTenant(tenantId).then(loadIcpLevels);
+				icpByRun.set(key, pending);
+			}
+			return pending;
+		};
+
 		const icpScore: IcpScoreNode = ({ tenantId, runId, workflow, contactId }) =>
 			scoreContact(
 				{ tenantId, contactId },
 				{
 					store: outreach,
+					loadIcp: (id) => loadIcpOnce(id, runId),
 					now: () => new Date(),
 					evaluate: metered(
 						(args: Parameters<typeof runEvaluation>[0]) =>
@@ -192,8 +211,7 @@ export default defineSchedule({
 		// runner nunca corre dos pasadas ni dos ítems a la vez, así que esta
 		// variable, fijada al entrar a runItem, ya está resuelta cuando esas
 		// funciones la leen.
-		let contactEnrichmentCtx: { tenantId: string; runId: string } | null =
-			null;
+		let contactEnrichmentCtx: { tenantId: string; runId: string } | null = null;
 
 		const contactEnrichmentImpl = createContactEnrichmentWorkflow({
 			async reveal(contactId) {

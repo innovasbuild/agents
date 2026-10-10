@@ -29,7 +29,6 @@ describe("parseOutreachConfig", () => {
 			timezone: "America/Argentina/Buenos_Aires",
 			bcc: null,
 			deal: null,
-			icp: null,
 			company: null,
 			models: {
 				...DEFAULT_OUTREACH_MODELS,
@@ -46,34 +45,11 @@ describe("parseOutreachConfig", () => {
 	it("los idiomas soportados coinciden con los del gate", () => {
 		expect([...SUPPORTED_IDIOMAS]).toEqual([...GATE_IDIOMAS]);
 	});
-	it("acepta los niveles del ICP y exige entre 2 y 10 por dimensión", () => {
+	it("ignora una clave icp vieja: los niveles viven en el brain", () => {
 		const config = parseOutreachConfig({
-			icp: {
-				revision: "2026-09-22",
-				encaje_empresa: ["no entra todavía", "podría encajar", "encaja bien"],
-				rol_decisor: ["sin relación", "influye algo", "decide todo"],
-				excluir: "Es competidora, ya cliente, o proveedora",
-			},
+			icp: { revision: "2026-09-22", excluir: "x".repeat(20) },
 		});
-		expect(config.icp?.revision).toBe("2026-09-22");
-		expect(config.icp?.encaje_empresa).toHaveLength(3);
-	});
-	it("un solo nivel no es una escala: se rechaza", () => {
-		// Solo encaje_empresa viola la cardinalidad (1 nivel); el resto queda
-		// válido para que el throw aísle esa invariante y no el min(10) de string.
-		expect(() =>
-			parseOutreachConfig({
-				icp: {
-					revision: "r1",
-					encaje_empresa: ["nivel único"],
-					rol_decisor: ["sin relación", "influye algo", "decide todo"],
-					excluir: "motivo de exclusión de prueba",
-				},
-			}),
-		).toThrow();
-	});
-	it("sin bloque icp, la config sigue siendo válida y el scoring no corre", () => {
-		expect(parseOutreachConfig({}).icp).toBeNull();
+		expect("icp" in config).toBe(false);
 	});
 });
 

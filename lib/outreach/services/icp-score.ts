@@ -1,5 +1,8 @@
 // Nodo outreach/icp-score (spec etapa 13 §7): tres preguntas a Jev en una
 // request, sobre lo que la búsqueda ya devolvió gratis. Sin email, sin research.
+
+import type { CanonLoad } from "../canon";
+import { type IcpLevels, icpRevision } from "../canon-blocks";
 import {
 	DEFAULT_ICP_THRESHOLDS,
 	decideIcp,
@@ -14,6 +17,8 @@ export const JEV_MODEL = "typesafe-ai/jev";
 
 export interface IcpScoreDeps {
 	store: OutreachStore;
+	/** Los niveles del ICP del brain de la empresa (spec 21.3 §3.4). */
+	loadIcp: (tenantId: string) => Promise<CanonLoad<IcpLevels>>;
 	evaluate: (
 		args: Parameters<typeof runEvaluation>[0],
 	) => Promise<Awaited<ReturnType<typeof runEvaluation>>>;
@@ -28,14 +33,32 @@ export async function scoreContact(
 	input: { tenantId: string; contactId: string },
 	deps: IcpScoreDeps,
 ): Promise<IcpScoreResult> {
-	const tenant = await deps.store.loadTenantOutreach(input.tenantId);
-	const levels = tenant?.config.icp;
-	if (!levels) {
-		return refuse(
-			"icp_sin_niveles",
-			"este tenant no tiene los niveles del ICP cargados: no se puede calificar",
-		);
+	const loaded = await deps.loadIcp(input.tenantId);
+	if (!loaded.ok) {
+		switch (loaded.reason) {
+			case "sin_brain":
+				return refuse(
+					"icp_sin_brain",
+					"esta empresa no tiene el brain habilitado: no se puede calificar",
+				);
+			case "brain_caido":
+				return refuse(
+					"canon_no_disponible",
+					"no pude leer el ICP de la empresa en el brain",
+				);
+			case "falta":
+				return refuse(
+					"icp_sin_niveles",
+					"el brain no tiene un bloque icp en una página activa con el tag canon:icp: no se puede calificar",
+				);
+			default:
+				return refuse(
+					"icp_invalido",
+					`el bloque icp del brain no es válido: ${loaded.errors[0] ?? "revisá la página canon:icp"}`,
+				);
+		}
 	}
+	const levels = loaded.value;
 
 	const contact = await deps.store.findContactById(
 		input.tenantId,
@@ -96,7 +119,7 @@ export async function scoreContact(
 		lane: decision.lane,
 		reason: decision.reason,
 		model: JEV_MODEL,
-		revision: levels.revision,
+		revision: icpRevision(levels),
 		judged_at: deps.now().toISOString(),
 	});
 
