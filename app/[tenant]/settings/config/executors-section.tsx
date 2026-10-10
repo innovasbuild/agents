@@ -38,7 +38,8 @@ interface Draft {
 const MAX_QUOTA = 200;
 const DEFAULT_QUOTA = 30;
 // Mismo formato que la base (executors.slug) y que set_executor.
-const SLUG_PATTERN = "[a-z][a-z0-9-]{0,30}";
+// El guion va escapado: los navegadores compilan `pattern` con la bandera v, donde un `-` suelto en la clase es un error y el atributo se ignora.
+const SLUG_PATTERN = "[a-z][a-z0-9\\-]{0,30}";
 
 /** La persona elegida, o la primera disponible si la elegida ya no está. */
 export function resolveCandidate(

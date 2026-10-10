@@ -148,7 +148,7 @@ describe("alta de ejecutores: la persona elegida siempre es una que sigue dispon
 		const html = renderToStaticMarkup(
 			createElement(AddExecutor, { slug: "acme", candidates: [a] }),
 		);
-		expect(html).toMatch(/<input[^>]*pattern="\[a-z\]\[a-z0-9-\]\{0,30\}"/);
+		expect(html).toMatch(/<input[^>]*pattern="\[a-z\]\[a-z0-9\\-\]\{0,30\}"/);
 		expect(html).toMatch(
 			/<input[^>]*id="nuevo-slug"[^>]*required|<input[^>]*required[^>]*id="nuevo-slug"/,
 		);
