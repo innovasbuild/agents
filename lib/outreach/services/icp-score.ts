@@ -42,10 +42,9 @@ export async function scoreContact(
 					"esta empresa no tiene el brain habilitado: no se puede calificar",
 				);
 			case "brain_caido":
-				return refuse(
-					"canon_no_disponible",
-					"no pude leer el ICP de la empresa en el brain",
-				);
+				// Transitorio: tira para que el runner reintente el ítem en vez de
+				// darlo por rechazado para siempre.
+				throw new Error("No pude leer el brain para calificar el ICP");
 			case "falta":
 				return refuse(
 					"icp_sin_niveles",

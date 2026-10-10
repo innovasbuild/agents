@@ -128,6 +128,47 @@ describe("loadIcpLevels", () => {
 	});
 });
 
+describe("tope de páginas por tag", () => {
+	const many = (n: number, tag: string, body: string) =>
+		Array.from({ length: n }, (_, i) => page(`comercial/p${i}`, [tag], body));
+
+	it("seis páginas canon:icp: inválido, nombra el tag y el tope", async () => {
+		const result = await loadIcpLevels(
+			brainWith(many(6, "canon:icp", "prosa")),
+		);
+		expect(result).toMatchObject({ ok: false, reason: "invalido" });
+		expect(result.ok === false && result.errors[0]).toContain("canon:icp");
+		expect(result.ok === false && result.errors[0]).toContain("5");
+	});
+
+	it("cinco páginas canon:icp: se leen (no es error de carga)", async () => {
+		const result = await loadIcpLevels(
+			brainWith([
+				...many(4, "canon:icp", "prosa"),
+				page("comercial/icp", ["canon:icp"], ICP_BODY),
+			]),
+		);
+		expect(result.ok).toBe(true);
+	});
+
+	it("seis páginas canon:hooks: inválido, nombra el tag y el tope", async () => {
+		const result = await loadMarco(brainWith(many(6, "canon:hooks", "prosa")));
+		expect(result).toMatchObject({ ok: false, reason: "invalido" });
+		expect(result.ok === false && result.errors[0]).toContain("canon:hooks");
+		expect(result.ok === false && result.errors[0]).toContain("5");
+	});
+
+	it("cinco páginas canon:hooks: se leen", async () => {
+		const result = await loadMarco(
+			brainWith([
+				...many(4, "canon:hooks", "prosa"),
+				page("comercial/hooks", ["canon:hooks"], MARCO_BODY),
+			]),
+		);
+		expect(result.ok).toBe(true);
+	});
+});
+
 describe("loadMarco", () => {
 	it("lee hooks y vectores de las páginas activas", async () => {
 		expect(

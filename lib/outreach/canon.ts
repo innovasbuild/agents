@@ -62,6 +62,8 @@ async function readTag(
 	return Promise.all(found.map((summary) => brain.read(summary.slug)));
 }
 
+class TooManyPagesError extends Error {}
+
 const toCanonPage =
 	(tag: string) =>
 	(page: BrainPage): CanonPage => ({
@@ -174,7 +176,16 @@ async function activeBlockPages(
 	brain: BrainProvider,
 	tag: string,
 ): Promise<BlockPage[]> {
-	return (await readTag(brain, tag))
+	// Se pide una de más: si vuelve, hay más páginas que el tope y leer solo
+	// las primeras ocultaría bloques (spec 21.3 §3.3).
+	const found = await brain.search({
+		query: "",
+		tag,
+		limit: MAX_PAGES_PER_TAG + 1,
+	});
+	if (found.length > MAX_PAGES_PER_TAG) throw new TooManyPagesError(tag);
+	const pages = await Promise.all(found.map((s) => brain.read(s.slug)));
+	return pages
 		.filter((page) => page.status === "activo")
 		.map((page) => ({ slug: page.slug, body: page.body }));
 }
@@ -193,6 +204,15 @@ async function loadBlocks<T>(
 	try {
 		pages = await activeBlockPages(brain, tag);
 	} catch (error) {
+		if (error instanceof TooManyPagesError) {
+			return {
+				ok: false,
+				reason: "invalido",
+				errors: [
+					`hay más de ${MAX_PAGES_PER_TAG} páginas con el tag ${tag}: es un error de carga, dejá como máximo ${MAX_PAGES_PER_TAG}`,
+				],
+			};
+		}
 		console.error(`canon: no pude leer ${tag}:`, error);
 		return { ok: false, reason: "brain_caido", errors: [] };
 	}

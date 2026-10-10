@@ -11,6 +11,15 @@ export type ReadinessIssue =
 	| "icp"
 	| "marco";
 
+/** Si algún agente habilitado necesita el canon del brain (ICP, hooks). */
+export function agentsNeedCanon(
+	enabledAgents: ReadonlyArray<{ agent: string }>,
+): boolean {
+	return enabledAgents.some(
+		({ agent }) => isCatalogAgent(agent) && AGENT_CATALOG[agent].requiresBrain,
+	);
+}
+
 export const READINESS_LABELS: Record<ReadinessIssue, string> = {
 	agentes: "sin agentes habilitados",
 	brain: "sin brain",
@@ -76,9 +85,7 @@ export function tenantReadiness(input: {
 
 	// Solo si algún agente habilitado necesita el brain y el brain está: sin
 	// brain ya figura "brain", y pedir además el ICP sería ruido.
-	const needsCanon = enabledAgents.some(
-		({ agent }) => isCatalogAgent(agent) && AGENT_CATALOG[agent].requiresBrain,
-	);
+	const needsCanon = agentsNeedCanon(enabledAgents);
 	if (needsCanon && input.canon && !missing.includes("brain")) {
 		if (input.canon.icp === "falta" || input.canon.icp === "invalido")
 			missing.push("icp");

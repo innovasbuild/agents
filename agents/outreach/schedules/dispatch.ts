@@ -19,6 +19,7 @@ import {
 	loadIcpLevels,
 } from "../../../lib/outreach/canon";
 import { isFichaVigente } from "../../../lib/outreach/ficha";
+import { createIcpCache } from "../../../lib/outreach/icp-cache";
 import { refuse } from "../../../lib/outreach/result";
 import { draftMessage } from "../../../lib/outreach/services/draft";
 import { runEvaluation } from "../../../lib/outreach/services/evaluate";
@@ -114,19 +115,9 @@ export default defineSchedule({
 			);
 		};
 
-		// El ICP se lee una vez por pasada, no una vez por contacto (spec 21.3
-		// §3.4). La clave lleva la corrida: una pasada nueva lo vuelve a leer.
-		const icpByRun = new Map<string, ReturnType<typeof loadIcpLevels>>();
-		const loadIcpOnce = (tenantId: string, runId: string) => {
-			const key = `${tenantId}:${runId}`;
-			let pending = icpByRun.get(key);
-			if (!pending) {
-				if (icpByRun.size >= 50) icpByRun.clear();
-				pending = brainForTenant(tenantId).then(loadIcpLevels);
-				icpByRun.set(key, pending);
-			}
-			return pending;
-		};
+		const loadIcpOnce = createIcpCache((tenantId) =>
+			brainForTenant(tenantId).then(loadIcpLevels),
+		);
 
 		const icpScore: IcpScoreNode = ({ tenantId, runId, workflow, contactId }) =>
 			scoreContact(

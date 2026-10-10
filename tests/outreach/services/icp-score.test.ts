@@ -92,7 +92,6 @@ describe("scoreContact", () => {
 
 	it.each([
 		["sin_brain", "icp_sin_brain"],
-		["brain_caido", "canon_no_disponible"],
 		["falta", "icp_sin_niveles"],
 	])(
 		"ICP %s: se niega con %s y no llama al modelo",
@@ -110,6 +109,21 @@ describe("scoreContact", () => {
 			expect(d.evaluate).not.toHaveBeenCalled();
 		},
 	);
+
+	it("brain caído: tira para que el runner reintente, sin llamar al modelo", async () => {
+		const store = createFakeStore();
+		store.contacts.push(contactRow());
+		const d = deps(store, ANSWERS, {
+			ok: false,
+			reason: "brain_caido",
+			errors: [],
+		});
+
+		await expect(
+			scoreContact({ tenantId: TENANT, contactId: store.contacts[0].id }, d),
+		).rejects.toThrow("No pude leer el brain para calificar el ICP");
+		expect(d.evaluate).not.toHaveBeenCalled();
+	});
 
 	it("ICP inválido: la negativa lleva el primer error del bloque", async () => {
 		const store = createFakeStore();

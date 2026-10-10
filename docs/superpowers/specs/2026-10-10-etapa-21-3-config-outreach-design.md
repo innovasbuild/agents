@@ -90,22 +90,21 @@ Cada error dice página y línea, en castellano, para mostrarlo tal cual.
 
 `lib/outreach/canon.ts` suma `loadIcpLevels(brain)` y `loadMarco(brain)`: leen las páginas del tag, se quedan con las de estado `activo` (O8) y llaman al parser. Devuelven `{ ok: true, ... } | { ok: false; reason: "sin_brain" | "brain_caido" | "falta" | "invalido"; errors }`.
 
-`MAX_PAGES_PER_TAG` (5) sigue valiendo: una empresa con más de cinco páginas `canon:hooks` es un error de carga del canon, no un caso a soportar.
+`MAX_PAGES_PER_TAG` (5) sigue valiendo: una empresa con más de cinco páginas `canon:hooks` es un error de carga del canon, no un caso a soportar: la lectura pide una página de más y, si vuelve, `loadIcpLevels` / `loadMarco` devuelven `invalido` con un error que nombra el tag y el tope.
 
 ### 3.4 Scoring
 
-`outreach/icp-score` (`lib/outreach/services/icp-score.ts`) recibe `loadIcp: (tenantId) => Promise<...>` en sus dependencias y deja de leer `tenant.config.icp`. Se niega con:
+`outreach/icp-score` (`lib/outreach/services/icp-score.ts`) recibe `loadIcp: (tenantId) => Promise<...>` en sus dependencias y deja de leer `tenant.config.icp`. Se niega con los motivos de la tabla, salvo el brain caído, que **tira** un error (transitorio) para que el runner reintente el ítem: los rechazos son terminales y dejarían al contacto sin calificar para siempre.
 
 | Motivo | Cuándo |
 |---|---|
 | `icp_sin_brain` | la empresa no tiene brain habilitado |
-| `canon_no_disponible` | el brain no respondió |
 | `icp_sin_niveles` | no hay bloque ` ```icp ` en páginas activas |
 | `icp_invalido` | el bloque no parsea; el texto lleva el primer error |
 
 `revision` en `contacts.icp` pasa a ser `icpRevision(levels)`: cada juicio guarda con qué ICP se hizo. Hoy ningún código mete esa revisión en el `input_hash` de la cola (el comentario de `lib/outreach/config.ts` lo afirma, pero `enqueue` no la usa), así que cambiar el ICP no recalifica solo a los contactos ya juzgados. Esta entrega no lo agrega (§8).
 
-La puerta (`agents/outreach/schedules/dispatch.ts`) carga el ICP una vez por pasada y lo reusa: no hay una lectura del brain por contacto.
+La puerta (`agents/outreach/schedules/dispatch.ts`) carga el ICP una vez por pasada y lo reusa: no hay una lectura del brain por contacto. Solo se guarda el resultado ok; un fallo no se cachea y el ítem siguiente vuelve a leer.
 
 `outreachConfigSchema` pierde `icp`. `parseOutreachConfig` ignora la clave que quede en una fila vieja (zod descarta claves desconocidas). La migración no la borra, para que el código viejo siga calificando hasta el deploy; desaparece la primera vez que el administrador guarda los datos de outreach, porque `set_outreach_config` reemplaza la clave entera.
 
@@ -245,7 +244,10 @@ Mismo patrón que `config-actions.ts`: zod, `resolveTenantAccess(slug)`, cliente
 
 Orden, para que INNOV.AS no quede sin calificar ni sin hooks:
 
-1. **Antes del deploy, en el brain de `innovas`:** pegar el bloque ` ```icp ` en su página `canon:icp` con los niveles de `tenants/innovas/outreach.json`, y los bloques ` ```hooks ` y ` ```vectores ` en `comercial/outreach/22-redaccion` y `23-vectores`. El código viejo los ignora.
+1. **Antes del deploy, en el brain de `innovas`:** pegar el bloque ` ```icp ` en su página `canon:icp` con los niveles de `tenants/innovas/outreach.json`, y los bloques ` ```hooks ` y ` ```vectores ` en `comercial/outreach/22-redaccion` y `23-vectores`. El código viejo los ignora. Tres cuidados:
+   - **`innovas` tiene DOS páginas `canon:icp`** (`producto/linea-proyectos` y `comercial/criterios-calificacion-en-paralelo`). El bloque `icp` va en exactamente una; en las dos da `icp_invalido` (dos bloques).
+   - **El bloque `vectores` lista los 8 vectores (v0 a v7) y el bloque `hooks` todos los hooks que ya están en `config_values`:** lo que se omita se desactiva en el primer guardado.
+   - **Verificación previa, obligatoria:** antes de desplegar, correr `loadIcpLevels` y `loadMarco` contra el brain de producción de `innovas` y comprobar que ambos devuelven `ok: true` (un solo bloque `icp`, ocho vectores, todos los hooks).
 2. `npx supabase migration list`, y aplicar `20261017120000_outreach_marco_reflect` y `20261018120000_outreach_settings` antes que el código. El código viejo contra la base nueva sigue andando: la migración solo agrega funciones.
 3. Desplegar el código.
 4. En `/innovas/settings/outreach`: "Releer del brain" y comprobar que no desactiva nada (los identificadores pegados son los mismos).

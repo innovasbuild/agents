@@ -11,6 +11,7 @@ import {
 	requirePlatformAdmin,
 } from "@/lib/tenants/platform";
 import {
+	agentsNeedCanon,
 	canonState,
 	READINESS_LABELS,
 	tenantReadiness,
@@ -136,6 +137,7 @@ export default async function TenantDetailPage({
 	);
 	let canon: Parameters<typeof tenantReadiness>[0]["canon"];
 	let brainUnreadable = false;
+	const canonNeeded = agentsNeedCanon(agents.filter((a) => a.enabled));
 	if (!readError && brainEnabled) {
 		try {
 			const brain = await brainForTenant(tenant.id);
@@ -234,7 +236,7 @@ export default async function TenantDetailPage({
 						))}
 					</ul>
 				)}
-				{brainUnreadable ? (
+				{brainUnreadable && canonNeeded ? (
 					<p className="mt-2 text-muted-foreground text-sm">
 						No pude leer el brain: no sé si el ICP y los hooks están cargados.
 					</p>
