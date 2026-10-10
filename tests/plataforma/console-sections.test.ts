@@ -87,6 +87,25 @@ describe("BrainSection", () => {
 	});
 });
 
+describe("BrainSection deshabilitado", () => {
+	it("un brain deshabilitado lo dice y no ofrece crearlo de nuevo", () => {
+		const html = renderToStaticMarkup(
+			createElement(BrainSection, {
+				slug: "acme",
+				tenantId: TENANT,
+				brain: {
+					provider: "wiki",
+					categories: ["empresa"],
+					createdAt: "2026-10-10T00:00:00Z",
+					enabled: false,
+				},
+			}),
+		);
+		expect(html).toContain("Deshabilitado");
+		expect(html).not.toContain("Crear brain");
+	});
+});
+
 describe("ConnectionsSection", () => {
 	const connection = {
 		id: "22222222-2222-4222-8222-222222222222",

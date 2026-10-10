@@ -170,4 +170,23 @@ describe("detalle de la empresa", () => {
 		expect(html).not.toContain("Crear brain");
 		expect(html).toContain("Acme ColdIQ");
 	});
+
+	it("un brain deshabilitado no ofrece crearlo de nuevo", async () => {
+		state.connections = [
+			{
+				id: "c1",
+				capability: "brain",
+				provider: "wiki",
+				connector_uid: null,
+				config: { categories: ["empresa"] },
+				enabled: false,
+				verified_at: null,
+				verified_name: null,
+				created_at: "2026-10-10T00:00:00Z",
+			},
+		];
+		const html = await render();
+		expect(html).toContain("Deshabilitado");
+		expect(html).not.toContain("Crear brain");
+	});
 });
