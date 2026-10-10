@@ -33,7 +33,7 @@ const idSchema = z.guid();
 const UID = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/;
 const BRAIN_ACCESS = ["none", "read", "read_write"] as const;
 
-export const DEFAULT_BRAIN_CONFIG = {
+const DEFAULT_BRAIN_CONFIG = {
 	categories: ["empresa", "producto", "comercial", "operacion"],
 	requiredFrontmatter: ["title", "category", "status", "updated"],
 	search: "fts",
