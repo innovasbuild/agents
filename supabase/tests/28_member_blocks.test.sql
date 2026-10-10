@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(36);
 
 -- Personas. El último dígito del uuid es el número de persona.
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -12,7 +12,8 @@ values
   ('b8b8b8b8-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'mem@bk.test', now()),
   ('b8b8b8b8-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'otro@otra.test', now()),
   ('b8b8b8b8-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'solo@unica.test', now()),
-  ('b8b8b8b8-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'segundo@unica.test', now());
+  ('b8b8b8b8-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'segundo@unica.test', now()),
+  ('b8b8b8b8-0000-0000-0000-000000000007', 'authenticated', 'authenticated', 'plat@plataforma.test', now());
 
 -- bk-a: abierta al dominio bk.test, dos administradores y un miembro.
 -- bk-b: otra empresa. bk-c: una empresa con un solo administrador.
@@ -168,7 +169,27 @@ select lives_ok(
   'subir a alguien a administrador nunca lo frena el trigger');
 reset role;
 
--- 32-33: borrar la empresa entera pasa, y se lleva sus bloqueos.
+-- 32-34: a quién no se bloquea. La persona 7 recién acá entra como
+-- platform_admin de bk-a, para que no cambie nada de lo anterior (is_platform_admin()
+-- es global y el trigger la cuenta como administradora).
+insert into public.memberships (tenant_id, user_id, role)
+values ('a8a8a8a8-0000-0000-0000-00000000000a', 'b8b8b8b8-0000-0000-0000-000000000007', 'platform_admin');
+select pg_temp.login_as(1);
+select throws_ok(
+  $$select public.block_member('a8a8a8a8-0000-0000-0000-00000000000a', 'b8b8b8b8-0000-0000-0000-000000000007')$$,
+  '42501', 'solo plataforma bloquea a un administrador de plataforma',
+  'un administrador de la empresa no bloquea a un administrador de plataforma');
+select throws_ok(
+  $$select public.block_member('a8a8a8a8-0000-0000-0000-00000000000a', 'b8b8b8b8-0000-0000-0000-000000000004')$$,
+  '42501', 'solo se bloquea a un miembro de la empresa',
+  'no se bloquea a alguien que no es miembro de la empresa');
+reset role;
+select is(
+  (select count(*)::int from public.membership_blocks
+    where tenant_id = 'a8a8a8a8-0000-0000-0000-00000000000a' and user_id = 'b8b8b8b8-0000-0000-0000-000000000004'),
+  0, 'y no queda ningún bloqueo de esa persona');
+
+-- 35-36: borrar la empresa entera pasa, y se lleva sus bloqueos.
 select lives_ok(
   $$delete from public.tenants where id = 'a8a8a8a8-0000-0000-0000-00000000000c'$$,
   'borrar una empresa entera no lo frena el trigger');

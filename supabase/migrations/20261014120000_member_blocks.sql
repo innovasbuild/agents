@@ -49,6 +49,7 @@ begin
     return new;
   end if;
 
+  -- Serializa porque corre en READ COMMITTED (lo de PostgREST): con un nivel más estricto el candado no refresca la foto.
   perform 1 from public.tenants t where t.id = old.tenant_id for no key update;
   if not found then
     return coalesce(new, old);
@@ -68,7 +69,7 @@ begin
 end;
 $$;
 
-revoke execute on function public.memberships_keep_one_admin() from public;
+revoke execute on function public.memberships_keep_one_admin() from public, anon, authenticated;
 
 create trigger memberships_keep_one_admin
   before update of role or delete on public.memberships
@@ -101,6 +102,15 @@ begin
   if v_target_role = 'platform_admin' and not (select public.is_platform_admin()) then
     raise exception 'solo plataforma bloquea a un administrador de plataforma'
       using errcode = '42501';
+  end if;
+
+  -- Solo se bloquea a un miembro (o a quien ya está bloqueado: bloquear dos
+  -- veces no falla). Si no, un administrador podría anotar a cualquier uuid.
+  if v_target_role is null and not exists (
+    select 1 from public.membership_blocks b
+    where b.tenant_id = p_tenant and b.user_id = p_user
+  ) then
+    raise exception 'solo se bloquea a un miembro de la empresa' using errcode = '42501';
   end if;
 
   -- El trigger memberships_keep_one_admin puede frenar este delete.
