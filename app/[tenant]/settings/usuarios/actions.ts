@@ -78,11 +78,15 @@ export async function revokeMembership(
 	if (!allowed) return done(slug, SIN_PERMISO);
 
 	// La RLS decide: si no sos admin del tenant, no borra nada.
-	const { error } = await supabase
+	const { data, error } = await supabase
 		.from("memberships")
 		.delete()
-		.eq("id", membershipId);
-	return done(slug, error ? fromDbError(error) : { ok: true });
+		.eq("id", membershipId)
+		.select("id");
+	if (error) return done(slug, fromDbError(error));
+	// Cero filas: la RLS no dejó borrar.
+	if (!data || data.length === 0) return done(slug, SIN_PERMISO);
+	return done(slug, { ok: true });
 }
 
 export async function revokeInvitation(
@@ -99,11 +103,15 @@ export async function revokeInvitation(
 	);
 	if (!allowed) return done(slug, SIN_PERMISO);
 
-	const { error } = await supabase
+	const { data, error } = await supabase
 		.from("invitations")
 		.update({ status: "revoked" })
-		.eq("id", invitationId);
-	return done(slug, error ? fromDbError(error) : { ok: true });
+		.eq("id", invitationId)
+		.select("id");
+	if (error) return done(slug, fromDbError(error));
+	// Cero filas: la RLS no dejó revocar.
+	if (!data || data.length === 0) return done(slug, SIN_PERMISO);
+	return done(slug, { ok: true });
 }
 
 export async function changeMemberRole(
