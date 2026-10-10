@@ -59,7 +59,11 @@ export default async function UsuariosPage({
 							</span>
 							<form
 								className="ml-auto"
-								action={revokeMembership.bind(null, membership.id, slug)}
+								action={async () => {
+									"use server";
+									// Provisorio hasta la Tarea 4: el resultado se descarta.
+									await revokeMembership(membership.id, slug);
+								}}
 							>
 								<Button type="submit" variant="outline" size="sm">
 									Sacar
@@ -84,7 +88,11 @@ export default async function UsuariosPage({
 							</span>
 							<form
 								className="ml-auto"
-								action={revokeInvitation.bind(null, invitation.id, slug)}
+								action={async () => {
+									"use server";
+									// Provisorio hasta la Tarea 4: el resultado se descarta.
+									await revokeInvitation(invitation.id, slug);
+								}}
 							>
 								<Button type="submit" variant="outline" size="sm">
 									Revocar

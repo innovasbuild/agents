@@ -10,6 +10,7 @@ const state = vi.hoisted(() => ({
 		tenant_id: string;
 	} | null,
 	readError: null as { message: string } | null,
+	writeError: null as { code?: string; message: string } | null,
 	reads: [] as { table: string; column: string; value: unknown }[],
 	writes: [] as {
 		table: string;
@@ -57,13 +58,13 @@ vi.mock("@/lib/supabase/server", () => ({
 				delete: () => ({
 					eq: async (column: string, value: unknown) => {
 						state.writes.push({ table, kind: "delete", column, value });
-						return { error: null };
+						return { error: state.writeError };
 					},
 				}),
 				update: (values: unknown) => ({
 					eq: async (column: string, value: unknown) => {
 						state.writes.push({ table, kind: "update", values, column, value });
-						return { error: null };
+						return { error: state.writeError };
 					},
 				}),
 			};
@@ -79,6 +80,7 @@ beforeEach(() => {
 	state.user = { id: "u1" };
 	state.row = { tenant_id: TENANT_ID };
 	state.readError = null;
+	state.writeError = null;
 	state.reads = [];
 	state.writes = [];
 	state.revalidated = [];
@@ -158,5 +160,49 @@ describe.each(cases)("$name", ({ run, table, write }) => {
 		expect(state.reads).toHaveLength(0);
 		expect(state.writes).toHaveLength(0);
 		expect(state.revalidated).toEqual(["/acme/settings/usuarios"]);
+	});
+});
+
+describe("resultado de las bajas", () => {
+	it("cuando sale bien devuelven ok", async () => {
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({ ok: true });
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({ ok: true });
+	});
+
+	it("sacar al único administrador explica por qué no se pudo", async () => {
+		state.writeError = { code: "23514", message: "check" };
+
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "La empresa no puede quedar sin administrador.",
+		});
+	});
+
+	it("sin permiso, sin fila o con el método no permitido dicen que no hay permiso", async () => {
+		gate.allows = false;
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+
+		gate.allows = true;
+		state.row = null;
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+	});
+
+	it("otro error de la base no se filtra al mensaje", async () => {
+		state.writeError = { code: "XX000", message: "detalle interno" };
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await revokeMembership(ROW_ID, "acme");
+
+		expect(result).toEqual({
+			ok: false,
+			message: "No se pudo completar. Probá de nuevo.",
+		});
+		error.mockRestore();
 	});
 });
