@@ -46,7 +46,9 @@ export function IcpSummary({
 						))}
 					</ul>
 				) : null}
-				<BrainLink slug={slug}>Abrir el brain →</BrainLink>
+				{icp.reason === "sin_brain" ? null : (
+					<BrainLink slug={slug}>Abrir el brain →</BrainLink>
+				)}
 			</div>
 		);
 	}

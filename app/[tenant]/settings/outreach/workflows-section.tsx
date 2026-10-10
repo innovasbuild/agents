@@ -12,12 +12,28 @@ import { Message } from "./lists-section";
 const INPUT =
 	"h-9 w-24 rounded-md border border-input bg-transparent px-2 text-sm";
 
-const when = (value: string | null) =>
+// Zona fija: el servidor y el navegador tienen husos distintos y el texto
+// tiene que salir idéntico en ambos (si no, falla la hidratación).
+const FALLBACK_TIMEZONE = "America/Argentina/Buenos_Aires";
+
+const when = (value: string | null, timeZone: string) =>
 	value
-		? `Última corrida: ${new Date(value).toLocaleString("es-AR")}`
+		? `Última corrida: ${new Intl.DateTimeFormat("es-AR", {
+				dateStyle: "short",
+				timeStyle: "short",
+				timeZone,
+			}).format(new Date(value))}`
 		: "Todavía no corrió";
 
-function Row({ slug, row }: { slug: string; row: WorkflowRow }) {
+function Row({
+	slug,
+	row,
+	timeZone,
+}: {
+	slug: string;
+	row: WorkflowRow;
+	timeZone: string;
+}) {
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	const [feedback, setFeedback] = useState<Feedback>(null);
@@ -52,7 +68,7 @@ function Row({ slug, row }: { slug: string; row: WorkflowRow }) {
 				<div className="min-w-0 flex-1">
 					<div className="font-mono text-sm">{row.workflow}</div>
 					<div className="text-muted-foreground text-xs">
-						{when(row.lastRunAt)} · usa{" "}
+						{when(row.lastRunAt, timeZone)} · usa{" "}
 						{row.resources.map(resourceLabel).join(" y ")}
 					</div>
 				</div>
@@ -117,9 +133,12 @@ function Row({ slug, row }: { slug: string; row: WorkflowRow }) {
 export function WorkflowsSection({
 	slug,
 	workflows,
+	timezone = FALLBACK_TIMEZONE,
 }: {
 	slug: string;
 	workflows: WorkflowRow[];
+	/** La zona horaria de la empresa; sin ella, la de Buenos Aires. */
+	timezone?: string;
 }) {
 	return (
 		<div className="space-y-3">
@@ -129,7 +148,7 @@ export function WorkflowsSection({
 			</p>
 			<ul className="divide-y rounded-lg border bg-card">
 				{workflows.map((row) => (
-					<Row key={row.workflow} row={row} slug={slug} />
+					<Row key={row.workflow} row={row} slug={slug} timeZone={timezone} />
 				))}
 			</ul>
 		</div>

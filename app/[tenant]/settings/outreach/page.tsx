@@ -194,6 +194,7 @@ export default async function OutreachSettingsPage({
 				) : (
 					<WorkflowsSection
 						slug={slug}
+						timezone={config.timezone}
 						workflows={workflowRows(workflowsResult.data ?? [], budgets)}
 					/>
 				)}

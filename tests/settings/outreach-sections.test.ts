@@ -219,3 +219,65 @@ describe("secciones de solo lectura", () => {
 		expect(html).toContain("2,50");
 	});
 });
+
+describe("fixes de la ronda 1", () => {
+	const ran = {
+		workflow: "target-search",
+		enabled: true,
+		cadenceMinutes: 60,
+		itemsPerTick: 2,
+		maxItemsPerTick: 2,
+		lastRunAt: "2026-10-10T12:30:00Z",
+		resources: ["apollo_credits"],
+		unfunded: [],
+	};
+
+	it("la última corrida sale con zona fija, igual en cualquier TZ del proceso", () => {
+		const html = render(
+			createElement(WorkflowsSection, { slug: "acme", workflows: [ran] }),
+		);
+		expect(html).toContain("Última corrida: 10/10/26, 9:30 a. m.");
+		const utc = render(
+			createElement(WorkflowsSection, {
+				slug: "acme",
+				workflows: [ran],
+				timezone: "UTC",
+			}),
+		);
+		expect(utc).toContain("Última corrida: 10/10/26, 12:30 p. m.");
+	});
+
+	it("un modelo guardado que ya no está permitido no se manda", () => {
+		const html = render(
+			createElement(OutreachConfigForm, {
+				slug: "acme",
+				initial: {
+					timezone: "UTC",
+					bcc: "",
+					dealPipeline: "",
+					dealStage: "",
+					companyName: "",
+					companyUrl: "",
+					models: { draft_msg1: "anthropic/viejo" },
+				},
+				allowedModels: ["anthropic/claude-sonnet-5"],
+				defaults: {},
+			}),
+		);
+		expect(html).toMatch(/<option[^>]*value=""[^>]*selected/);
+		expect(html).not.toMatch(
+			/<option[^>]*value="anthropic\/claude-sonnet-5"[^>]*selected/,
+		);
+		expect(html).not.toContain("anthropic/viejo");
+	});
+
+	it("sin brain no ofrece el link al brain en el ICP", () => {
+		const html = render(
+			createElement(IcpSummary, {
+				slug: "acme",
+				icp: { ok: false, reason: "sin_brain", errors: [] },
+			}),
+		);
+		expect(html).not.toContain("/acme/brain");
+	});
+});

@@ -43,7 +43,16 @@ export function OutreachConfigForm({
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	const [feedback, setFeedback] = useState<Feedback>(null);
-	const [draft, setDraft] = useState(initial);
+	// Un modelo guardado que ya no está permitido se descarta: el formulario
+	// muestra "el de la plataforma" y es lo que se manda.
+	const [draft, setDraft] = useState({
+		...initial,
+		models: Object.fromEntries(
+			Object.entries(initial.models).filter(([, model]) =>
+				allowedModels.includes(model),
+			),
+		),
+	});
 	const set = (patch: Partial<OutreachConfigDraft>) =>
 		setDraft((current) => ({ ...current, ...patch }));
 
