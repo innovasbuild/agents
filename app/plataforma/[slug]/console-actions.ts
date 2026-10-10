@@ -12,6 +12,7 @@ import {
 	type ProviderKey,
 } from "@/lib/connectors/providers";
 import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
+import { seedCanonPagesForTenant } from "@/lib/outreach/canon-seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 
@@ -105,7 +106,7 @@ export async function createBrain(
 	if (!admin) return SIN_PERMISO;
 	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
 
-	return call(slug, "platform_bind_connection", {
+	const created = await call(slug, "platform_bind_connection", {
 		p_actor: admin.userId,
 		p_tenant: tenantId,
 		p_capability: "brain",
@@ -114,6 +115,16 @@ export async function createBrain(
 		p_config: DEFAULT_BRAIN_CONFIG,
 		p_verified_name: null,
 	});
+	if (!created.ok) return created;
+	// Carpeta y archivo por defecto para el ICP y los hooks (spec 21.3 §3.6).
+	const seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
+	return seeded
+		? created
+		: {
+				ok: false,
+				message:
+					"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+			};
 }
 
 /** Cuántos identificadores lleva un proveedor: ninguno (OAuth de plataforma), uno, o varios. */

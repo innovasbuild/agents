@@ -25,6 +25,8 @@ const state = vi.hoisted(() => ({
 		{ name: string; service: string } | null | Error
 	>,
 	describeCalls: [] as string[],
+	seed: true as boolean | Error,
+	seedCalls: [] as string[][],
 }));
 
 vi.mock("next/cache", () => ({
@@ -60,6 +62,13 @@ vi.mock("@/lib/connectors/auth", () => ({
 	},
 }));
 vi.mock("@/lib/connectors/env", () => ({ inVercel: () => state.inVercel }));
+vi.mock("@/lib/outreach/canon-seed", () => ({
+	seedCanonPagesForTenant: async (tenantId: string, userId: string) => {
+		state.seedCalls.push([tenantId, userId]);
+		if (state.seed instanceof Error) throw state.seed;
+		return state.seed;
+	},
+}));
 
 const actions = await import("@/app/plataforma/[slug]/console-actions");
 
@@ -67,6 +76,8 @@ const SIN_PERMISO = { ok: false, message: "No tenés permiso." };
 const GENERICO = { ok: false, message: "No se pudo guardar. Probá de nuevo." };
 
 beforeEach(() => {
+	state.seed = true;
+	state.seedCalls = [];
 	state.admin = true;
 	state.rpc = { data: CONN, error: null };
 	state.rpcCalls = [];
@@ -425,5 +436,35 @@ describe("setConnectionEnabled, removeConnection, verifyConnection", () => {
 			message: "Este conector no tiene identificador que verificar.",
 		});
 		expect(state.describeCalls).toHaveLength(0);
+	});
+});
+
+describe("createBrain: páginas por defecto", () => {
+	it("después de crear el brain siembra las páginas con el actor", async () => {
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toEqual([[TENANT, "u1"]]);
+	});
+
+	it("si crear el brain falla, no siembra", async () => {
+		state.rpc = {
+			data: null,
+			error: {
+				code: "23514",
+				message: "la empresa ya tiene un brain",
+				hint: "consola",
+			},
+		};
+		await actions.createBrain("acme", TENANT);
+		expect(state.seedCalls).toEqual([]);
+	});
+
+	it("si la siembra falla, avisa que el brain quedó creado", async () => {
+		state.seed = false;
+		expect(await actions.createBrain("acme", TENANT)).toEqual({
+			ok: false,
+			message:
+				"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+		expect(state.revalidated).toEqual(["/plataforma", "/plataforma/acme"]);
 	});
 });
