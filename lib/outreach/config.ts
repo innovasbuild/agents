@@ -1,5 +1,6 @@
-// Configuración de outreach por tenant (spec 03 §4.3 y §4.8). Solo importa
-// zod: lo usa scripts/outreach-config.mts con type stripping de Node.
+// Configuración de outreach por tenant (spec 03 §4.3 y §4.8). Los niveles del
+// ICP no están acá: viven en el brain (spec 21.3 O1). Solo importa zod: lo
+// usa scripts/outreach-config.mts con type stripping de Node.
 import { z } from "zod";
 
 export const DEFAULT_OUTREACH_MODELS = {
