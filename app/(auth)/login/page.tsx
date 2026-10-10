@@ -16,7 +16,7 @@ export default async function LoginPage({
 		<main className="flex min-h-screen items-center justify-center px-4 py-16">
 			<div className="w-full max-w-sm space-y-8">
 				<div className="space-y-2 text-center">
-					<h1 className="text-3xl leading-tight">INNOV.AS Agents</h1>
+					<h1 className="text-3xl leading-tight">INNOV.AS - Central IA</h1>
 					<p className="text-muted-foreground">
 						Entrá con la cuenta con la que te invitaron.
 					</p>

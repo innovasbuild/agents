@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "INNOV.AS Agents",
-	description: "Agentes de INNOV.AS para cada cliente",
+	title: "INNOV.AS - Central IA",
+	description: "La plataforma que ordena la adopción de IA en tu empresa",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
