@@ -5,8 +5,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 import { type ActionResult, changeMemberRole } from "./actions";
-
-type Feedback = { ok: boolean; text: string } | null;
+import { type Feedback, runRowAction } from "./run-row-action";
 
 function Message({ feedback }: { feedback: Feedback }) {
 	if (!feedback) return null;
@@ -43,21 +42,15 @@ export function ActionButton({
 	const [feedback, setFeedback] = useState<Feedback>(null);
 
 	function onClick() {
-		if (confirmText && !window.confirm(confirmText)) return;
 		setFeedback(null);
 		startTransition(async () => {
-			try {
-				const result = await run();
-				if (!result.ok || result.message) {
-					setFeedback({ ok: result.ok, text: result.message ?? "" });
-				}
-				if (result.ok) router.refresh();
-			} catch {
-				setFeedback({
-					ok: false,
-					text: "No se pudo completar. Probá de nuevo.",
-				});
-			}
+			const out = await runRowAction({
+				run,
+				confirmText,
+				confirm: window.confirm.bind(window),
+				refresh: router.refresh,
+			});
+			setFeedback(out.feedback);
 		});
 	}
 
@@ -89,21 +82,20 @@ export function RoleSelect({
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	const [feedback, setFeedback] = useState<Feedback>(null);
+	const [resetKey, setResetKey] = useState(0);
 
 	function onChange(next: string) {
 		setFeedback(null);
 		startTransition(async () => {
-			try {
-				const result = await changeMemberRole(membershipId, next, slug);
-				if (!result.ok) setFeedback({ ok: false, text: result.message });
-				// Con error también se refresca: el selector vuelve al rol real.
-				router.refresh();
-			} catch {
-				setFeedback({
-					ok: false,
-					text: "No se pudo completar. Probá de nuevo.",
-				});
-			}
+			const out = await runRowAction({
+				run: () => changeMemberRole(membershipId, next, slug),
+				confirm: window.confirm.bind(window),
+				refresh: router.refresh,
+			});
+			setFeedback(out.feedback);
+			// El select no es controlado: si falló, el rol del servidor no cambió
+			// y la key tampoco, así que se remonta a mano para mostrar el rol real.
+			if (out.failed) setResetKey((n) => n + 1);
 		});
 	}
 
@@ -114,7 +106,7 @@ export function RoleSelect({
 				className="h-8 rounded-md border border-input bg-transparent px-2 text-sm"
 				defaultValue={role}
 				disabled={pending}
-				key={role}
+				key={`${role}-${resetKey}`}
 				onChange={(event) => onChange(event.target.value)}
 			>
 				<option value="tenant_member">{ROLE_LABELS.tenant_member}</option>
