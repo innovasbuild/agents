@@ -26,7 +26,7 @@ Al cerrar esta entrega:
 | # | Decisión | Por qué |
 |---|---|---|
 | O1 | Los niveles del ICP viven en un bloque ` ```icp ` dentro de la página `canon:icp` del brain. `config.outreach.icp` se elimina | El ICP es conocimiento de la empresa, no configuración de un agente. Revierte D9 de la etapa 13: los niveles siguen siendo frases concretas que se sostienen solas, pero escritas en la página, no en un archivo del repo |
-| O2 | La revisión del scoring es la huella del bloque normalizado, no el número de revisión de la página | Cambiar un nivel recalifica; corregir la prosa de alrededor no. Nadie escribe la revisión a mano |
+| O2 | La revisión del scoring es la huella del bloque normalizado, no el número de revisión de la página | Cambiar un nivel cambia la huella; corregir la prosa de alrededor no. Nadie escribe la revisión a mano. Cada juicio guarda con qué huella se hizo |
 | O3 | Hooks y vectores salen de bloques ` ```hooks ` y ` ```vectores ` en páginas `canon:hooks`. `config_values` pasa a ser su reflejo | Los lectores (puerta, Focos, Métricas) no cambian y un valor retirado conserva su rótulo en los reportes viejos |
 | O4 | El reflejo corre solo, después de guardar o borrar una página `canon:hooks`, enganchado en `getBrainProvider` | Un solo punto cubre editor, MCP y agente. Con botón manual quedaría un estado donde el brain dice una cosa y el agente usa otra |
 | O5 | Un bloque inválido no se refleja: sigue vigente lo último válido y queda un evento de fallo. El guardado de la página nunca falla por el reflejo | El brain no conoce al outreach; la página es de quien la escribe. El aviso llega por el "qué falta" y por settings |
@@ -103,9 +103,9 @@ Cada error dice página y línea, en castellano, para mostrarlo tal cual.
 | `icp_sin_niveles` | no hay bloque ` ```icp ` en páginas activas |
 | `icp_invalido` | el bloque no parsea; el texto lleva el primer error |
 
-`revision` en `contacts.icp` pasa a ser `icpRevision(levels)`. Como entra en el `input_hash`, el primer scoring después del deploy recalifica a todos una vez (la huella nueva no coincide con `"2026-09-22"`). Queda acotado por el presupuesto diario y se anota en el despliegue (§9).
+`revision` en `contacts.icp` pasa a ser `icpRevision(levels)`: cada juicio guarda con qué ICP se hizo. Hoy ningún código mete esa revisión en el `input_hash` de la cola (el comentario de `lib/outreach/config.ts` lo afirma, pero `enqueue` no la usa), así que cambiar el ICP no recalifica solo a los contactos ya juzgados. Esta entrega no lo agrega (§8).
 
-El workflow `icp-scoring` carga el ICP una vez por pasada y se lo pasa al nodo: no hay una lectura del brain por contacto.
+La puerta (`agents/outreach/schedules/dispatch.ts`) carga el ICP una vez por pasada y lo reusa: no hay una lectura del brain por contacto.
 
 `outreachConfigSchema` pierde `icp`. `parseOutreachConfig` ignora la clave que quede en una fila vieja (zod descarta claves desconocidas). La migración no la borra, para que el código viejo siga calificando hasta el deploy; desaparece la primera vez que el administrador guarda los datos de outreach, porque `set_outreach_config` reemplaza la clave entera.
 
@@ -120,7 +120,7 @@ reflectMarco(tenantId, deps: { brain, store, now }): Promise<
 >
 ```
 
-Lee con `loadMarco`, y si es válido llama una sola función de la base (§5.1) que aplica altas, cambios y desactivaciones en una transacción y deja el evento `outreach.marco_reflected`. Si no es válido no escribe `config_values` y deja `outreach.marco_reflect_failed` con los errores. El diff reusa `planConfigValues`, acotado a `hook` y `vector`.
+Lee con `loadMarco`, y si es válido llama una sola función de la base (§5.1) que aplica altas, cambios y desactivaciones en una transacción y deja el evento `outreach.marco_reflected`. Si no es válido no escribe `config_values` y deja `outreach.marco_reflect_failed` con los errores. El diff lo hace la función de la base, que devuelve los tres contadores.
 
 **Enganche.** `getBrainProvider` (`lib/brain/adapters/provider.ts`) devuelve el proveedor envuelto por `withCanonReflection`: después de un `upsert` exitoso, si la página guardada tiene o tenía el tag `canon:hooks`, llama `reflectMarco` dentro de un `try/catch` que registra y sigue (O5). El borrado de páginas (`lib/brain/adapters/delete-page.ts`) hace lo mismo después de borrar. El módulo `lib/brain/core` no importa nada de outreach: el envoltorio vive en `adapters/` y recibe la función por parámetro.
 
@@ -162,7 +162,7 @@ Sección **Presupuestos**: una fila por recurso que usan los workflows del regis
 
 ## 5. Base de datos
 
-Migración `20261017120000_outreach_settings.sql`. Antes de escribirla se carga `supabase-postgres-best-practices`. No hay tablas nuevas: todas las que toca ya llevan `tenant_id` y RLS, y siguen cerradas a escritura directa.
+Dos migraciones, una por plan: `20261017120000_outreach_marco_reflect.sql` (21.3a, solo `outreach_reflect_marco`) y `20261018120000_outreach_settings.sql` (21.3b, el resto). Antes de escribirlas se carga `supabase-postgres-best-practices`. No hay tablas nuevas: todas las que toca ya llevan `tenant_id` y RLS, y siguen cerradas a escritura directa.
 
 ### 5.1 Funciones
 
@@ -173,18 +173,18 @@ Del cliente: `security definer set search_path = ''`, `grant execute to authenti
 | `set_list_value(p_tenant uuid, p_kind public.config_value_kind, p_value text, p_label text, p_active boolean)` | Alta o edición en `config_values` | `p_kind` solo `segmento` o `idioma` ("los hooks y vectores se editan en el brain"). No se puede desactivar el último activo de su clase. Formato de valor y rótulo: los `check` de la tabla, traducidos | `outreach.list_value_updated` |
 | `set_outreach_config(p_tenant uuid, p_config jsonb)` | `config = jsonb_set(config, '{outreach}', p_config)`. No toca `brain` ni `approvals` | La fila de `tenant_agents` de `outreach` tiene que existir. `p_config` tiene que ser un objeto y no puede traer la clave `icp` | `outreach.config_updated` |
 | `set_workflow(p_tenant uuid, p_workflow text, p_enabled boolean, p_cadence_minutes int, p_items_per_tick int)` | `insert ... on conflict (tenant_id, workflow) do update` de `enabled` y de las claves `cadence_minutes` e `items_per_tick` del config, sin tocar las demás | Cadencia entre 5 y 10080, ítems entre 1 y 1000 (las cotas de `platformSchema`) | `workflow.updated` con antes y después |
-| `tenant_budget_status(p_tenant uuid, p_since timestamptz) returns table (resource text, daily_limit numeric, spent numeric)` | Por cada fila de `tenant_budgets`, el límite y `usage_sum` desde `p_since` | Solo lectura. Mismo permiso: administrador de la empresa o plataforma | sin evento |
+| `tenant_budget_status(p_tenant uuid, p_resources text[], p_since timestamptz) returns table (resource text, daily_limit numeric, spent numeric)` | Por cada recurso pedido, el límite (0 si no hay fila en `tenant_budgets`) y `usage_sum` desde `p_since` | Solo lectura. Mismo permiso: administrador de la empresa o plataforma | sin evento |
 
 De plataforma: `grant execute to service_role`, con `p_actor`, `hint = 'consola'`.
 
 | Función | Qué hace | Reglas | Evento |
 |---|---|---|---|
 | `platform_set_budget(p_actor uuid, p_tenant uuid, p_resource text, p_daily_limit numeric)` | Upsert en `tenant_budgets` con `updated_by = p_actor` | Límite entre 0 y 100000. Formato del recurso: el `check` de la tabla | `budget.updated` con antes y después |
-| `outreach_reflect_marco(p_tenant uuid, p_hooks jsonb, p_vectors jsonb)` | En una transacción: upsert de los `hook` y `vector` recibidos (activos, con rótulo y `meta.default_hook`), y `active = false` para los `hook` y `vector` activos que no vinieron | Nunca borra. Nunca toca `segmento` ni `idioma`. Listas vacías se rechazan | `outreach.marco_reflected` con los tres contadores |
+| `outreach_reflect_marco(p_tenant uuid, p_hooks jsonb, p_vectors jsonb) returns jsonb` | En una transacción: upsert de los `hook` y `vector` recibidos (activos, con rótulo y `meta.default_hook`), y `active = false` para los `hook` y `vector` activos que no vinieron | Nunca borra. Nunca toca `segmento` ni `idioma`. Listas vacías se rechazan | `outreach.marco_reflected` con los tres contadores |
 
 Lo que SQL no puede verificar lo verifica la acción antes de llamar: que el workflow y el recurso existan en `lib/workflows/registry.ts`, que los ítems no pasen el tope del workflow, y que `p_config` cumpla `outreachConfigSchema` con modelos dentro de `tenant.allowedModels`. `parseTenantWorkflowConfig` sigue revalidando en cada pasada.
 
-### 5.2 Tests pgTAP (`31_outreach_settings.test.sql`)
+### 5.2 Tests pgTAP (`31_outreach_marco_reflect.test.sql` y `32_outreach_settings.test.sql`)
 
 Por cada función del cliente: puede el `tenant_admin` de la empresa y un `platform_admin`; reciben 42501 el `tenant_admin` de otra empresa, un `tenant_member` y `anon`. Además: `set_list_value` rechaza `hook` y `vector`, y desactivar el último; `set_outreach_config` preserva `brain` y `approvals` y rechaza `icp`; `set_workflow` crea la fila, preserva claves ajenas del config y respeta las cotas; `tenant_budget_status` no muestra otra empresa y suma solo desde `p_since`; `platform_set_budget` no lo ejecuta `authenticated`; `outreach_reflect_marco` desactiva sin borrar, no toca segmentos ni idiomas y rechaza listas vacías; cada escritura deja su evento; las tablas siguen sin escritura directa.
 
@@ -211,7 +211,7 @@ Mismo patrón que `config-actions.ts`: zod, `resolveTenantAccess(slug)`, cliente
 
 ### 6.4 Lo que se retira
 
-`scripts/outreach-config.mts`, `scripts/outreach-config-args.ts`, `scripts/workflows-set.mts`, `scripts/workflows-set-args.ts`, sus tests, las dos entradas de `package.json`, `tenants/innovas/outreach.json`, y `outreachFileSchema` de `lib/outreach/config.ts`. `planConfigValues` se queda, con la forma que necesita el reflejo. Se actualizan las menciones en `docs/` y el roadmap.
+`scripts/outreach-config.mts`, `scripts/outreach-config-args.ts`, `scripts/workflows-set.mts`, `scripts/workflows-set-args.ts`, sus tests, las dos entradas de `package.json`, `tenants/innovas/outreach.json`, y `outreachFileSchema` y `planConfigValues` de `lib/outreach/config.ts`. Se actualizan las menciones en `docs/` y el roadmap.
 
 ## 7. Seguridad
 
@@ -226,6 +226,7 @@ Mismo patrón que `config-actions.ts`: zod, `resolveTenantAccess(slug)`, cliente
 ## 8. Qué no entra
 
 - Umbrales del ICP (`DEFAULT_ICP_THRESHOLDS`): siguen en código.
+- Recalificar solos a los contactos ya juzgados cuando cambia el ICP: hoy no existe y no se agrega. Un contacto se vuelve a calificar cuando vuelve a entrar a la cola de `icp-scoring`.
 - `canon:gate`, voz y mensajes: ya viven en el brain.
 - Presupuesto fijado por el cliente o techo por recurso.
 - Clave de modelos por empresa y facturación (21.5).
@@ -245,9 +246,8 @@ Mismo patrón que `config-actions.ts`: zod, `resolveTenantAccess(slug)`, cliente
 Orden, para que INNOV.AS no quede sin calificar ni sin hooks:
 
 1. **Antes del deploy, en el brain de `innovas`:** pegar el bloque ` ```icp ` en su página `canon:icp` con los niveles de `tenants/innovas/outreach.json`, y los bloques ` ```hooks ` y ` ```vectores ` en `comercial/outreach/22-redaccion` y `23-vectores`. El código viejo los ignora.
-2. `npx supabase migration list`, y aplicar `20261017120000_outreach_settings` antes que el código. El código viejo contra la base nueva sigue andando: la migración solo agrega funciones.
+2. `npx supabase migration list`, y aplicar `20261017120000_outreach_marco_reflect` y `20261018120000_outreach_settings` antes que el código. El código viejo contra la base nueva sigue andando: la migración solo agrega funciones.
 3. Desplegar el código.
 4. En `/innovas/settings/outreach`: "Releer del brain" y comprobar que no desactiva nada (los identificadores pegados son los mismos).
-5. La siguiente pasada de `icp-scoring` recalifica a todos una vez por el cambio de huella: comprobar que el presupuesto de `model_usd` del día lo cubre o aceptar que tarde más de un día.
 
-**Terminado cuando**, en producción: un administrador de `innovas` cambia un nivel del ICP en el brain y la pasada siguiente recalifica con la huella nueva; agrega un hook en el brain y aparece en Focos sin tocar nada más; apaga y enciende un workflow desde settings; y un `platform_admin` cambia un presupuesto desde la consola y el cliente lo ve.
+**Terminado cuando**, en producción: un administrador de `innovas` cambia un nivel del ICP en el brain y el siguiente contacto calificado queda con la huella nueva; agrega un hook en el brain y aparece en Focos sin tocar nada más; apaga y enciende un workflow desde settings; y un `platform_admin` cambia un presupuesto desde la consola y el cliente lo ve.
