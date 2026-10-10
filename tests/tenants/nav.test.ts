@@ -12,6 +12,7 @@ describe("visibleNav", () => {
 			"Brain",
 			"Métricas",
 			"Conectar",
+			"Mis cuentas",
 		]);
 	});
 
@@ -22,6 +23,7 @@ describe("visibleNav", () => {
 			"Brain",
 			"Métricas",
 			"Conectar",
+			"Mis cuentas",
 			"Configuración",
 		]);
 		expect(labels("platform_admin")).toEqual(labels("tenant_admin"));
@@ -32,5 +34,12 @@ describe("visibleNav", () => {
 			href: "/conectar",
 			label: "Conectar",
 		});
+	});
+
+	it("Mis cuentas apunta a /mis-cuentas y la ve cualquier rol", () => {
+		const entry = visibleNav("tenant_member").find(
+			(e) => e.label === "Mis cuentas",
+		);
+		expect(entry).toMatchObject({ href: "/mis-cuentas" });
 	});
 });

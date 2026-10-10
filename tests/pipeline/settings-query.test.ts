@@ -20,6 +20,10 @@ describe("toExecutorRows", () => {
 			slug: "mati",
 			dailyQuota: 30,
 			gmailAuthorizedAt: "2026-09-01T00:00:00Z",
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
+			crmOwnerId: null,
 		});
 	});
 
@@ -31,9 +35,53 @@ describe("toExecutorRows", () => {
 		expect(row.slug).toBeNull();
 		expect(row.gmailAuthorizedAt).toBeNull();
 	});
+
+	it("trae la firma y el dueño en el CRM del ejecutor", () => {
+		expect(
+			toExecutorRows([
+				{
+					user_id: "u1",
+					slug: "ana",
+					daily_quota: 30,
+					gmail_authorized_at: null,
+					display_name: "Ana López",
+					title: "AE",
+					linkedin_url: "https://www.linkedin.com/in/ana",
+					crm_owner_id: "777",
+				},
+			])[0],
+		).toMatchObject({
+			displayName: "Ana López",
+			title: "AE",
+			linkedinUrl: "https://www.linkedin.com/in/ana",
+			crmOwnerId: "777",
+		});
+	});
+
+	it("un ejecutor sin esos datos los trae en null", () => {
+		expect(toExecutorRows([{ user_id: "u1" }])[0]).toMatchObject({
+			displayName: null,
+			title: null,
+			linkedinUrl: null,
+			crmOwnerId: null,
+		});
+	});
 });
 
 describe("toConnectionRows", () => {
+	it("la conexión dice si la bloqueó plataforma", () => {
+		const rows = toConnectionRows([
+			{
+				id: "c1",
+				capability: "leads",
+				provider: "coldiq",
+				enabled: false,
+				locked_by_platform: true,
+			},
+			{ id: "c2", capability: "crm", provider: "hubspot", enabled: true },
+		]);
+		expect(rows.map((row) => row.lockedByPlatform)).toEqual([true, false]);
+	});
 	it("aplana los campos de la conexión", () => {
 		const [row] = toConnectionRows([
 			{ id: "c1", capability: "mail", provider: "gmail", enabled: true },
@@ -44,6 +92,7 @@ describe("toConnectionRows", () => {
 			capability: "mail",
 			provider: "gmail",
 			enabled: true,
+			lockedByPlatform: false,
 		});
 	});
 

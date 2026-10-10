@@ -44,6 +44,19 @@ El nombre lleva el slug de la empresa para que `vercel connect list` lo muestre 
 2. En Vercel, borrar el conector.
 3. Avisarle al cliente que revoque la llave en el proveedor.
 
+## Cargar el owner de HubSpot a mano
+
+"Mis cuentas" resuelve solo el owner de HubSpot de cada persona cuando autoriza. Esto es el plan B, solo para cuando no lo logra (por ejemplo, HubSpot rechaza la consulta de owners con un 403 por los scopes del conector). Lo corre alguien de plataforma, con acceso a la base, en el editor SQL:
+
+```sql
+update public.executors set crm_owner_id = '<id de owner de HubSpot>' where tenant_id = '<tenant>' and user_id = '<user>';
+```
+
+- `<tenant>` y `<user>` son los uuid de la empresa y de la persona (`tenants.id` y `auth.users.id`).
+- El id de owner es el `ownerId` que devuelve `hubspot-get-user-details` corrido con la cuenta de esa persona, o el `id` de esa persona en la lista de owners de HubSpot (`GET /crm/v3/owners?email=<mail>`). No es el número de la dirección de la ficha en Configuración > Usuarios: ese es el id de usuario, que es otra cosa.
+- Verificar que la fila existe y quedó cargada: `select slug, crm_owner_id from public.executors where tenant_id = '<tenant>' and user_id = '<user>';`. Si no hay fila, la persona todavía no es ejecutora: se da de alta primero desde la configuración de la empresa.
+- Si "Mis cuentas" ya lo resuelve solo, no hace falta tocar nada.
+
 ## Lo que no hace la plataforma
 
 - No pide ni muestra llaves. Si una pantalla lo hiciera, es un bug grave.
