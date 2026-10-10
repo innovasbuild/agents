@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(35);
+select plan(45);
 
 -- Personas: 1 admin de os-a, 2 miembro de os-a, 3 admin de os-b, 4 platform_admin (en os-p).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -200,6 +200,46 @@ select throws_ok(
   $$insert into public.tenant_budgets (tenant_id, resource, daily_limit) values ('d3d3d3d3-0000-0000-0000-00000000000a', 'apollo_credits', 100)$$,
   '42501', null, 'el admin no escribe presupuestos directo');
 
+
+-- 36-45: endurecimiento.
 select pg_temp.logout();
+update public.tenants set allowed_models = '{anthropic/claude-sonnet-5}' where id = 'd3d3d3d3-0000-0000-0000-00000000000a';
+select set_config('role', 'anon', true);
+select throws_ok(
+  $$select public.set_list_value('d3d3d3d3-0000-0000-0000-00000000000a', 'segmento', 'seg_z', 'Z', true)$$,
+  '42501', null, 'anon no edita listas');
+select throws_ok(
+  $$select public.set_workflow('d3d3d3d3-0000-0000-0000-00000000000a', 'refresh-fichas', true, 60, 5)$$,
+  '42501', null, 'anon no enciende workflows');
+select pg_temp.logout();
+select pg_temp.login_as(2);
+select throws_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"timezone":"UTC"}')$$,
+  '42501', null, 'un miembro no cambia la configuración');
+select pg_temp.login_as(4);
+select lives_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"timezone":"UTC"}')$$,
+  'un platform_admin puede cambiar la configuración');
+select pg_temp.login_as(1);
+select throws_ok(
+  $$select public.set_list_value('d3d3d3d3-0000-0000-0000-00000000000a', 'vector', 'v_uno', 'Uno', true)$$,
+  '23514', 'los hooks y vectores se editan en el brain', 'no edita vectores');
+select throws_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"timezone":"UTC","extra":1}')$$,
+  '23514', null, 'rechaza una clave desconocida');
+select throws_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"models":{"classify":"openai/gpt-9"}}')$$,
+  '23514', 'ese modelo no está habilitado para la empresa', 'rechaza un modelo no habilitado');
+select throws_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', jsonb_build_object('timezone', repeat('x', 20000)))$$,
+  '23514', 'la configuración es demasiado grande', 'rechaza un payload enorme');
+select lives_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"models":{"classify":"anthropic/claude-sonnet-5"}}')$$,
+  'acepta un modelo habilitado');
+select pg_temp.logout();
+select is(
+  (select config #>> '{outreach,models,classify}' from public.tenant_agents
+    where tenant_id = 'd3d3d3d3-0000-0000-0000-00000000000a' and agent = 'outreach'),
+  'anthropic/claude-sonnet-5', 'queda guardado el modelo');
 select * from finish();
 rollback;

@@ -22,6 +22,7 @@ begin
   if p_active is null then
     raise exception 'falta el estado' using errcode = '23514', hint = 'settings';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_tenant::text || ':' || p_kind::text, 0));
   if not p_active and not exists (
     select 1 from public.config_values c
      where c.tenant_id = p_tenant and c.kind = p_kind and c.active and c.value <> p_value
@@ -51,6 +52,30 @@ begin
   end if;
   if p_config ? 'icp' then
     raise exception 'el ICP se edita en el brain' using errcode = '23514', hint = 'settings';
+  end if;
+  if pg_column_size(p_config) > 16384 then
+    raise exception 'la configuración es demasiado grande' using errcode = '23514', hint = 'settings';
+  end if;
+  -- Mismas claves que outreachConfigSchema (lib/outreach/config.ts).
+  if exists (
+    select 1 from jsonb_object_keys(p_config) k
+     where k not in ('timezone', 'bcc', 'deal', 'company', 'models')
+  ) then
+    raise exception 'la configuración tiene datos que no existen' using errcode = '23514', hint = 'settings';
+  end if;
+  -- Un cliente no gasta con modelos que no tiene habilitados.
+  if p_config ? 'models' and jsonb_typeof(p_config -> 'models') = 'object' then
+    if exists (
+      select 1 from jsonb_each(p_config -> 'models') m
+       where jsonb_typeof(m.value) <> 'string'
+          or not exists (
+               select 1 from public.tenants t
+                where t.id = p_tenant and (m.value #>> '{}') = any (t.allowed_models))
+    ) then
+      raise exception 'ese modelo no está habilitado para la empresa' using errcode = '23514', hint = 'settings';
+    end if;
+  elsif p_config ? 'models' and jsonb_typeof(p_config -> 'models') <> 'null' then
+    raise exception 'los modelos tienen que ser un objeto' using errcode = '23514', hint = 'settings';
   end if;
 
   -- Solo la clave outreach: brain y approvals tienen sus propias funciones.
