@@ -155,4 +155,36 @@ describe("tenantReadiness", () => {
 		expect(r).toEqual({ ready: false, missing: ["agentes", "brain"] });
 		for (const issue of r.missing) expect(READINESS_LABELS[issue]).toBeTruthy();
 	});
+
+	it("un brain mcp (llave de conexión) sin verificar no cuenta como sin verificar", () => {
+		const r = ok({
+			connections: [
+				{
+					capability: "brain",
+					provider: "mcp",
+					enabled: true,
+					verifiedAt: null,
+				},
+				{
+					capability: "crm",
+					provider: "hubspot",
+					enabled: true,
+					verifiedAt: null,
+				},
+				{
+					capability: "leads",
+					provider: "coldiq",
+					enabled: true,
+					verifiedAt: "x",
+				},
+				{
+					capability: "mail",
+					provider: "gmail",
+					enabled: true,
+					verifiedAt: null,
+				},
+			],
+		});
+		expect(r).toEqual({ ready: true, missing: [] });
+	});
 });

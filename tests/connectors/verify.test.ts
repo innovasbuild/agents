@@ -24,6 +24,7 @@ describe("checkConnectors", () => {
 			await checkConnectors(["a", "b"], { inVercel: true, describe }),
 		).toEqual({
 			ok: false,
+			kind: "missing",
 			message:
 				"El conector `b` no existe o no está adjunto a este proyecto en Vercel.",
 		});
@@ -37,6 +38,7 @@ describe("checkConnectors", () => {
 
 		expect(await checkConnectors(["a"], { inVercel: true, describe })).toEqual({
 			ok: false,
+			kind: "indeterminate",
 			message: "No pude verificar el conector en Vercel. Probá de nuevo.",
 		});
 		expect(error).toHaveBeenCalled();

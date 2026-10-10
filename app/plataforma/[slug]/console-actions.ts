@@ -165,7 +165,7 @@ export async function bindConnection(
 		inVercel: inVercel(),
 		describe: describeConnector,
 	});
-	if (!check.ok) return check;
+	if (!check.ok) return { ok: false, message: check.message };
 
 	return call(slug, "platform_bind_connection", {
 		p_actor: admin.userId,
@@ -227,7 +227,11 @@ export async function verifyConnection(
 		.select("id, tenant_id, connector_uid, config, provider")
 		.eq("id", connectionId)
 		.maybeSingle();
-	if (error || !row) return INVALIDO;
+	if (error) {
+		console.error("consola:", error.code, error.message);
+		return GENERICO;
+	}
+	if (!row) return INVALIDO;
 
 	const extra = (row.config as { connectorUids?: unknown } | null)
 		?.connectorUids;
@@ -250,11 +254,16 @@ export async function verifyConnection(
 		inVercel: true,
 		describe: describeConnector,
 	});
+	// Sin veredicto (la consulta falló) no se escribe nada: no se pisa una
+	// verificación vigente ni se deja un evento falso.
+	if (!check.ok && check.kind === "indeterminate") {
+		return { ok: false, message: check.message };
+	}
 	const marked = await call(slug, "platform_mark_connection_verified", {
 		p_actor: admin.userId,
 		p_connection: connectionId,
 		p_verified_name: check.ok ? verifiedNameFor(uids, check.names) : null,
 	});
-	if (!check.ok) return check;
+	if (!check.ok) return { ok: false, message: check.message };
 	return marked;
 }

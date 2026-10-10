@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(48);
+select plan(55);
 
 -- Personas: 1 administra la plataforma (actor), 2 es tenant_admin de pc-a, 3 miembro de pc-a.
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -39,6 +39,10 @@ select ok(not has_function_privilege('authenticated', 'public.platform_create_te
 select ok(not has_function_privilege('anon', 'public.platform_bind_connection(uuid, uuid, public.connector_capability, text, text[], jsonb, text)', 'execute'), 'anon no asocia conectores');
 select ok(not has_function_privilege('authenticated', 'public.platform_set_agent(uuid, uuid, text, boolean, text)', 'execute'), 'authenticated no toca agentes');
 select ok(not has_function_privilege('authenticated', 'public.platform_remove_connection(uuid, uuid)', 'execute'), 'authenticated no quita conectores');
+select ok(not has_function_privilege('authenticated', 'public.platform_set_connection_enabled(uuid, uuid, boolean)', 'execute'), 'authenticated no habilita conectores');
+select ok(not has_function_privilege('authenticated', 'public.platform_mark_connection_verified(uuid, uuid, text)', 'execute'), 'authenticated no marca verificaciones');
+select ok(has_function_privilege('service_role', 'public.platform_set_connection_enabled(uuid, uuid, boolean)', 'execute'), 'service_role habilita');
+select ok(has_function_privilege('service_role', 'public.platform_mark_connection_verified(uuid, uuid, text)', 'execute'), 'service_role marca verificaciones');
 select ok(has_function_privilege('service_role', 'public.platform_bind_connection(uuid, uuid, public.connector_capability, text, text[], jsonb, text)', 'execute'), 'service_role sí');
 select pg_temp.login_as(2);
 select throws_ok(
@@ -85,6 +89,9 @@ select lives_ok(
 select throws_ok(
   $$select public.platform_set_agent('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000a', 'outreach', true, 'todo')$$,
   '23514', 'el acceso al brain tiene que ser none, read o read_write', 'un acceso desconocido falla');
+select throws_ok(
+  $$select public.platform_set_agent('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000a', 'outreach', true, null)$$,
+  '23514', 'el acceso al brain tiene que ser none, read o read_write', 'un acceso nulo también falla');
 
 -- 19-28: platform_bind_connection y los reclamos.
 select lives_ok(
@@ -128,6 +135,10 @@ select lives_ok(
 select throws_ok(
   $$select public.platform_bind_connection('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000b', 'leads', 'coldiq', '{dup,dup}', '{}'::jsonb, null)$$,
   '23514', 'la lista de identificadores tiene repetidos', 'repetidos en la misma lista');
+select throws_ok(
+  $$select public.platform_bind_connection('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000b', 'leads', 'coldiq', '{pc-b-x1,pc-b-x2}', '{}'::jsonb, null)$$,
+  '23514', 'este proveedor lleva un solo identificador', 'un proveedor que no es Apollo no acepta varios');
+select is((select count(*)::int from public.connector_claims where connector_uid like 'pc-b-x%'), 0, 'el rechazo no deja reclamos huérfanos');
 
 -- 31-35: brain.
 select lives_ok(

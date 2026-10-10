@@ -55,6 +55,7 @@ begin
     from public.tenant_connections c
     where jsonb_typeof(c.config -> 'connectorUids') = 'array'
   ) u
+  where u.uid is not null
   group by u.uid
   having count(distinct u.tenant_id) > 1
   limit 1;
@@ -75,6 +76,7 @@ from (
   from public.tenant_connections c
   where jsonb_typeof(c.config -> 'connectorUids') = 'array'
 ) u
+where u.uid is not null
 order by u.uid, u.id;
 
 -- Candado de tenant_agents.
@@ -132,7 +134,7 @@ begin
   if p_actor is null then
     raise exception 'falta el actor';
   end if;
-  if p_brain not in ('none', 'read', 'read_write') then
+  if p_brain is null or p_brain not in ('none', 'read', 'read_write') then
     raise exception 'el acceso al brain tiene que ser none, read o read_write' using errcode = '23514', hint = 'consola';
   end if;
 
@@ -170,6 +172,9 @@ begin
   end if;
   if (select count(distinct u) from unnest(v_uids) u) <> cardinality(v_uids) then
     raise exception 'la lista de identificadores tiene repetidos' using errcode = '23514', hint = 'consola';
+  end if;
+  if p_provider <> 'apollo' and cardinality(v_uids) > 1 then
+    raise exception 'este proveedor lleva un solo identificador' using errcode = '23514', hint = 'consola';
   end if;
   if p_capability = 'brain' and exists (
     select 1 from public.tenant_connections c

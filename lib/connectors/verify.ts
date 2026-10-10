@@ -3,7 +3,9 @@
 // la fila queda "sin verificar".
 export type ConnectorCheck =
 	| { ok: true; names: Record<string, string> }
-	| { ok: false; message: string };
+	// missing: Vercel dijo que no existe o no está adjunto. indeterminate: la
+	// consulta falló (red, OIDC); no hay veredicto y no se escribe nada.
+	| { ok: false; kind: "missing" | "indeterminate"; message: string };
 
 export async function checkConnectors(
 	uids: string[],
@@ -25,12 +27,14 @@ export async function checkConnectors(
 			console.error("No pude consultar el conector en Vercel:", error);
 			return {
 				ok: false,
+				kind: "indeterminate",
 				message: "No pude verificar el conector en Vercel. Probá de nuevo.",
 			};
 		}
 		if (!found) {
 			return {
 				ok: false,
+				kind: "missing",
 				message: `El conector \`${uid}\` no existe o no está adjunto a este proyecto en Vercel.`,
 			};
 		}

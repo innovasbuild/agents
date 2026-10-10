@@ -68,7 +68,10 @@ export default async function TenantDetailPage({
 		(memberships ?? []).map(({ user_id }) => user_id),
 	);
 
-	const [{ data: agentRows }, { data: connectionRows }] = await Promise.all([
+	const [
+		{ data: agentRows, error: agentsError },
+		{ data: connectionRows, error: connectionsError },
+	] = await Promise.all([
 		admin.supabase
 			.from("tenant_agents")
 			.select("agent, enabled, config")
@@ -117,7 +120,11 @@ export default async function TenantDetailPage({
 	// Cualquier fila de brain, habilitada o no: si se filtrara por enabled, un
 	// brain deshabilitado ofrecería "Crear brain" y createBrain pisaría su config.
 	const brainRow = connections.find((c) => c.capability === "brain") ?? null;
-	const readiness = tenantReadiness({ agents, connections });
+	const readError = agentsError ?? connectionsError;
+	if (readError) {
+		console.error("consola:", readError.code, readError.message);
+	}
+	const readiness = readError ? null : tenantReadiness({ agents, connections });
 
 	const brand = brandFromRow(tenant);
 	const logoSrc = brand.logoUrl
@@ -186,7 +193,9 @@ export default async function TenantDetailPage({
 
 			<section>
 				<h2 className="mb-3 text-lg">Qué falta</h2>
-				{readiness.ready ? (
+				{readiness === null ? (
+					<p className="text-sm">No pude leer el estado. Probá de nuevo.</p>
+				) : readiness.ready ? (
 					<p className="text-sm">Lista para trabajar.</p>
 				) : (
 					<ul className="list-disc pl-5 text-sm">

@@ -20,6 +20,7 @@ const state = {
 	memberships: [] as unknown[],
 	agents: [] as unknown[],
 	connections: [] as unknown[],
+	failing: null as string | null,
 };
 
 function query(result: () => Result) {
@@ -53,7 +54,10 @@ vi.mock("@/lib/tenants/platform", () => ({
 											: table === "tenant_agents"
 												? state.agents
 												: state.connections,
-								error: null,
+								error:
+									table === state.failing
+										? { code: "XX000", message: "roto" }
+										: null,
 							})),
 					},
 				}
@@ -101,6 +105,7 @@ describe("detalle de la empresa", () => {
 			{ agent: "outreach", enabled: true, config: { brain: "read_write" } },
 		];
 		state.connections = [];
+		state.failing = null;
 	});
 
 	it("sin plataforma da 404", async () => {
@@ -189,4 +194,18 @@ describe("detalle de la empresa", () => {
 		expect(html).toContain("Deshabilitado");
 		expect(html).not.toContain("Crear brain");
 	});
+
+	it.each(["tenant_agents", "tenant_connections"])(
+		"si falla leer %s, dice que no pudo leer el estado y no inventa faltantes",
+		async (table) => {
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			state.failing = table;
+			const html = await render();
+			expect(html).toContain("No pude leer el estado");
+			expect(html).not.toContain("sin brain");
+			expect(html).not.toContain("Lista para trabajar");
+			expect(log).toHaveBeenCalled();
+			log.mockRestore();
+		},
+	);
 });

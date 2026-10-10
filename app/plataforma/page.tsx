@@ -51,6 +51,10 @@ export default async function PlataformaPage() {
 				>(),
 		]);
 
+	const readError = agentsResult.error ?? connectionsResult.error;
+	if (readError) {
+		console.error("consola:", readError.code, readError.message);
+	}
 	const tenants = tenantsResult.data ?? [];
 	const users = new Map<string, number>();
 	for (const { tenant_id } of membershipsResult.data ?? []) {
@@ -103,10 +107,12 @@ export default async function PlataformaPage() {
 			) : (
 				<ul className="divide-y rounded-lg border bg-card">
 					{tenants.map((tenant) => {
-						const readiness = tenantReadiness({
-							agents: agentsByTenant.get(tenant.id) ?? [],
-							connections: connectionsByTenant.get(tenant.id) ?? [],
-						});
+						const readiness = readError
+							? null
+							: tenantReadiness({
+									agents: agentsByTenant.get(tenant.id) ?? [],
+									connections: connectionsByTenant.get(tenant.id) ?? [],
+								});
 						return (
 							<li key={tenant.id}>
 								<Link
@@ -128,9 +134,11 @@ export default async function PlataformaPage() {
 										{tenant.active ? "Activo" : "Inactivo"}
 									</span>
 									<span className="text-muted-foreground text-sm">
-										{readiness.ready
-											? "Lista"
-											: `Faltan: ${readiness.missing.map((issue) => READINESS_LABELS[issue]).join(", ")}`}
+										{readiness === null
+											? "No pude leer el estado"
+											: readiness.ready
+												? "Lista"
+												: `Faltan: ${readiness.missing.map((issue) => READINESS_LABELS[issue]).join(", ")}`}
 									</span>
 									<span className="text-muted-foreground text-sm">
 										{users.get(tenant.id) ?? 0}{" "}

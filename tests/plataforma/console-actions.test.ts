@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
 		config: {} as Record<string, unknown>,
 		provider: "coldiq",
 	} as Record<string, unknown> | null,
+	rowError: null as { code?: string; message: string } | null,
 	revalidated: [] as string[],
 	inVercel: true,
 	describe: {} as Record<
@@ -44,7 +45,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 		from: () => ({
 			select: () => ({
 				eq: () => ({
-					maybeSingle: async () => ({ data: state.row, error: null }),
+					maybeSingle: async () => ({ data: state.row, error: state.rowError }),
 				}),
 			}),
 		}),
@@ -76,6 +77,7 @@ beforeEach(() => {
 		config: {},
 		provider: "coldiq",
 	};
+	state.rowError = null;
 	state.revalidated = [];
 	state.inVercel = true;
 	state.describe = {
@@ -369,6 +371,34 @@ describe("setConnectionEnabled, removeConnection, verifyConnection", () => {
 			fn: "platform_mark_connection_verified",
 			args: { p_actor: "u1", p_connection: CONN, p_verified_name: null },
 		});
+	});
+
+	it("si consultar a Vercel falla al verificar, no escribe nada", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.describe = { "acme-coldiq": new Error("red caída") };
+		expect(await actions.verifyConnection("acme", CONN)).toEqual({
+			ok: false,
+			message: "No pude verificar el conector en Vercel. Probá de nuevo.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+		log.mockRestore();
+	});
+
+	it("un error al leer la fila se loguea y es genérico; una fila ausente es inválida", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.row = null;
+		state.rowError = { code: "XX000", message: "se cayó" };
+		expect(await actions.verifyConnection("acme", CONN)).toEqual(GENERICO);
+		expect(log).toHaveBeenCalledWith("consola:", "XX000", "se cayó");
+		log.mockRestore();
+
+		state.rowError = null;
+		expect(await actions.verifyConnection("acme", CONN)).toEqual({
+			ok: false,
+			message: expect.any(String),
+		});
+		expect(await actions.verifyConnection("acme", CONN)).not.toEqual(GENERICO);
+		expect(state.rpcCalls).toHaveLength(0);
 	});
 
 	it("verificar fuera de Vercel no hace nada y lo explica", async () => {

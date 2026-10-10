@@ -8,6 +8,7 @@ const state = {
 	memberships: [] as unknown[],
 	agents: [] as unknown[],
 	connections: [] as unknown[],
+	failing: null as string | null,
 };
 
 function query(result: () => Result) {
@@ -37,7 +38,8 @@ vi.mock("@/lib/tenants/platform", () => ({
 								: table === "tenant_agents"
 									? state.agents
 									: state.connections,
-					error: null,
+					error:
+						table === state.failing ? { code: "XX000", message: "roto" } : null,
 				})),
 		},
 	}),
@@ -52,6 +54,7 @@ const { default: PlataformaPage } = await import("@/app/plataforma/page");
 
 describe("listado de empresas", () => {
 	beforeEach(() => {
+		state.failing = null;
 		state.tenants = [
 			{
 				id: "t1",
@@ -109,4 +112,18 @@ describe("listado de empresas", () => {
 		expect(acme).toContain("Lista");
 		expect(beta).toContain("Faltan: sin agentes habilitados, sin brain");
 	});
+
+	it.each(["tenant_agents", "tenant_connections"])(
+		"si falla leer %s, cada fila dice que no pudo leer el estado",
+		async (table) => {
+			const log = vi.spyOn(console, "error").mockImplementation(() => {});
+			state.failing = table;
+			const html = renderToStaticMarkup(await PlataformaPage());
+			expect(html).toContain("No pude leer el estado");
+			expect(html).not.toContain("Faltan:");
+			expect(html).not.toContain(">Lista<");
+			expect(log).toHaveBeenCalled();
+			log.mockRestore();
+		},
+	);
 });

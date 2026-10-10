@@ -23,10 +23,12 @@ interface ConnectionState {
 	verifiedAt: string | null;
 }
 
-function needsVerification(provider: string): boolean {
+// El brain no tiene botón Verificar en la consola: no cuenta.
+function needsVerification(c: ConnectionState): boolean {
 	return (
-		isProviderKey(provider) &&
-		PROVIDERS[provider].authKind === "connect_api_key"
+		c.capability !== "brain" &&
+		isProviderKey(c.provider) &&
+		PROVIDERS[c.provider].authKind === "connect_api_key"
 	);
 }
 
@@ -52,9 +54,7 @@ export function tenantReadiness(input: {
 	if ([...needed].some((capability) => !covered.has(capability)))
 		missing.push("conectores");
 
-	if (
-		enabled.some((c) => needsVerification(c.provider) && c.verifiedAt === null)
-	) {
+	if (enabled.some((c) => needsVerification(c) && c.verifiedAt === null)) {
 		missing.push("verificacion");
 	}
 
