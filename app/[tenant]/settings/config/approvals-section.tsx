@@ -106,7 +106,9 @@ export function ApprovalsSection({
 		<div className="space-y-4">
 			<p className="text-muted-foreground text-sm">
 				Son los pasos en los que el agente escribe en tus sistemas. Lo que le
-				llega a una persona de afuera siempre pide aprobación.
+				llega a una persona de afuera siempre pide aprobación. Estas reglas
+				gobiernan los procesos automáticos; el chat sigue pidiendo aprobación
+				según cada una de sus herramientas.
 			</p>
 			{agents.map(({ agent, name, nodes }) => (
 				<div key={agent}>

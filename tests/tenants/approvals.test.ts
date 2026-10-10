@@ -68,6 +68,12 @@ describe("políticas", () => {
 		}
 	});
 
+	it("'once' no promete seguir solo: en procesos automáticos equivale a always", () => {
+		expect(POLICY_HELP.once).not.toMatch(/sigue solo/);
+		expect(POLICY_HELP.once).toContain("procesos automáticos");
+		expect(POLICY_HELP.once).toContain(`«${POLICY_LABELS.always}»`);
+	});
+
 	it("isPolicy reconoce solo las tres", () => {
 		expect(POLICIES.every(isPolicy)).toBe(true);
 		expect(isPolicy("nunca")).toBe(false);

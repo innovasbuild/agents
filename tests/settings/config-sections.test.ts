@@ -194,7 +194,10 @@ describe("ApprovalsSection", () => {
 		expect(html).toMatch(/<option[^>]*value="once"[^>]*selected/);
 		expect(html).toContain("Siempre pedir");
 		expect(html).toContain("Sin pedir");
-		expect(html).toContain("Pide aprobación la primera vez");
+		expect(html).not.toContain("después sigue solo");
+		expect(html).toContain("procesos automáticos equivale a «Siempre pedir»");
+		expect(html).toContain("Estas reglas gobiernan los procesos automáticos");
+		expect(html).toContain("el chat sigue pidiendo");
 	});
 
 	it("sin pasos que configurar lo dice", () => {

@@ -15,7 +15,7 @@ export const POLICY_LABELS: Record<Policy, string> = {
 
 export const POLICY_HELP: Record<Policy, string> = {
 	always: "El agente espera a que una persona lo apruebe cada vez.",
-	once: "Pide aprobación la primera vez y después sigue solo.",
+	once: "Hoy, en los procesos automáticos equivale a «Siempre pedir»: una persona lo aprueba cada vez.",
 	auto: "Lo hace solo, también en los procesos automáticos.",
 };
 
