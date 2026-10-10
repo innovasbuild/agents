@@ -1123,6 +1123,7 @@ export type Database = {
 					created_at: string;
 					enabled: boolean;
 					id: string;
+					locked_by_platform: boolean;
 					provider: string;
 					tenant_id: string;
 					updated_at: string;
@@ -1138,6 +1139,7 @@ export type Database = {
 					created_at?: string;
 					enabled?: boolean;
 					id?: string;
+					locked_by_platform?: boolean;
 					provider: string;
 					tenant_id: string;
 					updated_at?: string;
@@ -1152,6 +1154,7 @@ export type Database = {
 					created_at?: string;
 					enabled?: boolean;
 					id?: string;
+					locked_by_platform?: boolean;
 					provider?: string;
 					tenant_id?: string;
 					updated_at?: string;
@@ -1594,8 +1597,38 @@ export type Database = {
 					researched_at: string;
 				}[];
 			};
+			remove_executor: {
+				Args: { p_tenant: string; p_user: string };
+				Returns: undefined;
+			};
 			run_cost_usd: { Args: { p_run: string }; Returns: number };
+			set_approval: {
+				Args: {
+					p_agent: string;
+					p_node: string;
+					p_policy: string;
+					p_tenant: string;
+				};
+				Returns: undefined;
+			};
+			set_connection_enabled: {
+				Args: { p_connection: string; p_enabled: boolean; p_tenant: string };
+				Returns: undefined;
+			};
+			set_executor: {
+				Args: {
+					p_daily_quota: number;
+					p_display_name: string;
+					p_linkedin_url: string;
+					p_slug: string;
+					p_tenant: string;
+					p_title: string;
+					p_user: string;
+				};
+				Returns: undefined;
+			};
 			set_run_cost: { Args: { p_run: string }; Returns: number };
+			settings_actor: { Args: { p_tenant: string }; Returns: string };
 			tenant_allows_login: { Args: { p_tenant: string }; Returns: boolean };
 			unblock_member: {
 				Args: { p_tenant: string; p_user: string };
