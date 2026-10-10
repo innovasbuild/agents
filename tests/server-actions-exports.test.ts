@@ -21,7 +21,7 @@ const ASYNC_CONST = /^export\s+const\s+\w+\s*(?::[^=]+)?=\s*async\b/;
 describe("archivos use server", () => {
 	it("solo exportan funciones async", () => {
 		const bad: string[] = [];
-		for (const file of walk("app/plataforma")) {
+		for (const file of walk("app")) {
 			const src = readFileSync(file, "utf8");
 			if (!USE_SERVER.test(src)) continue;
 			for (const m of src.matchAll(VALUE_EXPORT)) {
