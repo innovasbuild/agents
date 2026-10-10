@@ -44,6 +44,7 @@ vi.mock("@/lib/tenants/platform", () => ({
 			? {
 					userId: "u1",
 					supabase: {
+						rpc: async () => ({ data: [], error: null }),
 						from: (table: string) =>
 							query(() => ({
 								data:

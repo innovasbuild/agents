@@ -15,6 +15,7 @@ import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
 import { seedCanonPagesForTenant } from "@/lib/outreach/canon-seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
+import { budgetResources } from "@/lib/workflows/settings";
 
 export type ConsoleResult = { ok: true } | { ok: false; message: string };
 
@@ -44,12 +45,18 @@ const DEFAULT_BRAIN_CONFIG = {
  * Un error de una función de consola llega con hint 'consola' y un mensaje
  * escrito para la persona; se muestra tal cual. Cualquier otro se loguea.
  */
-function fromDbError(error: {
-	code?: string;
-	message: string;
-	hint?: string | null;
-}): ConsoleResult {
+function fromDbError(
+	error: {
+		code?: string;
+		message: string;
+		hint?: string | null;
+	},
+	byCode: Record<string, string> = {},
+): ConsoleResult {
 	if (error.hint === "consola") return { ok: false, message: error.message };
+	// Funciones que levantan errores crudos, sin hint: se traducen por código.
+	const translated = error.code ? byCode[error.code] : undefined;
+	if (translated) return { ok: false, message: translated };
 	console.error("consola:", error.code, error.message);
 	return GENERICO;
 }
@@ -67,12 +74,14 @@ async function call(
 		| "platform_bind_connection"
 		| "platform_set_connection_enabled"
 		| "platform_remove_connection"
-		| "platform_mark_connection_verified",
+		| "platform_mark_connection_verified"
+		| "platform_set_budget",
 	args: Record<string, unknown>,
+	byCode?: Record<string, string>,
 ): Promise<ConsoleResult> {
 	// biome-ignore lint/suspicious/noExplicitAny: el nombre de la función y sus argumentos ya están validados arriba
 	const { error } = await createAdminClient().rpc(fn as any, args as any);
-	return done(slug, error ? fromDbError(error) : { ok: true });
+	return done(slug, error ? fromDbError(error, byCode) : { ok: true });
 }
 
 export async function setAgent(
@@ -298,4 +307,51 @@ export async function verifyConnection(
 	});
 	if (!check.ok) return { ok: false, message: check.message };
 	return marked;
+}
+
+// Entero o decimal con punto, hasta 6 decimales (la precisión de la columna).
+const LIMIT = /^\d{1,6}(\.\d{1,6})?$/;
+
+// platform_set_budget levanta errores crudos, sin hint, cuando falta el actor
+// (P0001) o la empresa no existe (23503); 23514 es un valor fuera de rango.
+const BUDGET_ERRORS = {
+	P0001: "No se pudo identificar quién hace el cambio.",
+	"23503": "Esa empresa no existe.",
+	"23514": "El valor no es válido.",
+};
+
+export async function setBudget(
+	slug: string,
+	tenantId: string,
+	resource: string,
+	dailyLimit: string,
+): Promise<ConsoleResult> {
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
+	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
+	// El registry vive en código: la base no sabe qué recursos existen.
+	if (typeof resource !== "string" || !budgetResources().includes(resource)) {
+		return { ok: false, message: "Ese recurso no existe." };
+	}
+	const raw = typeof dailyLimit === "string" ? dailyLimit.trim() : "";
+	const limit = LIMIT.test(raw) ? Number(raw) : Number.NaN;
+	if (!Number.isFinite(limit) || limit > 100_000) {
+		return {
+			ok: false,
+			message:
+				"El límite diario es un número entre 0 y 100000, con punto decimal.",
+		};
+	}
+
+	return call(
+		slug,
+		"platform_set_budget",
+		{
+			p_actor: admin.userId,
+			p_tenant: tenantId,
+			p_resource: resource,
+			p_daily_limit: limit,
+		},
+		BUDGET_ERRORS,
+	);
 }

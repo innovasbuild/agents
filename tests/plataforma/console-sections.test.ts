@@ -13,6 +13,7 @@ vi.mock("@/app/plataforma/[slug]/console-actions", () => ({
 	setConnectionEnabled: async () => ({ ok: true }),
 	removeConnection: async () => ({ ok: true }),
 	verifyConnection: async () => ({ ok: true }),
+	setBudget: async () => ({ ok: true }),
 }));
 
 const { AgentsSection } = await import(
@@ -25,6 +26,9 @@ const { ConnectionsSection } = await import(
 	"@/app/plataforma/[slug]/console/connections-section"
 );
 const { BindForm } = await import("@/app/plataforma/[slug]/console/bind-form");
+const { BudgetsSection } = await import(
+	"@/app/plataforma/[slug]/console/budgets-section"
+);
 
 const TENANT = "11111111-1111-4111-8111-111111111111";
 
@@ -198,5 +202,26 @@ describe("BindForm: varios identificadores", () => {
 		);
 		expect(coldiq).not.toContain("Agregar otro");
 		expect(apollo).toContain("Agregar otro");
+	});
+});
+
+describe("BudgetsSection", () => {
+	it("una fila por recurso con su límite editable y lo gastado hoy", () => {
+		const html = renderToStaticMarkup(
+			createElement(BudgetsSection, {
+				slug: "acme",
+				tenantId: TENANT,
+				budgets: [
+					{ resource: "model_usd", dailyLimit: 2.5, spent: 0.4 },
+					{ resource: "apollo_credits", dailyLimit: 0, spent: 0 },
+				],
+			}),
+		);
+		expect(html).toContain("Modelos de IA (USD)");
+		expect(html).toMatch(/<input[^>]*value="2.5"/);
+		expect(html).toContain("Gastado hoy: 0,40");
+		expect(html).toContain(
+			"Sin presupuesto: los procesos que lo usan no corren.",
+		);
 	});
 });

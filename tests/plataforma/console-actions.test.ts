@@ -121,6 +121,9 @@ describe("gate común", () => {
 		);
 		expect(await actions.removeConnection("acme", CONN)).toEqual(SIN_PERMISO);
 		expect(await actions.verifyConnection("acme", CONN)).toEqual(SIN_PERMISO);
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual(
+			SIN_PERMISO,
+		);
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 
@@ -503,5 +506,95 @@ describe("createBrain: páginas por defecto", () => {
 				"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 		});
 		expect(state.revalidated).toEqual(["/plataforma", "/plataforma/acme"]);
+	});
+});
+
+describe("setBudget", () => {
+	it("llama platform_set_budget con el actor y el número", async () => {
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2.5")).toEqual(
+			{
+				ok: true,
+			},
+		);
+		expect(state.rpcCalls).toEqual([
+			{
+				fn: "platform_set_budget",
+				args: {
+					p_actor: "u1",
+					p_tenant: TENANT,
+					p_resource: "model_usd",
+					p_daily_limit: 2.5,
+				},
+			},
+		]);
+	});
+
+	it("un recurso que ningún workflow usa no llega a la base", async () => {
+		expect(await actions.setBudget("acme", TENANT, "inventado", "2")).toEqual({
+			ok: false,
+			message: "Ese recurso no existe.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("un id de empresa inválido no llega a la base", async () => {
+		expect(await actions.setBudget("acme", "x", "model_usd", "2")).toEqual({
+			ok: false,
+			message: "No se pudo procesar el pedido.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it.each(["", "  ", "2,5", "abc", "-1", "100001", "1e3", "NaN"])(
+		"límite %j: se rechaza con un mensaje",
+		async (raw) => {
+			expect(await actions.setBudget("acme", TENANT, "model_usd", raw)).toEqual(
+				{
+					ok: false,
+					message:
+						"El límite diario es un número entre 0 y 100000, con punto decimal.",
+				},
+			);
+			expect(state.rpcCalls).toHaveLength(0);
+		},
+	);
+
+	it("0 es un límite válido: apaga el gasto", async () => {
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "0")).toEqual({
+			ok: true,
+		});
+		expect(state.rpcCalls[0].args.p_daily_limit).toBe(0);
+	});
+
+	it.each([
+		["P0001", "falta el actor", "No se pudo identificar quién hace el cambio."],
+		["23503", "violates foreign key", "Esa empresa no existe."],
+		["23514", "el límite diario va de 0 a 100000", "El valor no es válido."],
+	])(
+		"error crudo %s de la base se traduce",
+		async (code, message, expected) => {
+			state.rpc = { data: null, error: { code, message } };
+			expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual(
+				{
+					ok: false,
+					message: expected,
+				},
+			);
+		},
+	);
+
+	it("un error con hint consola se muestra tal cual", async () => {
+		state.rpc = {
+			data: null,
+			error: {
+				code: "23514",
+				message: "ese recurso no existe",
+				hint: "consola",
+			},
+		};
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual({
+			ok: false,
+			message: "ese recurso no existe",
+		});
 	});
 });

@@ -18,9 +18,11 @@ import {
 } from "@/lib/tenants/readiness";
 import { brandFromRow, type TenantRole } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { budgetResources, toBudgetRows } from "@/lib/workflows/settings";
 import { AgentsSection } from "./console/agents-section";
 import { BindForm } from "./console/bind-form";
 import { BrainSection } from "./console/brain-section";
+import { BudgetsSection } from "./console/budgets-section";
 import { ConnectionsSection } from "./console/connections-section";
 import { TenantForm } from "./tenant-form";
 
@@ -158,6 +160,22 @@ export default async function TenantDetailPage({
 		? null
 		: tenantReadiness({ agents, connections, canon });
 
+	// El día se corta en UTC: la consola no conoce la zona horaria del outreach
+	// de cada empresa y no hace falta para fijar un tope.
+	const dayStartUtc = new Date();
+	dayStartUtc.setUTCHours(0, 0, 0, 0);
+	const { data: budgetRows, error: budgetsError } = await admin.supabase.rpc(
+		"tenant_budget_status",
+		{
+			p_tenant: tenant.id,
+			p_resources: budgetResources(),
+			p_since: dayStartUtc.toISOString(),
+		} as never,
+	);
+	if (budgetsError) {
+		console.error("consola:", budgetsError.code, budgetsError.message);
+	}
+
 	const brand = brandFromRow(tenant);
 	const logoSrc = brand.logoUrl
 		? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${brand.logoUrl}`
@@ -278,6 +296,21 @@ export default async function TenantDetailPage({
 					tenantId={tenant.id}
 				/>
 				<BindForm slug={tenant.slug} tenantId={tenant.id} />
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Presupuestos</h2>
+				{budgetsError ? (
+					<p className="text-muted-foreground text-sm">
+						No pude leer esta sección. Recargá la página.
+					</p>
+				) : (
+					<BudgetsSection
+						budgets={toBudgetRows((budgetRows as unknown[] | null) ?? [])}
+						slug={tenant.slug}
+						tenantId={tenant.id}
+					/>
+				)}
 			</section>
 
 			<section>
