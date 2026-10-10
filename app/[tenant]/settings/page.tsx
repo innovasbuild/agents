@@ -196,6 +196,12 @@ export default async function SettingsPage({
 			</section>
 
 			<Link
+				className="mr-6 inline-block text-sm underline underline-offset-4"
+				href={`/${slug}/settings/outreach`}
+			>
+				Outreach →
+			</Link>
+			<Link
 				className="inline-block text-sm underline underline-offset-4"
 				href={`/${slug}/settings/usuarios`}
 			>
