@@ -1537,6 +1537,10 @@ export type Database = {
 				Returns: number;
 			};
 			login_gate: { Args: Record<PropertyKey, never>; Returns: Json };
+			outreach_reflect_marco: {
+				Args: { p_hooks: Json; p_tenant: string; p_vectors: Json };
+				Returns: Json;
+			};
 			platform_bind_connection: {
 				Args: {
 					p_actor: string;
