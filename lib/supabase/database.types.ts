@@ -344,6 +344,43 @@ export type Database = {
 					},
 				];
 			};
+			connector_claims: {
+				Row: {
+					connection_id: string;
+					connector_uid: string;
+					created_at: string;
+					tenant_id: string;
+				};
+				ComputedFields: never;
+				Insert: {
+					connection_id: string;
+					connector_uid: string;
+					created_at?: string;
+					tenant_id: string;
+				};
+				Update: {
+					connection_id?: string;
+					connector_uid?: string;
+					created_at?: string;
+					tenant_id?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "connector_claims_connection_id_fkey";
+						columns: ["connection_id"];
+						isOneToOne: false;
+						referencedRelation: "tenant_connections";
+						referencedColumns: ["id"];
+					},
+					{
+						foreignKeyName: "connector_claims_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			contacts: {
 				Row: {
 					account_id: string | null;
@@ -1089,6 +1126,9 @@ export type Database = {
 					provider: string;
 					tenant_id: string;
 					updated_at: string;
+					updated_by: string | null;
+					verified_at: string | null;
+					verified_name: string | null;
 				};
 				ComputedFields: never;
 				Insert: {
@@ -1101,6 +1141,9 @@ export type Database = {
 					provider: string;
 					tenant_id: string;
 					updated_at?: string;
+					updated_by?: string | null;
+					verified_at?: string | null;
+					verified_name?: string | null;
 				};
 				Update: {
 					capability?: Database["public"]["Enums"]["connector_capability"];
@@ -1112,6 +1155,9 @@ export type Database = {
 					provider?: string;
 					tenant_id?: string;
 					updated_at?: string;
+					updated_by?: string | null;
+					verified_at?: string | null;
+					verified_name?: string | null;
 				};
 				Relationships: [
 					{
@@ -1467,16 +1513,6 @@ export type Database = {
 					isSetofReturn: true;
 				};
 			};
-			create_tenant: {
-				Args: {
-					p_allowed_domains: string[];
-					p_auth_methods: string[];
-					p_brand: Json;
-					p_display_name: string;
-					p_slug: string;
-				};
-				Returns: string;
-			};
 			current_login_method: {
 				Args: Record<PropertyKey, never>;
 				Returns: string;
@@ -1498,6 +1534,56 @@ export type Database = {
 				Returns: number;
 			};
 			login_gate: { Args: Record<PropertyKey, never>; Returns: Json };
+			platform_bind_connection: {
+				Args: {
+					p_actor: string;
+					p_capability: Database["public"]["Enums"]["connector_capability"];
+					p_config: Json;
+					p_connector_uids: string[];
+					p_provider: string;
+					p_tenant: string;
+					p_verified_name: string;
+				};
+				Returns: string;
+			};
+			platform_create_tenant: {
+				Args: {
+					p_actor: string;
+					p_agents: string[];
+					p_allowed_domains: string[];
+					p_auth_methods: string[];
+					p_brand: Json;
+					p_display_name: string;
+					p_slug: string;
+				};
+				Returns: string;
+			};
+			platform_mark_connection_verified: {
+				Args: {
+					p_actor: string;
+					p_connection: string;
+					p_verified_name: string;
+				};
+				Returns: undefined;
+			};
+			platform_remove_connection: {
+				Args: { p_actor: string; p_connection: string };
+				Returns: undefined;
+			};
+			platform_set_agent: {
+				Args: {
+					p_actor: string;
+					p_agent: string;
+					p_brain: string;
+					p_enabled: boolean;
+					p_tenant: string;
+				};
+				Returns: undefined;
+			};
+			platform_set_connection_enabled: {
+				Args: { p_actor: string; p_connection: string; p_enabled: boolean };
+				Returns: undefined;
+			};
 			refresh_fichas_candidates: {
 				Args: { p_limit: number; p_now: string; p_tenant: string };
 				Returns: {

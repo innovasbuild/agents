@@ -5,7 +5,10 @@ const NEW_ID = "22222222-2222-4222-8222-222222222222";
 const state: {
 	admin: boolean;
 	adminRedirects: boolean;
-	rpc: { data: unknown; error: { code?: string; message: string } | null };
+	rpc: {
+		data: unknown;
+		error: { code?: string; message: string; hint?: string } | null;
+	};
 	rpcCalls: { fn: string; args: Record<string, unknown> }[];
 	updates: Record<string, unknown>[];
 	uploads: string[];
@@ -60,7 +63,9 @@ vi.mock("@/lib/tenants/platform", () => ({
 		return state.admin ? { supabase, userId: "u1" } : null;
 	},
 }));
-vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/supabase/admin", () => ({
+	createAdminClient: () => ({ rpc: supabase.rpc }),
+}));
 vi.mock("@/lib/invitations/invite", () => ({
 	inviteToTenant: async (params: Record<string, unknown>) => {
 		state.inviteCalls.push(params);
@@ -84,10 +89,17 @@ function form(overrides: Record<string, string | File | null> = {}) {
 		primary: "#112233",
 		secondary: "",
 		admin_email: "ana@acme.test",
+		agents: "outreach",
 		...overrides,
 	};
+	const { agents, ...rest } = values;
 	const data = new FormData();
-	for (const [k, v] of Object.entries(values)) if (v !== null) data.set(k, v);
+	for (const [k, v] of Object.entries(rest)) if (v !== null) data.set(k, v);
+	if (agents !== null)
+		for (const agent of typeof agents === "string"
+			? agents.split(",")
+			: ["outreach"])
+			data.append("agents", agent);
 	return data;
 }
 
@@ -134,18 +146,20 @@ describe("createTenant", () => {
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 
-	it("crea la empresa con create_tenant e invita al admin hacia su chat", async () => {
+	it("crea la empresa con platform_create_tenant e invita al admin hacia su chat", async () => {
 		const result = await createTenant(form());
 
 		expect(result).toEqual({ ok: true, slug: "acme", warnings: [] });
 		expect(state.rpcCalls[0]).toEqual({
-			fn: "create_tenant",
+			fn: "platform_create_tenant",
 			args: {
+				p_actor: "u1",
 				p_slug: "acme",
 				p_display_name: "Acme",
 				p_allowed_domains: ["acme.test"],
 				p_auth_methods: ["email"],
 				p_brand: { primary: "#112233" },
+				p_agents: ["outreach"],
 			},
 		});
 		expect(state.inviteCalls[0]).toMatchObject({
@@ -157,6 +171,62 @@ describe("createTenant", () => {
 			origin: "https://app.test",
 			next: "/acme/chat",
 		});
+	});
+
+	it("sin agentes marcados no crea nada", async () => {
+		expect(await createTenant(form({ agents: null }))).toEqual({
+			ok: false,
+			message: "Elegí al menos un agente.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("un mensaje de regla de la base (hint consola) se muestra tal cual", async () => {
+		state.rpc = {
+			data: null,
+			error: {
+				code: "23514",
+				message: "la empresa necesita al menos un agente",
+				hint: "consola",
+			},
+		};
+
+		expect(await createTenant(form())).toEqual({
+			ok: false,
+			message: "la empresa necesita al menos un agente",
+		});
+	});
+
+	it("un error inesperado devuelve el genérico, lo deja en console.error y no sigue", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			state.rpc = { data: null, error: { code: "XX000", message: "boom" } };
+			const logo = new File(["png"], "l.png", { type: "image/png" });
+
+			expect(await createTenant(form({ logo }))).toEqual({
+				ok: false,
+				message: "No se pudo crear la empresa.",
+			});
+			expect(spy).toHaveBeenCalledWith(
+				"platform_create_tenant failed",
+				state.rpc.error,
+			);
+			expect(state.uploads).toHaveLength(0);
+			expect(state.inviteCalls).toHaveLength(0);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it("los errores mapeados no ensucian console.error", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			state.rpc = { data: null, error: { code: "23505", message: "dup" } };
+			await createTenant(form());
+			expect(spy).not.toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+		}
 	});
 
 	it("traduce un slug repetido", async () => {

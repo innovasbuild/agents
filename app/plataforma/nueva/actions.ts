@@ -50,17 +50,21 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 		const colors = { primary: input.primary, secondary: input.secondary };
 		const brand = mergeBrand({}, colors);
 
-		const { data: tenantId, error } = await admin.supabase.rpc(
-			"create_tenant",
+		const { data: tenantId, error } = await createAdminClient().rpc(
+			"platform_create_tenant",
 			{
+				p_actor: admin.userId,
 				p_slug: input.slug,
 				p_display_name: input.displayName,
 				p_allowed_domains: input.allowedDomains,
 				p_auth_methods: input.authMethods,
 				p_brand: brand,
+				p_agents: input.agents,
 			},
 		);
 		if (error || !tenantId) {
+			if (error?.hint === "consola")
+				return { ok: false, message: error.message };
 			if (error?.code === "23505")
 				return { ok: false, message: "Ya hay una empresa con ese slug." };
 			if (error?.code === "23514")
@@ -69,6 +73,7 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 					message: "Ese slug está reservado o tiene un formato inválido.",
 				};
 			if (error?.code === "42501") return SIN_PERMISO;
+			console.error("platform_create_tenant failed", error);
 			return NO_CREO;
 		}
 
@@ -115,7 +120,8 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 
 		revalidatePath("/plataforma");
 		return { ok: true, slug: input.slug, warnings };
-	} catch {
+	} catch (error) {
+		console.error("createTenant failed", error);
 		return NO_CREO;
 	}
 }

@@ -66,7 +66,7 @@ async function main(): Promise<void> {
 		throw new Error(`no pude leer el binding: ${bindingError.message}`);
 	if (!binding) {
 		throw new Error(
-			`${args.tenant} no tiene binding brain/wiki: corré npm run connections:bind primero`,
+			`${args.tenant} no tiene binding brain/wiki: creá el brain desde /plataforma/<slug> primero`,
 		);
 	}
 	const config = parseWikiConfig(binding.config);

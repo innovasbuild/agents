@@ -1,5 +1,5 @@
 // Registro puro de proveedores de conectores (spec 02 §4). Sin imports y solo
-// con sintaxis de tipos borrable: scripts/connections-bind.mts lo ejecuta con
+// con sintaxis de tipos borrable: un script de operación lo ejecuta con
 // Node directo, sin bundler.
 
 export type Capability = "crm" | "leads" | "enrichment" | "brain" | "mail";
@@ -94,4 +94,11 @@ export function connectionName(
 		? `${info.capability}-${binding.provider}`
 		: info.capability;
 	return info.authKind === "connect_oauth" ? `${base}-${binding.id}` : base;
+}
+
+// `multiple` habla de varias conexiones por capacidad, no de varios uids por
+// conexión. Solo Apollo lee config.connectorUids (agents/outreach/schedules/dispatch.ts);
+// para el resto la base guarda un único connector_uid.
+export function acceptsManyUids(provider: ProviderKey): boolean {
+	return provider === "apollo";
 }

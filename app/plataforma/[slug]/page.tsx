@@ -9,8 +9,13 @@ import {
 	platformOwnerSlug,
 	requirePlatformAdmin,
 } from "@/lib/tenants/platform";
+import { READINESS_LABELS, tenantReadiness } from "@/lib/tenants/readiness";
 import { brandFromRow, type TenantRole } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { AgentsSection } from "./console/agents-section";
+import { BindForm } from "./console/bind-form";
+import { BrainSection } from "./console/brain-section";
+import { ConnectionsSection } from "./console/connections-section";
 import { TenantForm } from "./tenant-form";
 
 interface TenantDetailRow {
@@ -62,6 +67,64 @@ export default async function TenantDetailPage({
 	const people = await loadPeople(
 		(memberships ?? []).map(({ user_id }) => user_id),
 	);
+
+	const [
+		{ data: agentRows, error: agentsError },
+		{ data: connectionRows, error: connectionsError },
+	] = await Promise.all([
+		admin.supabase
+			.from("tenant_agents")
+			.select("agent, enabled, config")
+			.eq("tenant_id", tenant.id),
+		admin.supabase
+			.from("tenant_connections")
+			.select(
+				"id, capability, provider, connector_uid, config, enabled, verified_at, verified_name, created_at",
+			)
+			.eq("tenant_id", tenant.id)
+			.order("created_at"),
+	]);
+	const agents = (agentRows ?? []).map((row) => ({
+		agent: row.agent as string,
+		enabled: row.enabled === true,
+		brain:
+			((row.config as { brain?: unknown } | null)?.brain as
+				| string
+				| undefined) ?? "none",
+	}));
+	const connections = (connectionRows ?? []).map((row) => {
+		const extra = (row.config as { connectorUids?: unknown } | null)
+			?.connectorUids;
+		return {
+			id: row.id as string,
+			capability: row.capability as string,
+			provider: row.provider as string,
+			connectorUids: [
+				...new Set([
+					...(typeof row.connector_uid === "string" ? [row.connector_uid] : []),
+					...(Array.isArray(extra)
+						? extra.filter((u): u is string => typeof u === "string")
+						: []),
+				]),
+			],
+			enabled: row.enabled === true,
+			verifiedAt: (row.verified_at as string | null) ?? null,
+			verifiedName: (row.verified_name as string | null) ?? null,
+			createdAt: row.created_at as string,
+			categories:
+				((row.config as { categories?: unknown } | null)?.categories as
+					| string[]
+					| undefined) ?? [],
+		};
+	});
+	// Cualquier fila de brain, habilitada o no: si se filtrara por enabled, un
+	// brain deshabilitado ofrecería "Crear brain" y createBrain pisaría su config.
+	const brainRow = connections.find((c) => c.capability === "brain") ?? null;
+	const readError = agentsError ?? connectionsError;
+	if (readError) {
+		console.error("consola:", readError.code, readError.message);
+	}
+	const readiness = readError ? null : tenantReadiness({ agents, connections });
 
 	const brand = brandFromRow(tenant);
 	const logoSrc = brand.logoUrl
@@ -126,6 +189,58 @@ export default async function TenantDetailPage({
 					}}
 					isOwner={tenant.slug === platformOwnerSlug()}
 				/>
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Qué falta</h2>
+				{readiness === null ? (
+					<p className="text-sm">No pude leer el estado. Probá de nuevo.</p>
+				) : readiness.ready ? (
+					<p className="text-sm">Lista para trabajar.</p>
+				) : (
+					<ul className="list-disc pl-5 text-sm">
+						{readiness.missing.map((issue) => (
+							<li key={issue}>{READINESS_LABELS[issue]}</li>
+						))}
+					</ul>
+				)}
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Agentes</h2>
+				<AgentsSection
+					agents={agents}
+					slug={tenant.slug}
+					tenantId={tenant.id}
+				/>
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Brain</h2>
+				<BrainSection
+					brain={
+						brainRow
+							? {
+									provider: brainRow.provider,
+									categories: brainRow.categories,
+									createdAt: brainRow.createdAt,
+									enabled: brainRow.enabled,
+								}
+							: null
+					}
+					slug={tenant.slug}
+					tenantId={tenant.id}
+				/>
+			</section>
+
+			<section className="space-y-4">
+				<h2 className="text-lg">Conectores</h2>
+				<ConnectionsSection
+					connections={connections.filter((c) => c.capability !== "brain")}
+					slug={tenant.slug}
+					tenantId={tenant.id}
+				/>
+				<BindForm slug={tenant.slug} tenantId={tenant.id} />
 			</section>
 
 			<section>

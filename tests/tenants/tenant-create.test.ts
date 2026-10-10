@@ -13,6 +13,7 @@ function form(overrides: Record<string, string | string[] | null> = {}) {
 		primary: "#112233",
 		secondary: "",
 		admin_email: "Ana@Acme.test",
+		agents: ["outreach"],
 		...overrides,
 	};
 	const data = new FormData();
@@ -45,7 +46,30 @@ describe("createTenantSchema", () => {
 			secondary: "",
 			adminEmail: "ana@acme.test",
 			allowExternalAdmin: false,
+			agents: ["outreach"],
 		});
+	});
+
+	it("lee los agentes marcados", () => {
+		const data = form({ agents: null });
+		data.append("agents", "outreach");
+		expect(readCreateForm(data)).toMatchObject({ agents: ["outreach"] });
+	});
+
+	it("sin agentes no se crea", () => {
+		expect(message({ agents: [] })).toBe("Elegí al menos un agente.");
+	});
+
+	it("un agente que no está en el catálogo no se acepta", () => {
+		expect(message({ agents: ["outreach", "soporte"] })).toBe(
+			"Hay un agente que no existe en el catálogo.",
+		);
+	});
+
+	it("un agente repetido no se acepta", () => {
+		expect(message({ agents: ["outreach", "outreach"] })).toBe(
+			"Hay un agente repetido.",
+		);
 	});
 
 	it("rechaza un slug con mayúsculas o espacios", () => {

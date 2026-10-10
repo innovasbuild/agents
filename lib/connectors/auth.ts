@@ -1,8 +1,10 @@
 // Único puente con Vercel Connect (spec 02 §5.2). Ningún otro archivo importa
 // @vercel/connect: tests/connectors/import-rule.test.ts lo hace cumplir.
 import {
+	ConnectError,
 	ConnectorInstallationRequiredError,
 	type ConnectTokenParams,
+	getConnectorMetadata,
 	getToken,
 	getTokenResponse,
 	NoValidTokenError,
@@ -163,4 +165,28 @@ export function isConnectAuthError(error: unknown): boolean {
  */
 export function isConnectorNotInstalledError(error: unknown): boolean {
 	return error instanceof ConnectorInstallationRequiredError;
+}
+
+/**
+ * ¿Existe este conector y está adjunto a este proyecto de Vercel? Es lo que
+ * la consola verifica antes de asociarlo a una empresa (spec 21.1 K3). Null
+ * cuando Vercel dice que no (404) o que no es de este proyecto (403);
+ * cualquier otro error (red, OIDC) se propaga para que quien llama no lo
+ * confunda con "no existe".
+ */
+export async function describeConnector(
+	uid: string,
+): Promise<{ name: string; service: string } | null> {
+	try {
+		const metadata = await getConnectorMetadata(uid);
+		return { name: metadata.name, service: metadata.service };
+	} catch (error) {
+		if (
+			error instanceof ConnectError &&
+			(error.status === 404 || error.status === 403)
+		) {
+			return null;
+		}
+		throw error;
+	}
 }
