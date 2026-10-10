@@ -675,6 +675,36 @@ export type Database = {
 					},
 				];
 			};
+			membership_blocks: {
+				Row: {
+					blocked_by: string | null;
+					created_at: string;
+					tenant_id: string;
+					user_id: string;
+				};
+				ComputedFields: never;
+				Insert: {
+					blocked_by?: string | null;
+					created_at?: string;
+					tenant_id: string;
+					user_id: string;
+				};
+				Update: {
+					blocked_by?: string | null;
+					created_at?: string;
+					tenant_id?: string;
+					user_id?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "membership_blocks_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			memberships: {
 				Row: {
 					created_at: string;
@@ -1306,6 +1336,10 @@ export type Database = {
 				Args: Record<PropertyKey, never>;
 				Returns: number;
 			};
+			block_member: {
+				Args: { p_tenant: string; p_user: string };
+				Returns: undefined;
+			};
 			brain_cleanup_orphan_access_rules: {
 				Args: Record<PropertyKey, never>;
 				Returns: number;
@@ -1477,6 +1511,10 @@ export type Database = {
 			run_cost_usd: { Args: { p_run: string }; Returns: number };
 			set_run_cost: { Args: { p_run: string }; Returns: number };
 			tenant_allows_login: { Args: { p_tenant: string }; Returns: boolean };
+			unblock_member: {
+				Args: { p_tenant: string; p_user: string };
+				Returns: undefined;
+			};
 			upsert_discovered_account: {
 				Args: {
 					p_domain: string;
