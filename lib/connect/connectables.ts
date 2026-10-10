@@ -1,5 +1,6 @@
 // Qué puede conectar una persona a su cliente MCP (spec etapa 19 §3.1).
 // Función pura: la página le pasa lo que leyó de la base.
+import { AGENT_CATALOG, isCatalogAgent } from "../agents/catalog";
 
 export type Connectable =
 	| {
@@ -18,15 +19,6 @@ export type Connectable =
 			url: string;
 	  }
 	| { kind: "tools"; name: string; description: string; soon: true };
-
-// Provisorio hasta el catálogo de agentes de la Etapa 22 (spec C5).
-const AGENT_COPY: Record<string, { name: string; description: string }> = {
-	outreach: {
-		name: "Agente de outreach",
-		description:
-			"Investiga cuentas, redacta mensajes y arma la cola de envíos de tu empresa.",
-	},
-};
 
 // Identificador para comandos de terminal y claves de JSON: sin espacios,
 // comillas ni mayúsculas, venga lo que venga de tenant_agents.agent.
@@ -70,10 +62,9 @@ export function buildConnectables(input: {
 	}
 
 	for (const agent of input.enabledAgents) {
-		const copy = AGENT_COPY[agent] ?? {
-			name: agent,
-			description: "Agente de tu empresa.",
-		};
+		const copy = isCatalogAgent(agent)
+			? AGENT_CATALOG[agent]
+			: { name: agent, description: "Agente de tu empresa." };
 		list.push({
 			kind: "agent",
 			agent,
