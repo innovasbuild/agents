@@ -1,16 +1,26 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
 import {
 	toConnectionRows,
 	toExecutorRows,
 } from "@/lib/outreach/settings-query";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { approvableNodes, readPolicy } from "@/lib/tenants/approvals";
+import { suggestExecutorSlug } from "@/lib/tenants/executor-slug";
+import { loadPeople } from "@/lib/tenants/people";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import { ApprovalsSection } from "./config/approvals-section";
+import { ConnectionsSection } from "./config/connections-section";
+import { ExecutorsSection } from "./config/executors-section";
 import { IngresoForm } from "./ingreso-form";
 import { ModeloForm } from "./modelo-form";
 
-const fecha = (value: string | null) =>
-	value ? new Date(value).toLocaleDateString("es-AR") : "—";
+const Unreadable = () => (
+	<p className="text-muted-foreground text-sm">
+		No pude leer esta sección. Recargá la página.
+	</p>
+);
 
 export default async function SettingsPage({
 	params,
@@ -26,23 +36,99 @@ export default async function SettingsPage({
 	if (tenant.role === "tenant_member") notFound();
 
 	const supabase = await createServerSupabase();
-	const [executorsResult, connectionsResult, signupResult] = await Promise.all([
+	const [
+		executorsResult,
+		connectionsResult,
+		signupResult,
+		membershipsResult,
+		agentsResult,
+	] = await Promise.all([
 		supabase
 			.from("executors")
-			.select("user_id, slug, daily_quota, gmail_authorized_at")
+			.select(
+				"user_id, slug, daily_quota, gmail_authorized_at, display_name, title, linkedin_url, crm_owner_id",
+			)
 			.eq("tenant_id", tenant.id),
+		// Sin connector_uid ni config: el cliente no los ve (spec 21.2 §5).
 		supabase
 			.from("tenant_connections")
-			.select("id, capability, provider, enabled")
-			.eq("tenant_id", tenant.id),
+			.select("id, capability, provider, enabled, locked_by_platform")
+			.eq("tenant_id", tenant.id)
+			.order("created_at"),
 		supabase
 			.from("tenants")
 			.select("allowed_domains, self_signup_by_domain")
 			.eq("id", tenant.id)
 			.maybeSingle(),
+		supabase.from("memberships").select("user_id").eq("tenant_id", tenant.id),
+		supabase
+			.from("tenant_agents")
+			.select("agent, enabled, config")
+			.eq("tenant_id", tenant.id),
 	]);
 
-	const executors = toExecutorRows(executorsResult.data ?? []);
+	for (const [name, result] of [
+		["executors", executorsResult],
+		["memberships", membershipsResult],
+		["tenant_agents", agentsResult],
+		["tenant_connections", connectionsResult],
+	] as const) {
+		if (result.error)
+			console.error(`settings: no pude leer ${name}:`, result.error);
+	}
+	const executorsFailed = Boolean(
+		executorsResult.error || membershipsResult.error,
+	);
+
+	const executorRows = toExecutorRows(executorsResult.data ?? []);
+	const memberIds = (membershipsResult.data ?? []).map(
+		(row) => row.user_id as string,
+	);
+	const people = executorsFailed
+		? new Map()
+		: await loadPeople([
+				...new Set([...memberIds, ...executorRows.map((row) => row.userId)]),
+			]);
+	const label = (userId: string) => {
+		const person = people.get(userId);
+		return person?.name || person?.email || userId;
+	};
+
+	const executors = executorRows.map((row) => ({
+		userId: row.userId,
+		person: label(row.userId),
+		slug: row.slug ?? "",
+		displayName: row.displayName ?? "",
+		title: row.title ?? "",
+		linkedinUrl: row.linkedinUrl ?? "",
+		dailyQuota: row.dailyQuota,
+		gmailAuthorizedAt: row.gmailAuthorizedAt,
+		crmOwnerId: row.crmOwnerId,
+	}));
+	const taken = new Set(executorRows.map((row) => row.userId));
+	const candidates = memberIds
+		.filter((userId) => !taken.has(userId))
+		.map((userId) => ({
+			userId,
+			person: label(userId),
+			suggestedSlug: suggestExecutorSlug(people.get(userId)?.email),
+		}));
+
+	const approvals = (agentsResult.data ?? [])
+		.filter((row) => row.enabled === true)
+		.map((row) => {
+			const agent = row.agent as string;
+			return {
+				agent,
+				name: isCatalogAgent(agent) ? AGENT_CATALOG[agent].name : agent,
+				nodes: approvableNodes(agent).map((node) => ({
+					node,
+					policy: readPolicy(row.config, node),
+				})),
+			};
+		})
+		.filter((entry) => entry.nodes.length > 0);
+
 	const connections = toConnectionRows(connectionsResult.data ?? []);
 
 	return (
@@ -80,69 +166,33 @@ export default async function SettingsPage({
 
 			<section>
 				<h2 className="mb-3 text-lg">Ejecutores</h2>
-				<p className="mb-3 text-muted-foreground text-sm">
-					Cupo diario y conexiones se editan por ahora con{" "}
-					<code className="rounded bg-muted px-1 py-0.5 text-xs">
-						npm run executors:set
-					</code>
-					.
-				</p>
-				<ul className="divide-y rounded-lg border bg-card empty:hidden">
-					{executors.map((executor) => (
-						<li
-							key={executor.userId}
-							className="flex flex-wrap items-center gap-3 px-4 py-3"
-						>
-							<span className="font-medium text-sm">
-								{executor.slug ?? executor.userId}
-							</span>
-							<span className="text-muted-foreground text-sm">
-								{executor.dailyQuota} por día
-							</span>
-							<span className="ml-auto text-muted-foreground text-xs">
-								{executor.gmailAuthorizedAt
-									? `Gmail autorizado ${fecha(executor.gmailAuthorizedAt)}`
-									: "Sin autorizar Gmail"}
-							</span>
-						</li>
-					))}
-				</ul>
-				{executors.length === 0 ? (
-					<p className="text-muted-foreground text-sm">
-						Todavía no hay ejecutores configurados.
-					</p>
-				) : null}
+				{executorsFailed ? (
+					<Unreadable />
+				) : (
+					<ExecutorsSection
+						candidates={candidates}
+						executors={executors}
+						slug={slug}
+					/>
+				)}
 			</section>
 
 			<section>
-				<h2 className="mb-3 text-lg">Conexiones</h2>
-				<ul className="divide-y rounded-lg border bg-card empty:hidden">
-					{connections.map((connection) => (
-						<li
-							key={connection.id}
-							className="flex items-center gap-3 px-4 py-3"
-						>
-							<span className="font-medium text-sm">{connection.provider}</span>
-							<span className="text-muted-foreground text-sm">
-								{connection.capability}
-							</span>
-							<span
-								className={
-									connection.enabled
-										? "ml-auto text-sm"
-										: "ml-auto text-muted-foreground text-sm"
-								}
-							>
-								{connection.enabled ? "Habilitada" : "Deshabilitada"}
-							</span>
-						</li>
-					))}
-				</ul>
-				{connections.length === 0 ? (
-					<p className="text-muted-foreground text-sm">
-						Todavía no hay conexiones configuradas.
-					</p>
-				) : null}
+				<h2 className="mb-3 text-lg">Aprobaciones</h2>
+				{agentsResult.error ? (
+					<Unreadable />
+				) : (
+					<ApprovalsSection agents={approvals} slug={slug} />
+				)}
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Conectores</h2>
+				{connectionsResult.error ? (
+					<Unreadable />
+				) : (
+					<ConnectionsSection connections={connections} slug={slug} />
+				)}
 			</section>
 
 			<Link
