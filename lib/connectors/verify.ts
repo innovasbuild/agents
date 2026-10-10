@@ -9,7 +9,9 @@ export async function checkConnectors(
 	uids: string[],
 	deps: {
 		inVercel: boolean;
-		describe: (uid: string) => Promise<{ name: string; service: string } | null>;
+		describe: (
+			uid: string,
+		) => Promise<{ name: string; service: string } | null>;
 	},
 ): Promise<ConnectorCheck> {
 	if (!deps.inVercel || uids.length === 0) return { ok: true, names: {} };
@@ -38,7 +40,12 @@ export async function checkConnectors(
 }
 
 /** Nombre guardado en la base: los de todos los identificadores, en orden. */
-export function verifiedNameFor(uids: string[], names: Record<string, string>): string | null {
+export function verifiedNameFor(
+	uids: string[],
+	names: Record<string, string>,
+): string | null {
 	const found = uids.map((uid) => names[uid]).filter(Boolean);
-	return found.length === uids.length && found.length > 0 ? found.join(", ") : null;
+	return found.length === uids.length && found.length > 0
+		? found.join(", ")
+		: null;
 }

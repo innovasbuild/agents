@@ -181,7 +181,10 @@ export async function describeConnector(
 		const metadata = await getConnectorMetadata(uid);
 		return { name: metadata.name, service: metadata.service };
 	} catch (error) {
-		if (error instanceof ConnectError && (error.status === 404 || error.status === 403)) {
+		if (
+			error instanceof ConnectError &&
+			(error.status === 404 || error.status === 403)
+		) {
 			return null;
 		}
 		throw error;

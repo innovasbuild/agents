@@ -1,21 +1,31 @@
 import { describe, expect, it, vi } from "vitest";
 import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
 
-const describeOk = async (uid: string) => ({ name: `Nombre ${uid}`, service: "coldiq" });
+const describeOk = async (uid: string) => ({
+	name: `Nombre ${uid}`,
+	service: "coldiq",
+});
 
 describe("checkConnectors", () => {
 	it("en Vercel, confirma cada identificador y devuelve sus nombres", async () => {
 		expect(
-			await checkConnectors(["a", "b"], { inVercel: true, describe: describeOk }),
+			await checkConnectors(["a", "b"], {
+				inVercel: true,
+				describe: describeOk,
+			}),
 		).toEqual({ ok: true, names: { a: "Nombre a", b: "Nombre b" } });
 	});
 
 	it("en Vercel, un identificador que no existe corta y lo nombra", async () => {
-		const describe = async (uid: string) => (uid === "b" ? null : { name: "A", service: "s" });
+		const describe = async (uid: string) =>
+			uid === "b" ? null : { name: "A", service: "s" };
 
-		expect(await checkConnectors(["a", "b"], { inVercel: true, describe })).toEqual({
+		expect(
+			await checkConnectors(["a", "b"], { inVercel: true, describe }),
+		).toEqual({
 			ok: false,
-			message: "El conector `b` no existe o no está adjunto a este proyecto en Vercel.",
+			message:
+				"El conector `b` no existe o no está adjunto a este proyecto en Vercel.",
 		});
 	});
 
@@ -36,10 +46,12 @@ describe("checkConnectors", () => {
 	it("fuera de Vercel no consulta y no hay nombres", async () => {
 		const describe = vi.fn(describeOk);
 
-		expect(await checkConnectors(["a"], { inVercel: false, describe })).toEqual({
-			ok: true,
-			names: {},
-		});
+		expect(await checkConnectors(["a"], { inVercel: false, describe })).toEqual(
+			{
+				ok: true,
+				names: {},
+			},
+		);
 		expect(describe).not.toHaveBeenCalled();
 	});
 

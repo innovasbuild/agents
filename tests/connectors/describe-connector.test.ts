@@ -49,10 +49,13 @@ describe("describeConnector", () => {
 		expect(state.calls).toEqual(["acme-coldiq"]);
 	});
 
-	it.each([404, 403])("si Vercel responde %s, el conector no está: null", async (status) => {
-		state.error = new connect.ConnectError("no", { status });
-		expect(await describeConnector("x")).toBeNull();
-	});
+	it.each([404, 403])(
+		"si Vercel responde %s, el conector no está: null",
+		async (status) => {
+			state.error = new connect.ConnectError("no", { status });
+			expect(await describeConnector("x")).toBeNull();
+		},
+	);
 
 	it("cualquier otro error se propaga", async () => {
 		state.error = new connect.ConnectError("boom", { status: 500 });
