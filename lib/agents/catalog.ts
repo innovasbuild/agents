@@ -13,6 +13,9 @@ export interface AgentCatalogEntry {
 	capabilities: readonly Capability[];
 	/** Si el agente puede recibir acceso al brain de la empresa. */
 	brain: boolean;
+	/** Si el agente no puede trabajar sin el brain de la empresa: la consola no
+	 * lo deja habilitar hasta que haya uno (spec 21.3 §3.7). */
+	requiresBrain: boolean;
 }
 
 export const AGENT_CATALOG = {
@@ -22,6 +25,7 @@ export const AGENT_CATALOG = {
 			"Investiga cuentas, redacta mensajes y arma la cola de envíos de tu empresa.",
 		capabilities: ["crm", "leads", "mail"],
 		brain: true,
+		requiresBrain: true,
 	},
 } as const satisfies Record<string, AgentCatalogEntry>;
 

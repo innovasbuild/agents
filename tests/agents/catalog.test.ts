@@ -45,4 +45,8 @@ describe("catálogo de agentes", () => {
 		expect(isCatalogAgent("soporte")).toBe(false);
 		expect(isCatalogAgent("toString")).toBe(false);
 	});
+
+	it("el outreach requiere brain", () => {
+		expect(AGENT_CATALOG.outreach.requiresBrain).toBe(true);
+	});
 });

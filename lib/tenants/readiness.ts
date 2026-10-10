@@ -7,14 +7,29 @@ export type ReadinessIssue =
 	| "agentes"
 	| "brain"
 	| "conectores"
-	| "verificacion";
+	| "verificacion"
+	| "icp"
+	| "marco";
 
 export const READINESS_LABELS: Record<ReadinessIssue, string> = {
 	agentes: "sin agentes habilitados",
 	brain: "sin brain",
 	conectores: "faltan conectores",
 	verificacion: "conectores sin verificar",
+	icp: "falta el ICP en el brain",
+	marco: "faltan hooks y vectores en el brain",
 };
+
+/** Qué se pudo leer de un bloque del canon. "sin_leer" (brain caído o sin
+ * brain) no es un motivo: lo avisa la consola aparte. */
+export type CanonState = "ok" | "falta" | "invalido" | "sin_leer";
+
+export function canonState(load: { ok: boolean; reason?: string }): CanonState {
+	if (load.ok) return "ok";
+	return load.reason === "falta" || load.reason === "invalido"
+		? load.reason
+		: "sin_leer";
+}
 
 interface ConnectionState {
 	capability: string;
@@ -35,6 +50,7 @@ function needsVerification(c: ConnectionState): boolean {
 export function tenantReadiness(input: {
 	agents: { agent: string; enabled: boolean }[];
 	connections: ConnectionState[];
+	canon?: { icp: CanonState; marco: CanonState };
 }): { ready: boolean; missing: ReadinessIssue[] } {
 	const missing: ReadinessIssue[] = [];
 	const enabledAgents = input.agents.filter((a) => a.enabled);
@@ -56,6 +72,18 @@ export function tenantReadiness(input: {
 
 	if (enabled.some((c) => needsVerification(c) && c.verifiedAt === null)) {
 		missing.push("verificacion");
+	}
+
+	// Solo si algún agente habilitado necesita el brain y el brain está: sin
+	// brain ya figura "brain", y pedir además el ICP sería ruido.
+	const needsCanon = enabledAgents.some(
+		({ agent }) => isCatalogAgent(agent) && AGENT_CATALOG[agent].requiresBrain,
+	);
+	if (needsCanon && input.canon && !missing.includes("brain")) {
+		if (input.canon.icp === "falta" || input.canon.icp === "invalido")
+			missing.push("icp");
+		if (input.canon.marco === "falta" || input.canon.marco === "invalido")
+			missing.push("marco");
 	}
 
 	return { ready: missing.length === 0, missing };

@@ -27,6 +27,8 @@ const state = vi.hoisted(() => ({
 	describeCalls: [] as string[],
 	seed: true as boolean | Error,
 	seedCalls: [] as string[][],
+	brainRows: [{ id: "b1" }] as { id: string }[],
+	brainRowsError: null as { message: string } | null,
 }));
 
 vi.mock("next/cache", () => ({
@@ -44,13 +46,18 @@ vi.mock("@/lib/supabase/admin", () => ({
 			state.rpcCalls.push({ fn, args });
 			return state.rpc;
 		},
-		from: () => ({
-			select: () => ({
-				eq: () => ({
-					maybeSingle: async () => ({ data: state.row, error: state.rowError }),
+		from: (_table: string) => {
+			const chain = {
+				select: () => chain,
+				eq: () => chain,
+				limit: async () => ({
+					data: state.brainRows,
+					error: state.brainRowsError,
 				}),
-			}),
-		}),
+				maybeSingle: async () => ({ data: state.row, error: state.rowError }),
+			};
+			return chain;
+		},
 	}),
 }));
 vi.mock("@/lib/connectors/auth", () => ({
@@ -76,6 +83,8 @@ const SIN_PERMISO = { ok: false, message: "No tenés permiso." };
 const GENERICO = { ok: false, message: "No se pudo guardar. Probá de nuevo." };
 
 beforeEach(() => {
+	state.brainRows = [{ id: "b1" }];
+	state.brainRowsError = null;
 	state.seed = true;
 	state.seedCalls = [];
 	state.admin = true;
@@ -145,6 +154,34 @@ describe("gate común", () => {
 });
 
 describe("setAgent", () => {
+	it("no deja habilitar el outreach sin brain habilitado", async () => {
+		state.brainRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({
+			ok: false,
+			message: "Este agente necesita el brain. Creá el brain primero.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("deshabilitar no exige brain", async () => {
+		state.brainRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", false, "none"),
+		).toEqual({ ok: true });
+	});
+
+	it("si no puede leer las conexiones, no habilita", async () => {
+		state.brainRowsError = { message: "caída" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual(GENERICO);
+		expect(state.rpcCalls).toHaveLength(0);
+		log.mockRestore();
+	});
+
 	it("llama platform_set_agent con el actor", async () => {
 		expect(
 			await actions.setAgent("acme", TENANT, "outreach", false, "none"),

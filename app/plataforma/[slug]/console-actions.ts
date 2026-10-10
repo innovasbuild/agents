@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { isCatalogAgent } from "@/lib/agents/catalog";
+import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
 import { describeConnector } from "@/lib/connectors/auth";
 import { inVercel } from "@/lib/connectors/env";
 import {
@@ -88,6 +88,27 @@ export async function setAgent(
 	if (!isCatalogAgent(agent))
 		return { ok: false, message: "Ese agente no existe en el catálogo." };
 	if (!(BRAIN_ACCESS as readonly string[]).includes(brain)) return INVALIDO;
+
+	// El catálogo vive en código: la base no sabe qué agente necesita brain.
+	if (enabled === true && AGENT_CATALOG[agent].requiresBrain) {
+		const { data, error } = await createAdminClient()
+			.from("tenant_connections")
+			.select("id")
+			.eq("tenant_id", tenantId)
+			.eq("capability", "brain")
+			.eq("enabled", true)
+			.limit(1);
+		if (error) {
+			console.error("consola: no pude leer el brain:", error.message);
+			return GENERICO;
+		}
+		if (!data || data.length === 0) {
+			return {
+				ok: false,
+				message: "Este agente necesita el brain. Creá el brain primero.",
+			};
+		}
+	}
 
 	return call(slug, "platform_set_agent", {
 		p_actor: admin.userId,
