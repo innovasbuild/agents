@@ -73,6 +73,7 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 					message: "Ese slug está reservado o tiene un formato inválido.",
 				};
 			if (error?.code === "42501") return SIN_PERMISO;
+			console.error("platform_create_tenant failed", error);
 			return NO_CREO;
 		}
 
@@ -119,7 +120,8 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 
 		revalidatePath("/plataforma");
 		return { ok: true, slug: input.slug, warnings };
-	} catch {
+	} catch (error) {
+		console.error("createTenant failed", error);
 		return NO_CREO;
 	}
 }

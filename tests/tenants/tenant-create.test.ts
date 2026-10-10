@@ -66,6 +66,12 @@ describe("createTenantSchema", () => {
 		);
 	});
 
+	it("un agente repetido no se acepta", () => {
+		expect(message({ agents: ["outreach", "outreach"] })).toBe(
+			"Hay un agente repetido.",
+		);
+	});
+
 	it("rechaza un slug con mayúsculas o espacios", () => {
 		expect(message({ slug: "Acme SA" })).toBe(
 			"El slug va en minúsculas, con números y guiones, y empieza con letra.",

@@ -197,6 +197,38 @@ describe("createTenant", () => {
 		});
 	});
 
+	it("un error inesperado devuelve el genérico, lo deja en console.error y no sigue", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			state.rpc = { data: null, error: { code: "XX000", message: "boom" } };
+			const logo = new File(["png"], "l.png", { type: "image/png" });
+
+			expect(await createTenant(form({ logo }))).toEqual({
+				ok: false,
+				message: "No se pudo crear la empresa.",
+			});
+			expect(spy).toHaveBeenCalledWith(
+				"platform_create_tenant failed",
+				state.rpc.error,
+			);
+			expect(state.uploads).toHaveLength(0);
+			expect(state.inviteCalls).toHaveLength(0);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it("los errores mapeados no ensucian console.error", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			state.rpc = { data: null, error: { code: "23505", message: "dup" } };
+			await createTenant(form());
+			expect(spy).not.toHaveBeenCalled();
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
 	it("traduce un slug repetido", async () => {
 		state.rpc = { data: null, error: { code: "23505", message: "dup" } };
 
