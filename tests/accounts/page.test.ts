@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
 	ownerMarks: [] as string[],
 	owner: "777" as string | null,
 	ownerThrows: false,
+	notInstalled: false,
 }));
 
 vi.mock("@/lib/outreach/web-session", () => ({
@@ -74,7 +75,7 @@ vi.mock("@/lib/connectors/auth", () => ({
 		return { url: "x", expiresAt: null };
 	},
 	isConnectAuthError: (e: unknown) => e === AUTH,
-	isConnectorNotInstalledError: () => false,
+	isConnectorNotInstalledError: () => state.notInstalled,
 }));
 vi.mock("@/lib/connectors/executors", () => ({
 	markGmailAuthorized: async (_t: string, userId: string) => {
@@ -129,6 +130,7 @@ describe("Mis cuentas", () => {
 		state.ownerMarks = [];
 		state.owner = "777";
 		state.ownerThrows = false;
+		state.notInstalled = false;
 	});
 
 	it("sin acceso da 404", async () => {
@@ -193,6 +195,22 @@ describe("Mis cuentas", () => {
 			state.tokens = { "mcp.hubspot.com/hubspot": "boom" };
 			const html = await render();
 			expect(html).toContain("No pude comprobarlo");
+			expect(html).not.toContain("<button");
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it("conector no instalado: lo dice y no ofrece botón", async () => {
+		state.executor = null;
+		state.notInstalled = true;
+		state.tokens = { "mcp.hubspot.com/hubspot": "boom" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			const html = await render();
+			expect(html).toContain(
+				"No disponible: pedile a INNOV.AS que la habilite",
+			);
 			expect(html).not.toContain("<button");
 		} finally {
 			log.mockRestore();

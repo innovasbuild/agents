@@ -48,7 +48,8 @@ export async function markGmailAuthorized(
 /**
  * Sella el dueño de HubSpot del ejecutor. Es un hecho que informa HubSpot, no
  * una preferencia: lo escribe el servidor, no una función del cliente (spec
- * 21.2 S8). Solo actualiza: quien no es ejecutor no pasa a serlo por esto.
+ * 21.2 S8). Solo actualiza: quien no es ejecutor no pasa a serlo por esto, y
+ * solo si la columna sigue vacía: nunca pisa un dueño ya guardado.
  */
 export async function markCrmOwner(
 	tenantId: string,
@@ -59,7 +60,8 @@ export async function markCrmOwner(
 		.from("executors")
 		.update({ crm_owner_id: ownerId })
 		.eq("tenant_id", tenantId)
-		.eq("user_id", userId);
+		.eq("user_id", userId)
+		.is("crm_owner_id", null);
 	if (error)
 		throw new Error(
 			`No pude registrar el usuario de HubSpot: ${error.message}`,

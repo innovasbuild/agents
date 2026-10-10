@@ -83,7 +83,9 @@ export default async function MisCuentasPage({
 	};
 	// Pedir un token no modifica nada. Acá NUNCA se llama a
 	// startAuthorizationForSubject: eso es solo por el clic (actions.ts).
-	const tokens = new Map<AccountKey, string>();
+	// Solo se conserva el token de HubSpot (para buscar al dueño); el de Gmail
+	// se descarta apenas termina el sondeo.
+	let hubspotToken: string | undefined;
 	const states = new Map<AccountKey, AccountState>();
 	await Promise.all(
 		accounts.map(async (key) => {
@@ -94,7 +96,7 @@ export default async function MisCuentasPage({
 						subject,
 						account === "gmail" ? [...GMAIL_SCOPES] : undefined,
 					);
-					tokens.set(account, token);
+					if (account === "hubspot") hubspotToken = token;
 				},
 				isAuthError: isConnectAuthError,
 				isNotInstalled: isConnectorNotInstalledError,
@@ -114,7 +116,6 @@ export default async function MisCuentasPage({
 				console.error("mis-cuentas: no pude sellar Gmail:", error);
 			}
 		}
-		const hubspotToken = tokens.get("hubspot");
 		if (
 			states.get("hubspot") === "autorizada" &&
 			!executor.crm_owner_id &&

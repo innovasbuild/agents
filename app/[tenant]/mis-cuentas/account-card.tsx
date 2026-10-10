@@ -13,6 +13,36 @@ import { startAccountAuthorization } from "./actions";
 const REAUTH_WARNING =
 	"Hasta que completes el consentimiento, esta cuenta deja de funcionar. ¿Seguimos?";
 
+export type AuthorizationNotice = { message: string; url: string | null };
+
+/**
+ * El aviso posterior al clic. La URL de autorización vive solo en el estado
+ * del componente (nunca en el HTML previo al clic, ni en logs): window.open
+ * después de esperar a la acción queda fuera del gesto del clic y el
+ * navegador puede bloquearlo sin que se note, así que el link visible es lo
+ * que garantiza que la persona pueda completar el consentimiento.
+ */
+export function AccountNotice({ message, url }: AuthorizationNotice) {
+	return (
+		<div className="text-xs" role="status">
+			{message}
+			{url ? (
+				<>
+					{" "}
+					<a
+						className="underline"
+						href={url}
+						rel="noopener noreferrer"
+						target="_blank"
+					>
+						Abrir la autorización
+					</a>
+				</>
+			) : null}
+		</div>
+	);
+}
+
 export function AccountCard({
 	slug,
 	account,
@@ -25,24 +55,27 @@ export function AccountCard({
 	note?: string;
 }) {
 	const [pending, startTransition] = useTransition();
-	const [message, setMessage] = useState<string | null>(null);
+	const [notice, setNotice] = useState<AuthorizationNotice | null>(null);
 	// Solo se ofrece autorizar cuando se sabe el estado: con "desconocido" el
 	// grant puede estar sano y arrancar una autorización lo rompería.
 	const canAuthorize = state === "autorizada" || state === "sin_autorizar";
 
 	function authorize() {
 		if (state === "autorizada" && !window.confirm(REAUTH_WARNING)) return;
-		setMessage(null);
+		setNotice(null);
 		startTransition(async () => {
 			const result = await startAccountAuthorization(slug, account);
 			if (!result.ok) {
-				setMessage(result.message);
+				setNotice({ message: result.message, url: null });
 				return;
 			}
+			// Puede quedar bloqueado (Safari, o una acción lenta): por eso el link.
 			window.open(result.url, "_blank", "noopener,noreferrer");
-			setMessage(
-				"Completá la autorización en la pestaña que se abrió y recargá esta página.",
-			);
+			setNotice({
+				message:
+					"Completá la autorización y recargá esta página. Si no se abrió una pestaña, abrí el link:",
+				url: result.url,
+			});
 		});
 	}
 
@@ -56,11 +89,7 @@ export function AccountCard({
 				{note ? (
 					<div className="text-muted-foreground text-xs">{note}</div>
 				) : null}
-				{message ? (
-					<div className="text-xs" role="status">
-						{message}
-					</div>
-				) : null}
+				{notice ? <AccountNotice {...notice} /> : null}
 			</div>
 			{canAuthorize ? (
 				<Button

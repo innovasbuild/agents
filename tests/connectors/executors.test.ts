@@ -69,6 +69,11 @@ function fakeClient() {
 							calls.updateFilters.push([column, value]);
 							return query;
 						},
+						is(column: string, value: unknown) {
+							filters.push([column, value]);
+							calls.updateFilters.push([`${column} is`, value]);
+							return query;
+						},
 						// biome-ignore lint/suspicious/noThenProperty: imita el builder de supabase-js
 						then(resolve: (result: { error: unknown }) => unknown) {
 							if (updateError)
@@ -160,6 +165,7 @@ describe("markCrmOwner", () => {
 		expect(calls.updateFilters).toEqual([
 			["tenant_id", "tenant-a"],
 			["user_id", "user-1"],
+			["crm_owner_id is", null],
 		]);
 		expect(calls.upserts).toHaveLength(0);
 		expect(db.executors.map((r) => r.crm_owner_id)).toEqual([
@@ -167,6 +173,14 @@ describe("markCrmOwner", () => {
 			null,
 			null,
 		]);
+	});
+
+	it("no pisa un dueño ya guardado: solo escribe si la columna sigue vacía", async () => {
+		db.executors = [
+			{ tenant_id: "tenant-a", user_id: "user-1", crm_owner_id: "111" },
+		];
+		await markCrmOwner("tenant-a", "user-1", "777");
+		expect(db.executors[0]?.crm_owner_id).toBe("111");
 	});
 
 	it("quien no es ejecutor no pasa a serlo", async () => {
