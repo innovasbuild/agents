@@ -53,7 +53,7 @@ update public.executors set crm_owner_id = '<id de owner de HubSpot>' where tena
 ```
 
 - `<tenant>` y `<user>` son los uuid de la empresa y de la persona (`tenants.id` y `auth.users.id`).
-- El id de owner sale de HubSpot > Configuración > Usuarios y equipos (el número va en la dirección de la ficha de la persona), o del `ownerId` que devuelve `hubspot-get-user-details` corrido con la cuenta de esa persona.
+- El id de owner es el `ownerId` que devuelve `hubspot-get-user-details` corrido con la cuenta de esa persona, o el `id` de esa persona en la lista de owners de HubSpot (`GET /crm/v3/owners?email=<mail>`). No es el número de la dirección de la ficha en Configuración > Usuarios: ese es el id de usuario, que es otra cosa.
 - Verificar que la fila existe y quedó cargada: `select slug, crm_owner_id from public.executors where tenant_id = '<tenant>' and user_id = '<user>';`. Si no hay fila, la persona todavía no es ejecutora: se da de alta primero desde la configuración de la empresa.
 - Si "Mis cuentas" ya lo resuelve solo, no hace falta tocar nada.
 
