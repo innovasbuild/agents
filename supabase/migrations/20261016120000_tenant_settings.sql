@@ -16,6 +16,10 @@ alter table public.tenant_connections
 -- Hasta hoy solo plataforma podía deshabilitar.
 update public.tenant_connections set locked_by_platform = true where not enabled;
 
+-- El bloqueo de plataforma implica conector apagado: nunca encendido y bloqueado.
+alter table public.tenant_connections
+  add constraint tenant_connections_lock_implies_disabled check (not (enabled and locked_by_platform));
+
 create or replace function public.platform_set_connection_enabled(
   p_actor uuid, p_connection uuid, p_enabled boolean
 ) returns void language plpgsql security definer set search_path = '' as $$
@@ -43,6 +47,107 @@ begin
   insert into public.events (tenant_id, actor_user_id, type, summary, payload)
   values (v_tenant, p_actor, case when p_enabled then 'connection.enabled' else 'connection.disabled' end,
           v_summary, jsonb_build_object('connection_id', p_connection));
+end;
+$$;
+
+-- Copia exacta de platform_bind_connection (21.1) salvo una línea: al volver a
+-- asociar un conector que plataforma había apagado, se suelta el bloqueo. Sin
+-- eso quedaba encendido y bloqueado a la vez.
+create or replace function public.platform_bind_connection(
+  p_actor uuid,
+  p_tenant uuid,
+  p_capability public.connector_capability,
+  p_provider text,
+  p_connector_uids text[],
+  p_config jsonb,
+  p_verified_name text
+) returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  v_uids text[] := coalesce(p_connector_uids, '{}');
+  v_uid text;
+  v_config jsonb := coalesce(p_config, '{}'::jsonb);
+  v_id uuid;
+  v_owner uuid;
+  v_connection uuid;
+begin
+  if p_actor is null then
+    raise exception 'falta el actor';
+  end if;
+  if (select count(distinct u) from unnest(v_uids) u) <> cardinality(v_uids) then
+    raise exception 'la lista de identificadores tiene repetidos' using errcode = '23514', hint = 'consola';
+  end if;
+  if p_provider <> 'apollo' and cardinality(v_uids) > 1 then
+    raise exception 'este proveedor lleva un solo identificador' using errcode = '23514', hint = 'consola';
+  end if;
+  if p_capability = 'brain' and exists (
+    select 1 from public.tenant_connections c
+    where c.tenant_id = p_tenant and c.capability = 'brain' and c.provider <> p_provider
+  ) then
+    raise exception 'la empresa ya tiene un brain' using errcode = '23514', hint = 'consola';
+  end if;
+
+  -- Un identificador ya reclamado por otra conexión se rechaza antes de tocar
+  -- nada; la clave primaria sigue siendo la red contra una carrera.
+  foreach v_uid in array v_uids loop
+    select k.tenant_id, k.connection_id into v_owner, v_connection
+    from public.connector_claims k where k.connector_uid = v_uid;
+    if v_owner is not null and v_owner <> p_tenant then
+      raise exception 'el conector % ya está asociado a otra empresa', v_uid using errcode = '23505', hint = 'consola';
+    end if;
+    if v_owner is not null and not exists (
+      select 1 from public.tenant_connections c
+      where c.id = v_connection and c.tenant_id = p_tenant and c.capability = p_capability and c.provider = p_provider
+    ) then
+      raise exception 'el conector % ya está asociado a otra conexión de esta empresa', v_uid using errcode = '23505', hint = 'consola';
+    end if;
+  end loop;
+
+  if p_provider = 'apollo' then
+    v_config := v_config || jsonb_build_object('connectorUids', to_jsonb(v_uids));
+  else
+    v_config := v_config - 'connectorUids';
+  end if;
+
+  insert into public.tenant_connections
+    (tenant_id, capability, provider, connector_uid, config, enabled, verified_at, verified_name, updated_by, updated_at)
+  values
+    (p_tenant, p_capability, p_provider,
+     case when cardinality(v_uids) >= 1 then v_uids[1] end,
+     v_config, true,
+     case when p_verified_name is null then null else now() end,
+     p_verified_name, p_actor, now())
+  on conflict (tenant_id, capability, provider) do update
+    set connector_uid = excluded.connector_uid,
+        config = excluded.config,
+        enabled = true,
+        locked_by_platform = false,
+        verified_at = excluded.verified_at,
+        verified_name = excluded.verified_name,
+        updated_by = excluded.updated_by,
+        updated_at = now()
+  returning id into v_id;
+
+  delete from public.connector_claims where connection_id = v_id;
+  begin
+    insert into public.connector_claims (connector_uid, tenant_id, connection_id)
+    select u, p_tenant, v_id from unnest(v_uids) u;
+  exception when unique_violation then
+    raise exception 'uno de los conectores ya está asociado a otra empresa' using errcode = '23505', hint = 'consola';
+  end;
+
+  if p_capability = 'brain' then
+    insert into public.brain_access_rules (tenant_id, path, principal, user_id, level, created_by)
+    values (p_tenant, '', 'members', null, 'lector', p_actor)
+    on conflict do nothing;
+  end if;
+
+  insert into public.events (tenant_id, actor_user_id, type, summary, payload)
+  values (p_tenant, p_actor, 'connection.bound', p_capability || '/' || p_provider,
+          jsonb_build_object('capability', p_capability, 'provider', p_provider,
+                             'connector_uid', case when cardinality(v_uids) >= 1 then v_uids[1] end,
+                             'connector_uids', to_jsonb(v_uids), 'binding_id', v_id, 'actor', 'consola'));
+
+  return v_id;
 end;
 $$;
 
@@ -121,6 +226,11 @@ declare
   v_actor uuid := public.settings_actor(p_tenant);
   v_slug text;
 begin
+  -- Bloquea la fila del ejecutor primero: un encolado concurrente toma KEY SHARE
+  -- sobre ella (clave foránea) y queda esperando, en vez de colarse entre el
+  -- chequeo de historial y el borrado.
+  perform 1 from public.executors e where e.tenant_id = p_tenant and e.user_id = p_user for update;
+
   -- Las claves foráneas hacia executors son on delete cascade (queue_items,
   -- search_focuses) o set null (contacts): borrar se llevaría el historial de
   -- envíos sin avisar. Se chequea acá, antes de tocar nada.
