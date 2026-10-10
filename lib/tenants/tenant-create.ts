@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isCatalogAgent } from "@/lib/agents/catalog";
 import { isAllowedDomain } from "@/lib/invitations/domain";
 import {
 	authMethodsSchema,
@@ -31,6 +32,9 @@ export function readCreateForm(formData: FormData): unknown {
 		secondary: text(formData, "secondary").trim(),
 		adminEmail: text(formData, "admin_email").trim().toLowerCase(),
 		allowExternalAdmin: formData.has("allow_external_admin"),
+		agents: formData
+			.getAll("agents")
+			.filter((value): value is string => typeof value === "string"),
 	};
 }
 
@@ -57,6 +61,15 @@ export const createTenantSchema = z
 			error: "El correo del primer administrador no es válido.",
 		}),
 		allowExternalAdmin: z.boolean(),
+		agents: z
+			.array(z.string())
+			.min(1, { error: "Elegí al menos un agente." })
+			.refine((list) => list.every(isCatalogAgent), {
+				error: "Hay un agente que no existe en el catálogo.",
+			})
+			.refine((list) => new Set(list).size === list.length, {
+				error: "Hay un agente repetido.",
+			}),
 	})
 	.superRefine((input, context) => {
 		// Se valida ANTES de crear la empresa: un error acá no puede dejar una

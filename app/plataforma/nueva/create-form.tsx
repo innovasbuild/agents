@@ -5,6 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AGENT_CATALOG, catalogAgents } from "@/lib/agents/catalog";
 import { AUTH_METHOD_LABELS, AUTH_METHODS } from "@/lib/tenants/auth-methods";
 import { createTenant } from "./actions";
 
@@ -86,6 +87,27 @@ export function CreateForm() {
 							defaultChecked
 						/>
 						{AUTH_METHOD_LABELS[method]}
+					</label>
+				))}
+			</fieldset>
+
+			<fieldset className="space-y-2">
+				<legend className="text-sm">Agentes</legend>
+				{catalogAgents().map((agent) => (
+					<label className="flex items-start gap-2 text-sm" key={agent}>
+						<input
+							className="mt-1"
+							defaultChecked
+							name="agents"
+							type="checkbox"
+							value={agent}
+						/>
+						<span>
+							{AGENT_CATALOG[agent].name}
+							<span className="block text-muted-foreground text-xs">
+								{AGENT_CATALOG[agent].description}
+							</span>
+						</span>
 					</label>
 				))}
 			</fieldset>
