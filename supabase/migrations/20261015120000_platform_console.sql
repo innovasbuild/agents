@@ -173,7 +173,7 @@ begin
   end if;
   if p_capability = 'brain' and exists (
     select 1 from public.tenant_connections c
-    where c.tenant_id = p_tenant and c.capability = 'brain' and c.enabled and c.provider <> p_provider
+    where c.tenant_id = p_tenant and c.capability = 'brain' and c.provider <> p_provider
   ) then
     raise exception 'la empresa ya tiene un brain' using errcode = '23514', hint = 'consola';
   end if;
@@ -253,10 +253,14 @@ begin
     raise exception 'falta el actor';
   end if;
 
-  update public.tenant_connections
-     set enabled = p_enabled, updated_by = p_actor, updated_at = now()
-   where id = p_connection
-  returning tenant_id, capability || '/' || provider into v_tenant, v_summary;
+  begin
+    update public.tenant_connections
+       set enabled = p_enabled, updated_by = p_actor, updated_at = now()
+     where id = p_connection
+    returning tenant_id, capability || '/' || provider into v_tenant, v_summary;
+  exception when unique_violation then
+    raise exception 'la empresa ya tiene un brain' using errcode = '23514', hint = 'consola';
+  end;
   if v_tenant is null then
     raise exception 'no existe la conexión' using errcode = 'P0002';
   end if;

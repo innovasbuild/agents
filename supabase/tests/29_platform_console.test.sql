@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(46);
+select plan(48);
 
 -- Personas: 1 administra la plataforma (actor), 2 es tenant_admin de pc-a, 3 miembro de pc-a.
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -146,6 +146,13 @@ select is(
 select throws_ok(
   $$select public.platform_bind_connection('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000a', 'brain', 'mcp', '{pc-a-brain-ext}', '{}'::jsonb, null)$$,
   '23514', 'la empresa ya tiene un brain', 'un segundo brain con otro proveedor falla');
+select public.platform_set_connection_enabled('c9c9c9c9-0000-0000-0000-000000000001', (select id from public.tenant_connections where tenant_id = 'd9d9d9d9-0000-0000-0000-00000000000a' and capability = 'brain'), false);
+select throws_ok(
+  $$select public.platform_bind_connection('c9c9c9c9-0000-0000-0000-000000000001', 'd9d9d9d9-0000-0000-0000-00000000000a', 'brain', 'mcp', '{pc-a-brain-ext}', '{}'::jsonb, null)$$,
+  '23514', 'la empresa ya tiene un brain', 'con el brain deshabilitado tampoco entra un segundo');
+select lives_ok(
+  $$select public.platform_set_connection_enabled('c9c9c9c9-0000-0000-0000-000000000001', (select id from public.tenant_connections where tenant_id = 'd9d9d9d9-0000-0000-0000-00000000000a' and capability = 'brain'), true)$$,
+  'el brain se puede volver a habilitar');
 
 -- 36-40: habilitar, verificar, quitar.
 select lives_ok(
@@ -153,7 +160,7 @@ select lives_ok(
   'deshabilita');
 select is(
   (select string_agg(type, ',' order by id) from public.events where tenant_id = 'd9d9d9d9-0000-0000-0000-00000000000a' and type in ('connection.disabled')),
-  'connection.disabled', 'deja el evento');
+  'connection.disabled,connection.disabled', 'deja el evento (el del brain y el de coldiq)');
 select lives_ok(
   $$select public.platform_mark_connection_verified('c9c9c9c9-0000-0000-0000-000000000001', (select id from public.tenant_connections where tenant_id = 'd9d9d9d9-0000-0000-0000-00000000000a' and provider = 'apollo'), 'Apollo PC A')$$,
   'marca verificado');
