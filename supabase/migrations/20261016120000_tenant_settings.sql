@@ -244,7 +244,7 @@ begin
   delete from public.executors where tenant_id = p_tenant and user_id = p_user
   returning slug into v_slug;
   if not found then
-    raise exception 'no es ejecutor de la empresa' using errcode = 'P0002';
+    raise exception 'Esa persona ya no es ejecutora.' using errcode = 'P0002', hint = 'settings';
   end if;
 
   insert into public.events (tenant_id, actor_user_id, type, summary, payload)
@@ -298,18 +298,20 @@ begin
    where c.id = p_connection and c.tenant_id = p_tenant
      for update;
   if not found then
-    raise exception 'no existe la conexión' using errcode = 'P0002';
+    raise exception 'Esa conexión ya no existe.' using errcode = 'P0002', hint = 'settings';
   end if;
   if v_row.capability = 'brain' then
     raise exception 'el brain lo maneja INNOV.AS' using errcode = '23514', hint = 'settings';
   end if;
+  -- Esta función nunca escribe locked_by_platform: solo plataforma lo cambia.
+  -- Apagar una fila bloqueada la deja bloqueada; encenderla se rechaza acá.
   if p_enabled and v_row.locked_by_platform then
     raise exception 'INNOV.AS deshabilitó este conector: pedile que lo habilite'
       using errcode = '23514', hint = 'settings';
   end if;
 
   update public.tenant_connections
-     set enabled = p_enabled, locked_by_platform = false, updated_by = v_actor, updated_at = now()
+     set enabled = p_enabled, updated_by = v_actor, updated_at = now()
    where id = p_connection;
 
   insert into public.events (tenant_id, actor_user_id, type, summary, payload)

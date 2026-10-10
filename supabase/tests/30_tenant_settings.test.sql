@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(71);
+select plan(83);
 
 -- Personas: 1 admin de ts-a, 2 miembro de ts-a (ejecutor candidato), 3 admin de
 -- ts-b, 4 platform_admin (en ts-p), 5 miembro de ts-a con historial, 6 nadie,
@@ -167,6 +167,18 @@ select throws_ok(
 select throws_ok(
   $$select public.set_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002', 'Ana!', null, null, 'http://linkedin.com/ana', 30)$$,
   '23514', null, 'slug o LinkedIn con formato inválido');
+select throws_ok(
+  $$select public.set_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002', 'ana', null, null, 'http://linkedin.com/ana', 30)$$,
+  '23514', 'el LinkedIn tiene que ser una dirección https://www.linkedin.com/in/…', 'con slug válido, un LinkedIn inválido también se rechaza');
+select is(
+  pg_temp.hint_of($$select public.set_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002', 'ana', null, null, 'http://linkedin.com/ana', 30)$$),
+  'settings', 'el LinkedIn inválido lleva el hint settings');
+select is(
+  pg_temp.hint_of($$select public.set_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002', 'beto', null, null, null, 30)$$),
+  'settings', 'el slug repetido lleva el hint settings');
+select is(
+  pg_temp.hint_of($$select public.set_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002', 'ana', null, null, null, 201)$$),
+  'settings', 'el cupo inválido lleva el hint settings');
 
 -- 21-27: remove_executor. Con historial se niega y nada se borra.
 select throws_ok(
@@ -185,7 +197,10 @@ select lives_ok(
   'sin historial se quita');
 select throws_ok(
   $$select public.remove_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002')$$,
-  'P0002', null, 'quitar a quien no es ejecutor');
+  'P0002', 'Esa persona ya no es ejecutora.', 'quitar a quien no es ejecutor');
+select is(
+  pg_temp.hint_of($$select public.remove_executor('d0d0d0d0-0000-0000-0000-00000000000a', 'c0c0c0c0-0000-0000-0000-000000000002')$$),
+  'settings', 'y la UI recibe el hint settings');
 select pg_temp.logout();
 select is(
   (select count(*)::int from public.executors where tenant_id = 'd0d0d0d0-0000-0000-0000-00000000000a' and user_id = 'c0c0c0c0-0000-0000-0000-000000000002'),
@@ -245,6 +260,12 @@ select throws_ok(
 select throws_ok(
   $$select public.set_approval('d0d0d0d0-0000-0000-0000-00000000000a', 'soporte', 'soporte/responder', 'auto')$$,
   '23514', 'la empresa no tiene ese agente', 'agente que la empresa no tiene');
+select is(
+  pg_temp.hint_of($$select public.set_approval('d0d0d0d0-0000-0000-0000-00000000000a', 'outreach', 'outreach/crm-record', 'nunca')$$),
+  'settings', 'la política desconocida lleva el hint settings');
+select is(
+  pg_temp.hint_of($$select public.set_approval('d0d0d0d0-0000-0000-0000-00000000000a', 'outreach', 'soporte/responder', 'auto')$$),
+  'settings', 'el nodo de otro agente lleva el hint settings');
 select pg_temp.login_as(4);
 select lives_ok(
   $$select public.set_approval('d0d0d0d0-0000-0000-0000-00000000000a', 'outreach', 'outreach/crm-record', 'always')$$,
@@ -264,6 +285,9 @@ select throws_ok(
 select throws_ok(
   $$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000004', false)$$,
   'P0002', null, 'una conexión de otra empresa no existe para él');
+select is(
+  pg_temp.hint_of($$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000004', false)$$),
+  'settings', 'y la UI recibe el hint settings');
 select pg_temp.login_as(3);
 select throws_ok(
   $$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000002', false)$$,
@@ -286,6 +310,19 @@ select pg_temp.login_as(1);
 select throws_ok(
   $$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000002', true)$$,
   '23514', 'INNOV.AS deshabilitó este conector: pedile que lo habilite', 'el cliente no lo rehabilita');
+select is(
+  pg_temp.hint_of($$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000002', true)$$),
+  'settings', 'y la negativa lleva el hint settings');
+-- Página vieja o POST directo: el cliente "apaga" lo que plataforma ya apagó.
+select lives_ok(
+  $$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000002', false)$$,
+  'el cliente apaga un conector que plataforma ya había apagado');
+select is(
+  (select (enabled, locked_by_platform)::text from public.tenant_connections where id = 'e0e0e0e0-0000-0000-0000-000000000002'),
+  '(f,t)', 'sigue bloqueado: la función del cliente no suelta el bloqueo');
+select throws_ok(
+  $$select public.set_connection_enabled('d0d0d0d0-0000-0000-0000-00000000000a', 'e0e0e0e0-0000-0000-0000-000000000002', true)$$,
+  '23514', 'INNOV.AS deshabilitó este conector: pedile que lo habilite', 'y sigue sin poder encenderlo');
 select pg_temp.logout();
 select lives_ok(
   $$select public.platform_set_connection_enabled('c0c0c0c0-0000-0000-0000-000000000004', 'e0e0e0e0-0000-0000-0000-000000000002', true)$$,
