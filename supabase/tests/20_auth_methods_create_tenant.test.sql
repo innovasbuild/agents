@@ -34,13 +34,11 @@ select throws_ok(
   '23514', null, 'auth_methods rechaza un método desconocido'
 );
 
--- platform_admin crea una empresa y su agente en una sola llamada.
-set local role authenticated;
-set local "request.jwt.claims" to '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}';
-
+-- El alta la hace el servidor (service_role) desde la consola, con el actor
+-- explícito. Ningún rol de sesión puede llamarla.
 select lives_ok(
-  $$select public.create_tenant('acme', 'Acme', '{acme.test}', '{email}', '{"primary":"#112233"}'::jsonb)$$,
-  'platform_admin crea una empresa'
+  $$select public.platform_create_tenant('11111111-1111-1111-1111-111111111111', 'acme', 'Acme', '{acme.test}', '{email}', '{"primary":"#112233"}'::jsonb, '{outreach}')$$,
+  'el servidor crea una empresa'
 );
 
 select is(
@@ -48,7 +46,7 @@ select is(
      join public.tenants t on t.id = ta.tenant_id
    where t.slug = 'acme' and ta.agent = 'outreach' and ta.enabled),
   1,
-  'la empresa nueva nace con el agente outreach activo'
+  'la empresa nueva nace con el agente elegido activo'
 );
 
 select is(
@@ -58,16 +56,13 @@ select is(
 );
 
 select throws_ok(
-  $$select public.create_tenant('acme', 'Acme 2', '{}', '{email}', '{}'::jsonb)$$,
+  $$select public.platform_create_tenant('11111111-1111-1111-1111-111111111111', 'acme', 'Acme 2', '{}', '{email}', '{}'::jsonb, '{outreach}')$$,
   '23505', null, 'un slug repetido falla con unique_violation'
 );
 
--- tenant_admin no puede crear empresas: lo frena la RLS de tenants.
-set local "request.jwt.claims" to '{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}';
-
-select throws_ok(
-  $$select public.create_tenant('otra', 'Otra', '{}', '{email}', '{}'::jsonb)$$,
-  '42501', null, 'tenant_admin no puede crear una empresa'
+select ok(
+  not has_function_privilege('authenticated', 'public.platform_create_tenant(uuid, text, text, text[], text[], jsonb, text[])', 'execute'),
+  'ninguna sesión puede crear empresas: lo hace el servidor'
 );
 
 select * from finish();
