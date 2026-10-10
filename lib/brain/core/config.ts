@@ -1,5 +1,5 @@
 // Configuración del proveedor wiki en tenant_connections.config (spec brain
-// §4.3). Solo imports relativos con extensión .ts: la usa scripts/connections-bind.mts con Node directo.
+// §4.3). Solo imports relativos con extensión .ts: la usan scripts de operación con Node directo.
 import { type McpLimits, parseMcpLimits } from "./limits.ts";
 
 export interface WikiConfig {

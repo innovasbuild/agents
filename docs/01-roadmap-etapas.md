@@ -560,17 +560,17 @@ Agregada el 2026-10-09 (resto del G3 tras el PR #81). Completa el ingreso por do
 
 **Modelo Claude Code:** Opus 5 para la spec (decide la frontera plataforma/tenant); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** el que defina el tenant.
-**Spec/Plan:** a escribir. Alcance y propuesta de frontera en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** 21.1: `docs/superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md` · `docs/superpowers/plans/2026-10-10-etapa-21-1-consola-conectores.md`. 21.2 a 21.5: a escribir. Alcance general en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
 
 Agregada el 2026-10-09 (G4 y G7). Dar de alta y operar un cliente sin terminal: agentes, conectores, ejecutores y brain desde la consola de plataforma o el settings del tenant. La **Etapa 7** se corre dentro de esta como prueba.
 
-- [ ] Spec: qué configura platform_admin en `/plataforma/<slug>` (agentes, acceso al brain de cada agente, conectores, binding del brain) y qué configura tenant_admin en `/<slug>/settings` (aprobaciones de nivel 2, cupos, ejecutores); y cómo se abre la escritura de `tenant_connections` y `executors` (RLS por rol o funciones `security definer`).
-- [ ] Pantallas que reemplazan a `connections:bind`, `executors:set` y el alta de brain, con Vercel Connect para api-key u OAuth.
-- [ ] `create_tenant` deja de hardcodear `outreach`: el alta elige agentes de un catálogo mínimo.
-- [ ] Sección "Mis cuentas" para autorizar o reautorizar Gmail y HubSpot sin esperar a que falle una acción de la cola.
-- [ ] **Etapa 7 como prueba:** segundo tenant con otro CRM o ninguno, configurado entero desde la UI, piloto de 5 contactos sin tocar `agents/` ni `lib/`; medir horas contra la Etapa 3.
-- [ ] La página de la Etapa 19 muestra lo habilitado.
-- [ ] `/ship` + `/context-save`.
+Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador configura sus agentes; INNOV.AS ve el estado de todo y asocia las llaves que el cliente le pasa por un canal seguro (`docs/llaves-de-clientes.md`). Cinco entregas:
+
+- [x] **21.1 · Consola: conectores y agentes.** Catálogo de agentes en código; alta de empresa eligiendo agentes; desde `/plataforma/<slug>`, habilitar agentes con su acceso al brain, crear el brain, asociar conectores con verificación contra Vercel, deshabilitar, quitar y verificar; "qué falta" por empresa; `connector_claims` impide que un conector sirva a dos empresas; `tenant_agents` cerrada a `authenticated`; `connections:bind` se va. **Antes de desplegar:** correr en producción la consulta de la spec §9 (ningún conector en dos empresas), aplicar la migración `20261015120000_platform_console` primero (`npx supabase migration list` antes: `db push` aplica todas las pendientes) y recién después el código; al revés, el alta de empresas falla. Después del deploy, apretar Verificar en cada conector de `innovas`.
+- [ ] **21.2 · Settings del cliente.** Ejecutores, aprobaciones de nivel 2, qué conector usa cada agente, "Mis cuentas" para Gmail y HubSpot.
+- [ ] **21.3 · Configuración de outreach.** ICP, listas y presupuestos desde la UI.
+- [ ] **21.4 · Segundo tenant.** La Etapa 7 como prueba, solo con lo anterior.
+- [ ] **21.5 · Clave de modelos por empresa.** Una clave del AI Gateway por cliente, en la cuenta de INNOV.AS, con presupuesto, y el gasto visible para el cliente.
 
 **Terminado cuando:** un platform_admin da de alta una empresa, le habilita agentes y conectores, y un tenant_admin de esa empresa configura ejecutores y aprobaciones, todo desde el navegador; y el piloto del segundo tenant corre sin cambios de código.
 

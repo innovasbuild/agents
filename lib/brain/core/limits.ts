@@ -1,5 +1,5 @@
 // Límites por minuto del endpoint MCP del brain (spec etapa 11 §6.2). Sin
-// imports: lo usa scripts/connections-bind.mts con Node directo.
+// imports: lo usan scripts de operación con Node directo.
 
 export interface McpLimits {
 	readsPerMinute: number;

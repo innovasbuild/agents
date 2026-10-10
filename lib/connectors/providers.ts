@@ -1,5 +1,5 @@
 // Registro puro de proveedores de conectores (spec 02 §4). Sin imports y solo
-// con sintaxis de tipos borrable: scripts/connections-bind.mts lo ejecuta con
+// con sintaxis de tipos borrable: un script de operación lo ejecuta con
 // Node directo, sin bundler.
 
 export type Capability = "crm" | "leads" | "enrichment" | "brain" | "mail";

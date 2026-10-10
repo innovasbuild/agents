@@ -163,6 +163,6 @@ su propio repo.
 | `AccessRulesStore` | `core/access/types.ts` | Reglas de acceso del tenant. `createSupabaseAccessRulesStore(client)` lee `brain_access_rules`; si falla, lanza (falla cerrada) |
 | `SaveDeps` | `core/editor/save.ts` | Sesión, binding y proveedor para guardar desde el editor |
 
-Los scripts de operación (`scripts/brain-import.mts`, `scripts/connections-bind.mts`)
+Los scripts de operación (`scripts/brain-import.mts`)
 corren con Node directo: en `core/`, los imports que ellos alcanzan llevan
 extensión `.ts`.
