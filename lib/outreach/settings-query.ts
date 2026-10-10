@@ -1,4 +1,4 @@
-// Lectura de solo lectura para /settings: ejecutores y conexiones. Las dos
+// Normalización de las filas de /settings: ejecutores y conexiones. Las dos
 // tablas son planas (sin embeds), así que esto es normalización defensiva,
 // no un join.
 export interface ExecutorRow {
@@ -6,6 +6,10 @@ export interface ExecutorRow {
 	slug: string | null;
 	dailyQuota: number;
 	gmailAuthorizedAt: string | null;
+	displayName: string | null;
+	title: string | null;
+	linkedinUrl: string | null;
+	crmOwnerId: string | null;
 }
 
 export interface ConnectionRow {
@@ -13,6 +17,7 @@ export interface ConnectionRow {
 	capability: string;
 	provider: string;
 	enabled: boolean;
+	lockedByPlatform: boolean;
 }
 
 const str = (value: unknown): string =>
@@ -28,6 +33,10 @@ export function toExecutorRows(raw: readonly unknown[]): ExecutorRow[] {
 			slug: nullableStr(row.slug),
 			dailyQuota: typeof row.daily_quota === "number" ? row.daily_quota : 0,
 			gmailAuthorizedAt: nullableStr(row.gmail_authorized_at),
+			displayName: nullableStr(row.display_name),
+			title: nullableStr(row.title),
+			linkedinUrl: nullableStr(row.linkedin_url),
+			crmOwnerId: nullableStr(row.crm_owner_id),
 		};
 	});
 }
@@ -40,6 +49,7 @@ export function toConnectionRows(raw: readonly unknown[]): ConnectionRow[] {
 			capability: str(row.capability),
 			provider: str(row.provider),
 			enabled: row.enabled === true,
+			lockedByPlatform: row.locked_by_platform === true,
 		};
 	});
 }
