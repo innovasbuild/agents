@@ -102,8 +102,8 @@ export default async function SettingsPage({
 		title: row.title ?? "",
 		linkedinUrl: row.linkedinUrl ?? "",
 		dailyQuota: row.dailyQuota,
-		gmailAuthorizedAt: row.gmailAuthorizedAt,
-		crmOwnerId: row.crmOwnerId,
+		gmailAuthorized: Boolean(row.gmailAuthorizedAt),
+		hasCrmOwner: Boolean(row.crmOwnerId),
 	}));
 	const taken = new Set(executorRows.map((row) => row.userId));
 	const candidates = memberIds

@@ -34,8 +34,8 @@ const executor = {
 	title: "AE",
 	linkedinUrl: "https://www.linkedin.com/in/ana",
 	dailyQuota: 40,
-	gmailAuthorizedAt: "2026-10-01T00:00:00Z",
-	crmOwnerId: "777",
+	gmailAuthorized: true,
+	hasCrmOwner: true,
 };
 
 describe("ExecutorsSection", () => {
@@ -55,13 +55,18 @@ describe("ExecutorsSection", () => {
 		expect(html).toContain("HubSpot vinculado");
 		expect(html).toContain("Quitar");
 		expect(html).not.toContain("executors:set");
+		// Al navegador solo llegan booleanos: ni el id de owner ni el sello de Gmail.
+		expect(Object.keys(executor)).not.toContain("crmOwnerId");
+		expect(Object.keys(executor)).not.toContain("gmailAuthorizedAt");
 	});
 
 	it("avisa lo que le falta autorizar a un ejecutor", () => {
 		const html = renderToStaticMarkup(
 			createElement(ExecutorsSection, {
 				slug: "acme",
-				executors: [{ ...executor, gmailAuthorizedAt: null, crmOwnerId: null }],
+				executors: [
+					{ ...executor, gmailAuthorized: false, hasCrmOwner: false },
+				],
 				candidates: [],
 			}),
 		);

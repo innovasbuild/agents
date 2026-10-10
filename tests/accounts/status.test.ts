@@ -110,6 +110,30 @@ describe("probeAccount", () => {
 		}
 	});
 
+	it("registra solo el mensaje, nunca el objeto del error", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			for (const thrown of [
+				new Error("red caída"),
+				{ token: "no-debe-salir", status: 500 },
+			]) {
+				await probeAccount(
+					"gmail",
+					deps(async () => {
+						throw thrown;
+					}),
+				);
+			}
+			expect(log).toHaveBeenCalledTimes(2);
+			for (const call of log.mock.calls) {
+				expect(call.every((arg) => typeof arg === "string")).toBe(true);
+			}
+			expect(JSON.stringify(log.mock.calls)).not.toContain("no-debe-salir");
+		} finally {
+			log.mockRestore();
+		}
+	});
+
 	it("no instalado gana si un error cumple las dos condiciones", async () => {
 		const both = new Error("ambos");
 		expect(

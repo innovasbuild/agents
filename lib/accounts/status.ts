@@ -59,7 +59,10 @@ export async function probeAccount(
 	} catch (error) {
 		if (deps.isNotInstalled(error)) return "no_disponible";
 		if (deps.isAuthError(error)) return "sin_autorizar";
-		console.error(`mis-cuentas: no pude comprobar ${key}:`, error);
+		console.error(
+			`mis-cuentas: no pude comprobar ${key}:`,
+			error instanceof Error ? error.message : String(error),
+		);
 		return "desconocido";
 	}
 }

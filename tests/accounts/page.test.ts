@@ -18,6 +18,8 @@ const state = vi.hoisted(() => ({
 	owner: "777" as string | null,
 	ownerThrows: false,
 	notInstalled: false,
+	gmailMarkThrows: false,
+	readError: false,
 }));
 
 vi.mock("@/lib/outreach/web-session", () => ({
@@ -46,7 +48,12 @@ vi.mock("@/lib/supabase/server", () => ({
 			const q = {
 				select: () => q,
 				eq: () => q,
-				maybeSingle: async () => ({ data: state.executor, error: null }),
+				maybeSingle: async () => ({
+					data: state.executor,
+					error: state.readError
+						? { message: "permiso denegado", details: "fila u1" }
+						: null,
+				}),
 				// biome-ignore lint/suspicious/noThenProperty: imita el builder de supabase-js
 				then: (resolve: (v: unknown) => unknown) =>
 					Promise.resolve({
@@ -79,6 +86,7 @@ vi.mock("@/lib/connectors/auth", () => ({
 }));
 vi.mock("@/lib/connectors/executors", () => ({
 	markGmailAuthorized: async (_t: string, userId: string) => {
+		if (state.gmailMarkThrows) throw new Error("sello");
 		state.gmailMarks.push(userId);
 	},
 	markCrmOwner: async (_t: string, _u: string, ownerId: string) => {
@@ -131,6 +139,8 @@ describe("Mis cuentas", () => {
 		state.owner = "777";
 		state.ownerThrows = false;
 		state.notInstalled = false;
+		state.gmailMarkThrows = false;
+		state.readError = false;
 	});
 
 	it("sin acceso da 404", async () => {
@@ -270,6 +280,30 @@ describe("Mis cuentas", () => {
 			state.ownerThrows = true;
 			expect(await render()).toContain("No pude leer tu usuario de HubSpot");
 			expect(state.ownerMarks).toEqual([]);
+		} finally {
+			log.mockRestore();
+		}
+	});
+
+	it("los errores que registra son texto, nunca el objeto del error", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			// No se pudo sellar Gmail.
+			state.executor = {
+				user_id: "u1",
+				gmail_authorized_at: null,
+				crm_owner_id: "777",
+			};
+			state.gmailMarkThrows = true;
+			await render();
+			// No se pudo leer la configuración.
+			state.gmailMarkThrows = false;
+			state.readError = true;
+			await render();
+			expect(log).toHaveBeenCalledTimes(2);
+			for (const call of log.mock.calls) {
+				expect(call.every((arg) => typeof arg === "string")).toBe(true);
+			}
 		} finally {
 			log.mockRestore();
 		}

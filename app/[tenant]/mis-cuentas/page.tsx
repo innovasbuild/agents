@@ -51,7 +51,7 @@ export default async function MisCuentasPage({
 	if (connectionsResult.error || executorResult.error) {
 		console.error(
 			"mis-cuentas: no pude leer la configuración:",
-			connectionsResult.error ?? executorResult.error,
+			(connectionsResult.error ?? executorResult.error)?.message,
 		);
 		return (
 			<div className="max-w-3xl space-y-4">
@@ -113,7 +113,10 @@ export default async function MisCuentasPage({
 			try {
 				await markGmailAuthorized(caller.tenantId, caller.userId);
 			} catch (error) {
-				console.error("mis-cuentas: no pude sellar Gmail:", error);
+				console.error(
+					"mis-cuentas: no pude sellar Gmail:",
+					error instanceof Error ? error.message : String(error),
+				);
 			}
 		}
 		if (

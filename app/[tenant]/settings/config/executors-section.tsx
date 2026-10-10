@@ -16,8 +16,9 @@ export interface ExecutorView {
 	title: string;
 	linkedinUrl: string;
 	dailyQuota: number;
-	gmailAuthorizedAt: string | null;
-	crmOwnerId: string | null;
+	// Solo booleanos: el id de owner y el sello de Gmail no salen del servidor.
+	gmailAuthorized: boolean;
+	hasCrmOwner: boolean;
 }
 
 export interface CandidateView {
@@ -197,12 +198,12 @@ function ExecutorRow({
 				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 					<span className="font-medium text-sm">{executor.person}</span>
 					<span className="text-muted-foreground text-xs">
-						{executor.gmailAuthorizedAt
+						{executor.gmailAuthorized
 							? "Gmail autorizado"
 							: "Falta autorizar Gmail"}
 					</span>
 					<span className="text-muted-foreground text-xs">
-						{executor.crmOwnerId
+						{executor.hasCrmOwner
 							? "HubSpot vinculado"
 							: "Falta autorizar HubSpot"}
 					</span>
