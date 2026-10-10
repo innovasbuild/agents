@@ -156,6 +156,19 @@ describe("settings del cliente", () => {
 		expect(await render()).toContain("No hay pasos que requieran una política");
 	});
 
+	const emptyState: Record<string, string[]> = {
+		executors: [
+			"Todavía no hay ejecutores configurados",
+			"Todos los miembros ya son ejecutores",
+		],
+		memberships: [
+			"Todavía no hay ejecutores configurados",
+			"Todos los miembros ya son ejecutores",
+		],
+		tenant_agents: ["No hay pasos que requieran una política"],
+		tenant_connections: ["Todavía no hay conexiones configuradas"],
+	};
+
 	it.each(["executors", "memberships", "tenant_agents", "tenant_connections"])(
 		"si falla la lectura de %s, lo dice y no muestra una sección vacía como si fuera cierta",
 		async (table) => {
@@ -164,6 +177,8 @@ describe("settings del cliente", () => {
 				state.tables[table] = { data: null, error: { message: "boom" } };
 				const html = await render();
 				expect(html).toContain("No pude leer esta sección");
+				for (const text of emptyState[table] ?? [])
+					expect(html).not.toContain(text);
 				expect(log).toHaveBeenCalled();
 			} finally {
 				log.mockRestore();

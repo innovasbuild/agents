@@ -31,11 +31,49 @@ interface Draft {
 	displayName: string;
 	title: string;
 	linkedinUrl: string;
-	dailyQuota: number;
+	// Texto: así un campo vacío se ve vacío y no se vuelve 0 sin avisar.
+	dailyQuota: string;
 }
 
 const MAX_QUOTA = 200;
 const DEFAULT_QUOTA = 30;
+// Mismo formato que la base (executors.slug) y que set_executor.
+const SLUG_PATTERN = "[a-z][a-z0-9-]{0,30}";
+
+/** La persona elegida, o la primera disponible si la elegida ya no está. */
+export function resolveCandidate(
+	candidates: CandidateView[],
+	userId: string,
+): CandidateView | undefined {
+	return candidates.find((c) => c.userId === userId) ?? candidates[0];
+}
+
+/** Borrador limpio para dar de alta a esa persona, con el slug sugerido. */
+export function initialDraftFor(candidate: CandidateView | undefined): Draft {
+	return {
+		slug: candidate?.suggestedSlug ?? "",
+		displayName: "",
+		title: "",
+		linkedinUrl: "",
+		dailyQuota: String(DEFAULT_QUOTA),
+	};
+}
+
+export function parseDraft(
+	draft: Draft,
+):
+	| { ok: true; input: Omit<Draft, "dailyQuota"> & { dailyQuota: number } }
+	| { ok: false; message: string } {
+	const quota =
+		draft.dailyQuota.trim() === "" ? Number.NaN : Number(draft.dailyQuota);
+	if (!Number.isInteger(quota) || quota < 0 || quota > MAX_QUOTA) {
+		return {
+			ok: false,
+			message: `El cupo diario es un número entre 0 y ${MAX_QUOTA}.`,
+		};
+	}
+	return { ok: true, input: { ...draft, dailyQuota: quota } };
+}
 
 function Message({ feedback }: { feedback: Feedback }) {
 	if (!feedback) return null;
@@ -81,10 +119,7 @@ function Fields({
 				onChange={(event) =>
 					onChange({
 						...draft,
-						[key]:
-							key === "dailyQuota"
-								? Number(event.target.value)
-								: event.target.value,
+						[key]: event.target.value,
 					})
 				}
 				value={draft[key]}
@@ -95,7 +130,12 @@ function Fields({
 
 	return (
 		<div className="flex flex-wrap gap-3">
-			{field("slug", "Slug")}
+			{field("slug", "Slug", {
+				required: true,
+				pattern: SLUG_PATTERN,
+				maxLength: 31,
+				title: "Minúsculas, números y guiones; empieza con una letra.",
+			})}
 			{field("displayName", "Nombre en la firma")}
 			{field("title", "Puesto")}
 			{field("linkedinUrl", "LinkedIn", {
@@ -103,6 +143,7 @@ function Fields({
 			})}
 			{field("dailyQuota", "Cupo diario", {
 				type: "number",
+				required: true,
 				min: 0,
 				max: MAX_QUOTA,
 				step: 1,
@@ -126,14 +167,20 @@ function ExecutorRow({
 		displayName: executor.displayName,
 		title: executor.title,
 		linkedinUrl: executor.linkedinUrl,
-		dailyQuota: executor.dailyQuota,
+		dailyQuota: String(executor.dailyQuota),
 	});
 
-	function save() {
+	function save(event: React.FormEvent) {
+		event.preventDefault();
+		const parsed = parseDraft(draft);
+		if (!parsed.ok) {
+			setFeedback({ ok: false, text: parsed.message });
+			return;
+		}
 		setFeedback(null);
 		startTransition(async () => {
 			const out = await runRowAction({
-				run: () => saveExecutor(slug, executor.userId, draft),
+				run: () => saveExecutor(slug, executor.userId, parsed.input),
 				confirm: () => true,
 				refresh: () => router.refresh(),
 			});
@@ -144,44 +191,46 @@ function ExecutorRow({
 	}
 
 	return (
-		<li className="space-y-3 px-4 py-3">
-			<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-				<span className="font-medium text-sm">{executor.person}</span>
-				<span className="text-muted-foreground text-xs">
-					{executor.gmailAuthorizedAt
-						? "Gmail autorizado"
-						: "Falta autorizar Gmail"}
-				</span>
-				<span className="text-muted-foreground text-xs">
-					{executor.crmOwnerId
-						? "HubSpot vinculado"
-						: "Falta autorizar HubSpot"}
-				</span>
-			</div>
-			<Fields
-				disabled={pending}
-				draft={draft}
-				idPrefix={executor.userId}
-				onChange={setDraft}
-			/>
-			<div className="flex flex-wrap items-center gap-2">
-				<Button disabled={pending} onClick={save} size="sm" type="button">
-					Guardar
-				</Button>
-				<Message feedback={feedback} />
-				<span className="ml-auto">
-					<ActionButton
-						confirmText="¿Quitar a esta persona de los ejecutores? Si ya tiene envíos o contactos no se puede: ponele cupo 0."
-						label="Quitar"
-						run={() => removeExecutor(slug, executor.userId)}
-					/>
-				</span>
-			</div>
+		<li className="px-4 py-3">
+			<form className="space-y-3" onSubmit={save}>
+				<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+					<span className="font-medium text-sm">{executor.person}</span>
+					<span className="text-muted-foreground text-xs">
+						{executor.gmailAuthorizedAt
+							? "Gmail autorizado"
+							: "Falta autorizar Gmail"}
+					</span>
+					<span className="text-muted-foreground text-xs">
+						{executor.crmOwnerId
+							? "HubSpot vinculado"
+							: "Falta autorizar HubSpot"}
+					</span>
+				</div>
+				<Fields
+					disabled={pending}
+					draft={draft}
+					idPrefix={executor.userId}
+					onChange={setDraft}
+				/>
+				<div className="flex flex-wrap items-center gap-2">
+					<Button disabled={pending} size="sm" type="submit">
+						Guardar
+					</Button>
+					<Message feedback={feedback} />
+					<span className="ml-auto">
+						<ActionButton
+							confirmText="¿Quitar a esta persona de los ejecutores? Si ya tiene envíos o contactos no se puede: ponele cupo 0."
+							label="Quitar"
+							run={() => removeExecutor(slug, executor.userId)}
+						/>
+					</span>
+				</div>
+			</form>
 		</li>
 	);
 }
 
-function AddExecutor({
+export function AddExecutor({
 	slug,
 	candidates,
 }: {
@@ -191,29 +240,30 @@ function AddExecutor({
 	const router = useRouter();
 	const [pending, startTransition] = useTransition();
 	const [feedback, setFeedback] = useState<Feedback>(null);
-	const [userId, setUserId] = useState(candidates[0]?.userId ?? "");
-	const [draft, setDraft] = useState<Draft>({
-		slug: candidates[0]?.suggestedSlug ?? "",
-		displayName: "",
-		title: "",
-		linkedinUrl: "",
-		dailyQuota: DEFAULT_QUOTA,
-	});
+	const [chosen, setChosen] = useState(candidates[0]?.userId ?? "");
+	const [draft, setDraft] = useState<Draft>(() =>
+		initialDraftFor(candidates[0]),
+	);
+	// Lo que se ve y lo que se manda salen de la misma persona.
+	const selected = resolveCandidate(candidates, chosen);
 
 	function pick(next: string) {
-		setUserId(next);
-		setDraft({
-			...draft,
-			slug: candidates.find((c) => c.userId === next)?.suggestedSlug ?? "",
-		});
+		setChosen(next);
+		setDraft(initialDraftFor(candidates.find((c) => c.userId === next)));
 	}
 
 	function submit(event: React.FormEvent) {
 		event.preventDefault();
+		if (!selected) return;
+		const parsed = parseDraft(draft);
+		if (!parsed.ok) {
+			setFeedback({ ok: false, text: parsed.message });
+			return;
+		}
 		setFeedback(null);
 		startTransition(async () => {
 			const out = await runRowAction({
-				run: () => saveExecutor(slug, userId, draft),
+				run: () => saveExecutor(slug, selected.userId, parsed.input),
 				confirm: () => true,
 				refresh: () => router.refresh(),
 			});
@@ -240,7 +290,7 @@ function AddExecutor({
 					disabled={pending}
 					id="nuevo-ejecutor"
 					onChange={(event) => pick(event.target.value)}
-					value={userId}
+					value={selected?.userId ?? ""}
 				>
 					{candidates.map((candidate) => (
 						<option key={candidate.userId} value={candidate.userId}>
@@ -292,7 +342,12 @@ export function ExecutorsSection({
 				</ul>
 			)}
 			{candidates.length > 0 ? (
-				<AddExecutor candidates={candidates} slug={slug} />
+				<AddExecutor
+					candidates={candidates}
+					// Al cambiar quiénes quedan, el formulario arranca de cero.
+					key={candidates.map((c) => c.userId).join(",")}
+					slug={slug}
+				/>
 			) : (
 				<p className="text-muted-foreground text-sm">
 					Todos los miembros ya son ejecutores. Para sumar a alguien, invitalo

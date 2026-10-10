@@ -12,9 +12,13 @@ vi.mock("@/app/[tenant]/settings/config-actions", () => ({
 	toggleConnection: async () => ({ ok: true }),
 }));
 
-const { ExecutorsSection } = await import(
-	"@/app/[tenant]/settings/config/executors-section"
-);
+const {
+	AddExecutor,
+	ExecutorsSection,
+	initialDraftFor,
+	parseDraft,
+	resolveCandidate,
+} = await import("@/app/[tenant]/settings/config/executors-section");
 const { ApprovalsSection } = await import(
 	"@/app/[tenant]/settings/config/approvals-section"
 );
@@ -91,6 +95,83 @@ describe("ExecutorsSection", () => {
 		);
 		expect(html).not.toContain("Agregar ejecutor");
 		expect(html).toContain("Todos los miembros ya son ejecutores");
+	});
+});
+
+describe("alta de ejecutores: la persona elegida siempre es una que sigue disponible", () => {
+	const a = { userId: "ua", person: "Ana", suggestedSlug: "ana" };
+	const b = { userId: "ub", person: "Beto", suggestedSlug: "beto" };
+
+	it("resolveCandidate: si la elegida ya no está, cae a la primera disponible", () => {
+		expect(resolveCandidate([a, b], "ub")).toBe(b);
+		expect(resolveCandidate([b], "ua")).toBe(b);
+		expect(resolveCandidate([], "ua")).toBeUndefined();
+	});
+
+	it("initialDraftFor: arranca limpio y con el slug sugerido", () => {
+		expect(initialDraftFor(b)).toEqual({
+			slug: "beto",
+			displayName: "",
+			title: "",
+			linkedinUrl: "",
+			dailyQuota: "30",
+		});
+		expect(initialDraftFor(undefined).slug).toBe("");
+	});
+
+	it("tras agregar a A, el formulario se remonta (otra key) y ofrece a B", () => {
+		const tree = (candidates: (typeof a)[]) =>
+			// ExecutorsSection no usa hooks: se la puede llamar como función.
+			(
+				ExecutorsSection({
+					slug: "acme",
+					executors: [executor],
+					candidates,
+				}) as never as {
+					props: { children: { type: unknown; key: string | null }[] };
+				}
+			).props.children[1];
+		const before = tree([a, b]);
+		const after = tree([b]);
+		expect(after.type).toBe(AddExecutor);
+		expect(after.key).not.toBe(before.key);
+
+		const html = renderToStaticMarkup(
+			createElement(AddExecutor, { slug: "acme", candidates: [b] }),
+		);
+		expect(html).toMatch(/<option[^>]*value="ub"[^>]*selected/);
+		expect(html).not.toContain('value="ua"');
+		expect(html).toMatch(/<input[^>]*value="beto"/);
+	});
+
+	it("el slug y el cupo se validan en el navegador con la misma regla que la base", () => {
+		const html = renderToStaticMarkup(
+			createElement(AddExecutor, { slug: "acme", candidates: [a] }),
+		);
+		expect(html).toMatch(/<input[^>]*pattern="\[a-z\]\[a-z0-9-\]\{0,30\}"/);
+		expect(html).toMatch(
+			/<input[^>]*id="nuevo-slug"[^>]*required|<input[^>]*required[^>]*id="nuevo-slug"/,
+		);
+		expect(html).toMatch(
+			/<input[^>]*id="nuevo-dailyQuota"[^>]*required|<input[^>]*required[^>]*id="nuevo-dailyQuota"/,
+		);
+	});
+
+	it("parseDraft: un cupo vacío o inválido no se convierte en 0", () => {
+		const draft = initialDraftFor(a);
+		expect(parseDraft({ ...draft, dailyQuota: "" })).toEqual({
+			ok: false,
+			message: expect.any(String),
+		});
+		expect(parseDraft({ ...draft, dailyQuota: "abc" }).ok).toBe(false);
+		expect(parseDraft({ ...draft, dailyQuota: "0" })).toMatchObject({
+			ok: true,
+			input: { dailyQuota: 0 },
+		});
+		expect(parseDraft({ ...draft, dailyQuota: "40" })).toMatchObject({
+			ok: true,
+			input: { dailyQuota: 40 },
+		});
 	});
 });
 
