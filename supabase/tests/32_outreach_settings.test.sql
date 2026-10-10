@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(45);
+select plan(46);
 
 -- Personas: 1 admin de os-a, 2 miembro de os-a, 3 admin de os-b, 4 platform_admin (en os-p).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -201,7 +201,7 @@ select throws_ok(
   '42501', null, 'el admin no escribe presupuestos directo');
 
 
--- 36-45: endurecimiento.
+-- 36-46: endurecimiento.
 select pg_temp.logout();
 update public.tenants set allowed_models = '{anthropic/claude-sonnet-5}' where id = 'd3d3d3d3-0000-0000-0000-00000000000a';
 select set_config('role', 'anon', true);
@@ -233,6 +233,9 @@ select throws_ok(
 select throws_ok(
   $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', jsonb_build_object('timezone', repeat('x', 20000)))$$,
   '23514', 'la configuración es demasiado grande', 'rechaza un payload enorme');
+select throws_ok(
+  $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"models":null}')$$,
+  '23514', 'los modelos tienen que ser un objeto', 'rechaza models null');
 select lives_ok(
   $$select public.set_outreach_config('d3d3d3d3-0000-0000-0000-00000000000a', '{"models":{"classify":"anthropic/claude-sonnet-5"}}')$$,
   'acepta un modelo habilitado');

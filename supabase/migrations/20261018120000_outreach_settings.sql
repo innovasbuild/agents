@@ -74,7 +74,7 @@ begin
     ) then
       raise exception 'ese modelo no está habilitado para la empresa' using errcode = '23514', hint = 'settings';
     end if;
-  elsif p_config ? 'models' and jsonb_typeof(p_config -> 'models') <> 'null' then
+  elsif p_config ? 'models' then
     raise exception 'los modelos tienen que ser un objeto' using errcode = '23514', hint = 'settings';
   end if;
 
