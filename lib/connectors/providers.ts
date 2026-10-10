@@ -95,3 +95,10 @@ export function connectionName(
 		: info.capability;
 	return info.authKind === "connect_oauth" ? `${base}-${binding.id}` : base;
 }
+
+// `multiple` habla de varias conexiones por capacidad, no de varios uids por
+// conexión. Solo Apollo lee config.connectorUids (agents/outreach/schedules/dispatch.ts);
+// para el resto la base guarda un único connector_uid.
+export function acceptsManyUids(provider: ProviderKey): boolean {
+	return provider === "apollo";
+}

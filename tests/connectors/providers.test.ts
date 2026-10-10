@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	acceptsManyUids,
 	connectionName,
 	isProviderKey,
 	PROVIDERS,
@@ -68,5 +69,21 @@ describe("registro de proveedores", () => {
 			kind: "tool",
 			authKind: "none",
 		});
+	});
+});
+
+describe("acceptsManyUids", () => {
+	it("solo Apollo lee varios identificadores por conexión", () => {
+		expect(acceptsManyUids("apollo")).toBe(true);
+		for (const p of [
+			"coldiq",
+			"google-places",
+			"hubspot",
+			"gmail",
+			"wiki",
+			"mcp",
+		] as const) {
+			expect(acceptsManyUids(p)).toBe(false);
+		}
 	});
 });
