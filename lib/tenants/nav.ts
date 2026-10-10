@@ -22,6 +22,7 @@ export const NAV: NavEntry[] = [
 	{ href: "/brain", label: "Brain" },
 	{ href: "/metricas", label: "Métricas" },
 	{ href: "/conectar", label: "Conectar" },
+	{ href: "/mis-cuentas", label: "Mis cuentas" },
 	// /settings hace notFound() para tenant_member: el link no se muestra,
 	// no tiene sentido ofrecer una ruta que va a 404.
 	{ href: "/settings", label: "Configuración", adminOnly: true },

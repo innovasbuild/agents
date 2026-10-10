@@ -60,22 +60,54 @@ function fakeClient() {
 					return { error: null };
 				},
 				select: (_columns: string) => selectQuery(db.executors),
+				update: (values: Record<string, unknown>) => {
+					calls.updates.push(values);
+					const filters: [string, unknown][] = [];
+					const query = {
+						eq(column: string, value: unknown) {
+							filters.push([column, value]);
+							calls.updateFilters.push([column, value]);
+							return query;
+						},
+						// biome-ignore lint/suspicious/noThenProperty: imita el builder de supabase-js
+						then(resolve: (result: { error: unknown }) => unknown) {
+							if (updateError)
+								return resolve({ error: { message: updateError } });
+							for (const row of db.executors) {
+								if (filters.every(([c, v]) => row[c] === v))
+									Object.assign(row, values);
+							}
+							return resolve({ error: null });
+						},
+					};
+					return query;
+				},
 			};
 		},
 	};
 }
 
-const calls = vi.hoisted(() => ({ upserts: [] as unknown[][] }));
+const calls = vi.hoisted(() => ({
+	upserts: [] as unknown[][],
+	updates: [] as Record<string, unknown>[],
+	updateFilters: [] as [string, unknown][],
+}));
+let updateError: string | null = null;
 
 vi.mock("../../lib/supabase/admin", () => ({
 	createAdminClient: () => fakeClient(),
 }));
 
-const { markGmailAuthorized } = await import("@/lib/connectors/executors");
+const { markCrmOwner, markGmailAuthorized } = await import(
+	"@/lib/connectors/executors"
+);
 const { createSupabaseOutreachStore } = await import("@/lib/outreach/store");
 
 beforeEach(() => {
 	calls.upserts = [];
+	calls.updates = [];
+	calls.updateFilters = [];
+	updateError = null;
 	db.executors = [];
 });
 
@@ -112,5 +144,40 @@ describe("markGmailAuthorized", () => {
 		const [values] = calls.upserts[0] as [Record<string, unknown>];
 		expect(typeof values.gmail_authorized_at).toBe("string");
 		expect(typeof values.gmail_read_authorized_at).toBe("string");
+	});
+});
+
+describe("markCrmOwner", () => {
+	it("actualiza crm_owner_id filtrando por tenant y usuario, sin upsert", async () => {
+		db.executors = [
+			{ tenant_id: "tenant-a", user_id: "user-1", crm_owner_id: null },
+			{ tenant_id: "tenant-a", user_id: "user-2", crm_owner_id: null },
+			{ tenant_id: "tenant-b", user_id: "user-1", crm_owner_id: null },
+		];
+		await markCrmOwner("tenant-a", "user-1", "777");
+
+		expect(calls.updates).toEqual([{ crm_owner_id: "777" }]);
+		expect(calls.updateFilters).toEqual([
+			["tenant_id", "tenant-a"],
+			["user_id", "user-1"],
+		]);
+		expect(calls.upserts).toHaveLength(0);
+		expect(db.executors.map((r) => r.crm_owner_id)).toEqual([
+			"777",
+			null,
+			null,
+		]);
+	});
+
+	it("quien no es ejecutor no pasa a serlo", async () => {
+		await markCrmOwner("tenant-a", "user-1", "777");
+		expect(db.executors).toEqual([]);
+	});
+
+	it("tira si la base devuelve error", async () => {
+		updateError = "boom";
+		await expect(markCrmOwner("tenant-a", "user-1", "777")).rejects.toThrow(
+			"No pude registrar el usuario de HubSpot: boom",
+		);
 	});
 });

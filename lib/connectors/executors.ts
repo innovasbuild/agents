@@ -44,3 +44,24 @@ export async function markGmailAuthorized(
 	if (error)
 		throw new Error(`No pude registrar la casilla de Gmail: ${error.message}`);
 }
+
+/**
+ * Sella el dueño de HubSpot del ejecutor. Es un hecho que informa HubSpot, no
+ * una preferencia: lo escribe el servidor, no una función del cliente (spec
+ * 21.2 S8). Solo actualiza: quien no es ejecutor no pasa a serlo por esto.
+ */
+export async function markCrmOwner(
+	tenantId: string,
+	userId: string,
+	ownerId: string,
+): Promise<void> {
+	const { error } = await createAdminClient()
+		.from("executors")
+		.update({ crm_owner_id: ownerId })
+		.eq("tenant_id", tenantId)
+		.eq("user_id", userId);
+	if (error)
+		throw new Error(
+			`No pude registrar el usuario de HubSpot: ${error.message}`,
+		);
+}
