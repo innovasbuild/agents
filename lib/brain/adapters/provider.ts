@@ -5,8 +5,9 @@ import type { BrainBinding } from "../core/resolve.ts";
 import type { BrainProvider } from "../core/types.ts";
 import { createWikiProvider } from "../core/wiki.ts";
 import { createSupabaseWikiStore } from "../core/wiki-store.ts";
+import { withCanonReflection } from "./canon-reflection";
 
-export function getBrainProvider(binding: BrainBinding): BrainProvider {
+function rawBrainProvider(binding: BrainBinding): BrainProvider {
 	if (binding.provider === "mcp") {
 		const bearer = apiKeyBearer(binding.connectorUid);
 		return createMcpBrainProvider({
@@ -22,5 +23,15 @@ export function getBrainProvider(binding: BrainBinding): BrainProvider {
 		bindingId: binding.id,
 		config: binding.config,
 		store: createSupabaseWikiStore(createAdminClient()),
+	});
+}
+
+export function getBrainProvider(binding: BrainBinding): BrainProvider {
+	// Import dinámico: lib/outreach/canon importa este archivo.
+	return withCanonReflection(rawBrainProvider(binding), async () => {
+		const { reflectMarcoForTenant } = await import(
+			"../../outreach/marco-reflect"
+		);
+		await reflectMarcoForTenant(binding.tenantId);
 	});
 }
