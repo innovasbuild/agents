@@ -25,7 +25,7 @@ export async function resolveExecutor(
 	if (crm && !executor.crmOwnerId) {
 		return refuse(
 			"ejecutor_sin_crm_owner",
-			"tu usuario no tiene owner de CRM cargado (executors.crm_owner_id): sin eso tus propias notas te bloquearían los follow-ups. Pedile a un admin que lo cargue desde Configuración → Ejecutores",
+			"tu usuario no tiene owner de CRM cargado (executors.crm_owner_id): sin eso tus propias notas te bloquearían los follow-ups. Autorizá HubSpot desde Mis cuentas y se carga solo",
 		);
 	}
 	return { executor, tenant };
