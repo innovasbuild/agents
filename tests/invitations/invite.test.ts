@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { inviteToTenant } from "@/lib/invitations/invite";
+import { inviteToTenant, sendInvitationMail } from "@/lib/invitations/invite";
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -138,5 +138,53 @@ describe("inviteToTenant", () => {
 		state.tenant = null;
 
 		expect(await inviteToTenant(base)).toEqual({ kind: "tenant_inexistente" });
+	});
+});
+
+describe("sendInvitationMail", () => {
+	const params = {
+		// biome-ignore lint/suspicious/noExplicitAny: doble de prueba del cliente admin
+		admin: admin as any,
+		email: "ana@acme.test",
+		origin: "https://app.test",
+	};
+
+	beforeEach(() => {
+		state.inviteError = null;
+		state.inserts = [];
+		state.invites = [];
+	});
+
+	it("manda el mail con el callback del origen", async () => {
+		expect(await sendInvitationMail(params)).toBe("ok");
+		expect(state.invites).toEqual([
+			{ email: "ana@acme.test", redirectTo: "https://app.test/auth/callback" },
+		]);
+	});
+
+	it("con next, lo lleva codificado en el callback", async () => {
+		await sendInvitationMail({ ...params, next: "/acme/chat" });
+
+		expect(state.invites[0].redirectTo).toBe(
+			"https://app.test/auth/callback?next=%2Facme%2Fchat",
+		);
+	});
+
+	it.each(["email_exists", "user_already_exists"])(
+		"si la persona ya tiene cuenta (%s) lo dice",
+		async (code) => {
+			state.inviteError = { code, message: "ya existe" };
+			expect(await sendInvitationMail(params)).toBe("ya_existe");
+		},
+	);
+
+	it("cualquier otro error es un fallo del mail", async () => {
+		state.inviteError = { code: "over_email_send_rate_limit", message: "x" };
+		expect(await sendInvitationMail(params)).toBe("mail_fallo");
+	});
+
+	it("no escribe nada en la base", async () => {
+		await sendInvitationMail(params);
+		expect(state.inserts).toHaveLength(0);
 	});
 });

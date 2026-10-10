@@ -119,7 +119,7 @@ Migración `20261014120000_member_blocks.sql`.
 2. **`public.block_member(p_tenant uuid, p_user uuid) returns void`**, `security definer`. Exige que quien llama sea administrador de ese tenant o de plataforma; rechaza bloquearse a uno mismo (`42501`); borra la membresía si existe; inserta el bloqueo (`on conflict do nothing`); deja el evento `membership.blocked`.
 3. **`public.unblock_member(p_tenant uuid, p_user uuid) returns void`**, mismos permisos. Borra el bloqueo y deja `membership.unblocked`.
 4. **`join_tenants_by_domain()`** suma la condición "sin fila en `membership_blocks` para ese tenant y usuario". **`login_gate()`** saca del tercer grupo (dominio abierto) a los tenants donde está bloqueado.
-5. **`accept_pending_invitations()`** borra el bloqueo de ese tenant y usuario al aceptar.
+5. **`accept_pending_invitations()`** borra el bloqueo de ese tenant y usuario al aceptar y deja el evento `membership.unblocked`.
 6. **Trigger `memberships_keep_one_admin`**, `before update of role or delete on public.memberships for each row`. Si la fila vieja es `tenant_admin` o `platform_admin`, la nueva deja de serlo (o es un borrado), el tenant sigue existiendo y no queda otra fila con esos roles en ese tenant: excepción con `errcode = '23514'`. El chequeo "el tenant sigue existiendo" deja pasar el borrado en cascada de una empresa.
 
 Consecuencia declarada: borrar de Auth a una persona que es la única administradora de una empresa falla hasta nombrar a otra.
@@ -135,9 +135,10 @@ Consecuencia declarada: borrar de Auth a una persona que es la única administra
 Server actions en `actions.ts`, todas con resultado `{ ok: true } | { ok: false; message }` y mensajes en castellano:
 
 - `changeMemberRole(membershipId, role, slug)`: valida que `role` sea `tenant_admin` o `tenant_member`, actualiza con la sesión del usuario (la RLS y el `grant update (role)` deciden). Cero filas: "No tenés permiso". `23514`: "La empresa no puede quedar sin administrador."
-- `blockMember(tenantId, userId, slug)` y `unblockMember(...)`: `rpc`. `42501`: "No tenés permiso". `23514`: el mismo mensaje del administrador.
+- `blockMember(membershipId, slug)`: lee la fila con la sesión y bloquea a esa persona en esa empresa; la propia fila responde "No podés bloquearte a vos." `unblockMember(tenantId, userId, slug)`: un bloqueo no tiene id propio; se lee con la sesión antes de llamar al `rpc`. `42501`: "No tenés permiso". `23514`: el mismo mensaje del administrador.
 - `revokeMembership` pasa a devolver resultado y a traducir `23514`. Hoy ignora el error.
 - `resendInvitation(invitationId, slug)`: lee la invitación con la sesión del usuario, renueva `expires_at` a 14 días y llama a la parte de `lib/invitations/invite.ts` que manda el mail, extraída a `sendInvitationMail`. Resultados: enviado; "Esa persona ya tiene cuenta. Pasale el link de ingreso de la empresa."; "No se pudo mandar el mail. Probá de nuevo."
+- Todas aplican el chequeo del método de la sesión (`actionAllowsLogin`) contra la empresa de la fila antes de escribir (L10).
 
 ## 8. Límites declarados
 

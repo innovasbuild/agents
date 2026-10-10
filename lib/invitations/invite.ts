@@ -11,6 +11,40 @@ export type InviteOutcome =
 	| { kind: "mail_fallo" }
 	| { kind: "tenant_inexistente" };
 
+export type InvitationMailOutcome = "ok" | "ya_existe" | "mail_fallo";
+
+/**
+ * Manda el mail de invitación de Supabase. No toca `invitations`: quien llama
+ * ya creó o renovó la fila. Si la persona ya tiene cuenta, Supabase no
+ * reinvita y no hace falta: la invitación pendiente se acepta la próxima vez
+ * que entre.
+ */
+export async function sendInvitationMail(params: {
+	admin: SupabaseClient;
+	email: string;
+	origin: string;
+	next?: string;
+}): Promise<InvitationMailOutcome> {
+	const redirectTo = params.next
+		? `${params.origin}/auth/callback?next=${encodeURIComponent(params.next)}`
+		: `${params.origin}/auth/callback`;
+
+	const { error } = await params.admin.auth.admin.inviteUserByEmail(
+		params.email,
+		{ redirectTo },
+	);
+	if (!error) return "ok";
+
+	if (error.code === "email_exists" || error.code === "user_already_exists") {
+		console.warn("inviteUserByEmail:", error.message);
+		return "ya_existe";
+	}
+
+	// Fallo real (rate limit, SMTP caído): la fila de invitations queda pendiente.
+	console.error("inviteUserByEmail:", error.message);
+	return "mail_fallo";
+}
+
 /**
  * Invita a un correo a un tenant. Corre con el cliente admin: quien llama ya
  * verificó que puede invitar (RLS en la ruta, requirePlatformAdmin en la
@@ -63,25 +97,11 @@ export async function inviteToTenant(params: {
 		});
 	}
 
-	const redirectTo = params.next
-		? `${params.origin}/auth/callback?next=${encodeURIComponent(params.next)}`
-		: `${params.origin}/auth/callback`;
-
-	const { error: inviteError } =
-		await params.admin.auth.admin.inviteUserByEmail(email, { redirectTo });
-	if (!inviteError) return { kind: "ok" };
-
-	const alreadyExists =
-		inviteError.code === "email_exists" ||
-		inviteError.code === "user_already_exists";
-	if (alreadyExists) {
-		// Ya está en Auth: no hace falta mail de alta, la invitación pendiente se
-		// acepta la próxima vez que entre.
-		console.warn("inviteUserByEmail:", inviteError.message);
-		return { kind: "ya_existe" };
-	}
-
-	// Fallo real (rate limit, SMTP caído): la fila de invitations queda pendiente.
-	console.error("inviteUserByEmail:", inviteError.message);
-	return { kind: "mail_fallo" };
+	const outcome = await sendInvitationMail({
+		admin: params.admin,
+		email,
+		origin: params.origin,
+		next: params.next,
+	});
+	return { kind: outcome };
 }

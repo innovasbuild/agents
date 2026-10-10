@@ -10,6 +10,11 @@ const state = vi.hoisted(() => ({
 		tenant_id: string;
 	} | null,
 	readError: null as { message: string } | null,
+	writeError: null as { code?: string; message: string } | null,
+	/** Las filas que la escritura llegó a tocar; [] = la RLS la filtró. */
+	writeRows: [{ id: "33333333-3333-4333-8333-333333333333" }] as {
+		id: string;
+	}[],
 	reads: [] as { table: string; column: string; value: unknown }[],
 	writes: [] as {
 		table: string;
@@ -41,6 +46,19 @@ vi.mock("@/lib/tenants/login-check-server", () => ({
 		return gate.allows;
 	},
 }));
+/**
+ * Lo que sigue a `delete().eq()` o `update().eq()`: se puede esperar tal cual o
+ * encadenar `.select("id")`, que devuelve las filas que se escribieron.
+ */
+const written = () => ({
+	select: async () => ({
+		data: state.writeError ? null : state.writeRows,
+		error: state.writeError,
+	}),
+	then: (resolve: (value: { error: unknown }) => unknown) =>
+		resolve({ error: state.writeError }),
+});
+
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
 		auth: { getUser: async () => ({ data: { user: state.user } }) },
@@ -55,15 +73,15 @@ vi.mock("@/lib/supabase/server", () => ({
 					}),
 				}),
 				delete: () => ({
-					eq: async (column: string, value: unknown) => {
+					eq: (column: string, value: unknown) => {
 						state.writes.push({ table, kind: "delete", column, value });
-						return { error: null };
+						return written();
 					},
 				}),
 				update: (values: unknown) => ({
-					eq: async (column: string, value: unknown) => {
+					eq: (column: string, value: unknown) => {
 						state.writes.push({ table, kind: "update", values, column, value });
-						return { error: null };
+						return written();
 					},
 				}),
 			};
@@ -79,6 +97,8 @@ beforeEach(() => {
 	state.user = { id: "u1" };
 	state.row = { tenant_id: TENANT_ID };
 	state.readError = null;
+	state.writeError = null;
+	state.writeRows = [{ id: ROW_ID }];
 	state.reads = [];
 	state.writes = [];
 	state.revalidated = [];
@@ -158,5 +178,73 @@ describe.each(cases)("$name", ({ run, table, write }) => {
 		expect(state.reads).toHaveLength(0);
 		expect(state.writes).toHaveLength(0);
 		expect(state.revalidated).toEqual(["/acme/settings/usuarios"]);
+	});
+});
+
+describe("resultado de las bajas", () => {
+	it("cuando sale bien devuelven ok", async () => {
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({ ok: true });
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({ ok: true });
+	});
+
+	it("sacar al único administrador explica por qué no se pudo", async () => {
+		state.writeError = { code: "23514", message: "check" };
+
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "La empresa no puede quedar sin administrador.",
+		});
+	});
+
+	it("sin permiso, sin fila o con el método no permitido dicen que no hay permiso", async () => {
+		gate.allows = false;
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+
+		gate.allows = true;
+		state.row = null;
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+	});
+
+	it("otro error de la base no se filtra al mensaje", async () => {
+		state.writeError = { code: "XX000", message: "detalle interno" };
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		const result = await revokeMembership(ROW_ID, "acme");
+
+		expect(result).toEqual({
+			ok: false,
+			message: "No se pudo completar. Probá de nuevo.",
+		});
+		error.mockRestore();
+	});
+});
+
+describe("una baja que la RLS filtra", () => {
+	it("sin filas escritas no dice ok y revalida igual", async () => {
+		state.writeRows = [];
+
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({
+			ok: false,
+			message: "No tenés permiso.",
+		});
+		expect(state.revalidated).toEqual([
+			"/acme/settings/usuarios",
+			"/acme/settings/usuarios",
+		]);
+	});
+
+	it("con una fila escrita dice ok", async () => {
+		expect(await revokeMembership(ROW_ID, "acme")).toEqual({ ok: true });
+		expect(await revokeInvitation(ROW_ID, "acme")).toEqual({ ok: true });
 	});
 });
