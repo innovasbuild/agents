@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state: {
 	tenant: { id: string } | null;
 	agents: string[] | null;
-	brain: boolean;
+	brain: boolean | null;
 } = { tenant: { id: "t1" }, agents: [], brain: true };
 
 vi.mock("@/lib/tenants/resolve", () => ({
@@ -49,6 +49,17 @@ describe("/<slug>", () => {
 
 	it("si no se pudieron leer los agentes, va al chat como siempre", async () => {
 		state.agents = null;
+		await expect(open()).rejects.toThrow("REDIRECT /acme/chat");
+	});
+
+	it("si no se pudo leer el brain y no hay agentes de chat, va al brain", async () => {
+		state.brain = null;
+		await expect(open()).rejects.toThrow("REDIRECT /acme/brain");
+	});
+
+	it("si no se pudo leer el brain pero hay agente de chat, va al chat", async () => {
+		state.brain = null;
+		state.agents = ["outreach"];
 		await expect(open()).rejects.toThrow("REDIRECT /acme/chat");
 	});
 

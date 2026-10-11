@@ -10,15 +10,19 @@ vi.mock("react", async (original) => ({
 	cache: <T>(fn: T) => fn,
 }));
 
+// Cada eq() se puede encadenar o esperar: los agentes cortan en el segundo
+// eq y el brain sigue hasta limit().
+function chain(): Promise<unknown> & {
+	eq: typeof chain;
+	limit: () => unknown;
+} {
+	const result = Promise.resolve({ data: state.rows, error: state.error });
+	return Object.assign(result, { eq: chain, limit: () => result });
+}
+
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
-		from: () => ({
-			select: () => ({
-				eq: () => ({
-					eq: async () => ({ data: state.rows, error: state.error }),
-				}),
-			}),
-		}),
+		from: () => ({ select: () => ({ eq: chain }) }),
 	}),
 }));
 
@@ -27,9 +31,8 @@ const notFound = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ notFound }));
 
-const { loadEnabledAgents, requireAgent, requireChatAgent } = await import(
-	"@/lib/tenants/enabled-agents"
-);
+const { loadBrainEnabled, loadEnabledAgents, requireAgent, requireChatAgent } =
+	await import("@/lib/tenants/enabled-agents");
 
 beforeEach(() => {
 	state.rows = [];
@@ -47,6 +50,25 @@ describe("loadEnabledAgents", () => {
 		state.rows = null;
 		state.error = { message: "boom" };
 		expect(await loadEnabledAgents("t1")).toBeNull();
+	});
+});
+
+describe("loadBrainEnabled", () => {
+	it("true si hay una conexión de brain habilitada", async () => {
+		state.rows = [{ agent: "x" }];
+		expect(await loadBrainEnabled("t1")).toBe(true);
+	});
+
+	it("false si no hay ninguna", async () => {
+		expect(await loadBrainEnabled("t1")).toBe(false);
+	});
+
+	it("si la consulta falla devuelve null y no false", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.rows = null;
+		state.error = { message: "boom" };
+		expect(await loadBrainEnabled("t1")).toBeNull();
+		error.mockRestore();
 	});
 });
 

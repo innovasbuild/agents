@@ -29,8 +29,9 @@ export const loadEnabledAgents = cache(
 	},
 );
 
+/** `null` si no se pudo leer: una falla pasajera no es "no tiene brain". */
 export const loadBrainEnabled = cache(
-	async (tenantId: string): Promise<boolean> => {
+	async (tenantId: string): Promise<boolean | null> => {
 		try {
 			const supabase = await createServerSupabase();
 			const { data, error } = await supabase
@@ -42,12 +43,12 @@ export const loadBrainEnabled = cache(
 				.limit(1);
 			if (error) {
 				console.error("brain habilitado:", error.message);
-				return false;
+				return null;
 			}
 			return (data ?? []).length > 0;
 		} catch (error) {
 			console.error("brain habilitado:", error);
-			return false;
+			return null;
 		}
 	},
 );

@@ -25,5 +25,7 @@ export default async function TenantHomePage({
 	// Si no se pudieron leer los agentes, no se degrada a nadie: queda el
 	// aterrizaje de siempre, el chat.
 	if (enabledAgents === null) redirect(`/${slug}/chat`);
-	redirect(`/${slug}${tenantHome({ enabledAgents, brain })}`);
+	// Si no se pudo leer el brain, se asume que está: una falla pasajera no
+	// manda a Conectar a una empresa que ya lo tiene.
+	redirect(`/${slug}${tenantHome({ enabledAgents, brain: brain ?? true })}`);
 }
