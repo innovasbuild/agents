@@ -81,6 +81,23 @@ describe("savePage", () => {
 		);
 	});
 
+	it("una skill se guarda siempre activa, venga el status que venga", async () => {
+		const { deps: d, provider } = deps();
+		await savePage(
+			{
+				...input,
+				slug: "skills/ventas/reporte",
+				category: "skill",
+				status: "archivado",
+			},
+			d,
+		);
+		expect(provider.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ status: "activo" }),
+			expect.anything(),
+		);
+	});
+
 	it("página nueva va sin baseRevision", async () => {
 		const { deps: d, provider } = deps();
 		await savePage({ ...input, baseRevision: null }, d);

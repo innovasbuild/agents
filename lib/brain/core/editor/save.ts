@@ -11,7 +11,7 @@ import {
 	BrainValidation,
 } from "../errors";
 import type { BrainBinding } from "../resolve";
-import { skillPlacementOk } from "../skills/package";
+import { SKILL_CATEGORY, skillPlacementOk } from "../skills/package";
 import type {
 	BrainProvider,
 	BrainRole,
@@ -84,7 +84,8 @@ export async function savePage(
 		slug: input.slug,
 		title: input.title,
 		category: input.category,
-		status: input.status,
+		// Una skill siempre va activa: su ciclo de vida es publicar/retirar, no el status.
+		status: input.category === SKILL_CATEGORY ? "activo" : input.status,
 		tags: input.tags,
 		frontmatter: input.frontmatter,
 		body: input.body,
