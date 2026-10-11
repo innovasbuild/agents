@@ -4,16 +4,19 @@
 import { createHash } from "node:crypto";
 import { BrainConflict } from "../brain/core/errors";
 import type { BrainProvider } from "../brain/core/types";
-import { brainForTenant, CANON_TAGS_FOR_DRAFT } from "./canon";
+import { brainForTenant } from "./canon";
 import { DEFAULT_CANON_PAGES } from "./canon-templates";
 
 /**
- * Si el brain ya tiene alguna página con tag de canon. Una empresa que cargó su
- * canon con otros slugs no recibe plantillas: loadCanon lee también
- * los borradores y las pasaría a la redacción.
+ * Si el brain ya tiene alguna página con alguno de estos tags de canon. Una
+ * empresa que cargó ese canon con otros slugs no recibe la plantilla:
+ * loadCanon lee también los borradores y la pasaría a la redacción.
  */
-async function hasCanon(brain: BrainProvider): Promise<boolean> {
-	for (const tag of CANON_TAGS_FOR_DRAFT) {
+async function hasAnyTag(
+	brain: BrainProvider,
+	tags: readonly string[],
+): Promise<boolean> {
+	for (const tag of tags) {
 		const found = await brain.search({ query: "", tag, limit: 1 });
 		if (found.length > 0) return true;
 	}
@@ -25,15 +28,21 @@ export async function seedCanonPages(
 	userId: string,
 ): Promise<boolean> {
 	if (!brain) return false;
-	try {
-		if (await hasCanon(brain)) return true;
-	} catch (error) {
-		// Sin saber si ya hay canon no se siembra: una plantilla de más se lee.
-		console.error("canon: no pude ver si el brain ya tiene canon:", error);
-		return false;
-	}
 	let allOk = true;
+	// Cada plantilla mira solo su propio tag: un brain con ICP propio y sin
+	// hooks recibe la plantilla de hooks.
 	for (const page of DEFAULT_CANON_PAGES) {
+		try {
+			if (await hasAnyTag(brain, page.tags)) continue;
+		} catch (error) {
+			// Sin saber si ya hay canon no se siembra: una plantilla de más se lee.
+			console.error(
+				`canon: no pude ver si el brain ya tiene ${page.slug}:`,
+				error,
+			);
+			allOk = false;
+			continue;
+		}
 		try {
 			await brain.upsert(
 				{

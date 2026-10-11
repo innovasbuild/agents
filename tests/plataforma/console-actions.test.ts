@@ -611,13 +611,17 @@ describe("setAgent: el canon se siembra solo al pasar de apagado a prendido", ()
 		expect(state.rpcBeforeSeed).toEqual([["platform_set_agent"]]);
 	});
 
-	it("si no puede leer el estado previo, guarda igual pero no siembra", async () => {
+	it("si no puede leer el estado previo, guarda igual, no siembra y avisa", async () => {
 		state.agentRows = [];
 		state.agentRowsError = { message: "caída" };
 		const log = vi.spyOn(console, "error").mockImplementation(() => {});
 		expect(
 			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
-		).toEqual({ ok: true });
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
 		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
 		expect(state.seedCalls).toHaveLength(0);
 		expect(log).toHaveBeenCalled();

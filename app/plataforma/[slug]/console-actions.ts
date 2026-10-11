@@ -161,7 +161,7 @@ export async function setAgent(
 
 	// El canon se siembra solo cuando el agente pasa de apagado a prendido: un
 	// Guardar que solo cambia el acceso al brain no crea plantillas. Si no se
-	// puede saber el estado previo, no se siembra.
+	// puede saber el estado previo, no se siembra y se avisa.
 	const needsSeed = enabled === true && AGENT_CATALOG[agent].requiresBrain;
 	const before = needsSeed ? await readEnabledAgents(tenantId) : null;
 	const wasOff = before !== null && !before.some((row) => row.agent === agent);
@@ -185,6 +185,7 @@ export async function setAgent(
 		}
 		if (!seeded) return SIN_CANON;
 	}
+	if (saved.ok && needsSeed && before === null) return SIN_CANON;
 	return saved;
 }
 
