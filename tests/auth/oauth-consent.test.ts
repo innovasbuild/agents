@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
 	allowed: true,
+	check: "allowed" as "allowed" | "denied" | "no-tenants",
 	details: vi.fn(),
 	approve: vi.fn(),
 	redirects: [] as string[],
@@ -30,6 +31,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("@/lib/tenants/login-check-server", () => ({
 	consentAllowsLogin: async () => state.allowed,
+	consentLoginCheck: async () => state.check,
 }));
 
 const { default: ConsentPage } = await import("@/app/oauth/consent/page");
@@ -37,6 +39,7 @@ const { approveConsent } = await import("@/app/oauth/consent/actions");
 
 beforeEach(() => {
 	state.allowed = true;
+	state.check = "allowed";
 	state.redirects = [];
 	state.details.mockReset();
 	state.approve.mockReset();
@@ -65,9 +68,18 @@ describe("/oauth/consent y el método de la sesión", () => {
 	});
 
 	it("con un método que alguna empresa no permite, no lee el pedido (que aprobaría solo un consentimiento previo)", async () => {
-		state.allowed = false;
+		state.check = "denied";
 		const html = await page();
 		expect(html).toContain("No podés conectar con esta sesión");
+		expect(html).toContain("alguna de tus empresas no permite");
+		expect(state.details).not.toHaveBeenCalled();
+	});
+
+	it("sin empresas activas, no lee el pedido y lo dice con otras palabras", async () => {
+		state.check = "no-tenants";
+		const html = await page();
+		expect(html).toContain("Todavía no estás en ninguna empresa activa");
+		expect(html).not.toContain("alguna de tus empresas no permite");
 		expect(state.details).not.toHaveBeenCalled();
 	});
 

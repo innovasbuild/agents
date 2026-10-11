@@ -26,21 +26,28 @@ export async function actionAllowsLogin(
 	return allowsLogin(supabase, ownerTenantId ?? tenantId);
 }
 
+export type ConsentLoginCheck = "allowed" | "denied" | "no-tenants";
+
 /**
  * ¿Esta sesión puede autorizar una app por MCP en /oauth/consent? El grant
  * vale para todas las empresas de la persona y el token que emite no dice con
  * qué método entró, así que el método tiene que estar permitido en cada
  * empresa activa donde es miembro. Un administrador de plataforma se chequea
- * solo contra el tenant dueño (L12). Sin empresas no hay nada que autorizar.
- * Falla cerrado y nunca tira.
+ * solo contra el tenant dueño (L12). Sin empresas no hay nada que autorizar:
+ * "no-tenants", para que la pantalla lo diga con sus palabras. Falla cerrado
+ * ("denied") y nunca tira.
  */
-export async function consentAllowsLogin(
+export async function consentLoginCheck(
 	supabase: ServerSupabase,
 	userId: string,
-): Promise<boolean> {
+): Promise<ConsentLoginCheck> {
 	try {
 		const ownerTenantId = await platformOwnerAdminTenantId(supabase, userId);
-		if (ownerTenantId) return await allowsLogin(supabase, ownerTenantId);
+		if (ownerTenantId) {
+			return (await allowsLogin(supabase, ownerTenantId))
+				? "allowed"
+				: "denied";
+		}
 
 		const { data, error } = await supabase
 			.from("memberships")
@@ -49,18 +56,26 @@ export async function consentAllowsLogin(
 			.eq("tenants.active", true);
 		if (error) {
 			console.error("No se pudieron leer las empresas de la persona:", error);
-			return false;
+			return "denied";
 		}
 		const tenantIds = [
 			...new Set((data ?? []).map((row) => row.tenant_id as string)),
 		];
-		if (tenantIds.length === 0) return false;
+		if (tenantIds.length === 0) return "no-tenants";
 		const allowed = await Promise.all(
 			tenantIds.map((tenantId) => allowsLogin(supabase, tenantId)),
 		);
-		return allowed.every(Boolean);
+		return allowed.every(Boolean) ? "allowed" : "denied";
 	} catch (error) {
 		console.error("No se pudo chequear el método para autorizar:", error);
-		return false;
+		return "denied";
 	}
+}
+
+/** Lo mismo como sí o no: solo "allowed" deja autorizar. */
+export async function consentAllowsLogin(
+	supabase: ServerSupabase,
+	userId: string,
+): Promise<boolean> {
+	return (await consentLoginCheck(supabase, userId)) === "allowed";
 }

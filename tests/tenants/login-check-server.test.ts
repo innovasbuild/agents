@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	actionAllowsLogin,
 	consentAllowsLogin,
+	consentLoginCheck,
 } from "@/lib/tenants/login-check-server";
 import type { ServerSupabase } from "@/lib/tenants/platform";
 
@@ -201,5 +202,23 @@ describe("consentAllowsLogin", () => {
 	it("sin empresas activas no hay nada que autorizar", async () => {
 		const { client } = fakeConsentSupabase({ ownerRow: null, tenants: [] });
 		expect(await consentAllowsLogin(client, USER_ID)).toBe(false);
+	});
+
+	it("el detalle distingue no tener empresas de que una no permita el método", async () => {
+		const sinEmpresas = fakeConsentSupabase({ ownerRow: null, tenants: [] });
+		expect(await consentLoginCheck(sinEmpresas.client, USER_ID)).toBe(
+			"no-tenants",
+		);
+		const negado = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID],
+			allowed: () => false,
+		});
+		expect(await consentLoginCheck(negado.client, USER_ID)).toBe("denied");
+		const permitido = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID],
+		});
+		expect(await consentLoginCheck(permitido.client, USER_ID)).toBe("allowed");
 	});
 });
