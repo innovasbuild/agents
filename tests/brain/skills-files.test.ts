@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AccessRule } from "@/lib/brain/core/access/types";
-import { BrainConflict } from "@/lib/brain/core/errors";
+import { BrainConflict, BrainNotFound } from "@/lib/brain/core/errors";
 import {
 	type FilesDeps,
 	importSkillPackage,
@@ -76,6 +76,7 @@ function setup(
 		current?: SkillOverviewRow["current"];
 		putError?: unknown;
 		saveError?: unknown;
+		files?: { path: string; sha256: string; size: number }[];
 	} = {},
 ) {
 	const blobs = new Map<string, Uint8Array>([
@@ -134,7 +135,7 @@ function setup(
 							: opts.current,
 				},
 			],
-			files: async () => draftFiles,
+			files: async () => opts.files ?? draftFiles,
 			acts: async () => [oldAct],
 			putFile,
 			removeFile,
@@ -455,5 +456,131 @@ describe("importSkillPackage", () => {
 			{ code: "conflict" },
 		);
 		expect(putFile).not.toHaveBeenCalled();
+	});
+});
+
+describe("existencia: quien no ve la skill no sabe si existe", () => {
+	const input = { path: "a.txt", bytes: bytes("x") };
+	const entries = [{ path: "SKILL.md", bytes: bytes(SKILL_MD) }];
+
+	it("un lector de una skill sin publicar o retirada recibe not_found", async () => {
+		for (const current of [
+			null,
+			{ ...setupCurrent(), action: "retirar" as const },
+		]) {
+			const { deps } = setup({ ...LECTOR, current });
+			expect(await putSkillFile("acme", SLUG, input, deps)).toMatchObject({
+				code: "not_found",
+			});
+			expect(await removeSkillFile("acme", SLUG, "a.txt", deps)).toMatchObject({
+				code: "not_found",
+			});
+			expect(
+				await importSkillPackage("acme", SLUG, entries, deps),
+			).toMatchObject({
+				code: "not_found",
+			});
+		}
+	});
+
+	it("un lector de una skill publicada recibe forbidden", async () => {
+		const { deps } = setup(LECTOR);
+		expect(await removeSkillFile("acme", SLUG, "a.txt", deps)).toMatchObject({
+			code: "forbidden",
+		});
+		expect(await importSkillPackage("acme", SLUG, entries, deps)).toMatchObject(
+			{
+				code: "forbidden",
+			},
+		);
+	});
+
+	it("quien no tiene acceso recibe not_found al quitar e importar", async () => {
+		const { deps } = setup(HIDDEN);
+		expect(await removeSkillFile("acme", SLUG, "a.txt", deps)).toMatchObject({
+			code: "not_found",
+		});
+		expect(await importSkillPackage("acme", SLUG, entries, deps)).toMatchObject(
+			{
+				code: "not_found",
+			},
+		);
+	});
+
+	it("BrainNotFound al guardar el borrador sale como not_found", async () => {
+		const { deps } = setup({ saveError: new BrainNotFound(SLUG, []) });
+		expect(await importSkillPackage("acme", SLUG, entries, deps)).toMatchObject(
+			{
+				code: "not_found",
+			},
+		);
+	});
+});
+
+describe("endurecimiento del import", () => {
+	it("una carpeta raíz inválida (.., ., vacía) no se descarta", () => {
+		for (const root of ["..", ".", ""]) {
+			const plan = planImport([
+				{ path: `${root}/SKILL.md`, bytes: bytes(SKILL_MD) },
+				{ path: `${root}/a.txt`, bytes: bytes("x") },
+			]);
+			expect(plan.ok).toBe(false);
+		}
+	});
+
+	it("un segundo SKILL.md se informa como repetido", () => {
+		const plan = planImport([
+			{ path: "SKILL.md", bytes: bytes(SKILL_MD) },
+			{ path: "SKILL.md", bytes: bytes(SKILL_MD) },
+		]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems.join(" ")).toContain("Ruta repetida: SKILL.md");
+	});
+
+	it("compatibility de más de 500 caracteres se rechaza", () => {
+		const long = SKILL_MD.replace("Python 3", "x".repeat(501));
+		const plan = planImport([{ path: "SKILL.md", bytes: bytes(long) }]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems.join(" ")).toMatch(/compatibility supera los 500/);
+	});
+
+	it("el mensaje corta la lista de problemas en 10", async () => {
+		const bad = Array.from({ length: 30 }, (_, i) => ({
+			path: `../m${i}`,
+			bytes: bytes("x"),
+		}));
+		const result = await importSkillPackage(
+			"acme",
+			SLUG,
+			[{ path: "SKILL.md", bytes: bytes(SKILL_MD) }, ...bad],
+			setup().deps,
+		);
+		if (result.ok) throw new Error("tenía que fallar");
+		expect(result.message).toMatch(/ y 20 más\.$/);
+		expect(result.message.split("Ruta inválida")).toHaveLength(11);
+	});
+
+	it("los archivos que achican se cargan antes que los que agrandan", async () => {
+		const { deps, calls } = setup({
+			files: [
+				{ path: "grande.bin", sha256: "g", size: 10_000_000 },
+				{ path: "chico.bin", sha256: "c", size: 1 },
+			],
+		});
+		const result = await importSkillPackage(
+			"acme",
+			SLUG,
+			[
+				{ path: "SKILL.md", bytes: bytes(SKILL_MD) },
+				{ path: "chico.bin", bytes: new Uint8Array(4_000_000) },
+				{ path: "grande.bin", bytes: new Uint8Array(1) },
+			],
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+		expect(calls.filter((c) => c.startsWith("put:"))).toEqual([
+			"put:grande.bin",
+			"put:chico.bin",
+		]);
 	});
 });

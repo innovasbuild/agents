@@ -23,6 +23,7 @@ import { WikiStoreError } from "../wiki-store.ts";
 import {
 	isSkillSlug,
 	isValidFilePath,
+	MAX_COMPATIBILITY,
 	MAX_DESCRIPTION,
 	MAX_FILE_BYTES,
 	MAX_PACKAGE_BYTES,
@@ -98,7 +99,10 @@ function stripRoot(entries: PackageEntry[]): PackageEntry[] {
 	const roots = new Set(entries.map((entry) => entry.path.split("/")[0]));
 	if (roots.size !== 1 || entries.some((entry) => !entry.path.includes("/")))
 		return entries;
-	const prefix = `${[...roots][0]}/`;
+	const root = [...roots][0];
+	// Solo una carpeta común válida: "..", "." o vacío no se descartan.
+	if (!isValidFilePath(root)) return entries;
+	const prefix = `${root}/`;
 	return entries.map((entry) => ({
 		...entry,
 		path: entry.path.slice(prefix.length),
@@ -113,7 +117,9 @@ export function planImport(
 	const entries = stripRoot(raw);
 	const problems: string[] = [];
 
-	const skillMd = entries.find((entry) => entry.path === "SKILL.md");
+	const skillMds = entries.filter((entry) => entry.path === "SKILL.md");
+	const skillMd = skillMds[0];
+	if (skillMds.length > 1) problems.push("Ruta repetida: SKILL.md");
 	const files = entries.filter((entry) => entry.path !== "SKILL.md");
 	let skill: ParsedSkillMd | null = null;
 	if (!skillMd) {
@@ -126,6 +132,8 @@ export function planImport(
 			problems.push("SKILL.md no trae description.");
 		} else if (skill.description.length > MAX_DESCRIPTION) {
 			problems.push("La description de SKILL.md supera los 1024 caracteres.");
+		} else if (skill.compatibility.length > MAX_COMPATIBILITY) {
+			problems.push("El campo compatibility supera los 500 caracteres.");
 		}
 	}
 
@@ -196,6 +204,22 @@ async function context(
 	return { ok: true, actor, level, row };
 }
 
+const MAX_PROBLEMS_SHOWN = 10;
+
+function problemsMessage(problems: string[]): string {
+	const shown = problems.slice(0, MAX_PROBLEMS_SHOWN).join(" ");
+	const rest = problems.length - MAX_PROBLEMS_SHOWN;
+	return rest > 0 ? `${shown} y ${rest} más.` : shown;
+}
+
+// Quien solo lee y no ve la skill publicada no puede saber que existe: la
+// respuesta es la misma que para una ruta que no existe.
+function requireEditor(ctx: Context): SkillFailure | null {
+	if (atLeast(ctx.level, "editor")) return null;
+	if (!publishedSnapshot(ctx.row)) return skillFail("not_found", NOT_FOUND);
+	return skillFail("forbidden", ONLY_EDITORS);
+}
+
 const ONLY_EDITORS =
 	"Necesitás ser editor de esta skill para cambiar sus archivos.";
 
@@ -230,8 +254,8 @@ export async function putSkillFile(
 ): Promise<{ ok: true; filesDigest: string } | SkillFailure> {
 	const ctx = await context(tenantSlug, slug, deps);
 	if (!ctx.ok) return ctx;
-	if (!atLeast(ctx.level, "editor"))
-		return skillFail("forbidden", ONLY_EDITORS);
+	const denied = requireEditor(ctx);
+	if (denied) return denied;
 	const problem = fileProblem(input);
 	if (problem) return skillFail("validation", problem);
 
@@ -261,8 +285,8 @@ export async function removeSkillFile(
 ): Promise<{ ok: true; filesDigest: string } | SkillFailure> {
 	const ctx = await context(tenantSlug, slug, deps);
 	if (!ctx.ok) return ctx;
-	if (!atLeast(ctx.level, "editor"))
-		return skillFail("forbidden", ONLY_EDITORS);
+	const denied = requireEditor(ctx);
+	if (denied) return denied;
 	try {
 		const filesDigest = await deps.store.removeFile({
 			tenantId: ctx.actor.tenantId,
@@ -286,6 +310,7 @@ export async function readSkillFile(
 	if (!ctx.ok) return ctx;
 	const { actor, row } = ctx;
 
+	// Un lector debe llamar sin `version`: con ella siempre recibe not_found.
 	let manifest: SkillFile[];
 	if (atLeast(ctx.level, "editor")) {
 		manifest =
@@ -317,13 +342,13 @@ export async function importSkillPackage(
 ): Promise<{ ok: true; files: number; revision: number } | SkillFailure> {
 	const ctx = await context(tenantSlug, slug, deps);
 	if (!ctx.ok) return ctx;
-	if (!atLeast(ctx.level, "editor"))
-		return skillFail("forbidden", ONLY_EDITORS);
+	const denied = requireEditor(ctx);
+	if (denied) return denied;
 	const { actor, row } = ctx;
 
 	// Todo se valida antes de escribir: un paquete inválido no cambia nada.
 	const plan = planImport(entries);
-	if (!plan.ok) return skillFail("validation", plan.problems.join(" "));
+	if (!plan.ok) return skillFail("validation", problemsMessage(plan.problems));
 
 	const page = await deps.page(actor.tenantId, slug);
 	if (!page) return skillFail("not_found", NOT_FOUND);
@@ -359,7 +384,9 @@ export async function importSkillPackage(
 				"Alguien guardó el borrador mientras importabas. Recargá y probá de nuevo.",
 			);
 		}
-		if (error instanceof BrainForbidden || error instanceof BrainNotFound)
+		if (error instanceof BrainNotFound)
+			return skillFail("not_found", NOT_FOUND);
+		if (error instanceof BrainForbidden)
 			return skillFail("forbidden", ONLY_EDITORS);
 		if (error instanceof BrainValidation)
 			return skillFail("validation", error.message);
@@ -380,7 +407,16 @@ export async function importSkillPackage(
 				actorUserId: actor.userId,
 			});
 		}
-		for (const file of plan.files) {
+		// Los que achican van primero: el total nunca pasa del mayor entre el de
+		// partida y el final, así no salta el tope de 20 MB a mitad de camino.
+		const sizeBefore = new Map(existing.map((file) => [file.path, file.size]));
+		const ordered = [...plan.files].sort(
+			(a, b) =>
+				a.bytes.length -
+				(sizeBefore.get(a.path) ?? 0) -
+				(b.bytes.length - (sizeBefore.get(b.path) ?? 0)),
+		);
+		for (const file of ordered) {
 			const sha256 = sha256Hex(file.bytes);
 			await deps.blobs.put(actor.tenantId, sha256, file.bytes);
 			await deps.store.putFile({
