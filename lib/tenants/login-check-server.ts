@@ -25,3 +25,42 @@ export async function actionAllowsLogin(
 	}
 	return allowsLogin(supabase, ownerTenantId ?? tenantId);
 }
+
+/**
+ * ¿Esta sesión puede autorizar una app por MCP en /oauth/consent? El grant
+ * vale para todas las empresas de la persona y el token que emite no dice con
+ * qué método entró, así que el método tiene que estar permitido en cada
+ * empresa activa donde es miembro. Un administrador de plataforma se chequea
+ * solo contra el tenant dueño (L12). Sin empresas no hay nada que autorizar.
+ * Falla cerrado y nunca tira.
+ */
+export async function consentAllowsLogin(
+	supabase: ServerSupabase,
+	userId: string,
+): Promise<boolean> {
+	try {
+		const ownerTenantId = await platformOwnerAdminTenantId(supabase, userId);
+		if (ownerTenantId) return await allowsLogin(supabase, ownerTenantId);
+
+		const { data, error } = await supabase
+			.from("memberships")
+			.select("tenant_id, tenants!inner(active)")
+			.eq("user_id", userId)
+			.eq("tenants.active", true);
+		if (error) {
+			console.error("No se pudieron leer las empresas de la persona:", error);
+			return false;
+		}
+		const tenantIds = [
+			...new Set((data ?? []).map((row) => row.tenant_id as string)),
+		];
+		if (tenantIds.length === 0) return false;
+		const allowed = await Promise.all(
+			tenantIds.map((tenantId) => allowsLogin(supabase, tenantId)),
+		);
+		return allowed.every(Boolean);
+	} catch (error) {
+		console.error("No se pudo chequear el método para autorizar:", error);
+		return false;
+	}
+}

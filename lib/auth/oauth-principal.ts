@@ -3,6 +3,7 @@
 // agente (Etapa 6). Sin nada específico de ninguno de los dos.
 import { createClient } from "@supabase/supabase-js";
 import { createAdminClient } from "../supabase/admin";
+import { allowsLogin } from "../tenants/login-check";
 import { platformOwnerSlug } from "../tenants/platform-owner";
 
 export function createOAuthClaimsVerifier(): (
@@ -21,6 +22,26 @@ export function createOAuthClaimsVerifier(): (
 		}
 		return data.claims as Record<string, unknown>;
 	};
+}
+
+/**
+ * ¿La empresa permite el método con el que se abrió la sesión de este token?
+ * Pregunta a la base (tenant_allows_login) con el token de la persona, no con
+ * service role: el método sale del JWT. Falla cerrado y nunca tira.
+ */
+export function tokenAllowsLogin(
+	token: string,
+	tenantId: string,
+): Promise<boolean> {
+	const client = createClient(
+		process.env.NEXT_PUBLIC_SUPABASE_URL!,
+		process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+		{
+			auth: { persistSession: false, autoRefreshToken: false },
+			global: { headers: { Authorization: `Bearer ${token}` } },
+		},
+	);
+	return allowsLogin(client, tenantId);
 }
 
 export async function loadMemberships(
