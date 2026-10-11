@@ -137,6 +137,54 @@ su propio repo.
   El contenido visible es el mismo. Por V6 solo alcanzan a una página que una
   persona edita de verdad: si no toca el cuerpo, se guarda el original.
 
+## Skills
+
+- Una skill es una página de categoría `skill` bajo `skills/`; las dos cosas
+  van juntas y lo exige `validateWrite` (`core/skills/package.ts`,
+  `skillPlacementOk`). Como el slug no cambia, tampoco puede salir de la
+  categoría.
+- El borrador es la página más sus archivos (`brain_skill_files`); el
+  contenido de cada archivo va al bucket privado `skills`, en
+  `<tenant_id>/<sha256>`. El hash lo calcula el servidor.
+- Publicar (`core/skills/publish.ts`) exige `tenant_admin` o `platform_admin`
+  y llama a `brain_publish_skill`, que arma la copia desde la fila bloqueada y
+  la inserta en `brain_skill_versions`. Esa tabla es solo de inserción, también
+  para la service role. Retirar es otra fila; republicar copia una versión
+  anterior a una nueva.
+- **Lo que se publica es lo que se revisó:** la publicación va con la revisión
+  de la página y el hash de archivos que mostró la pantalla; si algo cambió, la
+  base responde `BR409`.
+- **Qué ve cada uno.** `core/skills/view.ts` tiene dos envoltorios de
+  `BrainProvider`. `withoutSkills` va en las tools del agente
+  (`adapters/tools.ts`), en el endpoint MCP (`core/mcp-server/handler.ts`) y en
+  el lector del canon de outreach (`lib/outreach/canon.ts`): ningún asistente
+  ve ni escribe nada bajo `skills/`, sea quien sea. `withSkillView` va en el
+  contexto del editor web (`adapters/editor.ts`): quien es editor de la skill
+  ve el borrador; quien solo lee ve la copia publicada (la revisión publicada,
+  estado `activo` y sin etiquetas, nada del borrador), y sin versión vigente la
+  skill no existe para él.
+- `resolveActingProvider` **no** lleva `withoutSkills`: lo usa el guardado del
+  editor web, que tiene que escribir borradores.
+- Los archivos se sirven siempre por `app/[tenant]/brain/skills/files/route.ts`,
+  como texto plano o como descarga, nunca con un tipo que el navegador ejecute
+  (`core/skills/http.ts`). El `POST` verifica el origen a mano (un route handler
+  no trae el chequeo de las server actions) y autoriza en orden antes de leer el
+  cuerpo: origen, `Content-Length`, miembro del tenant y editor sobre ese slug.
+- El zip se lee en `adapters/skill-zip.ts`, que recorre el directorio central
+  a mano e infla con `node:zlib` (`fflate` es solo devDependency de los tests).
+  Antes de descomprimir descarta carpetas, `__MACOSX/` y `.DS_Store`, y
+  rechaza zip64, cifrado, métodos distintos de 0 y 8, nombres repetidos,
+  entradas que se superponen o cuyo comprimido suma más que el zip, y topes
+  excedidos en el tamaño declarado. Cada entrada se infla con
+  `maxOutputLength` igual a su tamaño declarado y tiene que dar ese tamaño
+  exacto y su CRC.
+- Limitación conocida: `planImport` rechaza los archivos vacíos (`.gitkeep`, un
+  `__init__.py` vacío), así que un paquete que traiga uno se rechaza entero.
+- Los archivos que ninguna fila referencia quedan en el bucket: no hay limpieza
+  todavía.
+- Habilitar skills en una empresa es agregar `skill` a las categorías de su
+  brain desde la consola de plataforma.
+
 ## Qué viaja con el módulo
 
 - `lib/brain/core/`
@@ -146,8 +194,8 @@ su propio repo.
   reescriben junto con los adapters.
 - Migraciones: `20260913233557_brain_tables`, `20260913234426_brain_upsert_page`,
   `20260913235330_brain_search_pages`, `20260924100200_brain_mcp_usage`,
-  `20261007120000_brain_access_rules`, `20261008120000_brain_access_rule_fns` y
-  `20261009120000_brain_delete_page`.
+  `20261007120000_brain_access_rules`, `20261008120000_brain_access_rule_fns`,
+  `20261009120000_brain_delete_page` y `20261020120000_brain_skills`.
 - Tests pgTAP del brain en `supabase/tests/`, incluido
   `supabase/tests/21_brain_access_rules.test.sql`, `22_brain_access_rule_fns` y
   `23_brain_delete_page.test.sql`.

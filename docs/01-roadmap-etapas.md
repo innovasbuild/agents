@@ -620,11 +620,11 @@ Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, constru
 
 **Modelo Claude Code:** Opus 5 para las specs (toca permisos del brain y ejecución de código); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** n/a en la 24.1 y la 24.2 (no hay modelo del lado de la plataforma); el del agente en la 24.3.
-**Spec/Plan:** 24.1: `docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md` · plan a escribir. 24.2 y 24.3: a escribir.
+**Spec/Plan:** 24.1: `docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md` · Plan: `docs/superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md`. 24.2 y 24.3: a escribir.
 
 Agregada el 2026-10-11. Que cada empresa publique en su brain skills para sus empleados (procedimiento en markdown más scripts y plantillas, formato Agent Skills) y que se usen, siempre en su última versión publicada, desde el chat de la plataforma y desde Claude, ChatGPT o Codex. Frontera decidida: el agente define qué se puede hacer (tools con nivel de efecto); la skill define cómo se hace una tarea en esa empresa y nunca agrega una tool ni un permiso. Los scripts son cómputo puro, sin red ni credenciales. Tres entregas:
 
-- [ ] **24.1 · Paquete y publicación.** Categoría `skill` bajo `skills/`, archivos por hash en un bucket privado, versión publicada inmutable, revisión y publicación por un administrador de la empresa, republicar y retirar. Las tools del brain dejan afuera `skills/`. Depende de la 21.4 (categorías editables desde la consola).
+- [ ] **24.1 · Paquete y publicación.** Código terminado; falta el cierre en producción (spec §12). Categoría `skill` bajo `skills/`, archivos por hash en un bucket privado, versión publicada inmutable, revisión y publicación por un administrador de la empresa, republicar y retirar. Las tools del brain dejan afuera `skills/`. Depende de la 21.4 (categorías editables desde la consola).
 - [ ] **24.2 · Skills por MCP.** Tools para listar y cargar skills desde la versión publicada, `skill_run` que ejecuta el script en un sandbox de la plataforma (nodo nuevo, nivel 0, con asiento en `usage_entries`), bibliotecas base del sandbox, exportar el zip publicado, y la página de la 19 con las skills de cada persona.
 - [ ] **24.3 · Skills en el chat interno.** Va **después de la Etapa 22**: las skills de la empresa resueltas por persona como skills dinámicas de eve, con sus archivos en el sandbox de la sesión, sobre cualquier agente. El asistente general (brain, sandbox y skills, sin tools de dominio) es el candidato a segundo agente de la 22.
 

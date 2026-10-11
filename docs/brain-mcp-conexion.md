@@ -28,6 +28,8 @@ Codex: no probado todavía.
 - `brain_read`: leer una página completa con su revisión.
 - `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
 
+Las skills de la empresa (todo lo que está bajo `skills/`) no salen por estas tres tools: se arman y se publican desde la plataforma.
+
 Las tres tools aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
 
 Hay un límite de 60 lecturas y 10 escrituras por minuto por persona. Si lo pasás, la respuesta dice cuántos segundos esperar.
