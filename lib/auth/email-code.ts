@@ -3,13 +3,12 @@
 // del servidor de la app, que sería un balde compartido por todos. La sesión
 // queda en cookies y el tramo posterior lo corre la server action
 // completeLogin.
-import { z } from "zod";
-
 /** Un solo mensaje para cualquier falla: no confirma quién tiene cuenta. */
 export const EMAIL_CODE_ERROR =
 	"El código no es correcto o ya venció. Pedí otro.";
 
-const emailSchema = z.email().max(254);
+// Chequeo plano y no zod: este módulo viaja en el bundle del navegador.
+const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+$/;
 
 /** true solo si Supabase abrió sesión. Nunca tira. */
 export async function verifyEmailCode(params: {
@@ -21,12 +20,13 @@ export async function verifyEmailCode(params: {
 		type: "email";
 	}) => PromiseLike<{ data: { session: unknown }; error: unknown }>;
 }): Promise<boolean> {
-	const parsed = emailSchema.safeParse(params.email.trim().toLowerCase());
+	const email = params.email.trim().toLowerCase();
 	const token = params.code.replace(/\s+/g, "");
-	if (!parsed.success || !/^\d{6}$/.test(token)) return false;
+	if (email.length > 254 || !EMAIL_SHAPE.test(email)) return false;
+	if (!/^\d{6}$/.test(token)) return false;
 	try {
 		const { data, error } = await params.verifyOtp({
-			email: parsed.data,
+			email,
 			token,
 			type: "email",
 		});

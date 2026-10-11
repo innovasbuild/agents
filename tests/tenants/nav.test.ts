@@ -19,7 +19,15 @@ describe("visibleNav", () => {
 	});
 
 	it("con outreach, un administrador ve además Configuración, al final", () => {
-		expect(labels("tenant_admin").at(-1)).toBe("Configuración");
+		expect(labels("tenant_admin")).toEqual([
+			"Chat",
+			"Outreach",
+			"Brain",
+			"Métricas",
+			"Conectar",
+			"Mis cuentas",
+			"Configuración",
+		]);
 		expect(labels("platform_admin")).toEqual(labels("tenant_admin"));
 	});
 
@@ -48,5 +56,12 @@ describe("visibleNav", () => {
 			href: "/conectar",
 			label: "Conectar",
 		});
+	});
+
+	it("Mis cuentas apunta a /mis-cuentas y la ve cualquier rol", () => {
+		const entry = visibleNav("tenant_member", ["outreach"]).find(
+			(e) => e.label === "Mis cuentas",
+		);
+		expect(entry).toMatchObject({ href: "/mis-cuentas" });
 	});
 });

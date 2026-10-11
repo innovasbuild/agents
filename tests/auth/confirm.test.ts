@@ -214,6 +214,12 @@ describe("landingPathFor", () => {
 		expect(landingPathFor("/acme/chat")).toBe("/login/acme");
 	});
 
+	it("deduce la landing de un next que es solo el slug, con o sin query", () => {
+		expect(landingPathFor("/acme")).toBe("/login/acme");
+		expect(landingPathFor("/acme?x=1")).toBe("/login/acme");
+		expect(landingPathFor("/acme#top")).toBe("/login/acme");
+	});
+
 	it("sin next o con next que no es de una empresa va al login general", () => {
 		expect(landingPathFor(null)).toBe("/login");
 		expect(landingPathFor("/")).toBe("/login");

@@ -53,7 +53,7 @@ export function CreateForm() {
 				</label>
 				<Input id="slug" name="slug" placeholder="acme" required />
 				<p className="text-muted-foreground text-xs">
-					Va en la dirección: /slug/chat y /login/slug. Minúsculas, números y
+					Va en la dirección: /slug y /login/slug. Minúsculas, números y
 					guiones. No se cambia después.
 				</p>
 			</div>

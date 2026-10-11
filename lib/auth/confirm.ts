@@ -40,11 +40,11 @@ export function emailFromAccessToken(token: string): string | null {
 }
 
 /**
- * Landing de la empresa a la que apunta un `next` del estilo /<slug>/chat, para
+ * Landing de la empresa a la que apunta un `next` del estilo /<slug> o /<slug>/..., para
  * ofrecerla cuando el link venció. Cualquier otra cosa va al login general.
  */
 export function landingPathFor(next: string | null): string {
-	const slug = next?.match(/^\/([a-z][a-z0-9-]{1,38})\//)?.[1];
+	const slug = next?.match(/^\/([a-z][a-z0-9-]{1,38})(?:[/?#]|$)/)?.[1];
 	return slug ? `/login/${slug}` : "/login";
 }
 
