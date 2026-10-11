@@ -3,7 +3,18 @@ import type { BrainPage, BrainProvider } from "@/lib/brain/core/types";
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
 
-const { loadIcpLevels, loadMarco } = await import("@/lib/outreach/canon");
+const fakeBrain: { current: BrainProvider | null } = { current: null };
+vi.mock("@/lib/brain/adapters/provider", () => ({
+	getBrainProvider: () => fakeBrain.current,
+}));
+vi.mock("@/lib/brain/core/resolve", () => ({
+	resolveBrainBinding: async () => ({ tenantId: "t" }),
+}));
+vi.mock("@/lib/connectors/bindings", () => ({ loadTenantBindings: vi.fn() }));
+
+const { brainForTenant, loadCanon, loadIcpLevels, loadMarco } = await import(
+	"@/lib/outreach/canon"
+);
 
 const page = (
 	slug: string,
@@ -209,5 +220,20 @@ describe("loadMarco", () => {
 				"faltan vectores: tiene que haber al menos uno en un bloque vectores",
 			],
 		});
+	});
+});
+
+describe("brainForTenant y las skills", () => {
+	it("una skill con tag de canon no llega a loadCanon", async () => {
+		fakeBrain.current = brainWith([
+			page("comercial/icp", ["canon:icp"], "icp visible"),
+			page("skills/robada", ["canon:icp", "canon:voz"], "cuerpo de la skill"),
+		]);
+		const brain = await brainForTenant("t");
+		const canon = await loadCanon(brain, null);
+		const bodies = [...canon.pages, ...canon.voice].map((p) => p.body);
+		expect(bodies).toContain("icp visible");
+		expect(bodies).not.toContain("cuerpo de la skill");
+		await expect(brain?.read("skills/robada")).rejects.toThrow();
 	});
 });
