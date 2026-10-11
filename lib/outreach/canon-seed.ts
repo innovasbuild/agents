@@ -9,7 +9,7 @@ import { DEFAULT_CANON_PAGES } from "./canon-templates";
 
 /**
  * Si el brain ya tiene alguna página con tag de canon. Una empresa que cargó su
- * canon con otros slugs (innovas) no recibe plantillas: loadCanon lee también
+ * canon con otros slugs no recibe plantillas: loadCanon lee también
  * los borradores y las pasaría a la redacción.
  */
 async function hasCanon(brain: BrainProvider): Promise<boolean> {
