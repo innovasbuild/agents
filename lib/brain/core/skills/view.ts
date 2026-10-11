@@ -84,6 +84,11 @@ export function withSkillView(
 		if (!snapshot) return null;
 		return {
 			...page,
+			// Nada del borrador llega a quien solo lee: la revisión es la que se
+			// publicó, y las etiquetas y el estado no se publican.
+			revision: snapshot.pageRevision,
+			status: "activo",
+			tags: [],
 			title: snapshot.title,
 			frontmatter: snapshot.frontmatter,
 			body: snapshot.body,

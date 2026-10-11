@@ -41,6 +41,17 @@ const MarkdownEditor = dynamic(
 	{ ssr: false, loading: () => <div className="h-11 lg:h-10" aria-hidden /> },
 );
 
+// Serialización con las claves ordenadas: el orden de las claves no es un cambio.
+function stableJson(value: unknown): string {
+	return JSON.stringify(value, (_key, v) =>
+		v && typeof v === "object" && !Array.isArray(v)
+			? Object.fromEntries(
+					Object.entries(v).sort(([a], [b]) => a.localeCompare(b)),
+				)
+			: v,
+	);
+}
+
 export interface WorkspaceInitial {
 	slug: string;
 	title: string;
@@ -140,9 +151,29 @@ export function PageWorkspace({
 		form.category !== saved.category ||
 		form.status !== saved.status ||
 		form.slug !== saved.slug ||
-		JSON.stringify(form.frontmatter) !== JSON.stringify(saved.frontmatter) ||
+		stableJson(form.frontmatter) !== stableJson(saved.frontmatter) ||
 		tags.join(",") !== saved.tags.join(",") ||
 		body !== original;
+
+	// El servidor cambió la página por otro camino (importar un zip, otra
+	// persona): si no hay cambios sin guardar, el editor vuelve a cargarla. Tras
+	// un guardado propio `baseRevision` ya es la revisión nueva y no hace nada.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: solo reacciona a una revisión nueva del servidor
+	useEffect(() => {
+		if (mode !== "edit" || initial.revision === null) return;
+		if (initial.revision === baseRevision || dirty) return;
+		setSaved(initial);
+		setForm(initial);
+		setTagsText(initial.tags.join(", "));
+		setOriginal(initial.body);
+		setBaseline(null);
+		setSerialized(initial.body);
+		setBaseRevision(initial.revision);
+		setReason("");
+		setResult(null);
+		setServerBody(null);
+		setEditorKey((key) => key + 1);
+	}, [initial.revision]);
 
 	useEffect(() => {
 		if (!dirty) return;
@@ -236,13 +267,33 @@ export function PageWorkspace({
 					value={form.category}
 					disabled={mode === "edit" && isSkill}
 					aria-invalid={!!fieldError("category")}
-					onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+					onChange={(e) =>
+						setForm((f) => {
+							// Una skill lleva descripción y requisitos; otra categoría no.
+							const {
+								description: _d,
+								compatibility: _c,
+								...rest
+							} = f.frontmatter;
+							return {
+								...f,
+								category: e.target.value,
+								frontmatter:
+									f.category === SKILL_CATEGORY &&
+									e.target.value !== SKILL_CATEGORY
+										? rest
+										: f.frontmatter,
+							};
+						})
+					}
 				>
-					{categories.map((c) => (
-						<option key={c} value={c}>
-							{c}
-						</option>
-					))}
+					{categories
+						.filter((c) => mode === "new" || isSkill || c !== SKILL_CATEGORY)
+						.map((c) => (
+							<option key={c} value={c}>
+								{c}
+							</option>
+						))}
 				</select>
 			</label>
 			{!isSkill && (

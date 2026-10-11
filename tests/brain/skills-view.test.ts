@@ -164,13 +164,38 @@ describe("withSkillView (web)", () => {
 		expect(await wrapped.history("skills/publicada")).toEqual([]);
 	});
 
-	it("un lector ve la copia publicada, con la revisión del borrador", async () => {
+	it("un lector ve la copia publicada, sin nada derivado del borrador", async () => {
 		const { wrapped } = view("lector");
 		const read = await wrapped.read("skills/publicada");
 		expect(read.body).toBe("cuerpo publicado");
 		expect(read.title).toBe("Publicada");
 		expect(read.frontmatter).toEqual({ description: "desc publicada" });
 		expect(read.slug).toBe("skills/publicada");
+		expect(read.revision).toBe(4);
+		expect(read.tags).toEqual([]);
+		expect(read.status).toBe("activo");
+		const listed = (await wrapped.list()).find(
+			(p) => p.slug === "skills/publicada",
+		);
+		expect(listed?.revision).toBe(4);
+	});
+
+	it("un editor ve la revisión, el estado y las etiquetas reales del borrador", async () => {
+		const provider: BrainProvider = {
+			...fakeProvider().provider,
+			read: async (slug) =>
+				page(slug, { revision: 9, status: "borrador", tags: ["x"] }),
+		};
+		const wrapped = withSkillView(provider, {
+			levelOf: () => "editor",
+			overview: async () => OVERVIEW,
+		});
+		const read = await wrapped.read("skills/publicada");
+		expect([read.revision, read.status, read.tags]).toEqual([
+			9,
+			"borrador",
+			["x"],
+		]);
 	});
 
 	it("para un lector, sin versión vigente la skill no existe", async () => {
