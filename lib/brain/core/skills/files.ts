@@ -145,8 +145,6 @@ export function planImport(
 			problems.push(`Ruta inválida: ${entry.path}`);
 		} else if (seen.has(entry.path)) {
 			problems.push(`Ruta repetida: ${entry.path}`);
-		} else if (entry.bytes.length === 0) {
-			problems.push(`Archivo vacío: ${entry.path}`);
 		} else if (entry.bytes.length > MAX_FILE_BYTES) {
 			problems.push(`Supera los 4 MB: ${entry.path}`);
 		}
@@ -226,7 +224,6 @@ const ONLY_EDITORS =
 function fileProblem(entry: PackageEntry): string | null {
 	if (!isValidFilePath(entry.path))
 		return "Ruta inválida. Usá letras, números, guiones y puntos, sin espacios ni «..», hasta seis niveles.";
-	if (entry.bytes.length === 0) return "El archivo está vacío.";
 	if (entry.bytes.length > MAX_FILE_BYTES) return "El archivo supera los 4 MB.";
 	return null;
 }

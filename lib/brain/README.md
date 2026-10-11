@@ -178,8 +178,8 @@ su propio repo.
   excedidos en el tamaño declarado. Cada entrada se infla con
   `maxOutputLength` igual a su tamaño declarado y tiene que dar ese tamaño
   exacto y su CRC.
-- Limitación conocida: `planImport` rechaza los archivos vacíos (`.gitkeep`, un
-  `__init__.py` vacío), así que un paquete que traiga uno se rechaza entero.
+- Los archivos vacíos (un `__init__.py`, un `.gitkeep`) son válidos: se importan
+  y se suben como cualquier otro, con el hash de cero bytes.
 - Los archivos que ninguna fila referencia quedan en el bucket: no hay limpieza
   todavía.
 - Habilitar skills en una empresa es agregar `skill` a las categorías de su

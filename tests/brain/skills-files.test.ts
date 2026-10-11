@@ -188,19 +188,27 @@ describe("planImport", () => {
 		}
 	});
 
-	it("rechaza entero: sin SKILL.md, ruta inválida, archivo vacío o pesado", () => {
+	it("rechaza entero: sin SKILL.md, ruta inválida o archivo pesado", () => {
 		expect(
 			planImport([{ path: "scripts/calc.py", bytes: bytes("x") }]),
 		).toMatchObject({ ok: false });
 		const bad = planImport([
 			{ path: "SKILL.md", bytes: bytes(SKILL_MD) },
 			{ path: "scripts/../../etc/passwd", bytes: bytes("x") },
-			{ path: "vacio.txt", bytes: new Uint8Array() },
 			{ path: "pesado.bin", bytes: new Uint8Array(MAX_FILE_BYTES + 1) },
 		]);
 		if (bad.ok) throw new Error("tenía que fallar");
-		expect(bad.problems).toHaveLength(3);
+		expect(bad.problems).toHaveLength(2);
 		expect(bad.problems.join(" ")).toContain("scripts/../../etc/passwd");
+	});
+
+	it("acepta un archivo vacío, como un __init__.py", () => {
+		const plan = planImport([
+			{ path: "SKILL.md", bytes: bytes(SKILL_MD) },
+			{ path: "scripts/__init__.py", bytes: new Uint8Array() },
+		]);
+		if (!plan.ok) throw new Error(plan.problems.join(" "));
+		expect(plan.files.map((f) => f.path)).toEqual(["scripts/__init__.py"]);
 	});
 
 	it("rechaza un SKILL.md sin descripción y más de 50 archivos", () => {
@@ -240,6 +248,26 @@ describe("putSkillFile", () => {
 		});
 	});
 
+	it("un archivo vacío se sube y su contenido queda en <tenant>/<sha256 de cero bytes>", async () => {
+		const { deps, putFile, blobs } = setup();
+		const empty = new Uint8Array();
+		const result = await putSkillFile(
+			"acme",
+			SLUG,
+			{ path: "scripts/__init__.py", bytes: empty },
+			deps,
+		);
+		expect(result).toMatchObject({ ok: true });
+		const sha =
+			"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+		expect(sha256Hex(empty)).toBe(sha);
+		expect(blobs.get(`t1/${sha}`)).toBe(empty);
+		expect(await deps.blobs.get("t1", sha)).toBe(empty);
+		expect(putFile).toHaveBeenCalledWith(
+			expect.objectContaining({ sha256: sha, size: 0 }),
+		);
+	});
+
 	it("un lector no sube; quien no ve la skill recibe not_found", async () => {
 		const input = { path: "a.txt", bytes: bytes("x") };
 		expect(
@@ -250,12 +278,11 @@ describe("putSkillFile", () => {
 		).toMatchObject({ code: "not_found" });
 	});
 
-	it("ruta inválida, vacío o pesado: validación, sin tocar el bucket", async () => {
+	it("ruta inválida o pesado: validación, sin tocar el bucket", async () => {
 		const { deps } = setup();
 		for (const input of [
 			{ path: "../x", bytes: bytes("x") },
 			{ path: "SKILL.md", bytes: bytes("x") },
-			{ path: "a.txt", bytes: new Uint8Array() },
 			{ path: "a.bin", bytes: new Uint8Array(MAX_FILE_BYTES + 1) },
 		]) {
 			expect(await putSkillFile("acme", SLUG, input, deps)).toMatchObject({

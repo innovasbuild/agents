@@ -67,7 +67,7 @@ Migración nueva. Las dos tablas llevan `tenant_id`, RLS habilitada y **ninguna 
 | `page_id` | uuid | fk `brain_pages`, cascade |
 | `path` | text | ruta dentro del paquete; `check` con el patrón de §5.2 |
 | `sha256` | text | 64 hex |
-| `size` | integer | bytes, entre 1 y 4.194.304 |
+| `size` | integer | bytes, entre 0 y 4.194.304 |
 | `uploaded_by` | uuid | fk `auth.users`, set null |
 | `created_at` | timestamptz | |
 
@@ -114,7 +114,7 @@ Todas `security invoker`, `search_path = ''`, ejecutables solo por `service_role
 
 - **`brain_skill_overview(tenant)`**: una fila por página de categoría `skill` con su revisión, el hash de archivos del borrador y su último acto. Es la única lectura que necesitan los estados, el árbol y la vista del lector.
 
-El hash de archivos es `sha256` de las líneas `path:sha256` ordenadas por `path`. Lo calcula solo la base (`brain_skill_files_digest`); la aplicación lo lee, nunca lo recalcula.
+El hash de archivos es `sha256` de la lista JSON `[[path, sha256], ...]` ordenada por `path`. Lo calcula solo la base (`brain_skill_files_digest`); la aplicación lo lee, nunca lo recalcula.
 
 ## 5. El paquete
 
@@ -143,7 +143,7 @@ Un texto de más de 500 líneas avisa al publicar y no frena.
 
 ### 5.4 Hash del paquete
 
-El `digest` lo calcula la función de publicar: `sha256` de nombre, descripción, hash del cuerpo, `compatibility`, `license` y hash de archivos, una por línea. El mismo contenido da el mismo hash sin importar el orden de carga. Armar el archivo `SKILL.md` a partir de la copia (frontmatter más cuerpo) es de la 24.2, que es la que lo sirve.
+El `digest` lo calcula la función de publicar: `sha256` de nombre, descripción, hash del cuerpo, `compatibility`, `license` y hash de archivos, codificados como una lista JSON (el escape de JSON evita que campos distintos den el mismo texto). El mismo contenido da el mismo hash sin importar el orden de carga. Armar el archivo `SKILL.md` a partir de la copia (frontmatter más cuerpo) es de la 24.2, que es la que lo sirve.
 
 Los wikilinks del cuerpo se publican como están. La página enlazada se lee viva, con los permisos de quien la lea: cambiar `[[marca/paleta]]` cambia lo que el asistente encuentra sin pasar por la revisión de la skill. Es deliberado: ese contenido lo gobiernan los permisos del brain.
 

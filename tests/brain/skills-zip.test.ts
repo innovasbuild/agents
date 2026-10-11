@@ -35,6 +35,17 @@ describe("unzipPackage", () => {
 		).toEqual(["facturacion/SKILL.md", "facturacion/scripts/calc.py"]);
 	});
 
+	it("conserva un archivo vacío", () => {
+		const zip = zipSync({
+			"SKILL.md": bytes("x"),
+			"scripts/__init__.py": new Uint8Array(0),
+		});
+		const empty = unzipPackage(zip).find(
+			(e) => e.path === "scripts/__init__.py",
+		);
+		expect(empty?.bytes.length).toBe(0);
+	});
+
 	it("no cuenta la basura contra los topes", () => {
 		const files = Object.fromEntries(
 			Array.from({ length: 60 }, (_, i) => [`__MACOSX/._f${i}`, bytes("x")]),
