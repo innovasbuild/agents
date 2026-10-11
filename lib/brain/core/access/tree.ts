@@ -11,6 +11,9 @@ export interface TreePage {
 	slug: string;
 	title: string;
 	status: BrainStatus;
+	// Skill sin publicar o con cambios sin publicar. Solo se marca para quien
+	// puede editarla.
+	pending?: boolean;
 }
 
 export interface TreeNode {
@@ -68,8 +71,13 @@ export function visibleTree(
 			}
 			parent = node;
 		}
-		// Solo estos tres campos viajan al navegador: nunca el cuerpo.
-		parent.page = { slug: page.slug, title: page.title, status: page.status };
+		// Solo estos campos viajan al navegador: nunca el cuerpo.
+		parent.page = {
+			slug: page.slug,
+			title: page.title,
+			status: page.status,
+			...(page.pending ? { pending: true } : {}),
+		};
 	}
 
 	sortNodes(root.children);

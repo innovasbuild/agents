@@ -31,6 +31,7 @@ describe("loadBrainTree", () => {
 			kind: "ok",
 			categories: ["comercial"],
 			tenant: {},
+			skills: async () => [],
 			access: (path: string) => (path.startsWith("legal") ? null : "lector"),
 			provider: {
 				list: async () => [page("comercial/icp"), page("legal/contrato")],

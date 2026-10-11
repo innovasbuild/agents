@@ -8,12 +8,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
 import { type TreeNode, visibleTree } from "../core/access/tree";
-import { isAdminRole, type Level, type Principal } from "../core/access/types";
+import {
+	atLeast,
+	isAdminRole,
+	type Level,
+	type Principal,
+} from "../core/access/types";
 import { withAccess } from "../core/access/with-access";
 import { resolveBrainBinding } from "../core/resolve";
+import { SKILL_CATEGORY } from "../core/skills/package";
+import { skillState } from "../core/skills/state";
+import type { SkillOverviewRow } from "../core/skills/store";
+import { withSkillView } from "../core/skills/view";
 import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
 import { accessRulesStore } from "./access-rules";
 import { getBrainProvider } from "./provider";
+import { skillStore } from "./skills";
 
 export type EditorContext =
 	| {
@@ -22,6 +32,8 @@ export type EditorContext =
 			categories: string[];
 			provider: BrainProvider;
 			access: (path: string) => Level | null;
+			// Resumen de las skills del tenant; vacío si el brain no las habilita.
+			skills: () => Promise<SkillOverviewRow[]>;
 	  }
 	| { kind: "no-brain"; tenant: TenantAccess }
 	| { kind: "external"; tenant: TenantAccess };
@@ -48,12 +60,27 @@ export const loadEditorContext = cache(
 			: await accessRulesStore().load(tenant.id);
 		const access = (path: string) => resolveAccess(rules, principal, path);
 
+		// Sin la categoría no puede existir una página de skill: no se consulta.
+		const skillsEnabled = binding.config.categories.includes(SKILL_CATEGORY);
+		let overview: Promise<SkillOverviewRow[]> | null = null;
+		const skills = () => {
+			overview ??= skillsEnabled
+				? skillStore().overview(tenant.id)
+				: Promise.resolve([]);
+			return overview;
+		};
+		const guarded = withAccess(getBrainProvider(binding), principal, rules);
+
 		return {
 			kind: "ok",
 			tenant,
 			categories: binding.config.categories,
-			provider: withAccess(getBrainProvider(binding), principal, rules),
+			// Quien solo lee una skill ve su versión publicada (spec 24.1 §7).
+			provider: skillsEnabled
+				? withSkillView(guarded, { levelOf: access, overview: skills })
+				: guarded,
 			access,
+			skills,
 		};
 	},
 );
@@ -67,8 +94,31 @@ export const loadBrainPages = cache(
 // El árbol sale de lo que el proveedor envuelto ya dejó ver, filtrado otra vez
 // por ctx.access: lo oculto no llega ni a la pantalla.
 export const loadBrainTree = cache(
-	async (ctx: OkEditorContext): Promise<TreeNode> =>
-		visibleTree(await loadBrainPages(ctx), ctx.access),
+	async (ctx: OkEditorContext): Promise<TreeNode> => {
+		const pages = await loadBrainPages(ctx);
+		const pending = new Set(
+			(await ctx.skills())
+				.filter((row) => {
+					const state = skillState(row);
+					return (
+						state.kind === "sin_publicar" ||
+						(state.kind === "publicada" && state.dirty)
+					);
+				})
+				.map((row) => row.slug),
+		);
+		return visibleTree(
+			pages.map((page) => ({
+				slug: page.slug,
+				title: page.title,
+				status: page.status,
+				...(pending.has(page.slug) && atLeast(ctx.access(page.slug), "editor")
+					? { pending: true }
+					: {}),
+			})),
+			ctx.access,
+		);
+	},
 );
 
 export interface RevisionRow extends Omit<BrainRevision, "authorUserId"> {
