@@ -306,7 +306,7 @@ describe("resendInvitation", () => {
 		db.read.tenants = { data: { slug: "acme-real" }, error: null };
 	});
 
-	it("renueva el vencimiento a 14 días y manda el mail hacia el chat de la empresa", async () => {
+	it("renueva el vencimiento a 14 días y manda el mail hacia la portada de la empresa", async () => {
 		const antes = Date.now();
 
 		expect(await resendInvitation(ROW_ID, "lo-que-mande-el-navegador")).toEqual(
@@ -329,7 +329,7 @@ describe("resendInvitation", () => {
 			{
 				email: "ana@acme.test",
 				origin: "https://app.test",
-				next: "/acme-real/chat",
+				next: "/acme-real",
 			},
 		]);
 	});
