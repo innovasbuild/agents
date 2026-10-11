@@ -48,26 +48,32 @@ export async function verifyEmailCode(params: {
 }
 
 /**
- * Entrar con el código: verifica en el navegador y corre completeLogin. Con
- * éxito la acción redirige y no devuelve nada: responde null. Si el código
- * pasó pero completar falla (devuelve error o tira), la sesión que dejó
- * verifyOtp en cookies nunca pasó por las membresías ni la compuerta: se
- * cierra antes de avisar. Nunca tira.
+ * Entrar con el código: verifica en el navegador y corre completeLogin, que
+ * devuelve adónde ir (no redirige: en Next 16 un redirect() de la acción
+ * rechaza la promesa acá). Con éxito navega a ese destino y responde null.
+ * Si el código pasó pero completar falla (devuelve error, algo sin destino o
+ * tira), la sesión que dejó verifyOtp en cookies nunca pasó por las
+ * membresías ni la compuerta: se cierra antes de avisar. Nunca tira.
  */
 export async function enterWithEmailCode(params: {
 	email: string;
 	code: string;
 	verifyOtp: Parameters<typeof verifyEmailCode>[0]["verifyOtp"];
-	completeLogin: () => Promise<{ ok: false; message: string } | undefined>;
+	completeLogin: () => Promise<
+		{ ok: true; target: string } | { ok: false; message: string }
+	>;
 	closeSession: () => Promise<void>;
+	navigate: (target: string) => void;
 }): Promise<string | null> {
 	const verified = await verifyEmailCode(params);
 	if (!verified) return EMAIL_CODE_ERROR;
 
 	try {
-		// redirect() de la acción no llega acá: Next lo resuelve antes.
 		const result = await params.completeLogin();
-		if (result?.ok !== false) return null;
+		if (result?.ok === true && typeof result.target === "string") {
+			params.navigate(result.target);
+			return null;
+		}
 	} catch (error) {
 		console.error("completar el ingreso con código falló:", error);
 	}

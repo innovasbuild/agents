@@ -104,7 +104,9 @@ describe("verifyEmailCode (navegador)", () => {
 describe("enterWithEmailCode (navegador)", () => {
 	function steps(opts: {
 		verified: boolean;
-		complete: () => Promise<{ ok: false; message: string } | undefined>;
+		complete: () => Promise<
+			{ ok: true; target: string } | { ok: false; message: string }
+		>;
 	}) {
 		const calls: string[] = [];
 		return {
@@ -126,20 +128,45 @@ describe("enterWithEmailCode (navegador)", () => {
 					closeSession: async () => {
 						calls.push("closeSession");
 					},
+					navigate: (target: string) => {
+						calls.push(`navigate ${target}`);
+					},
 				}),
 		};
 	}
 
 	it("código mal: el mensaje único, sin completar ni cerrar nada", async () => {
-		const s = steps({ verified: false, complete: async () => undefined });
+		const s = steps({
+			verified: false,
+			complete: async () => ({ ok: true, target: "/acme" }),
+		});
 		expect(await s.run()).toBe(EMAIL_CODE_ERROR);
 		expect(s.calls).toEqual(["verifyOtp"]);
 	});
 
-	it("código bien y la acción redirige: sin mensaje y sin cerrar", async () => {
-		const s = steps({ verified: true, complete: async () => undefined });
+	it("código bien: navega al destino de la acción, sin mensaje y sin cerrar", async () => {
+		const s = steps({
+			verified: true,
+			complete: async () => ({ ok: true, target: "/acme" }),
+		});
 		expect(await s.run()).toBeNull();
-		expect(s.calls).toEqual(["verifyOtp", "completeLogin"]);
+		expect(s.calls).toEqual(["verifyOtp", "completeLogin", "navigate /acme"]);
+	});
+
+	it("la compuerta rechazó: navega a la landing que devolvió la acción", async () => {
+		const s = steps({
+			verified: true,
+			complete: async () => ({
+				ok: true,
+				target: "/login/acme?error=metodo",
+			}),
+		});
+		expect(await s.run()).toBeNull();
+		expect(s.calls).toEqual([
+			"verifyOtp",
+			"completeLogin",
+			"navigate /login/acme?error=metodo",
+		]);
 	});
 
 	it("código bien pero la acción falla: cierra la sesión y avisa otra cosa", async () => {
@@ -164,6 +191,15 @@ describe("enterWithEmailCode (navegador)", () => {
 		error.mockRestore();
 	});
 
+	it("una respuesta sin destino no se toma por éxito: cierra y avisa", async () => {
+		const s = steps({
+			verified: true,
+			complete: async () => undefined as never,
+		});
+		expect(await s.run()).toBe(LOGIN_INCOMPLETE_ERROR);
+		expect(s.calls).toEqual(["verifyOtp", "completeLogin", "closeSession"]);
+	});
+
 	it("si cerrar la sesión también tira, igual devuelve el aviso", async () => {
 		const error = vi.spyOn(console, "error").mockImplementation(() => {});
 		const result = await enterWithEmailCode({
@@ -174,6 +210,7 @@ describe("enterWithEmailCode (navegador)", () => {
 			closeSession: async () => {
 				throw new Error("red");
 			},
+			navigate: () => {},
 		});
 		expect(result).toBe(LOGIN_INCOMPLETE_ERROR);
 		error.mockRestore();

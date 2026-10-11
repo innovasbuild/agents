@@ -62,8 +62,10 @@ beforeEach(() => {
 });
 
 describe("completeLogin (server action del código)", () => {
-	it("con sesión une, pasa la compuerta y redirige a next", async () => {
-		await expect(completeLogin("/acme")).rejects.toThrow("REDIRECT /acme");
+	// En Next 16 un redirect() dentro de una server action rechaza la promesa
+	// del lado del navegador: la acción devuelve el destino y navega el cliente.
+	it("con sesión une, pasa la compuerta y devuelve next sin redirigir", async () => {
+		expect(await completeLogin("/acme")).toEqual({ ok: true, target: "/acme" });
 		expect(state.calls).toEqual([
 			"getUser",
 			"accept_pending_invitations",
@@ -92,23 +94,29 @@ describe("completeLogin (server action del código)", () => {
 	});
 
 	it("un next de otro origen cae en /", async () => {
-		await expect(completeLogin("//evil.test")).rejects.toThrow("REDIRECT /");
-		await expect(completeLogin("https://evil.test/x")).rejects.toThrow(
-			/^REDIRECT \/$/,
-		);
+		expect(await completeLogin("//evil.test")).toEqual({
+			ok: true,
+			target: "/",
+		});
+		expect(await completeLogin("https://evil.test/x")).toEqual({
+			ok: true,
+			target: "/",
+		});
 	});
 
 	it("un next que no es string cae en /", async () => {
-		await expect(completeLogin(42 as unknown as string)).rejects.toThrow(
-			/^REDIRECT \/$/,
-		);
+		expect(await completeLogin(42 as unknown as string)).toEqual({
+			ok: true,
+			target: "/",
+		});
 	});
 
 	it("si la empresa no acepta correo, cierra la sesión y va a la landing", async () => {
 		state.gate = { allowed: false, landing: "acme" };
-		await expect(completeLogin("/acme")).rejects.toThrow(
-			"REDIRECT /login/acme?error=metodo",
-		);
+		expect(await completeLogin("/acme")).toEqual({
+			ok: true,
+			target: "/login/acme?error=metodo",
+		});
 		expect(state.calls.at(-1)).toBe("signOut");
 	});
 });

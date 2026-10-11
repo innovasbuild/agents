@@ -125,6 +125,9 @@ export function LoginForm({
 					verifyOtp: (args) => supabase.auth.verifyOtp(args),
 					completeLogin: () => completeLogin(next),
 					closeSession: () => closeLocalSession(supabase),
+					// Navegación completa: el pedido siguiente lleva las cookies
+					// que dejó verifyOtp y el servidor arma la página de cero.
+					navigate: (target) => window.location.assign(target),
 				}),
 			);
 		} finally {
