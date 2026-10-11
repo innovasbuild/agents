@@ -11,6 +11,7 @@ import {
 	BrainValidation,
 } from "../errors";
 import type { BrainBinding } from "../resolve";
+import { skillPlacementOk } from "../skills/package";
 import type {
 	BrainProvider,
 	BrainRole,
@@ -131,7 +132,9 @@ export async function savePage(
 				ok: false,
 				code: "validation",
 				fields: error.fields,
-				message: error.message,
+				message: skillPlacementOk(input.slug, input.category)
+					? error.message
+					: "Las skills van bajo skills/ con categoría skill, y nada más va ahí.",
 			};
 		const id = crypto.randomUUID();
 		console.error(`brain editor: error al guardar (${id})`, error);

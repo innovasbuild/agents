@@ -3,6 +3,7 @@
 // del binding, que viene de la sesión.
 import type { WikiConfig } from "./config.ts";
 import { BrainConflict, BrainNotFound, BrainValidation } from "./errors.ts";
+import { skillPlacementOk } from "./skills/package.ts";
 import {
 	BRAIN_STATUSES,
 	type BrainPageSummary,
@@ -44,6 +45,12 @@ export function validateWrite(
 	if (write.title.trim().length === 0 || write.title.length > 300)
 		fields.push("title");
 	if (!config.categories.includes(write.category)) fields.push("category");
+	// Una skill va bajo skills/ con categoría skill, y solo ella (spec 24.1 S3).
+	if (
+		!fields.includes("category") &&
+		!skillPlacementOk(write.slug, write.category)
+	)
+		fields.push("category");
 	if (!BRAIN_STATUSES.includes(write.status)) fields.push("status");
 	if (!write.tags.every((tag) => tag.trim().length > 0 && tag.length <= 60))
 		fields.push("tags");
