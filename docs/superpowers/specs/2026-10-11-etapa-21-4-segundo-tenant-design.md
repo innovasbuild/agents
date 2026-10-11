@@ -83,7 +83,7 @@ En `lib/tenants/nav.ts`, `NavLink` suma `agent?: CatalogAgent`. `visibleNav(role
 
 ### 3.4 Pantallas
 
-- Un helper `requireAgent(tenantId, agent)` en `lib/tenants/` hace el chequeo que hoy está escrito a mano en `settings/outreach/page.tsx`: si el agente no está habilitado, `notFound()`. Si la consulta falla, deja pasar y registra el error, igual que hoy.
+- Un helper `requireAgent(tenantId, agent)` en `lib/tenants/` hace el chequeo que hoy está escrito a mano en `settings/outreach/page.tsx`: si el agente no está habilitado, `notFound()`. Si la consulta falla, deja pasar y registra el error, igual que hoy; el menú, en ese caso, tampoco oculta nada.
 - Lo usan las páginas de Chat, Cola, Pipeline, Contactos, Cuentas, Focos, Métricas, Mis cuentas y `/settings/outreach`.
 - `app/[tenant]/settings/page.tsx`: las secciones Modelo default, Ejecutores, Aprobaciones y Conectores se muestran solo si hay algún agente habilitado. Ingreso y Usuarios quedan siempre.
 
@@ -95,15 +95,15 @@ En `lib/tenants/nav.ts`, `NavLink` suma `agent?: CatalogAgent`. `visibleNav(role
 
 ### 4.1 Páginas de canon
 
-- `AgentCatalogEntry` suma `seedsCanon: boolean` (`outreach: true`).
-- `createBrain` llama a `seedCanonPagesForTenant` solo si la empresa tiene habilitado un agente con `seedsCanon`.
-- `setAgent`, al habilitar un agente con `seedsCanon` en una empresa con brain, siembra las páginas que falten. Nunca pisa una página existente.
+- "Agente que usa el canon" es lo que ya responde `agentsNeedCanon` (`lib/tenants/readiness.ts`), que lee `requiresBrain` del catálogo. No se agrega un campo nuevo.
+- `createBrain` llama a `seedCanonPagesForTenant` solo si la empresa tiene habilitado un agente que usa el canon.
+- `setAgent`, al habilitar un agente que usa el canon, siembra las páginas que falten. Nunca pisa una página existente.
 - La consola no nombra `outreach`: pregunta al catálogo.
 
 ### 4.2 Categorías
 
 - Sección Brain de `/plataforma/<slug>`: la lista de categorías pasa de solo lectura a editable, con Guardar.
-- Función `platform_set_brain_categories(p_actor, p_tenant, p_categories text[])`, de `service_role`, con la misma verificación de `platform_admin` que las demás `platform_*`:
+- Función `platform_set_brain_categories(p_actor, p_tenant, p_categories text[])`, con el patrón de las demás `platform_*` (solo `service_role`, `p_actor` obligatorio; que quien llama sea `platform_admin` lo verifica la server action):
   - entre 1 y 20 categorías, sin repetidas, cada una con el mismo patrón que valida `brain_pages.category`;
   - rechaza quitar una categoría que tenga páginas (en cualquier estado), y dice cuál y cuántas;
   - actualiza solo `config.categories` del binding `wiki`; el resto de `config` no se toca.
@@ -111,8 +111,8 @@ En `lib/tenants/nav.ts`, `NavLink` suma `agent?: CatalogAgent`. `visibleNav(role
 
 ### 4.3 Textos de outreach en el brain
 
-- `app/[tenant]/brain/page.tsx`: los chips de `CANON_TAGS` se muestran solo si hay un agente con `seedsCanon` habilitado.
-- `lib/brain/core/contract.ts`: quien arma el contrato indica si va la mención al canon. Sin ella, las descripciones quedan generales ("Busca en el brain de esta empresa por texto, categoría o tag…"; "Categorías válidas: …"). El agente de outreach la pide siempre. El servidor MCP del brain la pide solo si la empresa tiene un agente con `seedsCanon` habilitado.
+- `app/[tenant]/brain/page.tsx`: los chips de `CANON_TAGS` se muestran solo si hay habilitado un agente que usa el canon.
+- `lib/brain/core/contract.ts`: quien arma el contrato indica si va la mención al canon. Sin ella, las descripciones quedan generales ("Busca en el brain de esta empresa por texto, categoría o tag…"; "Categorías válidas: …"). El agente de outreach la pide siempre. El servidor MCP del brain la pide solo si la empresa tiene habilitado un agente que usa el canon.
 
 ## 5. Código por correo (21.4a)
 
@@ -160,7 +160,7 @@ Antes de escribirla se carga `supabase-postgres-best-practices`.
 
 ## 8. Seguridad
 
-- Las dos funciones verifican adentro que `p_actor` sea `platform_admin`; no confían en el caller.
+- Las dos funciones son solo de `service_role` y exigen `p_actor`. Que quien llama sea `platform_admin` lo verifica la server action con `requirePlatformAdmin()`, igual que en la 21.1.
 - `requireAgent` es navegación, no autorización: el acceso a los datos de outreach lo sigue cerrando RLS por `tenant_id`.
 - El código de 6 dígitos dura lo que hoy dura el link (`otp_expiry`, una hora) y lo limita el rate limit de Supabase Auth por IP. No se agrega un límite propio.
 - La compuerta de método corre igual por código que por link: una empresa sin `email` en `auth_methods` no acepta el código.
