@@ -19,7 +19,10 @@ async function readHidingSkills(
 	visible: (slug: string) => boolean = () => false,
 ): Promise<BrainPage> {
 	try {
-		return await provider.read(slug, readOptions);
+		// Sin opciones, la llamada llega al proveedor igual que sin envoltorio.
+		return await (readOptions
+			? provider.read(slug, readOptions)
+			: provider.read(slug));
 	} catch (error) {
 		if (error instanceof BrainNotFound) {
 			throw new BrainNotFound(

@@ -480,6 +480,36 @@ describe("handleBrainMcp", () => {
 		expect(d.providerInstance.search).not.toHaveBeenCalled();
 		error.mockRestore();
 	});
+
+	describe("skills", () => {
+		const skillBinding: BrainBinding = {
+			...binding,
+			config: { ...binding.config, categories: ["comercial", "skill"] },
+		} as BrainBinding;
+		const skillDeps = () =>
+			deps({ store: { ...store, brainBinding: async () => skillBinding } });
+
+		it("ni un administrador lee una skill por MCP", async () => {
+			const d = skillDeps();
+			const admin = await connect("admin", d);
+			const result = await admin.callTool({
+				name: "brain_read",
+				arguments: { slug: "skills/facturacion" },
+			});
+			expect(result.isError).toBe(true);
+			expect(result.structuredContent).toMatchObject({ error: "not_found" });
+			expect(d.providerInstance.read).not.toHaveBeenCalled();
+		});
+
+		it("brain_upsert no anuncia la categoría skill", async () => {
+			const admin = await connect("admin", skillDeps());
+			const upsert = (await admin.listTools()).tools.find(
+				(tool) => tool.name === "brain_upsert",
+			);
+			expect(JSON.stringify(upsert?.inputSchema)).toContain('"comercial"');
+			expect(JSON.stringify(upsert?.inputSchema)).not.toContain('"skill"');
+		});
+	});
 });
 
 describe("protectedResourceMetadata", () => {

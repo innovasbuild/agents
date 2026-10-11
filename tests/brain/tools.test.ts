@@ -74,10 +74,18 @@ describe("createBrainTools", () => {
 			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
-		const tools = createBrainTools(binding, "read", { provider: providerFactory });
+		const tools = createBrainTools(binding, "read", {
+			provider: providerFactory,
+		});
 
-		const searchResult = await tools.brain_search.execute({ query: "hola" }, {} as never);
-		const readResult = await tools.brain_read.execute({ slug: "a" }, {} as never);
+		const searchResult = await tools.brain_search.execute(
+			{ query: "hola" },
+			{} as never,
+		);
+		const readResult = await tools.brain_read.execute(
+			{ slug: "a" },
+			{} as never,
+		);
 
 		expect(providerFactory).toHaveBeenCalledWith(binding);
 		expect(search).toHaveBeenCalledWith({ query: "hola" });
@@ -195,6 +203,82 @@ describe("createBrainTools", () => {
 				{} as never,
 			);
 			expect("results" in result ? result.results : []).toHaveLength(2);
+		});
+	});
+
+	describe("skills", () => {
+		const skillBinding: BrainBinding = {
+			...binding,
+			config: { ...binding.config, categories: ["comercial", "skill"] },
+		} as BrainBinding;
+		const summary = (slug: string) => ({
+			slug,
+			title: slug,
+			category: slug.startsWith("skills/") ? "skill" : "comercial",
+			status: "activo" as const,
+			tags: [],
+			snippet: "",
+			updatedAt: "2026-01-01",
+		});
+
+		function setup() {
+			const read = vi.fn();
+			const upsert = vi.fn(async () => ({ slug: "a", revision: 1 }));
+			const tools = createBrainTools(skillBinding, "read_write", {
+				provider: () => ({
+					search: async () => [
+						summary("comercial/icp"),
+						summary("skills/facturacion"),
+					],
+					read,
+					list: async () => [],
+					history: async () => null,
+					upsert,
+				}),
+			});
+			return { tools, read, upsert };
+		}
+
+		it("brain_search no devuelve nada bajo skills/", async () => {
+			const { tools } = setup();
+			const result = await tools.brain_search.execute(
+				{ query: "" },
+				{} as never,
+			);
+			expect(
+				(result as { results: Array<{ slug: string }> }).results.map(
+					(r) => r.slug,
+				),
+			).toEqual(["comercial/icp"]);
+		});
+
+		it("brain_read de una skill responde not_found sin tocar el proveedor", async () => {
+			const { tools, read } = setup();
+			const result = await tools.brain_read.execute(
+				{ slug: "skills/facturacion" },
+				{} as never,
+			);
+			expect(result).toMatchObject({ ok: false, error: "not_found" });
+			expect(read).not.toHaveBeenCalled();
+		});
+
+		it("brain_upsert rechaza la ruta skills/ y no escribe", async () => {
+			const { tools, upsert } = setup();
+			if (!("brain_upsert" in tools)) throw new Error("falta brain_upsert");
+			const result = await tools.brain_upsert.execute(
+				{
+					slug: "skills/x",
+					title: "x",
+					category: "comercial",
+					status: "activo",
+					tags: [],
+					body: "b",
+					reason: "r",
+				},
+				{ session: { id: "s1", auth: { initiator: null } } } as never,
+			);
+			expect(result).toMatchObject({ ok: false, error: "forbidden" });
+			expect(upsert).not.toHaveBeenCalled();
 		});
 	});
 });
