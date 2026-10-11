@@ -331,3 +331,70 @@ describe("republicar y retirar", () => {
 		});
 	});
 });
+
+describe("traducción de rechazos de la base", () => {
+	const input = { expectedRevision: 7, expectedFilesDigest: "fd7", note: "n" };
+	const rejected = (code: string, details: string) =>
+		setup({ publishError: new WikiStoreError(code, "X", details) }).deps;
+
+	it("BR422 se traduce a castellano, sin tokens crudos", async () => {
+		const cases: Array<[string, RegExp]> = [
+			["description", /descripción/],
+			["note", /nota/],
+			["package_limit", /paquete/],
+			["token_raro", /no cumple/],
+		];
+		for (const [token, pattern] of cases) {
+			const result = await publishSkill(
+				"acme",
+				SLUG,
+				input,
+				rejected("BR422", token),
+			);
+			expect(result).toMatchObject({ ok: false, code: "validation" });
+			if (result.ok) throw new Error("debía fallar");
+			expect(result.message).toMatch(pattern);
+			expect(result.message).not.toContain(token);
+		}
+	});
+
+	it("BR404 version al republicar", async () => {
+		const result = await republishSkill(
+			"acme",
+			SLUG,
+			{ fromVersion: 99, note: "n" },
+			rejected("BR404", "version"),
+		);
+		expect(result).toMatchObject({ ok: false, code: "not_found" });
+		expect(result.ok === false && result.message).toMatch(/versión/);
+	});
+
+	it("BR409 revision es conflicto", async () => {
+		expect(
+			await publishSkill("acme", SLUG, input, rejected("BR409", "revision")),
+		).toMatchObject({ ok: false, code: "conflict" });
+	});
+});
+
+describe("más casos de permisos y retiro", () => {
+	it("retirar dos veces: la segunda no retira nada", async () => {
+		const { deps } = setup();
+		deps.store.withdraw = vi.fn(async () => false);
+		expect(await withdrawSkill("acme", SLUG, { note: "n" }, deps)).toEqual({
+			ok: true,
+			withdrawn: false,
+		});
+	});
+
+	it("un miembro no previsualiza ni republica", async () => {
+		const { deps, publish } = setup({ role: "tenant_member" });
+		expect(await previewPublish("acme", SLUG, deps)).toMatchObject({
+			ok: false,
+			code: "forbidden",
+		});
+		expect(
+			await republishSkill("acme", SLUG, { fromVersion: 1, note: "n" }, deps),
+		).toMatchObject({ ok: false, code: "forbidden" });
+		expect(publish).not.toHaveBeenCalled();
+	});
+});

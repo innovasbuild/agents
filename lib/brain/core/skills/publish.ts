@@ -107,6 +107,16 @@ function cleanNote(note: string): string | null {
 
 const NOTE_REQUIRED = "Escribí una nota de hasta 500 caracteres.";
 
+const VALIDATION_MESSAGES: Record<string, string> = {
+	description: `${PUBLISH_MESSAGES.description_missing} Y no puede superar los 1024 caracteres.`,
+	name: PUBLISH_MESSAGES.name_too_long,
+	compatibility: PUBLISH_MESSAGES.compatibility_too_long,
+	note: NOTE_REQUIRED,
+	category: "Esta página no es una skill.",
+	package_limit: "El paquete supera el límite de 50 archivos o 20 MB.",
+};
+const VALIDATION_FALLBACK = "La skill no cumple las reglas para publicarse.";
+
 // Traduce los rechazos de las funciones SQL. Lo demás se propaga.
 function storeFailure(error: unknown, slug: string): SkillFailure {
 	if (!(error instanceof WikiStoreError)) throw error;
@@ -122,9 +132,19 @@ function storeFailure(error: unknown, slug: string): SkillFailure {
 				);
 	}
 	if (error.code === "BR422") {
-		return skillFail("validation", `Datos inválidos en: ${error.details}.`);
+		return skillFail(
+			"validation",
+			VALIDATION_MESSAGES[error.details] ?? VALIDATION_FALLBACK,
+		);
 	}
-	if (error.code === "BR404") return skillFail("not_found", NOT_FOUND);
+	if (error.code === "BR404") {
+		return error.details === "version"
+			? skillFail(
+					"not_found",
+					"Esa versión no existe; elegí una del historial.",
+				)
+			: skillFail("not_found", NOT_FOUND);
+	}
 	throw error;
 }
 
