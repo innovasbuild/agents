@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(49);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values ('a5a5a5a5-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'ana@skill-a.test', now());
@@ -18,6 +18,19 @@ select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000a', 'skills/
 select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000a', 'skills/llena', 'Llena', 'skill', 'activo', '{}'::text[], '{"description":"x"}'::jsonb, 'cuerpo', 'alta', null, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000001');
 select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000a', 'comercial/icp', 'ICP', 'comercial', 'activo', '{}'::text[], '{}'::jsonb, 'texto', 'alta', null, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000001');
 select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000b', 'skills/reporte', 'Reporte de B', 'skill', 'activo', '{}'::text[], '{"description":"El de B."}'::jsonb, 'cuerpo b', 'alta', null, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000002');
+
+-- Devuelve 'sqlstate:detail' del error que lanza la consulta, para afirmar el motivo exacto.
+create function pg_temp.errd(q text) returns text language plpgsql as $f$
+declare s text; d text;
+begin
+  execute q;
+  return 'sin error';
+exception when others then
+  get stacked diagnostics d = pg_exception_detail;
+  s := sqlstate;
+  return s || ':' || coalesce(d, '');
+end;
+$f$;
 
 create temp table ids as
 select slug, tenant_id, id from public.brain_pages where slug like 'skills/%' or slug = 'comercial/icp';
@@ -69,15 +82,26 @@ select is(
   2, 'cada archivo subido deja su evento');
 
 -- 20-22: publicar rechaza lo que no coincide o no valida
-select throws_ok(
-  $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 9, public.brain_skill_files_digest((select id from ids where slug = 'skills/ventas/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
-  'BR409', null, 'una revisión esperada vieja es conflicto');
-select throws_ok(
-  $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 1, 'otro-hash', 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
-  'BR409', null, 'un hash de archivos viejo es conflicto');
-select throws_ok(
-  $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/sin-descripcion'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/sin-descripcion')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
-  'BR422', null, 'sin descripción no se publica');
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 9, public.brain_skill_files_digest((select id from ids where slug = 'skills/ventas/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR409:revision', 'una revisión esperada vieja es conflicto');
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 1, 'otro-hash', 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR409:files', 'un hash de archivos viejo es conflicto');
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/sin-descripcion'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/sin-descripcion')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR422:description', 'sin descripción no se publica');
+
+-- Notas vacías y página de otra empresa
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/ventas/reporte')), '   ', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR422:note', 'publicar sin nota se rechaza');
+select is(
+  pg_temp.errd($$select public.brain_withdraw_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), '', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR422:note', 'retirar sin nota se rechaza');
+select is(
+  pg_temp.errd($$select public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/reporte'), 'a.txt', repeat('a', 64), 10, 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR404:', 'una página de otra empresa no existe para esta');
 
 -- 23-25: publicar
 select is(
@@ -91,17 +115,29 @@ select is(
   1, 'publicar deja su evento con la versión');
 
 -- 26-27: el nombre es único por empresa, no entre empresas
-select throws_ok(
-  $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/admin/reporte'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/admin/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
-  'BR409', null, 'otra skill vigente con el mismo nombre choca');
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/admin/reporte'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/admin/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR409:name', 'otra skill vigente con el mismo nombre choca');
+select is(
+  (select action::text from public.brain_skill_versions where slug = 'skills/ventas/reporte' order by id desc limit 1),
+  'publicar', 'tras el choque, ventas/reporte sigue siendo la vigente');
+select is(
+  (select count(*)::int from public.brain_skill_versions where slug = 'skills/admin/reporte'),
+  0, 'el choque no deja ningún acto de admin/reporte');
 select lives_ok(
   $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000b', (select id from ids where slug = 'skills/reporte'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
   'otra empresa publica el mismo nombre sin chocar');
 
+-- Lo publicado es una copia: editar la página después no la cambia.
+select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000b', 'skills/reporte', 'Reporte de B', 'skill', 'activo', '{}'::text[], '{"description":"El de B."}'::jsonb, 'cuerpo b editado', 'edición', 1, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000002');
+select is(
+  (select body from public.brain_skill_versions where slug = 'skills/reporte' and version = 1),
+  'cuerpo b', 'la versión publicada es una copia: editar la página no la cambia');
+
 -- 28: una skill publicada no se borra
-select throws_ok(
-  $$select * from public.brain_delete_page('b5b5b5b5-0000-0000-0000-00000000000a', 'skills/ventas/reporte', 1, 'a5a5a5a5-0000-0000-0000-000000000001', 'c5c5c5c5-0000-0000-0000-000000000001', '[]'::jsonb)$$,
-  'BR409', null, 'con versión vigente no se borra');
+select is(
+  pg_temp.errd($$select * from public.brain_delete_page('b5b5b5b5-0000-0000-0000-00000000000a', 'skills/ventas/reporte', 1, 'a5a5a5a5-0000-0000-0000-000000000001', 'c5c5c5c5-0000-0000-0000-000000000001', '[]'::jsonb)$$),
+  'BR409:skill_published', 'con versión vigente no se borra');
 
 -- 29-31: retirar libera el nombre
 select is(public.brain_withdraw_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 'salió mal', 'a5a5a5a5-0000-0000-0000-000000000001'), true, 'retira la vigente');
@@ -110,11 +146,23 @@ select lives_ok(
   $$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/admin/reporte'), 1, public.brain_skill_files_digest((select id from ids where slug = 'skills/admin/reporte')), 'nota', 'a5a5a5a5-0000-0000-0000-000000000001')$$,
   'con la otra retirada, el nombre queda libre');
 
+select is(
+  pg_temp.errd($$select * from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), null, null, 'x', 'a5a5a5a5-0000-0000-0000-000000000001', 99)$$),
+  'BR404:version', 'republicar una versión que no existe');
+
 -- 32: republicar una versión anterior crea una versión nueva (la otra se retira primero)
 select public.brain_withdraw_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/admin/reporte'), 'libero', 'a5a5a5a5-0000-0000-0000-000000000001');
 select is(
   (select skill_version from public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), null, null, 'vuelvo', 'a5a5a5a5-0000-0000-0000-000000000001', 1)),
   2, 'republicar la versión 1 crea la versión 2');
+
+select ok(
+  (select (v2.body, v2.description, v2.frontmatter, v2.manifest, v2.files_digest, v2.digest, v2.republished_from)
+        is not distinct from (v1.body, v1.description, v1.frontmatter, v1.manifest, v1.files_digest, v1.digest, 1)
+   from public.brain_skill_versions v1, public.brain_skill_versions v2
+   where v1.slug = 'skills/ventas/reporte' and v1.version = 1 and v1.action = 'publicar'
+     and v2.slug = 'skills/ventas/reporte' and v2.version = 2 and v2.action = 'publicar'),
+  'la versión 2 republicada tiene el mismo contenido y hash que la 1');
 
 -- 33: el resumen es por empresa
 select is(
@@ -141,6 +189,29 @@ select public.brain_skill_remove_file('b5b5b5b5-0000-0000-0000-00000000000a', (s
 select is(
   (select count(*)::int from public.events where type = 'brain.skill_file_removed'),
   0, 'quitar lo que no está no deja evento');
+
+-- Quitar un archivo que sí está: borra la fila, deja evento y cambia el hash
+create temp table d0 as select public.brain_skill_files_digest((select id from ids where slug = 'skills/llena')) as digest;
+create temp table d1 as select public.brain_skill_remove_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/llena'), 'f1.txt', 'a5a5a5a5-0000-0000-0000-000000000001') as digest;
+select is(
+  (select digest from d1),
+  public.brain_skill_files_digest((select id from ids where slug = 'skills/llena')), 'quitar devuelve el hash nuevo');
+select is(
+  (select count(*)::int from public.brain_skill_files where page_id = (select id from ids where slug = 'skills/llena') and path = 'f1.txt'),
+  0, 'quitar borra la fila');
+select is(
+  (select count(*)::int from public.events where type = 'brain.skill_file_removed' and payload ->> 'path' = 'f1.txt'),
+  1, 'quitar deja su evento');
+select isnt(
+  public.brain_skill_files_digest((select id from ids where slug = 'skills/llena')), (select digest from d0), 'quitar cambia el hash de archivos');
+
+-- Tope de 20 MB por paquete: 5 x 4 MB entran, un byte más no
+insert into public.brain_skill_files (tenant_id, page_id, path, sha256, size)
+select 'b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/sin-descripcion'), 'g' || n || '.bin', repeat('e', 64), 4194304
+from generate_series(1, 5) n;
+select is(
+  pg_temp.errd($$select public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/sin-descripcion'), 'extra.bin', repeat('f', 64), 1, 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'BR422:package_limit', 'pasar los 20 MB del paquete se rechaza');
 
 select * from finish();
 rollback;
