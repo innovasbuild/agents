@@ -31,6 +31,7 @@ const state = vi.hoisted(() => ({
 	brainRowsError: null as { message: string } | null,
 	agentRows: [{ agent: "outreach" }] as { agent: string }[],
 	agentRowsError: null as { message: string } | null,
+	agentRowsThrow: false,
 	rpcBeforeSeed: [] as string[][],
 }));
 
@@ -51,6 +52,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 		},
 		from: (table: string) => {
 			if (table === "tenant_agents") {
+				if (state.agentRowsThrow) throw new Error("sin red");
 				// La lectura de agentes termina en .eq(): la cadena es la promesa.
 				const agents = Object.assign(
 					Promise.resolve({
@@ -104,6 +106,7 @@ beforeEach(() => {
 	state.seedCalls = [];
 	state.agentRows = [{ agent: "outreach" }];
 	state.agentRowsError = null;
+	state.agentRowsThrow = false;
 	state.rpcBeforeSeed = [];
 	state.admin = true;
 	state.rpc = { data: CONN, error: null };
@@ -548,6 +551,7 @@ describe("canon según los agentes (spec 21.4 §4.1)", () => {
 	});
 
 	it("habilitar outreach con brain siembra el canon después de guardar", async () => {
+		state.agentRows = [];
 		expect(
 			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
 		).toEqual({ ok: true });
@@ -570,6 +574,7 @@ describe("canon según los agentes (spec 21.4 §4.1)", () => {
 	});
 
 	it("si la siembra falla al habilitar, avisa que quedó guardado", async () => {
+		state.agentRows = [];
 		state.seed = false;
 		expect(
 			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
@@ -578,6 +583,71 @@ describe("canon según los agentes (spec 21.4 §4.1)", () => {
 			message:
 				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 		});
+	});
+});
+
+describe("setAgent: el canon se siembra solo al pasar de apagado a prendido", () => {
+	it("un Guardar con el agente ya habilitado no siembra (innovas cambia el acceso al brain)", async () => {
+		state.agentRows = [{ agent: "outreach" }];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({ ok: true });
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("otro agente habilitado no cuenta como estado previo", async () => {
+		state.agentRows = [{ agent: "otro" }];
+		await actions.setAgent("acme", TENANT, "outreach", true, "read");
+		expect(state.seedCalls).toHaveLength(1);
+	});
+
+	it("de apagado a prendido siembra una vez, después de guardar", async () => {
+		state.agentRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({ ok: true });
+		expect(state.seedCalls).toEqual([[TENANT, "u1"]]);
+		expect(state.rpcBeforeSeed).toEqual([["platform_set_agent"]]);
+	});
+
+	it("si no puede leer el estado previo, guarda igual pero no siembra", async () => {
+		state.agentRows = [];
+		state.agentRowsError = { message: "caída" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({ ok: true });
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		expect(state.seedCalls).toHaveLength(0);
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+
+	it("si la siembra tira, el agente queda guardado y se avisa", async () => {
+		state.agentRows = [];
+		state.seed = new Error("brain caído");
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		log.mockRestore();
+	});
+});
+
+describe("createBrain: la lectura de agentes no lo hace fallar", () => {
+	it("si leer los agentes tira, el brain queda creado y se siembra como antes", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.agentRowsThrow = true;
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(1);
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
 	});
 });
 

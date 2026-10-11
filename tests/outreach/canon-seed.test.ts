@@ -63,6 +63,53 @@ describe("seedCanonPages", () => {
 		log.mockRestore();
 	});
 
+	it("si el brain ya tiene una página con tag de canon, no siembra nada", async () => {
+		const upsert = vi.fn();
+		const search = vi.fn(async (input: { tag?: string }) =>
+			input.tag === "canon:icp"
+				? [
+						{
+							slug: "comercial/criterios-calificacion-en-paralelo",
+							title: "Criterios",
+							category: "comercial",
+							status: "activo",
+							tags: ["canon:icp"],
+							updatedAt: "2026-01-01",
+							snippet: "",
+						},
+					]
+				: [],
+		);
+		const b = { ...brain(upsert as never), search: search as never };
+		expect(await seedCanonPages(b, "u1")).toBe(true);
+		expect(upsert).not.toHaveBeenCalled();
+	});
+
+	it("si no puede mirar el canon existente, no siembra y devuelve false sin tirar", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const upsert = vi.fn();
+		const b = {
+			...brain(upsert as never),
+			search: async () => {
+				throw new Error("brain caído");
+			},
+		};
+		expect(await seedCanonPages(b, "u1")).toBe(false);
+		expect(upsert).not.toHaveBeenCalled();
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+
+	it("si la categoría comercial no está en el brain, falla suave y loguea", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		const upsert = vi.fn(async () => {
+			throw new Error('category: "comercial" no está entre las categorías');
+		});
+		expect(await seedCanonPages(brain(upsert as never), "u1")).toBe(false);
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+
 	it("sin brain devuelve false", async () => {
 		expect(await seedCanonPages(null, "u1")).toBe(false);
 	});

@@ -99,16 +99,29 @@ const SIN_CANON: ConsoleResult = {
  * que ya está no se pisa.
  */
 async function tenantUsesCanon(tenantId: string): Promise<boolean> {
-	const { data, error } = await createAdminClient()
-		.from("tenant_agents")
-		.select("agent")
-		.eq("tenant_id", tenantId)
-		.eq("enabled", true);
-	if (error) {
-		console.error("consola: no pude leer los agentes:", error.message);
-		return true;
+	const enabled = await readEnabledAgents(tenantId);
+	return enabled === null ? true : agentsNeedCanon(enabled);
+}
+
+/** Agentes habilitados de la empresa; `null` si no se pudo leer (ya logueado). */
+async function readEnabledAgents(
+	tenantId: string,
+): Promise<{ agent: string }[] | null> {
+	try {
+		const { data, error } = await createAdminClient()
+			.from("tenant_agents")
+			.select("agent")
+			.eq("tenant_id", tenantId)
+			.eq("enabled", true);
+		if (error) {
+			console.error("consola: no pude leer los agentes:", error.message);
+			return null;
+		}
+		return data ?? [];
+	} catch (error) {
+		console.error("consola: no pude leer los agentes:", error);
+		return null;
 	}
-	return agentsNeedCanon(data ?? []);
 }
 
 export async function setAgent(
@@ -146,6 +159,13 @@ export async function setAgent(
 		}
 	}
 
+	// El canon se siembra solo cuando el agente pasa de apagado a prendido: un
+	// Guardar que solo cambia el acceso al brain no crea plantillas. Si no se
+	// puede saber el estado previo, no se siembra.
+	const needsSeed = enabled === true && AGENT_CATALOG[agent].requiresBrain;
+	const before = needsSeed ? await readEnabledAgents(tenantId) : null;
+	const wasOff = before !== null && !before.some((row) => row.agent === agent);
+
 	const saved = await call(slug, "platform_set_agent", {
 		p_actor: admin.userId,
 		p_tenant: tenantId,
@@ -154,10 +174,15 @@ export async function setAgent(
 		p_brain: brain,
 	});
 	// Las páginas del canon nacen cuando hay un agente que las usa, no con el
-	// brain (spec 21.4 §4.1). El brain ya existe: se verificó arriba. Una página
-	// que ya está no se pisa.
-	if (saved.ok && enabled === true && AGENT_CATALOG[agent].requiresBrain) {
-		const seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
+	// brain (spec 21.4 §4.1). El brain ya existe: se verificó arriba. Un brain
+	// que ya tiene canon no recibe plantillas.
+	if (saved.ok && needsSeed && wasOff) {
+		let seeded = false;
+		try {
+			seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
+		} catch (error) {
+			console.error("consola: no pude sembrar el canon:", error);
+		}
 		if (!seeded) return SIN_CANON;
 	}
 	return saved;
