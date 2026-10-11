@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import { closeLocalSession } from "@/lib/auth/close-session";
-import { joinOnLogin } from "@/lib/auth/join-on-login";
-import { gateLogin } from "@/lib/auth/login-gate";
+import { completeLogin } from "@/lib/auth/complete-login";
 import { safeNextPath } from "@/lib/auth/next-path";
 import { createServerSupabase } from "@/lib/supabase/server";
 
@@ -35,14 +33,10 @@ export async function GET(request: Request) {
 	}
 
 	// Las invitaciones pendientes y el ingreso por dominio de este mail
-	// verificado se convierten en memberships acá y en ningún otro lado.
-	await joinOnLogin(supabase);
-
-	// Recién después de unir: una membresía nueva puede ser la que permite
-	// este método. Si ninguna lo permite, la sesión no queda abierta.
-	const gate = await gateLogin(supabase);
+	// verificado se convierten en memberships acá, y después corre la compuerta
+	// de método: una membresía nueva puede ser la que lo permite.
+	const gate = await completeLogin(supabase);
 	if (!gate.ok) {
-		await closeLocalSession(supabase);
 		return NextResponse.redirect(new URL(gate.landing, requestUrl.origin));
 	}
 

@@ -247,6 +247,16 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# El correo de ingreso trae el código de 6 dígitos y el link (spec 21.4 §5.2).
+# En producción estas dos plantillas se pegan a mano en el panel de Supabase Auth.
+[auth.email.template.magic_link]
+subject = "Tu código para entrar"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Tu código para entrar"
+content_path = "./supabase/templates/confirmation.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true

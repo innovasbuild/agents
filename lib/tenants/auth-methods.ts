@@ -6,7 +6,7 @@ export const AUTH_METHODS = ["email", "google", "microsoft"] as const;
 export type AuthMethod = (typeof AUTH_METHODS)[number];
 
 export const AUTH_METHOD_LABELS: Record<AuthMethod, string> = {
-	email: "Link por correo",
+	email: "Código por correo",
 	google: "Google",
 	microsoft: "Microsoft",
 };

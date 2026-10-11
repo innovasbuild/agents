@@ -11,7 +11,7 @@ describe("auth methods", () => {
 	});
 
 	it("cada método tiene rótulo en castellano", () => {
-		expect(AUTH_METHOD_LABELS.email).toBe("Link por correo");
+		expect(AUTH_METHOD_LABELS.email).toBe("Código por correo");
 		expect(AUTH_METHOD_LABELS.google).toBe("Google");
 		expect(AUTH_METHOD_LABELS.microsoft).toBe("Microsoft");
 	});

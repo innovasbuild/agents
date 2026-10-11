@@ -8,6 +8,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/app/(auth)/login/actions", () => ({
 	canSignUpByDomain: async () => false,
+	verifyEmailCode: async () => ({ ok: false, message: "" }),
 }));
 
 const { LoginForm } = await import("@/app/(auth)/login/login-form");
@@ -19,7 +20,7 @@ describe("LoginForm", () => {
 	it("con solo email no dibuja Google ni el separador", () => {
 		const html = render(["email"]);
 
-		expect(html).toContain("Mandarme un link");
+		expect(html).toContain("Mandarme un código");
 		expect(html).not.toContain("Entrar con Google");
 		expect(html).not.toContain("bg-border");
 	});
@@ -28,7 +29,7 @@ describe("LoginForm", () => {
 		const html = render(["google"]);
 
 		expect(html).toContain("Entrar con Google");
-		expect(html).not.toContain("Mandarme un link");
+		expect(html).not.toContain("Mandarme un código");
 		expect(html).not.toContain("bg-border");
 	});
 
@@ -37,7 +38,7 @@ describe("LoginForm", () => {
 
 		expect(html).toContain("Entrar con Google");
 		expect(html).toContain("bg-border");
-		expect(html).toContain("Mandarme un link");
+		expect(html).toContain("Mandarme un código");
 	});
 
 	it("con solo Microsoft no dibuja Google, el formulario ni el separador", () => {
@@ -45,7 +46,7 @@ describe("LoginForm", () => {
 
 		expect(html).toContain("Entrar con Microsoft");
 		expect(html).not.toContain("Entrar con Google");
-		expect(html).not.toContain("Mandarme un link");
+		expect(html).not.toContain("Mandarme un código");
 		expect(html).not.toContain("bg-border");
 	});
 
@@ -60,7 +61,7 @@ describe("LoginForm", () => {
 			html.indexOf("bg-border"),
 		);
 		expect(html.indexOf("bg-border")).toBeLessThan(
-			html.indexOf("Mandarme un link"),
+			html.indexOf("Mandarme un código"),
 		);
 	});
 
