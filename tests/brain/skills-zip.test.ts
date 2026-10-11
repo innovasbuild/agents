@@ -61,18 +61,80 @@ describe("unzipPackage", () => {
 		expect(() => unzipPackage(zip)).toThrow(ZipRejected);
 	});
 
-	it("un encabezado que miente no hace crecer la memoria más de lo declarado", () => {
+	it("rechaza un encabezado que declara menos de lo que hay (no trunca)", () => {
 		const zip = lieAboutSize(
 			zipSync({ "a.bin": new Uint8Array(MAX_FILE_BYTES) }),
 			100,
 		);
-		let out: ReturnType<typeof unzipPackage> | null = null;
-		try {
-			out = unzipPackage(zip);
-		} catch (error) {
-			expect(error).toBeInstanceOf(ZipRejected);
+		expect(() => unzipPackage(zip)).toThrow(ZipRejected);
+	});
+
+	it("rechaza muchas entradas que declaran 1 byte y se inflan a mucho", () => {
+		const big = new Uint8Array(2_000_000);
+		const zip = lieAboutSize(
+			zipSync(
+				Object.fromEntries(
+					Array.from({ length: 8 }, (_, i) => [`f${i}.bin`, big]),
+				),
+			),
+			1,
+		);
+		expect(() => unzipPackage(zip)).toThrow(ZipRejected);
+	});
+
+	it("rechaza entradas cuyos datos se superponen", () => {
+		const zip = zipSync({
+			"a.txt": bytes("a".repeat(500)),
+			"b.txt": bytes("b".repeat(500)),
+		});
+		const forged = zip.slice();
+		const view = new DataView(forged.buffer);
+		const entries: number[] = [];
+		for (let i = 0; i < forged.length - 4; i++) {
+			if (view.getUint32(i, true) === 0x02014b50) entries.push(i);
 		}
-		if (out) expect(out.every((entry) => entry.bytes.length <= 100)).toBe(true);
+		// La segunda entrada apunta a los datos de la primera.
+		view.setUint32(
+			entries[1] + 42,
+			view.getUint32(entries[0] + 42, true),
+			true,
+		);
+		expect(() => unzipPackage(forged)).toThrow(ZipRejected);
+	});
+
+	it("rechaza un método de compresión que no es 0 ni 8", () => {
+		const forged = zipSync({ "a.txt": bytes("hola hola hola") }).slice();
+		const view = new DataView(forged.buffer);
+		for (let i = 0; i < forged.length - 4; i++) {
+			if (view.getUint32(i, true) === 0x02014b50)
+				view.setUint16(i + 10, 9, true);
+		}
+		expect(() => unzipPackage(forged)).toThrow(ZipRejected);
+	});
+
+	it("rechaza si lo comprimido declarado suma más que el zip", () => {
+		const zip = zipSync({
+			"a.txt": bytes("a".repeat(500)),
+			"b.txt": bytes("b".repeat(500)),
+		});
+		const forged = zip.slice();
+		const view = new DataView(forged.buffer);
+		for (let i = 0; i < forged.length - 4; i++) {
+			if (view.getUint32(i, true) === 0x02014b50) {
+				view.setUint32(i + 20, forged.length, true);
+			}
+		}
+		expect(() => unzipPackage(forged)).toThrow(ZipRejected);
+	});
+
+	it("rechaza una entrada guardada sin comprimir con tamaños distintos", () => {
+		const forged = zipSync({ "a.txt": [bytes("hola"), { level: 0 }] }).slice();
+		const view = new DataView(forged.buffer);
+		for (let i = 0; i < forged.length - 4; i++) {
+			if (view.getUint32(i, true) === 0x02014b50)
+				view.setUint32(i + 24, 2, true);
+		}
+		expect(() => unzipPackage(forged)).toThrow(ZipRejected);
 	});
 
 	it("rechaza un paquete con más archivos de los que admite", () => {

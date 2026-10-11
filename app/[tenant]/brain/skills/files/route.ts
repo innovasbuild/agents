@@ -2,6 +2,8 @@ import { revalidatePath } from "next/cache";
 import { unzipPackage, ZipRejected } from "@/lib/brain/adapters/skill-zip";
 import { filesDeps } from "@/lib/brain/adapters/skills";
 import {
+	authorizeSkillEdit,
+	type FilesDeps,
 	importSkillPackage,
 	putSkillFile,
 	readSkillFile,
@@ -78,12 +80,33 @@ export async function POST(
 	) {
 		return refuse(403, "Origen no permitido.");
 	}
-	if (
-		Number(request.headers.get("content-length") ?? "0") > MAX_REQUEST_BYTES
-	) {
+	// Sin Content-Length no hay cómo acotar lo que se va a leer.
+	const length = request.headers.get("content-length");
+	if (length === null || !/^\d+$/.test(length)) {
+		return refuse(411, "Falta el tamaño del pedido.");
+	}
+	if (Number(length) > MAX_REQUEST_BYTES) {
 		return refuse(413, "El archivo supera los 4 MB.");
 	}
 
+	const deps = filesDeps();
+	// Lo más barato primero: quien no es miembro no hace trabajar al servidor.
+	if (!(await deps.actor(tenant))) return refuse(404, "No encontrado.");
+
+	try {
+		return await handleUpload(request, tenant, deps);
+	} catch (error) {
+		// El detalle queda en el log; la persona recibe un mensaje sin internos.
+		console.error("skills: falló la subida de un archivo", error);
+		return refuse(500, "No pude guardar el archivo. Probá de nuevo.");
+	}
+}
+
+async function handleUpload(
+	request: Request,
+	tenant: string,
+	deps: FilesDeps,
+): Promise<Response> {
 	let form: FormData;
 	try {
 		form = await request.formData();
@@ -99,6 +122,9 @@ export async function POST(
 	if (file.size > MAX_FILE_BYTES) {
 		return refuse(413, "El archivo supera los 4 MB.");
 	}
+	// Antes de leer o descomprimir nada: ¿puede editar esta skill?
+	const allowed = await authorizeSkillEdit(tenant, slug, deps);
+	if (!allowed.ok) return failed(allowed);
 	const bytes = new Uint8Array(await file.arrayBuffer());
 
 	if (form.get("kind") === "zip") {
@@ -109,14 +135,14 @@ export async function POST(
 			if (error instanceof ZipRejected) return refuse(422, error.message);
 			throw error;
 		}
-		const result = await importSkillPackage(tenant, slug, entries, filesDeps());
+		const result = await importSkillPackage(tenant, slug, entries, deps);
 		if (!result.ok) return failed(result);
 		revalidatePath(`/${tenant}/brain`, "layout");
 		return Response.json(result);
 	}
 
 	if (typeof path !== "string") return refuse(400, "Falta la ruta.");
-	const result = await putSkillFile(tenant, slug, { path, bytes }, filesDeps());
+	const result = await putSkillFile(tenant, slug, { path, bytes }, deps);
 	if (!result.ok) return failed(result);
 	revalidatePath(`/${tenant}/brain`, "layout");
 	return Response.json(result);

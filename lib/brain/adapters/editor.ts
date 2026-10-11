@@ -96,8 +96,19 @@ export const loadBrainPages = cache(
 export const loadBrainTree = cache(
 	async (ctx: OkEditorContext): Promise<TreeNode> => {
 		const pages = await loadBrainPages(ctx);
+		// La marca es decoración: si la consulta falla, el árbol sigue sin ella.
+		// Las lecturas de skills (withSkillView) no se tocan: esas fallan cerradas.
+		let rows: SkillOverviewRow[] = [];
+		try {
+			rows = await ctx.skills();
+		} catch (error) {
+			console.error(
+				`brain editor: no pude leer las skills de ${ctx.tenant.slug}`,
+				error,
+			);
+		}
 		const pending = new Set(
-			(await ctx.skills())
+			rows
 				.filter((row) => {
 					const state = skillState(row);
 					return (

@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
-	filesDeps: vi.fn(() => ({})),
+	actor: vi.fn(async () => ({ tenantId: "t", userId: "u", role: "member" })),
+	filesDeps: vi.fn(() => ({ actor: state.actor })),
+	authorizeSkillEdit: vi.fn(async () => ({ ok: true })),
+	importSkillPackage: vi.fn(),
 	putSkillFile: vi.fn(async () => ({ ok: true, filesDigest: "d" })),
 	readSkillFile: vi.fn(),
 }));
@@ -9,7 +12,8 @@ const state = vi.hoisted(() => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/brain/adapters/skills", () => ({ filesDeps: state.filesDeps }));
 vi.mock("@/lib/brain/core/skills/files", () => ({
-	importSkillPackage: vi.fn(),
+	authorizeSkillEdit: state.authorizeSkillEdit,
+	importSkillPackage: state.importSkillPackage,
 	putSkillFile: state.putSkillFile,
 	readSkillFile: state.readSkillFile,
 }));
@@ -18,17 +22,24 @@ import { GET, POST } from "@/app/[tenant]/brain/skills/files/route";
 
 const params = { params: Promise.resolve({ tenant: "acme" }) };
 
-function upload(headers: Record<string, string>): Request {
+function upload(
+	headers: Record<string, string>,
+	extra: Record<string, string | File> = {},
+): Request {
 	const form = new FormData();
 	form.set("slug", "skills/a");
 	form.set("path", "a.txt");
 	form.set("file", new File(["hola"], "a.txt"));
+	for (const [key, value] of Object.entries(extra)) form.set(key, value);
 	return new Request("https://agentes.innov.as/acme/brain/skills/files", {
 		method: "POST",
-		headers,
+		// Un Request armado a mano no trae Content-Length; el navegador sí.
+		headers: { "content-length": "1000", ...headers },
 		body: form,
 	});
 }
+
+const SAME = { origin: "https://agentes.innov.as", host: "agentes.innov.as" };
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -59,6 +70,48 @@ describe("POST /brain/skills/files", () => {
 		);
 		expect(response.status).toBe(200);
 		expect(state.putSkillFile).toHaveBeenCalledOnce();
+	});
+});
+
+describe("POST: lo barato primero", () => {
+	it("sin Content-Length responde 411", async () => {
+		const request = upload(SAME);
+		request.headers.delete("content-length");
+		expect((await POST(request, params)).status).toBe(411);
+		expect(state.actor).not.toHaveBeenCalled();
+	});
+
+	it("quien no es miembro recibe 404 sin que se lea el cuerpo", async () => {
+		state.actor.mockResolvedValueOnce(null as never);
+		const request = upload(SAME);
+		const read = vi.spyOn(request, "formData");
+		expect((await POST(request, params)).status).toBe(404);
+		expect(read).not.toHaveBeenCalled();
+	});
+
+	it("quien no puede editar la skill no hace descomprimir el zip", async () => {
+		state.authorizeSkillEdit.mockResolvedValueOnce({
+			ok: false,
+			code: "forbidden",
+			message: "x",
+		} as never);
+		const response = await POST(
+			upload(SAME, { kind: "zip", file: new File(["no es zip"], "p.zip") }),
+			params,
+		);
+		expect(response.status).toBe(403);
+		expect(state.importSkillPackage).not.toHaveBeenCalled();
+	});
+
+	it("un fallo de Storage responde en castellano sin internos", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.putSkillFile.mockRejectedValueOnce(new Error("bucket secreto caído"));
+		const response = await POST(upload(SAME), params);
+		expect(response.status).toBe(500);
+		const body = JSON.stringify(await response.json());
+		expect(body).toContain("No pude guardar");
+		expect(body).not.toContain("secreto");
+		logged.mockRestore();
 	});
 });
 

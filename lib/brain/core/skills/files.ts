@@ -246,6 +246,19 @@ function storeFailure(error: unknown): SkillFailure {
 	throw error;
 }
 
+// Chequeo barato y previo a procesar un pedido pesado (descomprimir un zip):
+// quién es y si puede editar esa skill. Responde igual que el resto de las
+// operaciones; no cambia nada.
+export async function authorizeSkillEdit(
+	tenantSlug: string,
+	slug: string,
+	deps: FilesDeps,
+): Promise<{ ok: true } | SkillFailure> {
+	const ctx = await context(tenantSlug, slug, deps);
+	if (!ctx.ok) return ctx;
+	return requireEditor(ctx) ?? { ok: true };
+}
+
 export async function putSkillFile(
 	tenantSlug: string,
 	slug: string,
