@@ -8,7 +8,7 @@ vi.mock("@/lib/supabase/browser", () => ({
 
 vi.mock("@/app/(auth)/login/actions", () => ({
 	canSignUpByDomain: async () => false,
-	verifyEmailCode: async () => ({ ok: false, message: "" }),
+	completeLogin: async () => ({ ok: false, message: "" }),
 }));
 
 const { LoginForm } = await import("@/app/(auth)/login/login-form");

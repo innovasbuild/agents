@@ -3,7 +3,8 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { completeLogin } from "@/lib/auth/complete-login";
+import { completeLogin as runCompleteLogin } from "@/lib/auth/complete-login";
+import { EMAIL_CODE_ERROR } from "@/lib/auth/email-code";
 import { safeNextPath } from "@/lib/auth/next-path";
 import { emailDomain } from "@/lib/invitations/domain";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -12,10 +13,7 @@ import { originFrom } from "@/lib/tenants/origin";
 
 const emailSchema = z.email().max(254);
 
-const CODIGO_INVALIDO = {
-	ok: false as const,
-	message: "El código no es correcto o ya venció. Pedí otro.",
-};
+const CODIGO_INVALIDO = { ok: false as const, message: EMAIL_CODE_ERROR };
 
 /**
  * ¿Puede este mail crear cuenta al pedir el link? Solo si su dominio está
@@ -49,34 +47,21 @@ export async function canSignUpByDomain(email: string): Promise<boolean> {
 }
 
 /**
- * Entra con el código de 6 dígitos del mail (spec 21.4 §5). Un solo mensaje
- * para código mal escrito, equivocado, vencido o de otro correo: la pantalla
- * no confirma quién tiene cuenta. Con éxito no devuelve: redirige.
+ * Lo que sigue a verificar el código en el navegador (spec 21.4 §5.1): con la
+ * sesión ya en cookies, corre el mismo tramo que /auth/callback (membresías y
+ * compuerta de método) y redirige a `next`. Sin sesión responde el mensaje
+ * único del código. Con éxito no devuelve: redirige.
  */
-export async function verifyEmailCode(
-	email: string,
-	code: string,
+export async function completeLogin(
 	next: string | null,
 ): Promise<{ ok: false; message: string }> {
-	if (typeof email !== "string" || typeof code !== "string") {
-		return CODIGO_INVALIDO;
-	}
-	const parsedEmail = emailSchema.safeParse(email.trim().toLowerCase());
-	const token = code.replace(/\s+/g, "");
-	if (!parsedEmail.success || !/^\d{6}$/.test(token)) return CODIGO_INVALIDO;
-
 	let target: string;
 	try {
 		const supabase = await createServerSupabase();
-		const { data, error } = await supabase.auth.verifyOtp({
-			email: parsedEmail.data,
-			token,
-			type: "email",
-		});
-		if (error || !data.session) return CODIGO_INVALIDO;
+		const { data, error } = await supabase.auth.getUser();
+		if (error || !data.user) return CODIGO_INVALIDO;
 
-		// El mismo tramo que /auth/callback: membresías y compuerta de método.
-		const gate = await completeLogin(supabase);
+		const gate = await runCompleteLogin(supabase);
 		target = gate.ok
 			? safeNextPath(
 					typeof next === "string" ? next : null,
@@ -84,7 +69,7 @@ export async function verifyEmailCode(
 				)
 			: gate.landing;
 	} catch (error) {
-		console.error("verifyEmailCode falló:", error);
+		console.error("completeLogin falló:", error);
 		return CODIGO_INVALIDO;
 	}
 	// Fuera del try: redirect() tira para cortar la acción.
