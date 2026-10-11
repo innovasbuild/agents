@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { PageWorkspace } from "@/components/brain/editor/page-workspace";
 import { PageFacts } from "@/components/brain/page-facts";
 import { ReadingView } from "@/components/brain/reading-view";
+import { PublishedFiles } from "@/components/brain/skills/published-files";
+import { SkillPanel } from "@/components/brain/skills/skill-panel";
 import { Button } from "@/components/ui/button";
 import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import { skillStore } from "@/lib/brain/adapters/skills";
+import { isAdminRole } from "@/lib/brain/core/access/types";
 import { entryMode } from "@/lib/brain/core/editor/entry-mode";
 import {
 	historyHref,
@@ -12,6 +17,8 @@ import {
 	slugFromParams,
 } from "@/lib/brain/core/editor/slug";
 import { buildLinkIndex } from "@/lib/brain/core/links";
+import { isSkillSlug } from "@/lib/brain/core/skills/package";
+import { publishedSnapshot, skillState } from "@/lib/brain/core/skills/state";
 
 export default async function BrainPageView({
 	params,
@@ -61,9 +68,39 @@ export default async function BrainPageView({
 	const outgoing = index.outgoing.get(slug) ?? [];
 	const incoming = index.incoming.get(slug) ?? [];
 
+	// Una skill suma su panel (quien edita) o sus archivos publicados (quien lee).
+	const skillRow = isSkillSlug(slug)
+		? (await ctx.skills()).find((row) => row.slug === slug)
+		: undefined;
+
 	// Sin `key` derivada de la revisión: remontaría el editor tras cada
 	// router.refresh() y perdería su historial de deshacer.
 	if (entryMode(level) === "edit") {
+		let skill: ReactNode;
+		if (skillRow) {
+			const store = skillStore();
+			const [files, acts] = await Promise.all([
+				store.files(ctx.tenant.id, skillRow.pageId),
+				store.acts(ctx.tenant.id, skillRow.pageId),
+			]);
+			skill = (
+				<SkillPanel
+					tenantSlug={tenantSlug}
+					slug={slug}
+					state={skillState(skillRow)}
+					files={files}
+					versions={acts.map((act) => ({
+						id: act.id,
+						action: act.action,
+						version: act.version,
+						note: act.note,
+						createdAt: act.createdAt,
+						republishedFrom: act.republishedFrom,
+					}))}
+					canPublish={isAdminRole(ctx.tenant.role)}
+				/>
+			);
+		}
 		return (
 			<PageWorkspace
 				mode="edit"
@@ -86,6 +123,7 @@ export default async function BrainPageView({
 					revision: page.revision,
 				}}
 				canDelete={level === "administrador"}
+				skill={skill}
 				facts={
 					<PageFacts
 						tenantSlug={tenantSlug}
@@ -99,18 +137,32 @@ export default async function BrainPageView({
 		);
 	}
 
+	const publishedFiles = publishedSnapshot(skillRow)?.manifest ?? [];
+
 	return (
-		<ReadingView
-			tenantSlug={tenantSlug}
-			page={page}
-			lookup={lookup}
-			outgoing={outgoing}
-			incoming={incoming}
-			actions={
-				<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
-					<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
-				</Button>
-			}
-		/>
+		<div className="space-y-6">
+			<ReadingView
+				tenantSlug={tenantSlug}
+				page={page}
+				lookup={lookup}
+				outgoing={outgoing}
+				incoming={incoming}
+				actions={
+					// El historial de una skill es el de su borrador: no es para lectores.
+					skillRow ? undefined : (
+						<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
+							<Link href={historyHref(tenantSlug, slug)}>Historial</Link>
+						</Button>
+					)
+				}
+			/>
+			{skillRow && (
+				<PublishedFiles
+					tenantSlug={tenantSlug}
+					slug={slug}
+					files={publishedFiles}
+				/>
+			)}
+		</div>
 	);
 }

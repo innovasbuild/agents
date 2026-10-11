@@ -19,10 +19,16 @@ import { DiffView } from "@/components/brain/diff-view";
 import { Paper } from "@/components/brain/paper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { diffLines } from "@/lib/brain/core/diff";
 import { chooseBodyToSave } from "@/lib/brain/core/editor/body-to-save";
 import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { historyHref, pageHref } from "@/lib/brain/core/editor/slug";
+import {
+	MAX_COMPATIBILITY,
+	MAX_DESCRIPTION,
+	SKILL_CATEGORY,
+} from "@/lib/brain/core/skills/package";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
@@ -62,6 +68,8 @@ export interface PageWorkspaceProps {
 	// Datos y conexiones, ya armados en el servidor (solo modo edit).
 	facts?: ReactNode;
 	canDelete?: boolean;
+	// Panel de la skill (estado, archivos, versiones), ya armado en el servidor.
+	skill?: ReactNode;
 }
 
 export function PageWorkspace({
@@ -73,10 +81,13 @@ export function PageWorkspace({
 	initial,
 	facts,
 	canDelete,
+	skill,
 }: PageWorkspaceProps) {
 	const router = useRouter();
 	const tagsId = useId();
 	const slugId = useId();
+	const descriptionId = useId();
+	const compatibilityId = useId();
 	// `saved` es el último estado guardado de los campos (para detectar cambios).
 	const [saved, setSaved] = useState(initial);
 	const [form, setForm] = useState(initial);
@@ -92,6 +103,20 @@ export function PageWorkspace({
 	const [serverBody, setServerBody] = useState<string | null>(null);
 	const [editorKey, setEditorKey] = useState(0);
 	const [isPending, startTransition] = useTransition();
+
+	const isSkill = form.category === SKILL_CATEGORY;
+	const frontmatterText = (key: string) =>
+		typeof form.frontmatter[key] === "string"
+			? (form.frontmatter[key] as string)
+			: "";
+	// Un campo vacío se saca del frontmatter en vez de guardarse como "".
+	const setFrontmatterText = (key: string, value: string) =>
+		setForm((f) => {
+			const next = { ...f.frontmatter };
+			if (value.length > 0) next[key] = value;
+			else delete next[key];
+			return { ...f, frontmatter: next };
+		});
 
 	const body = useMemo(
 		() =>
@@ -115,6 +140,7 @@ export function PageWorkspace({
 		form.category !== saved.category ||
 		form.status !== saved.status ||
 		form.slug !== saved.slug ||
+		JSON.stringify(form.frontmatter) !== JSON.stringify(saved.frontmatter) ||
 		tags.join(",") !== saved.tags.join(",") ||
 		body !== original;
 
@@ -208,6 +234,7 @@ export function PageWorkspace({
 				<select
 					className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
 					value={form.category}
+					disabled={mode === "edit" && isSkill}
 					aria-invalid={!!fieldError("category")}
 					onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
 				>
@@ -218,22 +245,63 @@ export function PageWorkspace({
 					))}
 				</select>
 			</label>
-			<label className="block space-y-1">
-				<span>Estado</span>
-				<select
-					className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
-					value={form.status}
-					onChange={(e) =>
-						setForm((f) => ({ ...f, status: e.target.value as BrainStatus }))
-					}
-				>
-					{BRAIN_STATUSES.map((s) => (
-						<option key={s} value={s}>
-							{STATUS_LABEL[s]}
-						</option>
-					))}
-				</select>
-			</label>
+			{!isSkill && (
+				<label className="block space-y-1">
+					<span>Estado</span>
+					<select
+						className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
+						value={form.status}
+						onChange={(e) =>
+							setForm((f) => ({ ...f, status: e.target.value as BrainStatus }))
+						}
+					>
+						{BRAIN_STATUSES.map((s) => (
+							<option key={s} value={s}>
+								{STATUS_LABEL[s]}
+							</option>
+						))}
+					</select>
+				</label>
+			)}
+			{isSkill && (
+				<>
+					<label htmlFor={descriptionId} className="block space-y-1">
+						<span>Descripción: cuándo usar esta skill</span>
+						<Textarea
+							id={descriptionId}
+							value={frontmatterText("description")}
+							maxLength={MAX_DESCRIPTION}
+							rows={4}
+							placeholder="Usar cuando alguien pide emitir o revisar una factura."
+							onChange={(e) =>
+								setFrontmatterText("description", e.target.value)
+							}
+						/>
+						<span className="text-muted-foreground">
+							Es lo que lee el asistente para decidir si la carga. Sin esto no
+							se puede publicar.
+						</span>
+					</label>
+					<label htmlFor={compatibilityId} className="block space-y-1">
+						<span>Qué necesita (opcional)</span>
+						<Input
+							id={compatibilityId}
+							value={frontmatterText("compatibility")}
+							maxLength={MAX_COMPATIBILITY}
+							className="min-h-11 lg:min-h-9"
+							placeholder="Python 3 con openpyxl"
+							onChange={(e) =>
+								setFrontmatterText("compatibility", e.target.value)
+							}
+						/>
+					</label>
+					{mode === "new" && (
+						<p className="text-muted-foreground">
+							La ruta de una skill empieza con <code>skills/</code>.
+						</p>
+					)}
+				</>
+			)}
 			<label htmlFor={tagsId} className="block space-y-1">
 				<span>Tags, separados por coma</span>
 				<Input
@@ -255,6 +323,7 @@ export function PageWorkspace({
 					<p className="text-muted-foreground">
 						Slug: <code className="break-all">{form.slug}</code>
 					</p>
+					{skill}
 					{facts}
 					{canDelete && (
 						<DeletePageButton
