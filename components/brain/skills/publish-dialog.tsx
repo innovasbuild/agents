@@ -142,7 +142,7 @@ export function PublishDialog({
 
 	return (
 		<AlertDialog open onOpenChange={(open) => !open && onClose()}>
-			<AlertDialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+			<AlertDialogContent className="max-h-[90vh] overflow-y-auto data-[size=default]:sm:max-w-3xl">
 				<AlertDialogHeader>
 					<AlertDialogTitle>
 						Publicar {preview ? `«${preview.name}»` : "skill"}
@@ -158,7 +158,7 @@ export function PublishDialog({
 					<p className="text-destructive text-sm">{state.error}</p>
 				)}
 				{preview && (
-					<div className="space-y-4 text-sm">
+					<div className="min-w-0 space-y-4 text-sm">
 						{preview.problems.length > 0 && (
 							<ul className="list-disc space-y-1 pl-5 text-destructive">
 								{preview.problems.map((problem) => (
