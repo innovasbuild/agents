@@ -44,6 +44,7 @@ vi.mock("@/lib/tenants/platform", () => ({
 			? {
 					userId: "u1",
 					supabase: {
+						rpc: async () => ({ data: [], error: null }),
 						from: (table: string) =>
 							query(() => ({
 								data:
@@ -62,6 +63,11 @@ vi.mock("@/lib/tenants/platform", () => ({
 					},
 				}
 			: null,
+}));
+vi.mock("@/lib/outreach/canon", () => ({
+	brainForTenant: async () => null,
+	loadIcpLevels: async () => ({ ok: false, reason: "brain_caido", errors: [] }),
+	loadMarco: async () => ({ ok: false, reason: "brain_caido", errors: [] }),
 }));
 vi.mock("@/lib/tenants/people", () => ({ loadPeople: async () => new Map() }));
 vi.mock("next/headers", () => ({
@@ -174,6 +180,29 @@ describe("detalle de la empresa", () => {
 		expect(html).toContain("Lista para trabajar");
 		expect(html).not.toContain("Crear brain");
 		expect(html).toContain("Acme ColdIQ");
+	});
+
+	const brainOn = {
+		id: "c1",
+		capability: "brain",
+		provider: "wiki",
+		connector_uid: null,
+		config: { categories: ["empresa"] },
+		enabled: true,
+		verified_at: null,
+		verified_name: null,
+		created_at: "2026-10-10T00:00:00Z",
+	};
+
+	it("brain caído con outreach habilitado: avisa que no pudo leerlo", async () => {
+		state.connections = [brainOn];
+		expect(await render()).toContain("No pude leer el brain");
+	});
+
+	it("brain caído pero sin agente que necesite el canon: no avisa", async () => {
+		state.agents = [];
+		state.connections = [brainOn];
+		expect(await render()).not.toContain("No pude leer el brain");
 	});
 
 	it("un brain deshabilitado no ofrece crearlo de nuevo", async () => {

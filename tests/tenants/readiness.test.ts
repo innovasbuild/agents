@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { READINESS_LABELS, tenantReadiness } from "@/lib/tenants/readiness";
+import {
+	canonState,
+	READINESS_LABELS,
+	tenantReadiness,
+} from "@/lib/tenants/readiness";
 
 const ok = (over: Partial<Parameters<typeof tenantReadiness>[0]> = {}) =>
 	tenantReadiness({
@@ -186,5 +190,58 @@ describe("tenantReadiness", () => {
 			],
 		});
 		expect(r).toEqual({ ready: true, missing: [] });
+	});
+});
+
+describe("ICP y marco en el brain", () => {
+	it("con los dos bien, no falta nada", () => {
+		expect(ok({ canon: { icp: "ok", marco: "ok" } })).toEqual({
+			ready: true,
+			missing: [],
+		});
+	});
+
+	it("ICP faltante o inválido: falta el ICP", () => {
+		expect(ok({ canon: { icp: "falta", marco: "ok" } }).missing).toEqual([
+			"icp",
+		]);
+		expect(ok({ canon: { icp: "invalido", marco: "ok" } }).missing).toEqual([
+			"icp",
+		]);
+	});
+
+	it("marco faltante: faltan hooks y vectores", () => {
+		expect(ok({ canon: { icp: "ok", marco: "falta" } }).missing).toEqual([
+			"marco",
+		]);
+		expect(READINESS_LABELS.marco).toBe("faltan hooks y vectores en el brain");
+		expect(READINESS_LABELS.icp).toBe("falta el ICP en el brain");
+	});
+
+	it("un brain que no se pudo leer no suma motivo", () => {
+		expect(
+			ok({ canon: { icp: "sin_leer", marco: "sin_leer" } }).missing,
+		).toEqual([]);
+	});
+
+	it("sin outreach habilitado no se pide ICP ni marco", () => {
+		expect(
+			ok({
+				agents: [{ agent: "outreach", enabled: false }],
+				canon: { icp: "falta", marco: "falta" },
+			}).missing,
+		).toEqual(["agentes"]);
+	});
+
+	it("sin canon en la entrada (el listado) no cambia nada", () => {
+		expect(ok().missing).toEqual([]);
+	});
+
+	it("canonState traduce la carga", () => {
+		expect(canonState({ ok: true })).toBe("ok");
+		expect(canonState({ ok: false, reason: "falta" })).toBe("falta");
+		expect(canonState({ ok: false, reason: "invalido" })).toBe("invalido");
+		expect(canonState({ ok: false, reason: "brain_caido" })).toBe("sin_leer");
+		expect(canonState({ ok: false, reason: "sin_brain" })).toBe("sin_leer");
 	});
 });

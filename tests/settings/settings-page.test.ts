@@ -148,6 +148,17 @@ describe("settings del cliente", () => {
 		);
 	});
 
+	it("el link a outreach aparece solo con el agente outreach habilitado", async () => {
+		expect(await render()).toContain('href="/acme/settings/outreach"');
+		state.tables.tenant_agents = {
+			data: [{ agent: "outreach", enabled: false, config: {} }],
+			error: null,
+		};
+		expect(await render()).not.toContain("/acme/settings/outreach");
+		state.tables.tenant_agents = { data: [], error: null };
+		expect(await render()).not.toContain("/acme/settings/outreach");
+	});
+
 	it("un agente deshabilitado no ofrece aprobaciones", async () => {
 		state.tables.tenant_agents = {
 			data: [{ agent: "outreach", enabled: false, config: {} }],

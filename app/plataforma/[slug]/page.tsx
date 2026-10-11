@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { brainForTenant, loadIcpLevels, loadMarco } from "@/lib/outreach/canon";
 import { isAuthMethod } from "@/lib/tenants/auth-methods";
 import { knownWarnings } from "@/lib/tenants/create-warnings";
 import { originFrom } from "@/lib/tenants/origin";
@@ -9,12 +10,19 @@ import {
 	platformOwnerSlug,
 	requirePlatformAdmin,
 } from "@/lib/tenants/platform";
-import { READINESS_LABELS, tenantReadiness } from "@/lib/tenants/readiness";
+import {
+	agentsNeedCanon,
+	canonState,
+	READINESS_LABELS,
+	tenantReadiness,
+} from "@/lib/tenants/readiness";
 import { brandFromRow, type TenantRole } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { budgetResources, toBudgetRows } from "@/lib/workflows/settings";
 import { AgentsSection } from "./console/agents-section";
 import { BindForm } from "./console/bind-form";
 import { BrainSection } from "./console/brain-section";
+import { BudgetsSection } from "./console/budgets-section";
 import { ConnectionsSection } from "./console/connections-section";
 import { TenantForm } from "./tenant-form";
 
@@ -124,7 +132,49 @@ export default async function TenantDetailPage({
 	if (readError) {
 		console.error("consola:", readError.code, readError.message);
 	}
-	const readiness = readError ? null : tenantReadiness({ agents, connections });
+	// El ICP y el marco solo se leen acá, en el detalle: en el listado sería
+	// una lectura del brain por empresa.
+	const brainEnabled = connections.some(
+		(c) => c.capability === "brain" && c.enabled,
+	);
+	let canon: Parameters<typeof tenantReadiness>[0]["canon"];
+	let brainUnreadable = false;
+	const canonNeeded = agentsNeedCanon(agents.filter((a) => a.enabled));
+	if (!readError && brainEnabled) {
+		try {
+			const brain = await brainForTenant(tenant.id);
+			const [icp, marco] = await Promise.all([
+				loadIcpLevels(brain),
+				loadMarco(brain),
+			]);
+			canon = { icp: canonState(icp), marco: canonState(marco) };
+			brainUnreadable =
+				(!icp.ok && icp.reason === "brain_caido") ||
+				(!marco.ok && marco.reason === "brain_caido");
+		} catch (error) {
+			console.error("consola: no pude leer el brain:", error);
+			brainUnreadable = true;
+		}
+	}
+	const readiness = readError
+		? null
+		: tenantReadiness({ agents, connections, canon });
+
+	// El día se corta en UTC: la consola no conoce la zona horaria del outreach
+	// de cada empresa y no hace falta para fijar un tope.
+	const dayStartUtc = new Date();
+	dayStartUtc.setUTCHours(0, 0, 0, 0);
+	const { data: budgetRows, error: budgetsError } = await admin.supabase.rpc(
+		"tenant_budget_status",
+		{
+			p_tenant: tenant.id,
+			p_resources: budgetResources(),
+			p_since: dayStartUtc.toISOString(),
+		} as never,
+	);
+	if (budgetsError) {
+		console.error("consola:", budgetsError.code, budgetsError.message);
+	}
 
 	const brand = brandFromRow(tenant);
 	const logoSrc = brand.logoUrl
@@ -204,6 +254,11 @@ export default async function TenantDetailPage({
 						))}
 					</ul>
 				)}
+				{brainUnreadable && canonNeeded ? (
+					<p className="mt-2 text-muted-foreground text-sm">
+						No pude leer el brain: no sé si el ICP y los hooks están cargados.
+					</p>
+				) : null}
 			</section>
 
 			<section>
@@ -241,6 +296,21 @@ export default async function TenantDetailPage({
 					tenantId={tenant.id}
 				/>
 				<BindForm slug={tenant.slug} tenantId={tenant.id} />
+			</section>
+
+			<section>
+				<h2 className="mb-3 text-lg">Presupuestos</h2>
+				{budgetsError ? (
+					<p className="text-muted-foreground text-sm">
+						No pude leer esta sección. Recargá la página.
+					</p>
+				) : (
+					<BudgetsSection
+						budgets={toBudgetRows((budgetRows as unknown[] | null) ?? [])}
+						slug={tenant.slug}
+						tenantId={tenant.id}
+					/>
+				)}
 			</section>
 
 			<section>

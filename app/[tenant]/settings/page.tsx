@@ -114,6 +114,11 @@ export default async function SettingsPage({
 			suggestedSlug: suggestExecutorSlug(people.get(userId)?.email),
 		}));
 
+	// La pantalla de outreach da 404 sin el agente habilitado.
+	const outreachEnabled = (agentsResult.data ?? []).some(
+		(row) => row.agent === "outreach" && row.enabled === true,
+	);
+
 	const approvals = (agentsResult.data ?? [])
 		.filter((row) => row.enabled === true)
 		.map((row) => {
@@ -195,6 +200,14 @@ export default async function SettingsPage({
 				)}
 			</section>
 
+			{outreachEnabled ? (
+				<Link
+					className="mr-6 inline-block text-sm underline underline-offset-4"
+					href={`/${slug}/settings/outreach`}
+				>
+					Outreach →
+				</Link>
+			) : null}
 			<Link
 				className="inline-block text-sm underline underline-offset-4"
 				href={`/${slug}/settings/usuarios`}

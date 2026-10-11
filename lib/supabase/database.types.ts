@@ -1537,6 +1537,10 @@ export type Database = {
 				Returns: number;
 			};
 			login_gate: { Args: Record<PropertyKey, never>; Returns: Json };
+			outreach_reflect_marco: {
+				Args: { p_hooks: Json; p_tenant: string; p_vectors: Json };
+				Returns: Json;
+			};
 			platform_bind_connection: {
 				Args: {
 					p_actor: string;
@@ -1579,6 +1583,15 @@ export type Database = {
 					p_agent: string;
 					p_brain: string;
 					p_enabled: boolean;
+					p_tenant: string;
+				};
+				Returns: undefined;
+			};
+			platform_set_budget: {
+				Args: {
+					p_actor: string;
+					p_daily_limit: number;
+					p_resource: string;
 					p_tenant: string;
 				};
 				Returns: undefined;
@@ -1627,9 +1640,41 @@ export type Database = {
 				};
 				Returns: undefined;
 			};
+			set_list_value: {
+				Args: {
+					p_active: boolean;
+					p_kind: Database["public"]["Enums"]["config_value_kind"];
+					p_label: string;
+					p_tenant: string;
+					p_value: string;
+				};
+				Returns: undefined;
+			};
+			set_outreach_config: {
+				Args: { p_config: Json; p_tenant: string };
+				Returns: undefined;
+			};
 			set_run_cost: { Args: { p_run: string }; Returns: number };
+			set_workflow: {
+				Args: {
+					p_cadence_minutes: number;
+					p_enabled: boolean;
+					p_items_per_tick: number;
+					p_tenant: string;
+					p_workflow: string;
+				};
+				Returns: undefined;
+			};
 			settings_actor: { Args: { p_tenant: string }; Returns: string };
 			tenant_allows_login: { Args: { p_tenant: string }; Returns: boolean };
+			tenant_budget_status: {
+				Args: { p_resources: string[]; p_since: string; p_tenant: string };
+				Returns: {
+					daily_limit: number;
+					resource: string;
+					spent: number;
+				}[];
+			};
 			unblock_member: {
 				Args: { p_tenant: string; p_user: string };
 				Returns: undefined;

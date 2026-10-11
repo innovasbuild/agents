@@ -58,24 +58,6 @@ export function defaultTenant(
 	return {
 		config: parseOutreachConfig({
 			timezone: "America/Argentina/Buenos_Aires",
-			// Niveles de ICP por defecto (Task 15): así el fake sirve tal cual para
-			// scoreContact sin que cada test tenga que cargarlos a mano. El test que
-			// necesita el tenant SIN niveles los pisa con `icp: null`.
-			icp: {
-				revision: "2026-09-01",
-				encaje_empresa: [
-					"no encaja: no es el tipo de empresa que buscamos",
-					"podría encajar: comparte algunos rasgos del perfil",
-					"encaja bien: es exactamente el tipo de empresa que buscamos",
-				],
-				rol_decisor: [
-					"sin relación con la decisión ni con el problema",
-					"influye en la decisión o sufre el problema de cerca",
-					"decide o compra directamente la solución",
-				],
-				excluir:
-					"es una competidora directa, un proveedor nuestro, o parte de nuestro propio equipo",
-			},
 		}),
 		values: {
 			segmento: ["mid_market_ar"],

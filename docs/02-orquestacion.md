@@ -128,11 +128,7 @@ Un verificador con modelo va solo donde no hay chequeo en código y sí hay evid
    - la `WorkflowImpl` con el store falso de outreach (`tests/outreach/fake-store.ts`);
    - un caso de punta a punta con el runner real y `tests/workflows/fake-workflow-store.ts`;
    - si toca SQL, su pgTAP y el test de integración (`npm run test:it:workflows`).
-7. **Prendelo para un tenant**, primero sin `--apply` para ver el plan:
-
-   ```bash
-   npm run workflows:set -- --tenant <slug> --workflow <nombre> --enable --cadence 60 --items 5 --budget model_usd=<USD>
-   ```
+7. **Prendelo para un tenant:** se enciende en `/<slug>/settings/outreach` (encendido, cadencia e ítems por pasada). El presupuesto lo fija INNOV.AS en `/plataforma/<slug>`.
 
 8. **Está terminado cuando su primera corrida real aparece en `runs` en producción,** con la cuenta que cierra y el costo escrito.
 
@@ -157,4 +153,4 @@ Invariante con test: `TICK_BUDGET_MS + ITEM_TIMEOUT_MS < 300 000`. En cada tick 
 - **Qué corrió y cuánto costó:** `runs` con `workflow`, los conteos `items_*` y `cost_usd`.
 - **Por qué un sujeto tiene este resultado:** `events`.
 - **Avisos:** el resumen que abre el chat (`lib/outreach/summary.ts`, con `lib/workflows/alerts.ts`) avisa de presupuestos agotados, ítems y pasadas `failed`, pasadas que no cierran la cuenta, y workflows prendidos que no corrieron en 24 h.
-- **Prender, apagar, cambiar cadencia o presupuesto:** `npm run workflows:set`. Cada cambio deja su evento.
+- **Prender, apagar, cambiar cadencia o presupuesto:** el encendido, la cadencia y los ítems se cambian en `/<slug>/settings/outreach`; el presupuesto lo fija INNOV.AS en `/plataforma/<slug>`. Cada cambio deja su evento.

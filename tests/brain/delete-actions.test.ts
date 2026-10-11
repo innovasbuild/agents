@@ -4,6 +4,11 @@ const previewDelete = vi.fn();
 const deletePage = vi.fn();
 const revalidatePath = vi.fn();
 
+const reflectMarcoForTenant = vi.fn();
+vi.mock("@/lib/outreach/marco-reflect", () => ({ reflectMarcoForTenant }));
+vi.mock("@/lib/tenants/resolve", () => ({
+	resolveTenantAccess: async () => ({ id: "t1" }),
+}));
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/lib/brain/adapters/delete-page", () => ({ deleteDeps: () => ({}) }));
 vi.mock("@/lib/brain/core/editor/delete", () => ({
@@ -19,6 +24,12 @@ beforeEach(() => {
 	previewDelete.mockReset();
 	deletePage.mockReset();
 	revalidatePath.mockReset();
+	reflectMarcoForTenant.mockReset();
+	previewDelete.mockResolvedValue({
+		ok: false,
+		code: "not_found",
+		message: "No encontrado.",
+	});
 });
 
 describe("delete actions", () => {
@@ -78,5 +89,67 @@ describe("delete actions", () => {
 			expectedRevision: 3,
 		});
 		expect(revalidatePath).not.toHaveBeenCalled();
+	});
+
+	it("al borrar una página canon:hooks refleja el marco", async () => {
+		previewDelete.mockResolvedValue({
+			ok: true,
+			preview: { canonTags: ["canon:hooks"] },
+		});
+		deletePage.mockResolvedValue({ ok: true, cleaned: 0 });
+		await deleteBrainPage({
+			tenantSlug: "acme",
+			slug: "comercial/hooks",
+			expectedRevision: 3,
+		});
+		expect(reflectMarcoForTenant).toHaveBeenCalledWith("t1");
+	});
+
+	it("no refleja si la página no era canon:hooks, ni si el borrado falló", async () => {
+		previewDelete.mockResolvedValue({
+			ok: true,
+			preview: { canonTags: ["canon:icp"] },
+		});
+		deletePage.mockResolvedValue({ ok: true, cleaned: 0 });
+		await deleteBrainPage({
+			tenantSlug: "acme",
+			slug: "x",
+			expectedRevision: 3,
+		});
+
+		previewDelete.mockResolvedValue({
+			ok: true,
+			preview: { canonTags: ["canon:hooks"] },
+		});
+		deletePage.mockResolvedValue({
+			ok: false,
+			code: "conflict",
+			message: "cambió",
+		});
+		await deleteBrainPage({
+			tenantSlug: "acme",
+			slug: "x",
+			expectedRevision: 3,
+		});
+
+		expect(reflectMarcoForTenant).not.toHaveBeenCalled();
+	});
+
+	it("un reflejo que tira no cambia el resultado del borrado", async () => {
+		previewDelete.mockResolvedValue({
+			ok: true,
+			preview: { canonTags: ["canon:hooks"] },
+		});
+		deletePage.mockResolvedValue({ ok: true, cleaned: 0 });
+		reflectMarcoForTenant.mockRejectedValue(new Error("base caída"));
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await deleteBrainPage({
+				tenantSlug: "acme",
+				slug: "x",
+				expectedRevision: 3,
+			}),
+		).toEqual({ ok: true, cleaned: 0 });
+		log.mockRestore();
 	});
 });

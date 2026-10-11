@@ -6,6 +6,13 @@ import { resolveBrainBinding } from "../brain/core/resolve";
 import type { BrainPage, BrainProvider } from "../brain/core/types";
 import { loadTenantBindings } from "../connectors/bindings";
 import {
+	type BlockPage,
+	type IcpLevels,
+	type Marco,
+	parseIcpBlocks,
+	parseMarcoBlocks,
+} from "./canon-blocks";
+import {
 	emptyGateRules,
 	type GateRules,
 	mergeGateRules,
@@ -54,6 +61,8 @@ async function readTag(
 	});
 	return Promise.all(found.map((summary) => brain.read(summary.slug)));
 }
+
+class TooManyPagesError extends Error {}
 
 const toCanonPage =
 	(tag: string) =>
@@ -146,6 +155,91 @@ export async function loadCanonOrMissing(
 	return canon.available && canon.pages.length > 0
 		? canon
 		: { missing: "sin_canon" };
+}
+
+export const ICP_TAG = "canon:icp";
+export const MARCO_TAG = "canon:hooks";
+
+/** Lo que el outreach lee de un bloque del canon, o por qué no pudo. Nunca
+ * tira: quien llama decide qué hacer con cada motivo (spec 21.3 §3.3). */
+export type CanonLoad<T> =
+	| { ok: true; value: T }
+	| {
+			ok: false;
+			reason: "sin_brain" | "brain_caido" | "falta" | "invalido";
+			errors: string[];
+	  };
+
+// Solo páginas activas (spec O8): la búsqueda del brain devuelve borradores,
+// y una plantilla sin completar no puede calificar ni reflejarse.
+async function activeBlockPages(
+	brain: BrainProvider,
+	tag: string,
+): Promise<BlockPage[]> {
+	// Se pide una de más: si vuelve, hay más páginas que el tope y leer solo
+	// las primeras ocultaría bloques (spec 21.3 §3.3).
+	const found = await brain.search({
+		query: "",
+		tag,
+		limit: MAX_PAGES_PER_TAG + 1,
+	});
+	if (found.length > MAX_PAGES_PER_TAG) throw new TooManyPagesError(tag);
+	const pages = await Promise.all(found.map((s) => brain.read(s.slug)));
+	return pages
+		.filter((page) => page.status === "activo")
+		.map((page) => ({ slug: page.slug, body: page.body }));
+}
+
+async function loadBlocks<T>(
+	brain: BrainProvider | null,
+	tag: string,
+	parse: (pages: BlockPage[]) => {
+		value: T | null;
+		blocks: number;
+		errors: string[];
+	},
+): Promise<CanonLoad<T>> {
+	if (!brain) return { ok: false, reason: "sin_brain", errors: [] };
+	let pages: BlockPage[];
+	try {
+		pages = await activeBlockPages(brain, tag);
+	} catch (error) {
+		if (error instanceof TooManyPagesError) {
+			return {
+				ok: false,
+				reason: "invalido",
+				errors: [
+					`hay más de ${MAX_PAGES_PER_TAG} páginas con el tag ${tag}: es un error de carga, dejá como máximo ${MAX_PAGES_PER_TAG}`,
+				],
+			};
+		}
+		console.error(`canon: no pude leer ${tag}:`, error);
+		return { ok: false, reason: "brain_caido", errors: [] };
+	}
+	const parsed = parse(pages);
+	if (parsed.blocks === 0) return { ok: false, reason: "falta", errors: [] };
+	if (parsed.errors.length > 0 || parsed.value === null) {
+		return { ok: false, reason: "invalido", errors: parsed.errors };
+	}
+	return { ok: true, value: parsed.value };
+}
+
+export function loadIcpLevels(
+	brain: BrainProvider | null,
+): Promise<CanonLoad<IcpLevels>> {
+	return loadBlocks(brain, ICP_TAG, (pages) => {
+		const { icp, blocks, errors } = parseIcpBlocks(pages);
+		return { value: icp, blocks, errors };
+	});
+}
+
+export function loadMarco(
+	brain: BrainProvider | null,
+): Promise<CanonLoad<Marco>> {
+	return loadBlocks(brain, MARCO_TAG, (pages) => {
+		const { hooks, vectores, blocks, errors } = parseMarcoBlocks(pages);
+		return { value: { hooks, vectores }, blocks, errors };
+	});
 }
 
 export async function brainForTenant(

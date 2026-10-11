@@ -20,8 +20,6 @@
 		"db:test": "npx supabase db reset --no-seed && npx supabase test db",
 		"db:types": "npx supabase gen types typescript --local > lib/supabase/database.types.ts.tmp && mv lib/supabase/database.types.ts.tmp lib/supabase/database.types.ts && npx biome check --write lib/supabase/database.types.ts",
 		"brain:import": "node --env-file=.env.local scripts/brain-import.mts",
-		"outreach:config": "node --env-file=.env.local scripts/outreach-config.mts",
-		"workflows:set": "node --env-file=.env.local scripts/workflows-set.mts",
 		"evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts",
 		"jev:probe": "node --env-file=.env.local scripts/jev-probe.mts",
 		"oauth:probe": "node --env-file=.env.local scripts/oauth-probe.mts"

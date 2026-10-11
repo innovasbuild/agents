@@ -25,6 +25,10 @@ const state = vi.hoisted(() => ({
 		{ name: string; service: string } | null | Error
 	>,
 	describeCalls: [] as string[],
+	seed: true as boolean | Error,
+	seedCalls: [] as string[][],
+	brainRows: [{ id: "b1" }] as { id: string }[],
+	brainRowsError: null as { message: string } | null,
 }));
 
 vi.mock("next/cache", () => ({
@@ -42,13 +46,18 @@ vi.mock("@/lib/supabase/admin", () => ({
 			state.rpcCalls.push({ fn, args });
 			return state.rpc;
 		},
-		from: () => ({
-			select: () => ({
-				eq: () => ({
-					maybeSingle: async () => ({ data: state.row, error: state.rowError }),
+		from: (_table: string) => {
+			const chain = {
+				select: () => chain,
+				eq: () => chain,
+				limit: async () => ({
+					data: state.brainRows,
+					error: state.brainRowsError,
 				}),
-			}),
-		}),
+				maybeSingle: async () => ({ data: state.row, error: state.rowError }),
+			};
+			return chain;
+		},
 	}),
 }));
 vi.mock("@/lib/connectors/auth", () => ({
@@ -60,6 +69,13 @@ vi.mock("@/lib/connectors/auth", () => ({
 	},
 }));
 vi.mock("@/lib/connectors/env", () => ({ inVercel: () => state.inVercel }));
+vi.mock("@/lib/outreach/canon-seed", () => ({
+	seedCanonPagesForTenant: async (tenantId: string, userId: string) => {
+		state.seedCalls.push([tenantId, userId]);
+		if (state.seed instanceof Error) throw state.seed;
+		return state.seed;
+	},
+}));
 
 const actions = await import("@/app/plataforma/[slug]/console-actions");
 
@@ -67,6 +83,10 @@ const SIN_PERMISO = { ok: false, message: "No tenés permiso." };
 const GENERICO = { ok: false, message: "No se pudo guardar. Probá de nuevo." };
 
 beforeEach(() => {
+	state.brainRows = [{ id: "b1" }];
+	state.brainRowsError = null;
+	state.seed = true;
+	state.seedCalls = [];
 	state.admin = true;
 	state.rpc = { data: CONN, error: null };
 	state.rpcCalls = [];
@@ -101,6 +121,9 @@ describe("gate común", () => {
 		);
 		expect(await actions.removeConnection("acme", CONN)).toEqual(SIN_PERMISO);
 		expect(await actions.verifyConnection("acme", CONN)).toEqual(SIN_PERMISO);
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual(
+			SIN_PERMISO,
+		);
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 
@@ -134,6 +157,34 @@ describe("gate común", () => {
 });
 
 describe("setAgent", () => {
+	it("no deja habilitar el outreach sin brain habilitado", async () => {
+		state.brainRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({
+			ok: false,
+			message: "Este agente necesita el brain. Creá el brain primero.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("deshabilitar no exige brain", async () => {
+		state.brainRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", false, "none"),
+		).toEqual({ ok: true });
+	});
+
+	it("si no puede leer las conexiones, no habilita", async () => {
+		state.brainRowsError = { message: "caída" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual(GENERICO);
+		expect(state.rpcCalls).toHaveLength(0);
+		log.mockRestore();
+	});
+
 	it("llama platform_set_agent con el actor", async () => {
 		expect(
 			await actions.setAgent("acme", TENANT, "outreach", false, "none"),
@@ -425,5 +476,125 @@ describe("setConnectionEnabled, removeConnection, verifyConnection", () => {
 			message: "Este conector no tiene identificador que verificar.",
 		});
 		expect(state.describeCalls).toHaveLength(0);
+	});
+});
+
+describe("createBrain: páginas por defecto", () => {
+	it("después de crear el brain siembra las páginas con el actor", async () => {
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toEqual([[TENANT, "u1"]]);
+	});
+
+	it("si crear el brain falla, no siembra", async () => {
+		state.rpc = {
+			data: null,
+			error: {
+				code: "23514",
+				message: "la empresa ya tiene un brain",
+				hint: "consola",
+			},
+		};
+		await actions.createBrain("acme", TENANT);
+		expect(state.seedCalls).toEqual([]);
+	});
+
+	it("si la siembra falla, avisa que el brain quedó creado", async () => {
+		state.seed = false;
+		expect(await actions.createBrain("acme", TENANT)).toEqual({
+			ok: false,
+			message:
+				"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+		expect(state.revalidated).toEqual(["/plataforma", "/plataforma/acme"]);
+	});
+});
+
+describe("setBudget", () => {
+	it("llama platform_set_budget con el actor y el número", async () => {
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2.5")).toEqual(
+			{
+				ok: true,
+			},
+		);
+		expect(state.rpcCalls).toEqual([
+			{
+				fn: "platform_set_budget",
+				args: {
+					p_actor: "u1",
+					p_tenant: TENANT,
+					p_resource: "model_usd",
+					p_daily_limit: 2.5,
+				},
+			},
+		]);
+	});
+
+	it("un recurso que ningún workflow usa no llega a la base", async () => {
+		expect(await actions.setBudget("acme", TENANT, "inventado", "2")).toEqual({
+			ok: false,
+			message: "Ese recurso no existe.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("un id de empresa inválido no llega a la base", async () => {
+		expect(await actions.setBudget("acme", "x", "model_usd", "2")).toEqual({
+			ok: false,
+			message: "No se pudo procesar el pedido.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it.each(["", "  ", "2,5", "abc", "-1", "100001", "1e3", "NaN"])(
+		"límite %j: se rechaza con un mensaje",
+		async (raw) => {
+			expect(await actions.setBudget("acme", TENANT, "model_usd", raw)).toEqual(
+				{
+					ok: false,
+					message:
+						"El límite diario es un número entre 0 y 100000, con punto decimal.",
+				},
+			);
+			expect(state.rpcCalls).toHaveLength(0);
+		},
+	);
+
+	it("0 es un límite válido: apaga el gasto", async () => {
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "0")).toEqual({
+			ok: true,
+		});
+		expect(state.rpcCalls[0].args.p_daily_limit).toBe(0);
+	});
+
+	it.each([
+		["P0001", "falta el actor", "No se pudo identificar quién hace el cambio."],
+		["23503", "violates foreign key", "Esa empresa no existe."],
+		["23514", "el límite diario va de 0 a 100000", "El valor no es válido."],
+	])(
+		"error crudo %s de la base se traduce",
+		async (code, message, expected) => {
+			state.rpc = { data: null, error: { code, message } };
+			expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual(
+				{
+					ok: false,
+					message: expected,
+				},
+			);
+		},
+	);
+
+	it("un error con hint consola se muestra tal cual", async () => {
+		state.rpc = {
+			data: null,
+			error: {
+				code: "23514",
+				message: "ese recurso no existe",
+				hint: "consola",
+			},
+		};
+		expect(await actions.setBudget("acme", TENANT, "model_usd", "2")).toEqual({
+			ok: false,
+			message: "ese recurso no existe",
+		});
 	});
 });

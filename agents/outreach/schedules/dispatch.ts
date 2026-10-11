@@ -13,8 +13,13 @@ import { defineSchedule } from "eve/schedules";
 import { apiKeyValues } from "../../../lib/connectors/auth";
 import { loadTenantBindings } from "../../../lib/connectors/bindings";
 import { createApolloAdapter } from "../../../lib/connectors/leads/apollo-adapter";
-import { brainForTenant, loadCanon } from "../../../lib/outreach/canon";
+import {
+	brainForTenant,
+	loadCanon,
+	loadIcpLevels,
+} from "../../../lib/outreach/canon";
 import { isFichaVigente } from "../../../lib/outreach/ficha";
+import { createIcpCache } from "../../../lib/outreach/icp-cache";
 import { refuse } from "../../../lib/outreach/result";
 import { draftMessage } from "../../../lib/outreach/services/draft";
 import { runEvaluation } from "../../../lib/outreach/services/evaluate";
@@ -110,11 +115,16 @@ export default defineSchedule({
 			);
 		};
 
+		const loadIcpOnce = createIcpCache((tenantId) =>
+			brainForTenant(tenantId).then(loadIcpLevels),
+		);
+
 		const icpScore: IcpScoreNode = ({ tenantId, runId, workflow, contactId }) =>
 			scoreContact(
 				{ tenantId, contactId },
 				{
 					store: outreach,
+					loadIcp: (id) => loadIcpOnce(id, runId),
 					now: () => new Date(),
 					evaluate: metered(
 						(args: Parameters<typeof runEvaluation>[0]) =>
@@ -192,8 +202,7 @@ export default defineSchedule({
 		// runner nunca corre dos pasadas ni dos ítems a la vez, así que esta
 		// variable, fijada al entrar a runItem, ya está resuelta cuando esas
 		// funciones la leen.
-		let contactEnrichmentCtx: { tenantId: string; runId: string } | null =
-			null;
+		let contactEnrichmentCtx: { tenantId: string; runId: string } | null = null;
 
 		const contactEnrichmentImpl = createContactEnrichmentWorkflow({
 			async reveal(contactId) {
