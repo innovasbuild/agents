@@ -56,8 +56,8 @@ describe("createTenantSchema", () => {
 		expect(readCreateForm(data)).toMatchObject({ agents: ["outreach"] });
 	});
 
-	it("sin agentes no se crea", () => {
-		expect(message({ agents: [] })).toBe("Elegí al menos un agente.");
+	it("sin agentes también se crea", () => {
+		expect(message({ agents: [] })).toBeNull();
 	});
 
 	it("un agente que no está en el catálogo no se acepta", () => {

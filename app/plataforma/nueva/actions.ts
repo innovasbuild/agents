@@ -110,7 +110,7 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 				invitedBy: admin.userId,
 				allowExternal: input.allowExternalAdmin,
 				origin: originFrom(await headers()),
-				next: `/${input.slug}/chat`,
+				next: `/${input.slug}`,
 			});
 			if (outcome.kind !== "ok" && outcome.kind !== "ya_existe")
 				warnings.push(INVITE_WARNING);
