@@ -167,9 +167,11 @@ su propio repo.
   editor web, que tiene que escribir borradores.
 - Los archivos se sirven siempre por `app/[tenant]/brain/skills/files/route.ts`,
   como texto plano o como descarga, nunca con un tipo que el navegador ejecute
-  (`core/skills/http.ts`). El `POST` verifica el origen a mano (un route handler
-  no trae el chequeo de las server actions) y autoriza en orden antes de leer el
-  cuerpo: origen, `Content-Length`, miembro del tenant y editor sobre ese slug.
+  (`core/skills/http.ts`). El `POST` verifica el origen a mano (un route
+  handler no trae el chequeo de las server actions) y autoriza en orden: origen, `Content-Length` y miembro del
+  tenant se chequean antes de leer el cuerpo; después viene el parseo del
+  formulario (acotado por el tope de tamaño), el chequeo de editor sobre ese
+  slug y recién entonces se descomprime o se escribe algo.
 - El zip se lee en `adapters/skill-zip.ts`, que recorre el directorio central
   a mano e infla con `node:zlib` (`fflate` es solo devDependency de los tests).
   Antes de descomprimir descarta carpetas, `__MACOSX/` y `.DS_Store`, y
