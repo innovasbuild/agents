@@ -21,6 +21,8 @@ import {
 	CANON_TAGS,
 	SLUG_PATTERN,
 } from "@/lib/brain/core/types";
+import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
+import { agentsNeedCanon } from "@/lib/tenants/readiness";
 
 export default async function BrainIndexPage({
 	params,
@@ -111,6 +113,13 @@ export default async function BrainIndexPage({
 		return `/${slug}/brain${qs ? `?${qs}` : ""}`;
 	};
 
+	// Los tags de canon son de outreach: sin un agente que los use no se ofrecen.
+	// Si no se pudo leer, se muestran como antes.
+	const enabledAgents = await loadEnabledAgents(ctx.tenant.id);
+	const showCanon =
+		enabledAgents === null ||
+		agentsNeedCanon(enabledAgents.map((agent) => ({ agent })));
+
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center gap-3">
@@ -157,17 +166,19 @@ export default async function BrainIndexPage({
 					Buscar
 				</Button>
 			</form>
-			<div className="flex flex-wrap gap-2 text-sm">
-				{CANON_TAGS.map((t) => (
-					<Link
-						key={t}
-						href={href({ tag: tag === t ? undefined : t })}
-						className={`rounded-full border px-3 py-1 ${tag === t ? "bg-primary text-primary-foreground" : ""}`}
-					>
-						{t}
-					</Link>
-				))}
-			</div>
+			{showCanon ? (
+				<div className="flex flex-wrap gap-2 text-sm">
+					{CANON_TAGS.map((t) => (
+						<Link
+							key={t}
+							href={href({ tag: tag === t ? undefined : t })}
+							className={`rounded-full border px-3 py-1 ${tag === t ? "bg-primary text-primary-foreground" : ""}`}
+						>
+							{t}
+						</Link>
+					))}
+				</div>
+			) : null}
 			{folders.length > 0 && (
 				<ul className="divide-y rounded-lg border">
 					{folders.map((node) => (

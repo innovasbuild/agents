@@ -3,6 +3,8 @@
 // por proceso: así la caché de JWKS de supabaseClaimsVerifier() sobrevive
 // entre requests en vez de reconstruirse en cada llamada.
 import { createUnauthorizedResponse } from "eve/channels/auth";
+import { createAdminClient } from "../../supabase/admin";
+import { agentsNeedCanon } from "../../tenants/readiness";
 import type { BrainMcpDeps } from "../core/mcp-server/handler.ts";
 import { accessRulesStore } from "./access-rules.ts";
 import {
@@ -55,6 +57,25 @@ export function productionDeps(): BrainMcpDeps {
 		...publicSettings(),
 		...sharedDeps(),
 		provider: getBrainProvider,
+		usesCanon: async (tenantId) => {
+			// Si no se puede leer, las descripciones de siempre (con canon): una
+			// empresa con outreach no pierde la guía por una lectura caída.
+			try {
+				const { data, error } = await createAdminClient()
+					.from("tenant_agents")
+					.select("agent")
+					.eq("tenant_id", tenantId)
+					.eq("enabled", true);
+				if (error) {
+					console.error("brain mcp: no pude leer los agentes:", error.message);
+					return true;
+				}
+				return agentsNeedCanon(data ?? []);
+			} catch (error) {
+				console.error("brain mcp: no pude leer los agentes:", error);
+				return true;
+			}
+		},
 		unauthorized: createUnauthorizedResponse,
 	};
 }

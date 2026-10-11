@@ -15,6 +15,7 @@ import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
 import { seedCanonPagesForTenant } from "@/lib/outreach/canon-seed";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
+import { agentsNeedCanon } from "@/lib/tenants/readiness";
 import { budgetResources } from "@/lib/workflows/settings";
 
 export type ConsoleResult = { ok: true } | { ok: false; message: string };
@@ -84,6 +85,30 @@ async function call(
 	return done(slug, error ? fromDbError(error, byCode) : { ok: true });
 }
 
+const SIN_CANON: ConsoleResult = {
+	ok: false,
+	message:
+		"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+};
+
+/**
+ * Si algún agente habilitado de la empresa usa el canon del brain. Si no se
+ * puede leer, se asume que sí: es lo que pasaba antes de la 21.4, y una página
+ * que ya está no se pisa.
+ */
+async function tenantUsesCanon(tenantId: string): Promise<boolean> {
+	const { data, error } = await createAdminClient()
+		.from("tenant_agents")
+		.select("agent")
+		.eq("tenant_id", tenantId)
+		.eq("enabled", true);
+	if (error) {
+		console.error("consola: no pude leer los agentes:", error.message);
+		return true;
+	}
+	return agentsNeedCanon(data ?? []);
+}
+
 export async function setAgent(
 	slug: string,
 	tenantId: string,
@@ -119,13 +144,21 @@ export async function setAgent(
 		}
 	}
 
-	return call(slug, "platform_set_agent", {
+	const saved = await call(slug, "platform_set_agent", {
 		p_actor: admin.userId,
 		p_tenant: tenantId,
 		p_agent: agent,
 		p_enabled: enabled === true,
 		p_brain: brain,
 	});
+	// Las páginas del canon nacen cuando hay un agente que las usa, no con el
+	// brain (spec 21.4 §4.1). El brain ya existe: se verificó arriba. Una página
+	// que ya está no se pisa.
+	if (saved.ok && enabled === true && AGENT_CATALOG[agent].requiresBrain) {
+		const seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
+		if (!seeded) return SIN_CANON;
+	}
+	return saved;
 }
 
 export async function createBrain(
@@ -146,6 +179,8 @@ export async function createBrain(
 		p_verified_name: null,
 	});
 	if (!created.ok) return created;
+	// Sin un agente que use el canon, el brain nace vacío (spec 21.4 §4.1).
+	if (!(await tenantUsesCanon(tenantId))) return created;
 	// Carpeta y archivo por defecto para el ICP y los hooks (spec 21.3 §3.6).
 	const seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
 	return seeded
