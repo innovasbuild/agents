@@ -11,7 +11,9 @@ vi.mock("@/app/(auth)/login/actions", () => ({
 	completeLogin: async () => ({ ok: false, message: "" }),
 }));
 
-const { LoginForm } = await import("@/app/(auth)/login/login-form");
+const { LoginForm, RESEND_COOLDOWN_SECONDS, ResendCodeButton } = await import(
+	"@/app/(auth)/login/login-form"
+);
 
 const render = (methods: ("email" | "google" | "microsoft")[]) =>
 	renderToStaticMarkup(createElement(LoginForm, { methods, next: null }));
@@ -67,5 +69,33 @@ describe("LoginForm", () => {
 
 	it("sin Microsoft en los métodos, el botón no aparece", () => {
 		expect(render(["email", "google"])).not.toContain("Entrar con Microsoft");
+	});
+});
+
+describe("ResendCodeButton", () => {
+	const button = (props: { sending: boolean; secondsLeft: number }) =>
+		renderToStaticMarkup(
+			createElement(ResendCodeButton, { ...props, onClick: () => {} }),
+		);
+
+	it("mientras sale el pedido está deshabilitado", () => {
+		const html = button({ sending: true, secondsLeft: 0 });
+		expect(html).toContain('disabled=""');
+	});
+
+	it("después de mandar, espera y muestra cuánto falta", () => {
+		const html = button({ sending: false, secondsLeft: 42 });
+		expect(html).toContain('disabled=""');
+		expect(html).toContain("42 s");
+	});
+
+	it("pasada la espera se puede volver a pedir", () => {
+		const html = button({ sending: false, secondsLeft: 0 });
+		expect(html).not.toContain('disabled=""');
+		expect(html).toContain("Mandar otro");
+	});
+
+	it("la espera es de un minuto", () => {
+		expect(RESEND_COOLDOWN_SECONDS).toBe(60);
 	});
 });

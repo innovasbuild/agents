@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EMAIL_CODE_ERROR, verifyEmailCode } from "@/lib/auth/email-code";
@@ -13,6 +13,38 @@ import { canSignUpByDomain, completeLogin } from "./actions";
 function callbackUrl(next: string | null): string {
 	const base = `${window.location.origin}/auth/callback`;
 	return next ? `${base}?next=${encodeURIComponent(next)}` : base;
+}
+
+/** Cuánto espera "Mandar otro" después de un envío. */
+export const RESEND_COOLDOWN_SECONDS = 60;
+
+/**
+ * "Mandar otro": deshabilitado mientras sale el pedido y durante la espera
+ * posterior, para no gastar el límite de envíos de Supabase con dos clics.
+ */
+export function ResendCodeButton({
+	sending,
+	secondsLeft,
+	onClick,
+}: {
+	sending: boolean;
+	secondsLeft: number;
+	onClick: (event: React.SyntheticEvent) => void;
+}) {
+	return (
+		<button
+			className="underline underline-offset-4 disabled:text-muted-foreground disabled:no-underline"
+			disabled={sending || secondsLeft > 0}
+			onClick={onClick}
+			type="button"
+		>
+			{sending
+				? "Mandando..."
+				: secondsLeft > 0
+					? `Mandar otro en ${secondsLeft} s`
+					: "Mandar otro"}
+		</button>
+	);
 }
 
 /**
@@ -33,6 +65,14 @@ export function LoginForm({
 	const [code, setCode] = useState("");
 	const [codeError, setCodeError] = useState<string | null>(null);
 	const [checking, setChecking] = useState(false);
+	const [sending, setSending] = useState(false);
+	const [secondsLeft, setSecondsLeft] = useState(0);
+
+	useEffect(() => {
+		if (secondsLeft <= 0) return;
+		const timer = setTimeout(() => setSecondsLeft((left) => left - 1), 1000);
+		return () => clearTimeout(timer);
+	}, [secondsLeft]);
 
 	// Microsoft primero: es el método de quien llega con cuenta corporativa.
 	const oauthMethods = (["microsoft", "google"] as const).filter((method) =>
@@ -50,16 +90,24 @@ export function LoginForm({
 
 	async function pedirCodigo(event: React.SyntheticEvent) {
 		event.preventDefault();
-		await requestMagicLink({
-			email,
-			redirectTo: callbackUrl(next),
-			canSignUpByDomain,
-			signInWithOtp: (args) => supabase.auth.signInWithOtp(args),
-		});
-		// El mensaje es el mismo con o sin acceso: no confirmamos quién tiene cuenta.
+		if (sending) return;
+		setSending(true);
+		try {
+			await requestMagicLink({
+				email,
+				redirectTo: callbackUrl(next),
+				canSignUpByDomain,
+				signInWithOtp: (args) => supabase.auth.signInWithOtp(args),
+			});
+		} finally {
+			setSending(false);
+		}
+		// El código tipeado se borra recién cuando salió el pedido nuevo. El
+		// mensaje es el mismo con o sin acceso: no confirmamos quién tiene cuenta.
 		setSent(true);
 		setCode("");
 		setCodeError(null);
+		setSecondsLeft(RESEND_COOLDOWN_SECONDS);
 	}
 
 	async function entrarConCodigo(event: React.FormEvent) {
@@ -128,6 +176,7 @@ export function LoginForm({
 					/>
 					<Button
 						className="w-full"
+						disabled={sending}
 						type="submit"
 						variant={oauthMethods.length > 0 ? "outline" : "default"}
 					>
@@ -139,8 +188,8 @@ export function LoginForm({
 			{showEmail && sent ? (
 				<form className="space-y-3" onSubmit={entrarConCodigo}>
 					<p className="text-muted-foreground text-sm" role="status">
-						Si {email} tiene acceso, le llega un correo con un código de 6
-						dígitos y un link. Usá cualquiera de los dos.
+						Si {email} tiene acceso, le llega un correo con un código y un link.
+						Usá cualquiera de los dos.
 					</p>
 					<label className="block text-sm" htmlFor="code">
 						Código
@@ -149,7 +198,7 @@ export function LoginForm({
 						autoComplete="one-time-code"
 						id="code"
 						inputMode="numeric"
-						maxLength={7}
+						maxLength={11}
 						onChange={(event) => setCode(event.target.value)}
 						placeholder="123456"
 						required
@@ -164,13 +213,11 @@ export function LoginForm({
 						Entrar
 					</Button>
 					<div className="flex justify-between text-sm">
-						<button
-							className="underline underline-offset-4"
+						<ResendCodeButton
 							onClick={pedirCodigo}
-							type="button"
-						>
-							Mandar otro
-						</button>
+							secondsLeft={secondsLeft}
+							sending={sending}
+						/>
 						<button
 							className="underline underline-offset-4"
 							onClick={() => setSent(false)}

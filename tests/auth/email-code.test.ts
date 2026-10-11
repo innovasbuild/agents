@@ -29,9 +29,23 @@ describe("verifyEmailCode (navegador)", () => {
 		]);
 	});
 
-	it("un código que no son 6 dígitos no llega a Supabase", async () => {
+	it("acepta códigos de 6 a 10 dígitos: el largo es un ajuste del proyecto", async () => {
 		const v = verifier(OK);
-		for (const code of ["12345", "abcdef", "1234567"]) {
+		for (const code of ["123456", "12345678", "1234 567 890"]) {
+			expect(
+				await verifyEmailCode({
+					email: "ana@acme.com",
+					code,
+					verifyOtp: v.verifyOtp,
+				}),
+			).toBe(true);
+		}
+		expect(v.calls).toHaveLength(3);
+	});
+
+	it("un código que no son de 6 a 10 dígitos no llega a Supabase", async () => {
+		const v = verifier(OK);
+		for (const code of ["12345", "abcdef", "12345678901", "12345a"]) {
 			expect(
 				await verifyEmailCode({
 					email: "ana@acme.com",
