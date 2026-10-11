@@ -89,6 +89,7 @@ Solo de inserción: `revoke update, delete, truncate`. Cada fila es un acto.
 | `page_revision` | integer | revisión de la página que se congeló |
 | `title`, `description`, `body`, `frontmatter` | | copia del texto; vacíos en `retirar` |
 | `manifest` | jsonb | `[{ path, sha256, size }]`, ordenado por `path` |
+| `files_digest` | text | hash de los archivos al publicar; se compara con el del borrador para saber si hay cambios |
 | `digest` | text | hash del paquete (§5.4) |
 | `note` | text | nota obligatoria |
 | `republished_from` | integer | versión de origen, si es una republicación |
@@ -107,11 +108,13 @@ Todas `security invoker`, `search_path = ''`, ejecutables solo por `service_role
 
 - **`brain_skill_put_file(tenant, page, path, sha256, size, actor)`**: bloquea la fila de la página (`for update`), verifica que sea categoría `skill`, inserta o reemplaza por `path`, y rechaza si el paquete pasa de 50 archivos o 20 MB. Evento `brain.skill_file_added`.
 - **`brain_skill_remove_file(tenant, page, path, actor)`**: bloquea la página y borra la fila. Evento `brain.skill_file_removed`. Quitar lo que no está no deja evento.
-- **`brain_publish_skill(tenant, page, expected_revision, expected_files_digest, snapshot, note, actor, republished_from)`**: bloquea la página; rechaza con conflicto (`BR409`) si la revisión o el hash de archivos no coinciden con lo esperado; toma un `pg_advisory_xact_lock` por `(tenant, name)` y rechaza si otra página tiene ese nombre vigente; inserta la fila con `version = última + 1`. Evento `brain.skill_published` con `version`, `digest`, `republished_from` y los autores de las revisiones desde la publicación anterior.
+- **`brain_publish_skill(tenant, page, expected_revision, expected_files_digest, note, actor, from_version)`**: bloquea la página; rechaza con conflicto (`BR409`) si la revisión o el hash de archivos no coinciden con lo esperado; **arma la copia ella misma** desde la fila bloqueada y los archivos (el servidor de aplicación no le pasa contenido); con `from_version` copia esa versión en vez del borrador; toma un `pg_advisory_xact_lock` por `(tenant, name)` y rechaza si otra página tiene ese nombre vigente; inserta la fila con `version = última + 1`. Evento `brain.skill_published` con `version`, `digest`, `republished_from` y los autores de las revisiones desde la publicación anterior.
 - **`brain_withdraw_skill(tenant, page, note, actor)`**: inserta la fila `retirar`. Evento `brain.skill_withdrawn`. Retirar algo ya retirado no hace nada.
 - **`brain_delete_page`** (se modifica): rechaza si la última fila de la página en `brain_skill_versions` es `publicar`.
 
-El hash de archivos es `sha256` de las líneas `path:sha256` ordenadas por `path`; se calcula igual en SQL y en TypeScript.
+- **`brain_skill_overview(tenant)`**: una fila por página de categoría `skill` con su revisión, el hash de archivos del borrador y su último acto. Es la única lectura que necesitan los estados, el árbol y la vista del lector.
+
+El hash de archivos es `sha256` de las líneas `path:sha256` ordenadas por `path`. Lo calcula solo la base (`brain_skill_files_digest`); la aplicación lo lee, nunca lo recalcula.
 
 ## 5. El paquete
 
@@ -138,16 +141,16 @@ Patrón: tramos de `[A-Za-z0-9._-]`, separados por `/`, hasta 200 caracteres y 6
 
 Un texto de más de 500 líneas avisa al publicar y no frena.
 
-### 5.4 `SKILL.md` y hash del paquete
+### 5.4 Hash del paquete
 
-`renderSkillMd(snapshot)` arma el archivo que la 24.2 va a servir: frontmatter con `name`, `description` y los opcionales, más el cuerpo tal cual. El `digest` es `sha256` de ese texto seguido del hash de archivos. El mismo contenido da el mismo hash sin importar el orden de carga.
+El `digest` lo calcula la función de publicar: `sha256` de nombre, descripción, hash del cuerpo, `compatibility`, `license` y hash de archivos, una por línea. El mismo contenido da el mismo hash sin importar el orden de carga. Armar el archivo `SKILL.md` a partir de la copia (frontmatter más cuerpo) es de la 24.2, que es la que lo sirve.
 
 Los wikilinks del cuerpo se publican como están. La página enlazada se lee viva, con los permisos de quien la lea: cambiar `[[marca/paleta]]` cambia lo que el asistente encuentra sin pasar por la revisión de la skill. Es deliberado: ese contenido lo gobiernan los permisos del brain.
 
 ## 6. Carga de archivos
 
 - **Sueltos.** Panel "Archivos" en la página: subir a una ruta, reemplazar, quitar.
-- **Importar zip.** Un paquete estándar entero: `SKILL.md` llena título, descripción y cuerpo del borrador (una revisión nueva, con motivo `Importación de paquete`), y el resto reemplaza los archivos. Admite el zip con o sin carpeta raíz. Una sola ruta inválida, un archivo fuera de límite o la falta de `SKILL.md` rechazan el zip entero, sin cambios. **Nunca publica.**
+- **Importar zip.** Un paquete estándar entero: `SKILL.md` llena la descripción, `compatibility`, `license` y el cuerpo del borrador (una revisión nueva, con motivo `Importación de paquete`; el título de la página no cambia), y el resto reemplaza los archivos. Se importa sobre una página de skill que ya existe. Admite el zip con o sin carpeta raíz. Una sola ruta inválida, un archivo fuera de límite o la falta de `SKILL.md` rechazan el zip entero, sin cambios. **Nunca publica.**
 
 Sin editor de código en el navegador: los archivos de texto se ven en modo lectura; para cambiarlos se vuelven a subir.
 
@@ -208,7 +211,7 @@ Agregar `skill` a las categorías de su brain desde la consola de plataforma. Si
 
 ## 9. Código
 
-- **`lib/brain/core/skills/`** (puro, respeta `tests/brain/boundary.test.ts`): `package.ts` (rutas, límites, validaciones), `render.ts` (`renderSkillMd`, hashes), `state.ts` (estados), `publish.ts` (`previewPublish`, `publishSkill`, `republish`, `withdraw`: exigen administrador y arman la copia), `view.ts` (qué ve cada nivel), `without-skills.ts` (el envoltorio), `store.ts` (RPC a las funciones SQL, como `delete-store.ts`).
+- **`lib/brain/core/skills/`** (puro, respeta `tests/brain/boundary.test.ts`): `package.ts` (rutas, límites, validaciones), `state.ts` (estados), `publish.ts` (`previewPublish`, `publishSkill`, `republishSkill`, `withdrawSkill`: exigen administrador), `files.ts` (subir, quitar, leer e importar), `view.ts` (`withoutSkills` para los asistentes y `withSkillView` para la web), `store.ts` (RPC a las funciones SQL, como `delete-store.ts`).
 - **`lib/brain/adapters/skills.ts`**: cliente admin, Storage y lectura del zip. El zip va en `adapters` porque necesita una dependencia nueva que `core` no puede importar; cuál, lo decide el plan.
 - **`app/[tenant]/brain/skill-actions.ts`**: server actions de publicar, republicar, retirar y quitar archivo. **`app/[tenant]/brain/skills/files/route.ts`**: subida e importación.
 - **`components/brain/skills/`**: panel de archivos, estado, revisión, historial de versiones, vista publicada.
@@ -219,9 +222,9 @@ No hay nodo nuevo ni tool nueva: nada que registrar en `lib/workflows/registry.t
 
 ## 10. Pruebas
 
-**pgTAP** (`supabase/tests/`): aislamiento entre empresas en las dos tablas; nada para `anon` ni `authenticated`; `brain_skill_versions` sin `update` ni `delete`; `brain_publish_skill` numera, rechaza revisión o hash viejos, exige nombre único y deja su evento; topes de archivos y tamaño bajo carrera; `brain_delete_page` rechaza con versión vigente y deja las versiones al borrar una retirada; bucket sin acceso directo.
+**pgTAP** (`supabase/tests/`): aislamiento entre empresas en las dos tablas; nada para `anon` ni `authenticated`; `brain_skill_versions` sin `update` ni `delete`; `brain_publish_skill` numera, rechaza revisión o hash viejos, exige nombre único y deja su evento; el hash de archivos no depende del orden de carga; topes de archivos y tamaño bajo carrera; `brain_delete_page` rechaza con versión vigente y deja las versiones al borrar una retirada; bucket sin acceso directo.
 
-**vitest** (`tests/brain/`): rutas válidas e inválidas; importación de zip (ruta que se sale, límites, sin `SKILL.md`, con y sin carpeta raíz); hash estable ante el orden; `renderSkillMd`; estados; quién publica (administrador sí, editor no); qué ve cada nivel; `withoutSkills` sobre las cinco operaciones; `brainContract` sin `skill`; invariante de S3; conflicto al publicar con borrador cambiado; republicar y retirar.
+**vitest** (`tests/brain/`): rutas válidas e inválidas; importación de zip (ruta que se sale, límites, sin `SKILL.md`, con y sin carpeta raíz); estados; quién publica (administrador sí, editor no); qué ve cada nivel; `withoutSkills` sobre las cinco operaciones; `brainContract` sin `skill`; invariante de S3; conflicto al publicar con borrador cambiado; republicar y retirar.
 
 **Navegador** (`/qa`, base local): un editor arma el borrador e importa un zip; un administrador revisa y publica; un lector ve solo lo publicado; el editor cambia y el lector no lo ve; republicar una versión anterior; retirar.
 
