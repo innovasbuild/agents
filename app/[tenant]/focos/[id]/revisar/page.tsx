@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import type { ContactIcp } from "@/lib/outreach/store";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { RevisarClient } from "./revisar-client";
 
@@ -18,8 +19,8 @@ function ErrorCard() {
 		<Card className="p-6">
 			<h1 className="font-semibold text-lg tracking-display">Revisar</h1>
 			<p className="mt-2 text-destructive text-sm">
-				No se pudo leer los contactos para revisar. Recargá la página; si
-				sigue igual, algo anda mal con la base.
+				No se pudo leer los contactos para revisar. Recargá la página; si sigue
+				igual, algo anda mal con la base.
 			</p>
 		</Card>
 	);
@@ -35,6 +36,7 @@ export default async function RevisarPage({
 	// 404 y no 403: mismo criterio que /focos (un 403 le confirma a cualquiera
 	// que el foco existe).
 	if (!tenant) notFound();
+	await requireAgent(tenant.id, "outreach");
 
 	const supabase = await createServerSupabase();
 

@@ -194,7 +194,7 @@ export default async function TenantDetailPage({
 					<h1 className="text-3xl leading-tight">{tenant.display_name}</h1>
 					{tenant.active ? (
 						<Link
-							href={`/${tenant.slug}/chat`}
+							href={`/${tenant.slug}`}
 							className="inline-flex min-h-11 items-center text-sm underline underline-offset-4"
 						>
 							Abrir

@@ -36,7 +36,7 @@ export default async function HomePage() {
 	);
 
 	if (tenants.length === 0) redirect("/sin-acceso");
-	if (tenants.length === 1) redirect(`/${tenants[0].slug}/chat`);
+	if (tenants.length === 1) redirect(`/${tenants[0].slug}`);
 
 	return (
 		<main className="mx-auto w-full max-w-lg px-4 py-16">
@@ -46,7 +46,7 @@ export default async function HomePage() {
 					<li key={tenant.slug}>
 						<Link
 							className="block rounded-lg border bg-card px-4 py-3 transition-colors hover:border-input hover:bg-muted"
-							href={`/${tenant.slug}/chat`}
+							href={`/${tenant.slug}`}
 						>
 							{tenant.display_name}
 						</Link>

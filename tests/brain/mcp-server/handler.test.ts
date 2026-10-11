@@ -57,6 +57,7 @@ const store: AccessStore = {
 			: [{ tenantId: "tenant-a", role: "tenant_member" }],
 	brainBinding: async () => binding,
 	platformOwnerTenantId: async () => null,
+	allowsLogin: async () => true,
 };
 
 function deps(
@@ -69,6 +70,7 @@ function deps(
 		rules: { load: async () => [] },
 		hit: async () => ({ allowed: true, retryAfterSeconds: 0 }),
 		provider: () => providerInstance,
+		usesCanon: async () => false,
 		publicUrl: "https://agents.test",
 		issuer: "https://ref.supabase.co/auth/v1",
 		unauthorized: createUnauthorizedResponse,
@@ -100,6 +102,32 @@ describe("handleBrainMcp", () => {
 		expect(
 			(await admin.listTools()).tools.map((tool) => tool.name).sort(),
 		).toEqual(["brain_read", "brain_search", "brain_upsert"]);
+	});
+
+	it("las descripciones nombran el canon solo si la empresa lo usa", async () => {
+		const asked: string[] = [];
+		const neutral = await connect(
+			"ana",
+			deps({
+				usesCanon: async (tenantId) => {
+					asked.push(tenantId);
+					return false;
+				},
+			}),
+		);
+		const neutralTools = (await neutral.listTools()).tools;
+		expect(asked).toContain("tenant-a");
+		expect(
+			neutralTools.find((t) => t.name === "brain_upsert")?.description,
+		).not.toContain("Tags de canon");
+		const withCanon = await connect(
+			"ana",
+			deps({ usesCanon: async () => true }),
+		);
+		expect(
+			(await withCanon.listTools()).tools.find((t) => t.name === "brain_upsert")
+				?.description,
+		).toContain("Tags de canon");
 	});
 
 	it("busca y lee con el resultado del contrato", async () => {

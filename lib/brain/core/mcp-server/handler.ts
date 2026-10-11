@@ -32,6 +32,8 @@ export interface BrainMcpDeps {
 	rules: AccessRulesStore;
 	hit: HitFn;
 	provider: (binding: BrainBinding) => BrainProvider;
+	/** Si la empresa tiene un agente que usa el canon comercial del brain. */
+	usesCanon: (tenantId: string) => Promise<boolean>;
 	publicUrl: string;
 	issuer: string;
 	unauthorized: (options: UnauthorizedOptions) => Response;
@@ -148,6 +150,7 @@ async function handleBrainMcpInner(
 	const server = buildBrainMcpServer({
 		userId: access.userId,
 		categories: assistantCategories(access.binding.config.categories),
+		canon: await deps.usesCanon(access.tenantId),
 		provider,
 		limiter: createRateLimiter({
 			tenantId: access.tenantId,

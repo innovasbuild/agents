@@ -20,7 +20,12 @@ Configuración → Conectores → Agregar conector personalizado. Pegá la URL d
 
 ## Codex
 
-Codex: no probado todavía.
+Corré estos dos comandos en tu terminal:
+
+    codex mcp add brain-<cliente> --url https://agentes.innov.as/brain/<cliente>/mcp
+    codex mcp login brain-<cliente>
+
+Se abre el navegador, entrás con tu cuenta y aprobás el acceso. Probado.
 
 ## Qué podés hacer
 
@@ -37,5 +42,6 @@ Hay un límite de 60 lecturas y 10 escrituras por minuto por persona. Si lo pas�
 ## Si algo falla
 
 - **403**: ese cliente no existe o tu cuenta no tiene acceso. Revisá el slug de la URL; si está bien, pedile a un administrador que te invite.
+- **403 "Tu empresa no permite entrar con ese método"**: la empresa restringió con qué métodos se entra (link, código, Google). Entrá a la plataforma con uno permitido y volvé a conectar.
 - **404**: el cliente no tiene brain configurado.
 - **No se abre el login**: revisá que la URL termine en `/mcp` y que estés usando la de tu cliente.

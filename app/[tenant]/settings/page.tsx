@@ -118,6 +118,12 @@ export default async function SettingsPage({
 	const outreachEnabled = (agentsResult.data ?? []).some(
 		(row) => row.agent === "outreach" && row.enabled === true,
 	);
+	// Sin agentes no hay modelo, ejecutores, aprobaciones ni conectores que
+	// configurar: quedan Ingreso y Usuarios (spec 21.4 §3.4). Si no se pudo leer,
+	// se muestra todo.
+	const hasAgents =
+		Boolean(agentsResult.error) ||
+		(agentsResult.data ?? []).some((row) => row.enabled === true);
 
 	const approvals = (agentsResult.data ?? [])
 		.filter((row) => row.enabled === true)
@@ -138,18 +144,21 @@ export default async function SettingsPage({
 
 	return (
 		<div className="max-w-3xl space-y-10">
-			<section>
-				<h1 className="mb-4 text-3xl leading-tight">
-					Configuración de {tenant.displayName}
-				</h1>
-				<h2 className="mb-3 text-lg">Modelo default</h2>
-				<ModeloForm
-					tenantId={tenant.id}
-					slug={slug}
-					defaultModel={tenant.defaultModel}
-					allowedModels={tenant.allowedModels}
-				/>
-			</section>
+			<h1 className="text-3xl leading-tight">
+				Configuración de {tenant.displayName}
+			</h1>
+
+			{hasAgents ? (
+				<section>
+					<h2 className="mb-3 text-lg">Modelo default</h2>
+					<ModeloForm
+						tenantId={tenant.id}
+						slug={slug}
+						defaultModel={tenant.defaultModel}
+						allowedModels={tenant.allowedModels}
+					/>
+				</section>
+			) : null}
 
 			<section>
 				<h2 className="mb-3 text-lg">Ingreso</h2>
@@ -169,36 +178,40 @@ export default async function SettingsPage({
 				)}
 			</section>
 
-			<section>
-				<h2 className="mb-3 text-lg">Ejecutores</h2>
-				{executorsFailed ? (
-					<Unreadable />
-				) : (
-					<ExecutorsSection
-						candidates={candidates}
-						executors={executors}
-						slug={slug}
-					/>
-				)}
-			</section>
+			{hasAgents ? (
+				<>
+					<section>
+						<h2 className="mb-3 text-lg">Ejecutores</h2>
+						{executorsFailed ? (
+							<Unreadable />
+						) : (
+							<ExecutorsSection
+								candidates={candidates}
+								executors={executors}
+								slug={slug}
+							/>
+						)}
+					</section>
 
-			<section>
-				<h2 className="mb-3 text-lg">Aprobaciones</h2>
-				{agentsResult.error ? (
-					<Unreadable />
-				) : (
-					<ApprovalsSection agents={approvals} slug={slug} />
-				)}
-			</section>
+					<section>
+						<h2 className="mb-3 text-lg">Aprobaciones</h2>
+						{agentsResult.error ? (
+							<Unreadable />
+						) : (
+							<ApprovalsSection agents={approvals} slug={slug} />
+						)}
+					</section>
 
-			<section>
-				<h2 className="mb-3 text-lg">Conectores</h2>
-				{connectionsResult.error ? (
-					<Unreadable />
-				) : (
-					<ConnectionsSection connections={connections} slug={slug} />
-				)}
-			</section>
+					<section>
+						<h2 className="mb-3 text-lg">Conectores</h2>
+						{connectionsResult.error ? (
+							<Unreadable />
+						) : (
+							<ConnectionsSection connections={connections} slug={slug} />
+						)}
+					</section>
+				</>
+			) : null}
 
 			{outreachEnabled ? (
 				<Link

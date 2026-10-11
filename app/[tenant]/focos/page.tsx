@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { groupConfigValuesByKind } from "@/lib/outreach/focus-query";
 import { webStoreDeps } from "@/lib/outreach/web-context";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { FocosClient } from "./focos-client";
 
@@ -27,6 +28,7 @@ export default async function FocosPage({
 	const tenant = await resolveTenantAccess(slug);
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.
 	if (!tenant) notFound();
+	await requireAgent(tenant.id, "outreach");
 
 	const supabase = await createServerSupabase();
 	// Las listas cerradas (vector, segmento, hook, idioma) salen de config_values

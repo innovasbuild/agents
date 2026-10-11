@@ -6,6 +6,7 @@ import {
 	toContactRows,
 } from "@/lib/outreach/contactos-query";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { ContactosClient } from "./contactos-client";
 
@@ -23,6 +24,7 @@ export default async function ContactosPage({
 	const tenant = await resolveTenantAccess(slug);
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.
 	if (!tenant) notFound();
+	await requireAgent(tenant.id, "outreach");
 
 	const raw = await searchParams;
 	const search = new URLSearchParams();

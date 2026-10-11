@@ -43,9 +43,9 @@ describe("ConnectCard", () => {
 		}
 	});
 
-	it("cuatro clientes llevan la marca Sin probar; Claude Code no", () => {
+	it("dos clientes llevan la marca Sin probar (claude.ai y Cursor); Claude Code, ChatGPT y Codex no", () => {
 		const html = render(agent);
-		expect(html.match(/Sin probar/g)?.length).toBe(4);
+		expect(html.match(/Sin probar/g)?.length).toBe(2);
 	});
 
 	it("la pestaña inicial es Claude Code, con su comando", () => {

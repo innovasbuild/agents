@@ -46,7 +46,7 @@ export default async function TenantLoginPage({
 						{notice}
 					</p>
 				) : null}
-				<LoginForm methods={tenant.authMethods} next={`/${tenant.slug}/chat`} />
+				<LoginForm methods={tenant.authMethods} next={`/${tenant.slug}`} />
 			</div>
 		</main>
 	);

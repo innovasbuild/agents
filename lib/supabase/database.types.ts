@@ -1786,6 +1786,10 @@ export type Database = {
 				};
 				Returns: undefined;
 			};
+			platform_set_brain_categories: {
+				Args: { p_actor: string; p_categories: string[]; p_tenant: string };
+				Returns: undefined;
+			};
 			platform_set_budget: {
 				Args: {
 					p_actor: string;

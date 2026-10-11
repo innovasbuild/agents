@@ -7,13 +7,42 @@ import type { BrainProvider } from "../brain/core/types";
 import { brainForTenant } from "./canon";
 import { DEFAULT_CANON_PAGES } from "./canon-templates";
 
+/**
+ * Si el brain ya tiene alguna página con alguno de estos tags de canon. Una
+ * empresa que cargó ese canon con otros slugs no recibe la plantilla:
+ * loadCanon lee también los borradores y la pasaría a la redacción.
+ */
+async function hasAnyTag(
+	brain: BrainProvider,
+	tags: readonly string[],
+): Promise<boolean> {
+	for (const tag of tags) {
+		const found = await brain.search({ query: "", tag, limit: 1 });
+		if (found.length > 0) return true;
+	}
+	return false;
+}
+
 export async function seedCanonPages(
 	brain: BrainProvider | null,
 	userId: string,
 ): Promise<boolean> {
 	if (!brain) return false;
 	let allOk = true;
+	// Cada plantilla mira solo su propio tag: un brain con ICP propio y sin
+	// hooks recibe la plantilla de hooks.
 	for (const page of DEFAULT_CANON_PAGES) {
+		try {
+			if (await hasAnyTag(brain, page.tags)) continue;
+		} catch (error) {
+			// Sin saber si ya hay canon no se siembra: una plantilla de más se lee.
+			console.error(
+				`canon: no pude ver si el brain ya tiene ${page.slug}:`,
+				error,
+			);
+			allOk = false;
+			continue;
+		}
 		try {
 			await brain.upsert(
 				{
@@ -34,6 +63,7 @@ export async function seedCanonPages(
 			);
 		} catch (error) {
 			if (error instanceof BrainConflict) continue;
+			// Incluye la categoría "comercial" ausente del brain: se loguea, no se tira.
 			console.error(`canon: no pude crear ${page.slug}:`, error);
 			allOk = false;
 		}

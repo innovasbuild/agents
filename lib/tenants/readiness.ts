@@ -65,8 +65,11 @@ export function tenantReadiness(input: {
 	const enabledAgents = input.agents.filter((a) => a.enabled);
 	const enabled = input.connections.filter((c) => c.enabled);
 
-	if (enabledAgents.length === 0) missing.push("agentes");
-	if (!enabled.some((c) => c.capability === "brain")) missing.push("brain");
+	// Una empresa puede usar solo el brain (spec 21.4 §3.5): sin agentes falta
+	// algo solo si tampoco tiene brain.
+	const hasBrain = enabled.some((c) => c.capability === "brain");
+	if (enabledAgents.length === 0 && !hasBrain) missing.push("agentes");
+	if (!hasBrain) missing.push("brain");
 
 	const needed = new Set<string>();
 	for (const { agent } of enabledAgents) {

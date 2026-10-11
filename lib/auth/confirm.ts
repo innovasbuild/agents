@@ -39,13 +39,27 @@ export function emailFromAccessToken(token: string): string | null {
 	}
 }
 
+// Primeros segmentos que son rutas de la app y no empresas: los mismos que la
+// base no deja usar como slug (migración reserve_plataforma_slug).
+const RESERVED_SEGMENTS = new Set([
+	"api",
+	"auth",
+	"brain",
+	"eve",
+	"login",
+	"oauth",
+	"plataforma",
+	"sin-acceso",
+]);
+
 /**
- * Landing de la empresa a la que apunta un `next` del estilo /<slug>/chat, para
- * ofrecerla cuando el link venció. Cualquier otra cosa va al login general.
+ * Landing de la empresa a la que apunta un `next` del estilo /<slug> o /<slug>/..., para
+ * ofrecerla cuando el link venció. Cualquier otra cosa, incluidas las rutas
+ * propias de la app, va al login general.
  */
 export function landingPathFor(next: string | null): string {
-	const slug = next?.match(/^\/([a-z][a-z0-9-]{1,38})\//)?.[1];
-	return slug ? `/login/${slug}` : "/login";
+	const slug = next?.match(/^\/([a-z][a-z0-9-]{1,38})(?:[/?#]|$)/)?.[1];
+	return slug && !RESERVED_SEGMENTS.has(slug) ? `/login/${slug}` : "/login";
 }
 
 /**

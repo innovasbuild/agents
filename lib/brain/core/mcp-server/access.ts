@@ -16,6 +16,34 @@ export interface AccessStore {
 	// Una fila platform_admin solo cuenta como plataforma si es de ese tenant,
 	// igual que en la aplicación (lib/tenants/resolve.ts).
 	platformOwnerTenantId(): Promise<string | null>;
+	// ¿La empresa permite el método con el que se abrió la sesión de este
+	// token? Pregunta a la base con el token de la persona
+	// (tenant_allows_login), igual que resolveTenantAccess.
+	allowsLogin(token: string, tenantId: string): Promise<boolean>;
+}
+
+// Los métodos de login que reconoce public.current_login_method(). Un token
+// del servidor OAuth trae en amr solo "oauth_provider/authorization_code":
+// no dice con qué método entró la persona, y la base lo leería como método
+// desconocido. Ese token pasó por el corte de /oauth/consent al emitirse.
+const SESSION_LOGIN_METHODS = new Set([
+	"otp",
+	"magiclink",
+	"invite",
+	"email/signup",
+	"recovery",
+	"oauth",
+]);
+
+function namesLoginMethod(claims: Record<string, unknown>): boolean {
+	const amr = claims.amr;
+	if (!Array.isArray(amr)) return false;
+	return amr.some(
+		(entry) =>
+			typeof entry === "object" &&
+			entry !== null &&
+			SESSION_LOGIN_METHODS.has(String((entry as { method?: unknown }).method)),
+	);
 }
 
 type Denied = {
@@ -110,6 +138,28 @@ export async function resolveMcpAccess(
 		: own?.role === "tenant_admin" || own?.role === "platform_admin"
 			? "tenant_admin"
 			: "tenant_member";
+
+	// El método de la sesión tiene que estar permitido (spec etapa 20, L10).
+	// Un platform_admin se chequea contra el tenant dueño (L12). Falla cerrado.
+	if (namesLoginMethod(claims)) {
+		let allowed = false;
+		try {
+			allowed = await deps.store.allowsLogin(
+				token,
+				platformAdmin && ownerTenantId ? ownerTenantId : tenant.id,
+			);
+		} catch (error) {
+			console.error(
+				`brain mcp: no pude chequear el método de login (${error instanceof Error ? error.name : "desconocido"})`,
+			);
+		}
+		if (!allowed)
+			return deny(
+				403,
+				"forbidden",
+				"Tu empresa no permite entrar con ese método.",
+			);
+	}
 
 	const binding = await deps.store.brainBinding(tenant.id);
 	if (!binding)

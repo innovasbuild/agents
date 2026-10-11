@@ -8,6 +8,22 @@ import {
 describe("brainContract", () => {
 	const contract = brainContract(["comercial", "producto"]);
 
+	it("con canon, las descripciones nombran los tags de canon", () => {
+		const withCanon = brainContract(["comercial"]);
+		expect(withCanon.search.description).toContain("canon:icp");
+		expect(withCanon.upsert.description).toContain("Tags de canon");
+	});
+
+	it("sin canon, las descripciones son generales", () => {
+		const neutral = brainContract(["empresa", "trigo"], { canon: false });
+		for (const tool of [neutral.search, neutral.read, neutral.upsert]) {
+			expect(tool.description).not.toMatch(/canon|ICP|hooks|comercial/i);
+		}
+		expect(neutral.upsert.description).toContain(
+			"Categorías válidas: empresa, trigo.",
+		);
+	});
+
 	it("usa las categorías del binding en búsqueda y escritura", () => {
 		expect(
 			contract.search.input.safeParse({ query: "", category: "comercial" })

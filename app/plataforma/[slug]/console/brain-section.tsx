@@ -2,7 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import { createBrain } from "../console-actions";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { createBrain, setBrainCategories } from "../console-actions";
 import { ConsoleButton } from "./console-button";
 
 export interface BrainState {
@@ -13,6 +15,38 @@ export interface BrainState {
 }
 
 const fecha = (value: string) => new Date(value).toLocaleDateString("es-AR");
+
+function CategoriesForm({
+	slug,
+	tenantId,
+	categories,
+}: {
+	slug: string;
+	tenantId: string;
+	categories: string[];
+}) {
+	const [value, setValue] = useState(categories.join(", "));
+	return (
+		<div className="mt-2 flex flex-wrap items-center gap-2">
+			<label
+				className="text-muted-foreground text-xs"
+				htmlFor="brain-categories"
+			>
+				Categorías
+			</label>
+			<Input
+				className="h-8 min-w-0 flex-1 text-xs"
+				id="brain-categories"
+				onChange={(event) => setValue(event.target.value)}
+				value={value}
+			/>
+			<ConsoleButton
+				label="Guardar"
+				run={() => setBrainCategories(slug, tenantId, value)}
+			/>
+		</div>
+	);
+}
 
 export function BrainSection({
 	slug,
@@ -27,8 +61,8 @@ export function BrainSection({
 		return (
 			<div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm">
 				<span className="min-w-0 flex-1 text-muted-foreground">
-					La empresa todavía no tiene brain. Nace vacío, con permisos abiertos
-					para sus miembros.
+					La empresa todavía no tiene brain. Nace con permisos de lectura para
+					sus miembros.
 				</span>
 				<ConsoleButton
 					label="Crear brain"
@@ -44,9 +78,14 @@ export function BrainSection({
 				<div>
 					Proveedor {brain.provider} · desde el {fecha(brain.createdAt)}
 				</div>
-				<div className="text-muted-foreground text-xs">
-					Categorías: {brain.categories.join(", ")}
-				</div>
+				<CategoriesForm
+					categories={brain.categories}
+					slug={slug}
+					tenantId={tenantId}
+				/>
+				<p className="text-muted-foreground text-xs">
+					Separadas por coma. No se puede quitar una que tenga páginas.
+				</p>
 				{brain.enabled === false ? (
 					<div className="text-muted-foreground text-xs">Deshabilitado</div>
 				) : null}

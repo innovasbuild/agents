@@ -161,10 +161,48 @@ describe("settings del cliente", () => {
 
 	it("un agente deshabilitado no ofrece aprobaciones", async () => {
 		state.tables.tenant_agents = {
-			data: [{ agent: "outreach", enabled: false, config: {} }],
+			data: [
+				{ agent: "outreach", enabled: false, config: {} },
+				{ agent: "otro", enabled: true, config: {} },
+			],
 			error: null,
 		};
 		expect(await render()).toContain("No hay pasos que requieran una política");
+	});
+
+	it("sin agentes habilitados quedan Ingreso y Usuarios", async () => {
+		state.tables.tenant_agents = {
+			data: [{ agent: "outreach", enabled: false, config: {} }],
+			error: null,
+		};
+		const html = await render();
+		expect(html).toContain("Configuración de Acme");
+		expect(html).toContain("Ingreso");
+		expect(html).toContain('href="/acme/settings/usuarios"');
+		for (const section of [
+			"Modelo default",
+			"Ejecutores",
+			"Aprobaciones",
+			"Conectores",
+		])
+			expect(html).not.toContain(section);
+	});
+
+	it("si no se pudieron leer los agentes, se muestra todo", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		try {
+			state.tables.tenant_agents = { data: null, error: { message: "boom" } };
+			const html = await render();
+			for (const section of [
+				"Modelo default",
+				"Ejecutores",
+				"Aprobaciones",
+				"Conectores",
+			])
+				expect(html).toContain(section);
+		} finally {
+			log.mockRestore();
+		}
 	});
 
 	const emptyState: Record<string, string[]> = {
