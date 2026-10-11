@@ -184,6 +184,12 @@ export async function deletePage(
 		return { ok: true, cleaned: outcome.cleaned };
 	} catch (error) {
 		if (error instanceof WikiStoreError) {
+			if (error.code === "BR409" && error.details === "skill_published") {
+				return fail(
+					"conflict",
+					"Esta skill está publicada. Retirala antes de borrarla.",
+				);
+			}
 			if (error.code === "BR409" || error.code === "40P01") {
 				return fail(
 					"conflict",
