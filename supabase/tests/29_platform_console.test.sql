@@ -69,9 +69,9 @@ select is(
   (select e.payload -> 'agents' from public.events e join public.tenants t on t.id = e.tenant_id
     where t.slug = 'pc-nueva' and e.type = 'tenant.created' and e.actor_user_id = 'c9c9c9c9-0000-0000-0000-000000000001'),
   '["outreach","soporte"]'::jsonb, 'el evento dice quién y con qué agentes');
-select throws_ok(
-  $$select public.platform_create_tenant('c9c9c9c9-0000-0000-0000-000000000001', 'pc-otra', 'Otra', '{}', '{email}', '{}'::jsonb, '{}')$$,
-  '23514', 'la empresa necesita al menos un agente', 'sin agentes no se crea');
+select lives_ok(
+  $$select public.platform_create_tenant('c9c9c9c9-0000-0000-0000-000000000001', 'pc-sin', 'Sin agentes', '{}', '{email}', '{}'::jsonb, '{}')$$,
+  'sin agentes también se crea (21.4)');
 select throws_ok(
   $$select public.platform_create_tenant('c9c9c9c9-0000-0000-0000-000000000001', 'pc-otra', 'Otra', '{}', '{email}', '{}'::jsonb, '{outreach,outreach}')$$,
   '23514', 'la lista de agentes tiene repetidos', 'agentes repetidos no se crean');
