@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(49);
+select plan(52);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values ('a5a5a5a5-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'ana@skill-a.test', now());
@@ -71,11 +71,11 @@ select throws_ok(
 -- 17-19: subir y hash de archivos, sin importar el orden
 select is(
   public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 'scripts/a.py', repeat('a', 64), 100, 'a5a5a5a5-0000-0000-0000-000000000001'),
-  encode(sha256(convert_to('scripts/a.py:' || repeat('a', 64), 'UTF8')), 'hex'),
+  encode(sha256(convert_to(jsonb_build_array(jsonb_build_array('scripts/a.py', repeat('a', 64)))::text, 'UTF8')), 'hex'),
   'el hash de archivos de un solo archivo');
 select is(
   public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/ventas/reporte'), 'assets/z.txt', repeat('b', 64), 200, 'a5a5a5a5-0000-0000-0000-000000000001'),
-  encode(sha256(convert_to('assets/z.txt:' || repeat('b', 64) || E'\n' || 'scripts/a.py:' || repeat('a', 64), 'UTF8')), 'hex'),
+  encode(sha256(convert_to(jsonb_build_array(jsonb_build_array('assets/z.txt', repeat('b', 64)), jsonb_build_array('scripts/a.py', repeat('a', 64)))::text, 'UTF8')), 'hex'),
   'el hash ordena por ruta, no por orden de carga');
 select is(
   (select count(*)::int from public.events where type = 'brain.skill_file_added' and tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000a'),
@@ -212,6 +212,26 @@ from generate_series(1, 5) n;
 select is(
   pg_temp.errd($$select public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/sin-descripcion'), 'extra.bin', repeat('f', 64), 1, 'a5a5a5a5-0000-0000-0000-000000000001')$$),
   'BR422:package_limit', 'pasar los 20 MB del paquete se rechaza');
+
+-- Archivo vacío: entra con size 0 y el hash de archivos lo cuenta
+select is(
+  pg_temp.errd($$select public.brain_skill_put_file('b5b5b5b5-0000-0000-0000-00000000000a', (select id from ids where slug = 'skills/admin/reporte'), '__init__.py', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 0, 'a5a5a5a5-0000-0000-0000-000000000001')$$),
+  'sin error', 'un archivo vacío (size 0) se sube');
+
+-- El hash del paquete no es ambiguo: con el separador viejo (\n), estas dos
+-- skills (compatibility "x\ny" sin licencia / compatibility "x" y licencia "y")
+-- daban el mismo texto a hashear.
+select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000a', 'skills/colision', 'Colisión', 'skill', 'activo', '{}'::text[], jsonb_build_object('description', 'd', 'compatibility', E'x\ny'), 'cuerpo', 'alta', null, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000001');
+select public.brain_upsert_page('b5b5b5b5-0000-0000-0000-00000000000b', 'skills/colision', 'Colisión', 'skill', 'activo', '{}'::text[], jsonb_build_object('description', 'd', 'compatibility', 'x', 'license', 'y'), 'cuerpo', 'alta', null, 'user', 'a5a5a5a5-0000-0000-0000-000000000001', null, 'c5c5c5c5-0000-0000-0000-000000000002');
+select public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000a', (select id from public.brain_pages where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000a' and slug = 'skills/colision'), 1, public.brain_skill_files_digest((select id from public.brain_pages where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000a' and slug = 'skills/colision')), 'n', 'a5a5a5a5-0000-0000-0000-000000000001');
+select public.brain_publish_skill('b5b5b5b5-0000-0000-0000-00000000000b', (select id from public.brain_pages where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000b' and slug = 'skills/colision'), 1, public.brain_skill_files_digest((select id from public.brain_pages where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000b' and slug = 'skills/colision')), 'n', 'a5a5a5a5-0000-0000-0000-000000000001');
+select isnt(
+  (select digest from public.brain_skill_versions where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000a' and slug = 'skills/colision'),
+  (select digest from public.brain_skill_versions where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000b' and slug = 'skills/colision'),
+  'combinaciones que colisionaban con el separador viejo dan hashes distintos');
+select is(
+  (select digest from public.brain_skill_versions where tenant_id = 'b5b5b5b5-0000-0000-0000-00000000000a' and slug = 'skills/colision') ~ '^[0-9a-f]{64}$',
+  true, 'el hash del paquete es un sha256 hex');
 
 select * from finish();
 rollback;

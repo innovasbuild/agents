@@ -14,7 +14,7 @@ create table public.brain_skill_files (
     and lower(path) <> 'skill.md'
   ),
   sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
-  size integer not null check (size between 1 and 4194304),
+  size integer not null check (size between 0 and 4194304),
   uploaded_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   unique (page_id, path)
@@ -66,7 +66,8 @@ insert into storage.buckets (id, name, public, file_size_limit)
 values ('skills', 'skills', false, 4194304)
 on conflict (id) do nothing;
 
--- Hash de los archivos del borrador: líneas path:sha256 ordenadas por ruta.
+-- Hash de los archivos del borrador: sha256 de la lista JSON [[path, sha256], ...]
+-- ordenada por ruta. JSON escapa cada campo, así que la codificación no es ambigua.
 create or replace function public.brain_skill_files_digest(p_page_id uuid)
 returns text
 language sql
@@ -76,7 +77,10 @@ set search_path = ''
 as $$
   select encode(
     sha256(convert_to(
-      coalesce(string_agg(f.path || ':' || f.sha256, E'\n' order by f.path collate "C"), ''),
+      coalesce(
+        jsonb_agg(jsonb_build_array(f.path, f.sha256) order by f.path collate "C"),
+        '[]'::jsonb
+      )::text,
       'UTF8'
     )),
     'hex'
@@ -311,14 +315,16 @@ begin
   from public.brain_skill_versions v
   where v.tenant_id = p_tenant_id and v.page_id = p_page_id;
 
-  v_digest := encode(sha256(convert_to(concat_ws(E'\n',
+  -- Lista JSON de seis campos: el escape de JSON hace la codificación inequívoca
+  -- (con un separador común, campos distintos podían dar el mismo texto).
+  v_digest := encode(sha256(convert_to(jsonb_build_array(
     v_name,
     v_description,
     encode(sha256(convert_to(v_body, 'UTF8')), 'hex'),
     coalesce(v_frontmatter ->> 'compatibility', ''),
     coalesce(v_frontmatter ->> 'license', ''),
     v_files_digest
-  ), 'UTF8')), 'hex');
+  )::text, 'UTF8')), 'hex');
 
   insert into public.brain_skill_versions (
     tenant_id, page_id, slug, name, action, version, page_revision, title, description,
