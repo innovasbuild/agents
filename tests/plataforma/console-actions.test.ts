@@ -27,7 +27,10 @@ const state = vi.hoisted(() => ({
 	describeCalls: [] as string[],
 	seed: true as boolean | Error,
 	seedCalls: [] as string[][],
-	brainRows: [{ id: "b1" }] as { id: string }[],
+	brainRows: [{ id: "b1" }] as {
+		id: string;
+		config?: Record<string, unknown>;
+	}[],
 	brainRowsError: null as { message: string } | null,
 	agentRows: [{ agent: "outreach" }] as { agent: string }[],
 	agentRowsError: null as { message: string } | null,
@@ -571,6 +574,34 @@ describe("canon según los agentes (spec 21.4 §4.1)", () => {
 		};
 		await actions.setAgent("acme", TENANT, "outreach", true, "read_write");
 		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("si la siembra falla y el brain no tiene la categoría del canon, dice que la agreguen primero", async () => {
+		state.agentRows = [];
+		state.seed = false;
+		state.brainRows = [{ id: "b1", config: { categories: ["empresa"] } }];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto: el brain no tiene la categoría comercial. Agregala en Categorías y creá a mano comercial/icp y comercial/hooks.",
+		});
+	});
+
+	it("si la siembra falla con la categoría del canon en el brain, el aviso de siempre", async () => {
+		state.agentRows = [];
+		state.seed = false;
+		state.brainRows = [
+			{ id: "b1", config: { categories: ["empresa", "comercial"] } },
+		];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
 	});
 
 	it("si la siembra falla al habilitar, avisa que quedó guardado", async () => {

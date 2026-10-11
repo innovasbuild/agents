@@ -14,6 +14,7 @@ import {
 } from "@/lib/connectors/providers";
 import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
 import { seedCanonPagesForTenant } from "@/lib/outreach/canon-seed";
+import { DEFAULT_CANON_PAGES } from "@/lib/outreach/canon-templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 import { agentsNeedCanon } from "@/lib/tenants/readiness";
@@ -93,6 +94,23 @@ const SIN_CANON: ConsoleResult = {
 		"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 };
 
+// La siembra no puede crear páginas en una categoría que el brain no tiene:
+// ahí el paso que falta es agregarla, no crear las páginas a mano.
+const SIN_CATEGORIA_CANON: ConsoleResult = {
+	ok: false,
+	message:
+		"Quedó guardado, pero no pude crear las páginas por defecto: el brain no tiene la categoría comercial. Agregala en Categorías y creá a mano comercial/icp y comercial/hooks.",
+};
+
+/** true solo si se sabe que al brain le falta alguna categoría del canon. */
+function lacksCanonCategory(config: unknown): boolean {
+	const categories = (config as { categories?: unknown } | null)?.categories;
+	if (!Array.isArray(categories)) return false;
+	return DEFAULT_CANON_PAGES.some(
+		(page) => !categories.includes(page.category),
+	);
+}
+
 /**
  * Si algún agente habilitado de la empresa usa el canon del brain. Si no se
  * puede leer, se asume que sí: es lo que pasaba antes de la 21.4, y una página
@@ -139,10 +157,12 @@ export async function setAgent(
 	if (!(BRAIN_ACCESS as readonly string[]).includes(brain)) return INVALIDO;
 
 	// El catálogo vive en código: la base no sabe qué agente necesita brain.
+	// La config se lee en la misma consulta para el aviso de la siembra.
+	let brainConfig: unknown = null;
 	if (enabled === true && AGENT_CATALOG[agent].requiresBrain) {
 		const { data, error } = await createAdminClient()
 			.from("tenant_connections")
-			.select("id")
+			.select("id, config")
 			.eq("tenant_id", tenantId)
 			.eq("capability", "brain")
 			.eq("enabled", true)
@@ -157,6 +177,7 @@ export async function setAgent(
 				message: "Este agente necesita el brain. Creá el brain primero.",
 			};
 		}
+		brainConfig = data[0].config;
 	}
 
 	// El canon se siembra solo cuando el agente pasa de apagado a prendido: un
@@ -183,7 +204,9 @@ export async function setAgent(
 		} catch (error) {
 			console.error("consola: no pude sembrar el canon:", error);
 		}
-		if (!seeded) return SIN_CANON;
+		if (!seeded) {
+			return lacksCanonCategory(brainConfig) ? SIN_CATEGORIA_CANON : SIN_CANON;
+		}
 	}
 	if (saved.ok && needsSeed && before === null) return SIN_CANON;
 	return saved;
