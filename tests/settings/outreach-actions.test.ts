@@ -298,19 +298,39 @@ describe("saveWorkflow", () => {
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 
-	it("números que no son enteros se rechazan", async () => {
+	it("números que no son enteros se rechazan con un mensaje legible", async () => {
+		const out = { ok: false, message: "Poné un número entero." };
 		expect(
 			await actions.saveWorkflow("acme", "refresh-fichas", {
 				...WF,
 				cadenceMinutes: 60.5,
 			}),
-		).toEqual(INVALIDO);
+		).toEqual(out);
+		expect(
+			await actions.saveWorkflow("acme", "refresh-fichas", {
+				...WF,
+				itemsPerTick: 2.5,
+			}),
+		).toEqual(out);
 		expect(
 			await actions.saveWorkflow("acme", "refresh-fichas", {
 				...WF,
 				cadenceMinutes: Number.NaN,
 			}),
-		).toEqual(INVALIDO);
+		).toEqual(out);
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it.each([
+		[{ cadenceMinutes: 4 }, "La cadencia va de 5 a 10080 minutos."],
+		[{ cadenceMinutes: 10081 }, "La cadencia va de 5 a 10080 minutos."],
+		[{ itemsPerTick: 0 }, "Los ítems por pasada van de 1 a 1000."],
+		[{ itemsPerTick: 1001 }, "Los ítems por pasada van de 1 a 1000."],
+	])("fuera de rango %j", async (patch, message) => {
+		expect(
+			await actions.saveWorkflow("acme", "refresh-fichas", { ...WF, ...patch }),
+		).toEqual({ ok: false, message });
+		expect(state.rpcCalls).toHaveLength(0);
 	});
 });
 
@@ -318,10 +338,18 @@ describe("rereadMarco", () => {
 	it("relee el brain de la empresa de la sesión y cuenta lo que cambió", async () => {
 		expect(await actions.rereadMarco("acme")).toEqual({
 			ok: true,
-			message: "Listo: 2 altas o cambios, 1 bajas, 3 sin cambios.",
+			message: "Listo: 2 altas o cambios, 1 baja, 3 sin cambios.",
 		});
 		expect(state.reflectCalls).toEqual([TENANT]);
 		expect(state.revalidated).toEqual(["/acme/settings/outreach"]);
+	});
+
+	it("los contadores en singular y en cero", async () => {
+		state.reflect = { ok: true, upserts: 1, deactivated: 0, unchanged: 1 };
+		expect(await actions.rereadMarco("acme")).toEqual({
+			ok: true,
+			message: "Listo: 1 alta o cambio, 0 bajas, 1 sin cambios.",
+		});
 	});
 
 	it.each([

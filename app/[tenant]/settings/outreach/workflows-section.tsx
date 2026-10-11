@@ -74,6 +74,7 @@ function Row({
 				</div>
 				<Message feedback={feedback} />
 				<Button
+					aria-label={`${enabled ? "Apagar" : "Encender"} ${row.workflow}`}
 					disabled={pending}
 					onClick={() => save(!enabled)}
 					size="sm"
@@ -111,6 +112,7 @@ function Row({
 					/>
 				</label>
 				<Button
+					aria-label={`Guardar ${row.workflow}`}
 					disabled={pending}
 					onClick={() => save(enabled)}
 					size="sm"

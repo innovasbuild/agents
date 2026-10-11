@@ -281,3 +281,70 @@ describe("fixes de la ronda 1", () => {
 		expect(html).not.toContain("/acme/brain");
 	});
 });
+
+describe("ronda final", () => {
+	it("AddIdioma se reinicia cuando cambian las opciones", () => {
+		const values = [
+			{
+				kind: "idioma" as const,
+				value: "es_ar",
+				label: "Rioplatense",
+				active: true,
+				defaultHook: null,
+			},
+		];
+		const html = render(
+			createElement(ListsSection, {
+				slug: "acme",
+				values,
+				idiomas: ["es_ar", "es_es"],
+			}),
+		);
+		expect(html).toMatch(/<option[^>]*value="es_es"[^>]*selected/);
+	});
+
+	it("los botones repetidos nombran su fila", () => {
+		const values = [
+			{
+				kind: "segmento" as const,
+				value: "mid",
+				label: "Mid",
+				active: true,
+				defaultHook: null,
+			},
+			{
+				kind: "idioma" as const,
+				value: "es_ar",
+				label: "Rio",
+				active: false,
+				defaultHook: null,
+			},
+		];
+		const lists = render(
+			createElement(ListsSection, { slug: "acme", values, idiomas: [] }),
+		);
+		expect(lists).toContain('aria-label="Guardar el segmento mid"');
+		expect(lists).toContain('aria-label="Desactivar el segmento mid"');
+		expect(lists).toContain('aria-label="Guardar el idioma es_ar"');
+		expect(lists).toContain('aria-label="Activar el idioma es_ar"');
+		const wf = render(
+			createElement(WorkflowsSection, {
+				slug: "acme",
+				workflows: [
+					{
+						workflow: "target-search",
+						enabled: true,
+						cadenceMinutes: 60,
+						itemsPerTick: 2,
+						maxItemsPerTick: 2,
+						lastRunAt: null,
+						resources: ["apollo_credits"],
+						unfunded: [],
+					},
+				],
+			}),
+		);
+		expect(wf).toContain('aria-label="Apagar target-search"');
+		expect(wf).toContain('aria-label="Guardar target-search"');
+	});
+});

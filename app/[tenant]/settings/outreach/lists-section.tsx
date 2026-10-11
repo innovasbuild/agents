@@ -72,6 +72,7 @@ function ValueRow({ slug, row }: { slug: string; row: ListValueRow }) {
 	const [label, setLabel] = useState(row.label);
 	const [active, setActive] = useState(row.active);
 
+	const name = `${row.kind === "segmento" ? "el segmento" : "el idioma"} ${row.value}`;
 	return (
 		<li className="flex flex-wrap items-center gap-3 px-4 py-3">
 			<input
@@ -90,6 +91,7 @@ function ValueRow({ slug, row }: { slug: string; row: ListValueRow }) {
 			)}
 			<Message feedback={feedback} />
 			<Button
+				aria-label={`Guardar ${name}`}
 				disabled={pending || label.trim() === "" || label === row.label}
 				onClick={() =>
 					run(() => saveListValue(slug, row.kind, row.value, label, active))
@@ -101,6 +103,7 @@ function ValueRow({ slug, row }: { slug: string; row: ListValueRow }) {
 				Guardar
 			</Button>
 			<Button
+				aria-label={`${active ? "Desactivar" : "Activar"} ${name}`}
 				disabled={pending}
 				onClick={() => {
 					const next = !active;
@@ -220,6 +223,7 @@ export function ListsSection({
 	const of = (kind: ListValueRow["kind"]) =>
 		values.filter((row) => row.kind === kind);
 	const taken = new Set(of("idioma").map((row) => row.value));
+	const idiomaOptions = idiomas.filter((idioma) => !taken.has(idioma));
 	return (
 		<div className="space-y-6">
 			{(
@@ -249,7 +253,9 @@ export function ListsSection({
 						<AddSegment slug={slug} />
 					) : (
 						<AddIdioma
-							options={idiomas.filter((idioma) => !taken.has(idioma))}
+							// Con otras opciones el estado del select arranca de nuevo.
+							key={idiomaOptions.join()}
+							options={idiomaOptions}
 							slug={slug}
 						/>
 					)}

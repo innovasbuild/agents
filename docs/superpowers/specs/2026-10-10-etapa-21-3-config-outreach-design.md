@@ -244,7 +244,7 @@ Mismo patrón que `config-actions.ts`: zod, `resolveTenantAccess(slug)`, cliente
 
 Orden, para que INNOV.AS no quede sin calificar ni sin hooks:
 
-1. **Antes del deploy, en el brain de `innovas`:** pegar el bloque ` ```icp ` en su página `canon:icp` con los niveles de `tenants/innovas/outreach.json`, y los bloques ` ```hooks ` y ` ```vectores ` en `comercial/outreach/22-redaccion` y `23-vectores`. El código viejo los ignora. Tres cuidados:
+1. **Antes del deploy, en el brain de `innovas`:** pegar el bloque ` ```icp ` en su página `canon:icp` con los niveles que da `git show b5cf2b9:tenants/innovas/outreach.json` (último commit que todavía tiene el archivo; la rama lo borra), y los bloques ` ```hooks ` y ` ```vectores ` en `comercial/outreach/22-redaccion` y `23-vectores`. El código viejo los ignora. **Pegar los bloques ANTES de que alguien guarde el formulario de datos de outreach con "Guardar datos":** ese primer guardado reescribe `config.outreach` conservando solo las claves permitidas y borra la clave `icp` vieja, y desde ahí el historial de git es la única copia hasta que exista el bloque en el brain. Tres cuidados:
    - **`innovas` tiene DOS páginas `canon:icp`** (`producto/linea-proyectos` y `comercial/criterios-calificacion-en-paralelo`). El bloque `icp` va en exactamente una; en las dos da `icp_invalido` (dos bloques).
    - **El bloque `vectores` lista los 8 vectores (v0 a v7) y el bloque `hooks` todos los hooks que ya están en `config_values`:** lo que se omita se desactiva en el primer guardado.
    - **Verificación previa, obligatoria:** antes de desplegar, correr `loadIcpLevels` y `loadMarco` contra el brain de producción de `innovas` y comprobar que ambos devuelven `ok: true` (un solo bloque `icp`, ocho vectores, todos los hooks).

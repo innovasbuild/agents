@@ -158,8 +158,18 @@ export async function saveOutreachConfig(
 
 const workflowSchema = z.object({
 	enabled: z.boolean(),
-	cadenceMinutes: z.number().int(),
-	itemsPerTick: z.number().int(),
+	// Los límites son los de set_workflow en la base; el tope por proceso
+	// (registry) se chequea aparte.
+	cadenceMinutes: z
+		.number({ error: "Poné un número entero." })
+		.int("Poné un número entero.")
+		.min(5, "La cadencia va de 5 a 10080 minutos.")
+		.max(10080, "La cadencia va de 5 a 10080 minutos."),
+	itemsPerTick: z
+		.number({ error: "Poné un número entero." })
+		.int("Poné un número entero.")
+		.min(1, "Los ítems por pasada van de 1 a 1000.")
+		.max(1000, "Los ítems por pasada van de 1 a 1000."),
 });
 
 export async function saveWorkflow(
@@ -172,7 +182,9 @@ export async function saveWorkflow(
 		return fail("Ese proceso no existe.");
 	}
 	const parsed = workflowSchema.safeParse(input);
-	if (!parsed.success) return INVALIDO;
+	if (!parsed.success) {
+		return fail(parsed.error.issues[0]?.message ?? INVALIDO.message);
+	}
 	const max = WORKFLOWS[workflow].caps.itemsPerTick;
 	if (parsed.data.itemsPerTick > max) {
 		return fail(`Ese proceso admite hasta ${max} por pasada.`);
@@ -215,6 +227,6 @@ export async function rereadMarco(slug: string): Promise<ConfigResult> {
 	revalidatePath(`/${slug}/settings/outreach`);
 	return {
 		ok: true,
-		message: `Listo: ${result.upserts} altas o cambios, ${result.deactivated} bajas, ${result.unchanged} sin cambios.`,
+		message: `Listo: ${result.upserts === 1 ? "1 alta o cambio" : `${result.upserts} altas o cambios`}, ${result.deactivated === 1 ? "1 baja" : `${result.deactivated} bajas`}, ${result.unchanged} sin cambios.`,
 	};
 }
