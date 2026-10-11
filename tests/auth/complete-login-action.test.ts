@@ -4,14 +4,22 @@ const state: {
 	user: unknown;
 	userError: unknown;
 	gate: unknown;
+	getUserThrows: boolean;
 	calls: string[];
-} = { user: { id: "u1" }, userError: null, gate: null, calls: [] };
+} = {
+	user: { id: "u1" },
+	userError: null,
+	gate: null,
+	getUserThrows: false,
+	calls: [],
+};
 
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
 		auth: {
 			getUser: async () => {
 				state.calls.push("getUser");
+				if (state.getUserThrows) throw new Error("red");
 				return { data: { user: state.user }, error: state.userError };
 			},
 			signOut: async () => {
@@ -38,15 +46,18 @@ vi.mock("next/navigation", () => ({
 
 const { completeLogin } = await import("@/app/(auth)/login/actions");
 
-const WRONG = {
+// El código ya se verificó en el navegador: si lo que sigue falla, el
+// mensaje no es el del código (que sí vale para cualquier mail).
+const INCOMPLETE = {
 	ok: false,
-	message: "El código no es correcto o ya venció. Pedí otro.",
+	message: "No pudimos terminar de entrar. Probá de nuevo.",
 };
 
 beforeEach(() => {
 	state.user = { id: "u1" };
 	state.userError = null;
 	state.gate = { allowed: true, landing: null };
+	state.getUserThrows = false;
 	state.calls = [];
 });
 
@@ -61,16 +72,23 @@ describe("completeLogin (server action del código)", () => {
 		]);
 	});
 
-	it("sin sesión responde el mensaje único y no toca nada", async () => {
+	it("sin sesión responde que no se pudo terminar y no toca nada", async () => {
 		state.user = null;
-		expect(await completeLogin("/acme")).toEqual(WRONG);
+		expect(await completeLogin("/acme")).toEqual(INCOMPLETE);
 		expect(state.calls).toEqual(["getUser"]);
 	});
 
-	it("si getUser falla, el mismo mensaje", async () => {
+	it("si getUser falla, el mismo aviso", async () => {
 		state.user = null;
 		state.userError = { message: "jwt expired" };
-		expect(await completeLogin(null)).toEqual(WRONG);
+		expect(await completeLogin(null)).toEqual(INCOMPLETE);
+	});
+
+	it("si completar tira, el mismo aviso y no redirige", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.getUserThrows = true;
+		expect(await completeLogin("/acme")).toEqual(INCOMPLETE);
+		error.mockRestore();
 	});
 
 	it("un next de otro origen cae en /", async () => {

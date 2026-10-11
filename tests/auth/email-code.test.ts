@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { verifyEmailCode } from "@/lib/auth/email-code";
+import { describe, expect, it, vi } from "vitest";
+import {
+	EMAIL_CODE_ERROR,
+	enterWithEmailCode,
+	LOGIN_INCOMPLETE_ERROR,
+	verifyEmailCode,
+} from "@/lib/auth/email-code";
 
 function verifier(result: { data: { session: unknown }; error: unknown }) {
 	const calls: unknown[] = [];
@@ -93,5 +98,88 @@ describe("verifyEmailCode (navegador)", () => {
 				},
 			}),
 		).toBe(false);
+	});
+});
+
+describe("enterWithEmailCode (navegador)", () => {
+	function steps(opts: {
+		verified: boolean;
+		complete: () => Promise<{ ok: false; message: string } | undefined>;
+	}) {
+		const calls: string[] = [];
+		return {
+			calls,
+			run: () =>
+				enterWithEmailCode({
+					email: "ana@acme.com",
+					code: "123456",
+					verifyOtp: async () => {
+						calls.push("verifyOtp");
+						return opts.verified
+							? OK
+							: { data: { session: null }, error: { message: "expired" } };
+					},
+					completeLogin: async () => {
+						calls.push("completeLogin");
+						return opts.complete();
+					},
+					closeSession: async () => {
+						calls.push("closeSession");
+					},
+				}),
+		};
+	}
+
+	it("código mal: el mensaje único, sin completar ni cerrar nada", async () => {
+		const s = steps({ verified: false, complete: async () => undefined });
+		expect(await s.run()).toBe(EMAIL_CODE_ERROR);
+		expect(s.calls).toEqual(["verifyOtp"]);
+	});
+
+	it("código bien y la acción redirige: sin mensaje y sin cerrar", async () => {
+		const s = steps({ verified: true, complete: async () => undefined });
+		expect(await s.run()).toBeNull();
+		expect(s.calls).toEqual(["verifyOtp", "completeLogin"]);
+	});
+
+	it("código bien pero la acción falla: cierra la sesión y avisa otra cosa", async () => {
+		const s = steps({
+			verified: true,
+			complete: async () => ({ ok: false, message: "x" }),
+		});
+		expect(await s.run()).toBe(LOGIN_INCOMPLETE_ERROR);
+		expect(s.calls).toEqual(["verifyOtp", "completeLogin", "closeSession"]);
+	});
+
+	it("código bien pero la llamada tira: cierra la sesión y avisa otra cosa", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const s = steps({
+			verified: true,
+			complete: async () => {
+				throw new Error("red");
+			},
+		});
+		expect(await s.run()).toBe(LOGIN_INCOMPLETE_ERROR);
+		expect(s.calls).toEqual(["verifyOtp", "completeLogin", "closeSession"]);
+		error.mockRestore();
+	});
+
+	it("si cerrar la sesión también tira, igual devuelve el aviso", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const result = await enterWithEmailCode({
+			email: "ana@acme.com",
+			code: "123456",
+			verifyOtp: async () => OK,
+			completeLogin: async () => ({ ok: false, message: "x" }),
+			closeSession: async () => {
+				throw new Error("red");
+			},
+		});
+		expect(result).toBe(LOGIN_INCOMPLETE_ERROR);
+		error.mockRestore();
+	});
+
+	it("los dos mensajes son distintos", () => {
+		expect(LOGIN_INCOMPLETE_ERROR).not.toBe(EMAIL_CODE_ERROR);
 	});
 });

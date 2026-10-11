@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { completeLogin as runCompleteLogin } from "@/lib/auth/complete-login";
-import { EMAIL_CODE_ERROR } from "@/lib/auth/email-code";
+import { LOGIN_INCOMPLETE_ERROR } from "@/lib/auth/email-code";
 import { safeNextPath } from "@/lib/auth/next-path";
 import { emailDomain } from "@/lib/invitations/domain";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,7 +13,9 @@ import { originFrom } from "@/lib/tenants/origin";
 
 const emailSchema = z.email().max(254);
 
-const CODIGO_INVALIDO = { ok: false as const, message: EMAIL_CODE_ERROR };
+// Solo se llama después de un código válido: la falla no es del código y el
+// navegador cierra la sesión al recibirla.
+const NO_TERMINO = { ok: false as const, message: LOGIN_INCOMPLETE_ERROR };
 
 /**
  * ¿Puede este mail crear cuenta al pedir el link? Solo si su dominio está
@@ -49,8 +51,9 @@ export async function canSignUpByDomain(email: string): Promise<boolean> {
 /**
  * Lo que sigue a verificar el código en el navegador (spec 21.4 §5.1): con la
  * sesión ya en cookies, corre el mismo tramo que /auth/callback (membresías y
- * compuerta de método) y redirige a `next`. Sin sesión responde el mensaje
- * único del código. Con éxito no devuelve: redirige.
+ * compuerta de método) y redirige a `next`. Sin sesión o con una falla
+ * responde que no se pudo terminar, distinto del mensaje del código. Con
+ * éxito no devuelve: redirige.
  */
 export async function completeLogin(
 	next: string | null,
@@ -59,7 +62,7 @@ export async function completeLogin(
 	try {
 		const supabase = await createServerSupabase();
 		const { data, error } = await supabase.auth.getUser();
-		if (error || !data.user) return CODIGO_INVALIDO;
+		if (error || !data.user) return NO_TERMINO;
 
 		const gate = await runCompleteLogin(supabase);
 		target = gate.ok
@@ -70,7 +73,7 @@ export async function completeLogin(
 			: gate.landing;
 	} catch (error) {
 		console.error("completeLogin falló:", error);
-		return CODIGO_INVALIDO;
+		return NO_TERMINO;
 	}
 	// Fuera del try: redirect() tira para cortar la acción.
 	redirect(target);

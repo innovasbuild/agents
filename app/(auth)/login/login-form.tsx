@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EMAIL_CODE_ERROR, verifyEmailCode } from "@/lib/auth/email-code";
+import { closeLocalSession } from "@/lib/auth/close-session";
+import { enterWithEmailCode } from "@/lib/auth/email-code";
 import { requestMagicLink } from "@/lib/auth/magic-link";
 import { OAUTH_PROVIDERS, type OAuthMethod } from "@/lib/auth/oauth-providers";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
@@ -117,22 +118,15 @@ export function LoginForm({
 		try {
 			// Se verifica desde el navegador para que el límite por IP de
 			// Supabase cuente la IP de la persona. La sesión queda en cookies.
-			const verified = await verifyEmailCode({
-				email,
-				code,
-				verifyOtp: (args) => supabase.auth.verifyOtp(args),
-			});
-			if (!verified) {
-				setCodeError(EMAIL_CODE_ERROR);
-				return;
-			}
-			// Con éxito la acción redirige y esta promesa no vuelve.
-			const result = await completeLogin(next);
-			if (result && !result.ok) setCodeError(result.message);
-		} catch (error) {
-			// redirect() de la acción no llega acá: Next lo resuelve antes.
-			console.error("entrar con código falló:", error);
-			setCodeError(EMAIL_CODE_ERROR);
+			setCodeError(
+				await enterWithEmailCode({
+					email,
+					code,
+					verifyOtp: (args) => supabase.auth.verifyOtp(args),
+					completeLogin: () => completeLogin(next),
+					closeSession: () => closeLocalSession(supabase),
+				}),
+			);
 		} finally {
 			setChecking(false);
 		}
