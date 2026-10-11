@@ -199,8 +199,8 @@ su propio repo.
   `20261007120000_brain_access_rules`, `20261008120000_brain_access_rule_fns`,
   `20261009120000_brain_delete_page` y `20261020120000_brain_skills`.
 - Tests pgTAP del brain en `supabase/tests/`, incluido
-  `supabase/tests/21_brain_access_rules.test.sql`, `22_brain_access_rule_fns` y
-  `23_brain_delete_page.test.sql`.
+  `supabase/tests/21_brain_access_rules.test.sql`, `22_brain_access_rule_fns`,
+  `23_brain_delete_page.test.sql` y `34_brain_skills.test.sql`.
 
 ## Lo que el host tiene que proveer
 

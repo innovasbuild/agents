@@ -6,7 +6,7 @@
 
 **Architecture:** El borrador es una página del brain de categoría `skill` bajo `skills/`; sus archivos van en `brain_skill_files`, con el contenido en un bucket privado guardado por hash. Publicar es una función SQL que arma la copia desde la fila bloqueada y la inserta en `brain_skill_versions`, tabla solo de inserción. Dos envoltorios de `BrainProvider` en `core` deciden qué se ve: `withoutSkills` (asistentes: nada bajo `skills/`) y `withSkillView` (web: el lector ve la copia publicada, el editor el borrador).
 
-**Tech Stack:** Postgres (Supabase) y Storage, pgTAP, Next.js 16 App Router (route handler y server actions), `fflate` para leer zips, `yaml`, zod, Vitest en entorno `node`.
+**Tech Stack:** Postgres (Supabase) y Storage, pgTAP, Next.js 16 App Router (route handler y server actions), un lector de zip propio (directorio central a mano e `inflateRawSync` de `node:zlib` con `maxOutputLength`; `fflate` solo en los tests), `yaml`, zod, Vitest en entorno `node`.
 
 **Spec:** `docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md`
 
@@ -17,7 +17,7 @@
 - Las funciones SQL nuevas son `security invoker set search_path = ''`, con `revoke execute ... from public, anon, authenticated` y `grant execute ... to service_role`. La autorización la hace el código antes de llamar (patrón `brain_set_access_rule`).
 - `events` es append-only: solo `insert`, en la misma transacción que el cambio.
 - Códigos de error de las funciones: `BR404` (no existe), `BR409` (conflicto; `detail` dice `revision`, `files`, `name` o `skill_published`), `BR422` (validación; `detail` dice el campo).
-- `lib/brain/core/` no importa nada fuera de `core` salvo `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo, `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`. Los imports relativos dentro de `core` llevan extensión `.ts`. `fflate` va solo en `lib/brain/adapters/`.
+- `lib/brain/core/` no importa nada fuera de `core` salvo `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo, `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`. Los imports relativos dentro de `core` llevan extensión `.ts`. El zip se lee en `lib/brain/adapters/skill-zip.ts` con `node:zlib`; `fflate` es solo devDependency de los tests.
 - Límites, copiados de la spec: archivo 4.194.304 bytes; paquete 20.971.520 bytes y 50 archivos; zip a importar 4.194.304 bytes; `description` 1024; `compatibility` 500; nombre 64; aviso por cuerpo de más de 500 líneas.
 - Ruta de archivo: `^[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*){0,5}$`, hasta 200 caracteres, y distinta de `SKILL.md` sin importar mayúsculas.
 - Publica solo `tenant_admin` o `platform_admin`. Edita quien tiene nivel `editor` sobre la página.
@@ -5716,7 +5716,7 @@ En `lib/brain/README.md`, agregar antes de "## Qué viaja con el módulo" esta s
   como texto plano o como descarga, nunca con un tipo que el navegador ejecute
   (`core/skills/http.ts`). El `POST` verifica el origen a mano: un route handler
   no trae el chequeo de las server actions.
-- El zip se lee en `adapters/skill-zip.ts` (`fflate` no entra a `core`). Los
+- El zip se lee en `adapters/skill-zip.ts` (parser propio y `node:zlib`; `fflate` solo en los tests). Los
   topes se miran en el tamaño declarado de cada entrada antes de descomprimir.
 - Los archivos que ninguna fila referencia quedan en el bucket: no hay limpieza
   todavía.
