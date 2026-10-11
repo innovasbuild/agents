@@ -24,6 +24,10 @@ function nextConfigAgents(): string[] {
 }
 
 describe("catálogo de agentes", () => {
+	it("el outreach tiene chat", () => {
+		expect(AGENT_CATALOG.outreach.chat).toBe(true);
+	});
+
 	it("tiene una entrada por carpeta de agents/ y nada más", () => {
 		expect(catalogAgents().sort()).toEqual(agentDirs());
 	});

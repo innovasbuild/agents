@@ -16,6 +16,8 @@ export interface AgentCatalogEntry {
 	/** Si el agente no puede trabajar sin el brain de la empresa: la consola no
 	 * lo deja habilitar hasta que haya uno (spec 21.3 §3.7). */
 	requiresBrain: boolean;
+	/** Si el agente se usa desde la pantalla de chat de la empresa. */
+	chat: boolean;
 }
 
 export const AGENT_CATALOG = {
@@ -26,6 +28,7 @@ export const AGENT_CATALOG = {
 		capabilities: ["crm", "leads", "mail"],
 		brain: true,
 		requiresBrain: true,
+		chat: true,
 	},
 } as const satisfies Record<string, AgentCatalogEntry>;
 
