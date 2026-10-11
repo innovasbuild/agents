@@ -670,3 +670,51 @@ describe("setBudget", () => {
 		});
 	});
 });
+
+describe("setBrainCategories", () => {
+	it("sin platform_admin no llama al rpc", async () => {
+		state.admin = false;
+		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
+			SIN_PERMISO,
+		);
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("normaliza la lista y llama a platform_set_brain_categories", async () => {
+		expect(
+			await actions.setBrainCategories("acme", TENANT, "Empresa, trigo"),
+		).toEqual({ ok: true });
+		expect(state.rpcCalls).toEqual([
+			{
+				fn: "platform_set_brain_categories",
+				args: {
+					p_actor: "u1",
+					p_tenant: TENANT,
+					p_categories: ["empresa", "trigo"],
+				},
+			},
+		]);
+		expect(state.revalidated).toContain("/plataforma/acme");
+	});
+
+	it("una categoría inválida devuelve el mensaje y no llama al rpc", async () => {
+		expect(
+			await actions.setBrainCategories("acme", TENANT, "compras de trigo"),
+		).toEqual({
+			ok: false,
+			message:
+				"«compras de trigo» no es válida: usá minúsculas, números y guiones, empezando con una letra.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("muestra el error de la base cuando trae hint consola", async () => {
+		state.rpc = {
+			data: null,
+			error: { message: "La categoría «x» tiene páginas.", hint: "consola" },
+		};
+		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
+			{ ok: false, message: "La categoría «x» tiene páginas." },
+		);
+	});
+});

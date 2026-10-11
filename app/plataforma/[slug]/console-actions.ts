@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
+import { parseCategories } from "@/lib/brain/core/categories";
 import { describeConnector } from "@/lib/connectors/auth";
 import { inVercel } from "@/lib/connectors/env";
 import {
@@ -76,7 +77,8 @@ async function call(
 		| "platform_set_connection_enabled"
 		| "platform_remove_connection"
 		| "platform_mark_connection_verified"
-		| "platform_set_budget",
+		| "platform_set_budget"
+		| "platform_set_brain_categories",
 	args: Record<string, unknown>,
 	byCode?: Record<string, string>,
 ): Promise<ConsoleResult> {
@@ -190,6 +192,26 @@ export async function createBrain(
 				message:
 					"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 			};
+}
+
+export async function setBrainCategories(
+	slug: string,
+	tenantId: string,
+	raw: string,
+): Promise<ConsoleResult> {
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
+	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
+	if (typeof raw !== "string" || raw.length > 2000) return INVALIDO;
+
+	const parsed = parseCategories(raw);
+	if (!parsed.ok) return { ok: false, message: parsed.message };
+
+	return call(slug, "platform_set_brain_categories", {
+		p_actor: admin.userId,
+		p_tenant: tenantId,
+		p_categories: parsed.categories,
+	});
 }
 
 /** Cuántos identificadores lleva un proveedor: ninguno (OAuth de plataforma), uno, o varios. */
