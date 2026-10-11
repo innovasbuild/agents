@@ -47,9 +47,9 @@ describe("/<slug>", () => {
 		await expect(open()).rejects.toThrow("REDIRECT /acme/conectar");
 	});
 
-	it("si no se pudieron leer los agentes, va al brain y no al chat", async () => {
+	it("si no se pudieron leer los agentes, va al chat como siempre", async () => {
 		state.agents = null;
-		await expect(open()).rejects.toThrow("REDIRECT /acme/brain");
+		await expect(open()).rejects.toThrow("REDIRECT /acme/chat");
 	});
 
 	it("sin acceso da 404", async () => {
