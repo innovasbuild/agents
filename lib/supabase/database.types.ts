@@ -299,6 +299,137 @@ export type Database = {
 					},
 				];
 			};
+			brain_skill_files: {
+				Row: {
+					created_at: string;
+					id: string;
+					page_id: string;
+					path: string;
+					sha256: string;
+					size: number;
+					tenant_id: string;
+					uploaded_by: string | null;
+				};
+				ComputedFields: never;
+				Insert: {
+					created_at?: string;
+					id?: string;
+					page_id: string;
+					path: string;
+					sha256: string;
+					size: number;
+					tenant_id: string;
+					uploaded_by?: string | null;
+				};
+				Update: {
+					created_at?: string;
+					id?: string;
+					page_id?: string;
+					path?: string;
+					sha256?: string;
+					size?: number;
+					tenant_id?: string;
+					uploaded_by?: string | null;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "brain_skill_files_page_id_fkey";
+						columns: ["page_id"];
+						isOneToOne: false;
+						referencedRelation: "brain_pages";
+						referencedColumns: ["id"];
+					},
+					{
+						foreignKeyName: "brain_skill_files_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
+			brain_skill_versions: {
+				Row: {
+					action: Database["public"]["Enums"]["brain_skill_action"];
+					actor_user_id: string | null;
+					body: string;
+					created_at: string;
+					description: string;
+					digest: string;
+					files_digest: string;
+					frontmatter: NonNullable<Json>;
+					id: number;
+					manifest: NonNullable<Json>;
+					name: string;
+					note: string;
+					page_id: string | null;
+					page_revision: number;
+					republished_from: number | null;
+					slug: string;
+					tenant_id: string;
+					title: string;
+					version: number;
+				};
+				ComputedFields: never;
+				Insert: {
+					action: Database["public"]["Enums"]["brain_skill_action"];
+					actor_user_id?: string | null;
+					body?: string;
+					created_at?: string;
+					description?: string;
+					digest?: string;
+					files_digest?: string;
+					frontmatter?: NonNullable<Json>;
+					id?: never;
+					manifest?: NonNullable<Json>;
+					name: string;
+					note: string;
+					page_id?: string | null;
+					page_revision: number;
+					republished_from?: number | null;
+					slug: string;
+					tenant_id: string;
+					title?: string;
+					version: number;
+				};
+				Update: {
+					action?: Database["public"]["Enums"]["brain_skill_action"];
+					actor_user_id?: string | null;
+					body?: string;
+					created_at?: string;
+					description?: string;
+					digest?: string;
+					files_digest?: string;
+					frontmatter?: NonNullable<Json>;
+					id?: never;
+					manifest?: NonNullable<Json>;
+					name?: string;
+					note?: string;
+					page_id?: string | null;
+					page_revision?: number;
+					republished_from?: number | null;
+					slug?: string;
+					tenant_id?: string;
+					title?: string;
+					version?: number;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "brain_skill_versions_page_id_fkey";
+						columns: ["page_id"];
+						isOneToOne: false;
+						referencedRelation: "brain_pages";
+						referencedColumns: ["id"];
+					},
+					{
+						foreignKeyName: "brain_skill_versions_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			config_values: {
 				Row: {
 					active: boolean;
@@ -1420,6 +1551,21 @@ export type Database = {
 					retry_after_seconds: number;
 				}[];
 			};
+			brain_publish_skill: {
+				Args: {
+					p_actor: string;
+					p_expected_files_digest: string;
+					p_expected_revision: number;
+					p_from_version?: number;
+					p_note: string;
+					p_page_id: string;
+					p_tenant_id: string;
+				};
+				Returns: {
+					skill_digest: string;
+					skill_version: number;
+				}[];
+			};
 			brain_remove_access_rule: {
 				Args: {
 					p_actor: string;
@@ -1460,6 +1606,50 @@ export type Database = {
 				};
 				Returns: undefined;
 			};
+			brain_skill_files_digest: {
+				Args: { p_page_id: string };
+				Returns: string;
+			};
+			brain_skill_overview: {
+				Args: { p_tenant_id: string };
+				Returns: {
+					action: Database["public"]["Enums"]["brain_skill_action"];
+					body: string;
+					description: string;
+					digest: string;
+					draft_files_digest: string;
+					files_digest: string;
+					frontmatter: Json;
+					manifest: Json;
+					page_id: string;
+					page_revision: number;
+					published_at: string;
+					revision: number;
+					slug: string;
+					title: string;
+					version: number;
+				}[];
+			};
+			brain_skill_put_file: {
+				Args: {
+					p_actor: string;
+					p_page_id: string;
+					p_path: string;
+					p_sha256: string;
+					p_size: number;
+					p_tenant_id: string;
+				};
+				Returns: string;
+			};
+			brain_skill_remove_file: {
+				Args: {
+					p_actor: string;
+					p_page_id: string;
+					p_path: string;
+					p_tenant_id: string;
+				};
+				Returns: string;
+			};
 			brain_upsert_page: {
 				Args: {
 					p_author_kind: Database["public"]["Enums"]["brain_author_kind"];
@@ -1484,6 +1674,15 @@ export type Database = {
 					page_revision: number;
 					page_slug: string;
 				}[];
+			};
+			brain_withdraw_skill: {
+				Args: {
+					p_actor: string;
+					p_note: string;
+					p_page_id: string;
+					p_tenant_id: string;
+				};
+				Returns: boolean;
 			};
 			claim_work_items: {
 				Args: {
@@ -1704,6 +1903,7 @@ export type Database = {
 			brain_access_principal: "user" | "members";
 			brain_author_kind: "user" | "agent" | "import";
 			brain_page_status: "activo" | "borrador" | "archivado";
+			brain_skill_action: "publicar" | "retirar";
 			config_value_kind: "segmento" | "vector" | "hook" | "idioma";
 			connector_capability: "crm" | "leads" | "enrichment" | "brain" | "mail";
 			invitation_status: "pending" | "accepted" | "revoked";
@@ -1873,6 +2073,7 @@ export const Constants = {
 			brain_access_principal: ["user", "members"],
 			brain_author_kind: ["user", "agent", "import"],
 			brain_page_status: ["activo", "borrador", "archivado"],
+			brain_skill_action: ["publicar", "retirar"],
 			config_value_kind: ["segmento", "vector", "hook", "idioma"],
 			connector_capability: ["crm", "leads", "enrichment", "brain", "mail"],
 			invitation_status: ["pending", "accepted", "revoked"],
