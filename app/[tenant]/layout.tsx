@@ -9,6 +9,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { brandStyle } from "@/lib/brand/contrast";
+import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { visibleNav } from "@/lib/tenants/nav";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
@@ -25,6 +26,7 @@ export default async function TenantLayout({
 
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.
 	if (!tenant) notFound();
+	const enabledAgents = await loadEnabledAgents(tenant.id);
 
 	const logoUrl = tenant.brand.logoUrl
 		? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${tenant.brand.logoUrl}`
@@ -84,7 +86,7 @@ export default async function TenantLayout({
 				    esta tira, no de la página. */}
 				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
 					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
-						{visibleNav(tenant.role).map((item) =>
+						{visibleNav(tenant.role, enabledAgents).map((item) =>
 							"items" in item ? (
 								<li key={item.label}>
 									<DropdownMenu>

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { toAccountRows } from "@/lib/outreach/cuentas-query";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { CuentasClient } from "./cuentas-client";
 
@@ -14,6 +15,7 @@ export default async function CuentasPage({
 	const tenant = await resolveTenantAccess(slug);
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.
 	if (!tenant) notFound();
+	await requireAgent(tenant.id, "outreach");
 
 	const supabase = await createServerSupabase();
 	// Con el cliente del usuario: la RLS accounts_select decide qué filas se

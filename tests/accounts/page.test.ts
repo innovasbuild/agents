@@ -105,6 +105,11 @@ vi.mock("next/navigation", () => ({
 	},
 	useRouter: () => ({ refresh: () => {} }),
 }));
+vi.mock("@/lib/tenants/enabled-agents", () => ({
+	requireAgent: async () => {},
+	loadEnabledAgents: async () => ["outreach"],
+	loadBrainEnabled: async () => true,
+}));
 vi.mock("@/app/[tenant]/mis-cuentas/actions", () => ({
 	startAccountAuthorization: async () => ({ ok: true, url: "x" }),
 }));
