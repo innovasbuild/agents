@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { executorSignature } from "@/lib/outreach/signature-preview";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { requireAgent } from "@/lib/tenants/enabled-agents";
+import { requireChatAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { ChatClient } from "./chat-client";
 
@@ -16,7 +16,7 @@ export default async function ChatPage({
 	const { hilo } = await searchParams;
 	const tenant = await resolveTenantAccess(slug);
 	if (!tenant) notFound();
-	await requireAgent(tenant.id, "outreach");
+	await requireChatAgent(tenant.id);
 
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();

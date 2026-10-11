@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import type { CatalogAgent } from "../agents/catalog";
 import { createServerSupabase } from "../supabase/server";
+import { hasChatAgent } from "./home";
 
 /** `null` si no se pudo leer: quien llama no oculta ni cierra nada. */
 export const loadEnabledAgents = cache(
@@ -58,4 +59,13 @@ export async function requireAgent(
 ): Promise<void> {
 	const enabled = await loadEnabledAgents(tenantId);
 	if (enabled && !enabled.includes(agent)) notFound();
+}
+
+/**
+ * 404 si la empresa no tiene ningún agente que se use desde el chat. Es la
+ * misma regla con la que tenantHome manda a /chat.
+ */
+export async function requireChatAgent(tenantId: string): Promise<void> {
+	const enabled = await loadEnabledAgents(tenantId);
+	if (enabled && !hasChatAgent(enabled)) notFound();
 }

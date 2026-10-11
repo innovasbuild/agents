@@ -27,7 +27,7 @@ const notFound = vi.fn(() => {
 });
 vi.mock("next/navigation", () => ({ notFound }));
 
-const { loadEnabledAgents, requireAgent } = await import(
+const { loadEnabledAgents, requireAgent, requireChatAgent } = await import(
 	"@/lib/tenants/enabled-agents"
 );
 
@@ -64,6 +64,27 @@ describe("requireAgent", () => {
 		state.rows = null;
 		state.error = { message: "boom" };
 		await expect(requireAgent("t1", "outreach")).resolves.toBeUndefined();
+		expect(notFound).not.toHaveBeenCalled();
+	});
+});
+
+describe("requireChatAgent (la pantalla de chat, con la misma regla que tenantHome)", () => {
+	it("deja pasar si algún agente habilitado se usa desde el chat", async () => {
+		state.rows = [{ agent: "desconocido" }, { agent: "outreach" }];
+		await expect(requireChatAgent("t1")).resolves.toBeUndefined();
+	});
+
+	it("da 404 si ningún agente habilitado se usa desde el chat", async () => {
+		state.rows = [{ agent: "desconocido" }];
+		await expect(requireChatAgent("t1")).rejects.toThrow("NOT_FOUND");
+		state.rows = [];
+		await expect(requireChatAgent("t1")).rejects.toThrow("NOT_FOUND");
+	});
+
+	it("si no se pudo leer, deja pasar", async () => {
+		state.rows = null;
+		state.error = { message: "boom" };
+		await expect(requireChatAgent("t1")).resolves.toBeUndefined();
 		expect(notFound).not.toHaveBeenCalled();
 	});
 });
