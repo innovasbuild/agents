@@ -247,7 +247,7 @@ export async function resendInvitation(
 		admin: createAdminClient(),
 		email: allowed.row.email,
 		origin: originFrom(await headers()),
-		next: tenant?.slug ? `/${tenant.slug}/chat` : undefined,
+		next: tenant?.slug ? `/${tenant.slug}` : undefined,
 	});
 
 	if (outcome === "mail_fallo") {

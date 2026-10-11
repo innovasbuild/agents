@@ -1,6 +1,6 @@
 // Pasos para conectar una URL de MCP desde cada cliente (spec etapa 19 §3.2).
 // Los pasos salen de la documentación pública de cada cliente al 2026-10-09.
-// `tested` dice si alguien lo probó contra esta plataforma en producción.
+// `tested` dice si alguien lo probó contra esta plataforma (en producción, con una cuenta real).
 
 export const CLIENTS = [
 	"claude-code",
@@ -67,19 +67,19 @@ export function instructionsFor(
 			};
 		case "chatgpt":
 			return {
-				tested: false,
+				tested: true,
 				steps: [
 					"Abrí Configuración y entrá a Conectores (puede figurar como Apps).",
-					"En Ajustes avanzados, activá el Modo desarrollador.",
+					"Si ChatGPT te lo pide, activá el Modo desarrollador en Ajustes avanzados.",
 					"Volvé a Conectores, elegí Crear y pegá la URL de arriba.",
 					"En autenticación elegí OAuth, confirmá que confiás en la aplicación y creala.",
 					LOGIN,
-					"Hace falta un plan con Modo desarrollador. En un espacio de trabajo, lo tiene que habilitar un administrador.",
+					"En un espacio de trabajo corporativo puede hacer falta que un administrador permita conectores propios. Ese caso todavía no lo probamos.",
 				],
 			};
 		case "codex":
 			return {
-				tested: false,
+				tested: true,
 				steps: ["Corré estos dos comandos en tu terminal.", LOGIN],
 				snippet: {
 					language: "bash",

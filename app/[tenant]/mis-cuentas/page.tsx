@@ -20,6 +20,7 @@ import { GMAIL_SCOPES } from "@/lib/gmail/send";
 import { connectSubjectIssuer } from "@/lib/outreach/web-context";
 import { webSession } from "@/lib/outreach/web-session";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { AccountCard } from "./account-card";
 
 const OWNER_NOTE =
@@ -34,6 +35,7 @@ export default async function MisCuentasPage({
 	const session = await webSession(slug);
 	if (!session) notFound();
 	const { caller } = session;
+	await requireAgent(caller.tenantId, "outreach");
 
 	const supabase = await createServerSupabase();
 	const [connectionsResult, executorResult] = await Promise.all([

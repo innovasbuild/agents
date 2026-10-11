@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
+import {
+	actionAllowsLogin,
+	consentAllowsLogin,
+	consentLoginCheck,
+} from "@/lib/tenants/login-check-server";
 import type { ServerSupabase } from "@/lib/tenants/platform";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
@@ -103,5 +107,118 @@ describe("actionAllowsLogin", () => {
 		expect(await actionAllowsLogin(client, USER_ID, TENANT_ID)).toBe(false);
 		expect(rpcCalls).toHaveLength(0);
 		expect(error).toHaveBeenCalled();
+	});
+});
+
+/**
+ * `ownerRow`: la membresía platform_admin en el tenant dueño, si la hay.
+ * `tenants`: las empresas activas de la persona.
+ */
+function fakeConsentSupabase(options: {
+	ownerRow: unknown;
+	tenants?: string[];
+	listError?: unknown;
+	allowed?: (tenantId: string) => boolean | Error;
+}) {
+	const rpcCalls: [string, unknown][] = [];
+	const list = Promise.resolve({
+		data: (options.tenants ?? []).map((id) => ({ tenant_id: id })),
+		error: options.listError ?? null,
+	});
+	const builder = Object.assign(list, {
+		select: () => builder,
+		eq: () => builder,
+		maybeSingle: async () => ({ data: options.ownerRow, error: null }),
+	});
+	const client = {
+		from: () => builder,
+		rpc: async (fn: string, args: { p_tenant: string }) => {
+			rpcCalls.push([fn, args]);
+			const answer = options.allowed ? options.allowed(args.p_tenant) : true;
+			if (answer instanceof Error) throw answer;
+			return { data: answer as unknown, error: null as unknown };
+		},
+	};
+	return { client: client as unknown as ServerSupabase, rpcCalls };
+}
+
+describe("consentAllowsLogin", () => {
+	const original = process.env.PLATFORM_OWNER_TENANT_SLUG;
+	beforeEach(() => {
+		process.env.PLATFORM_OWNER_TENANT_SLUG = "innovas";
+	});
+	afterEach(() => {
+		if (original === undefined) delete process.env.PLATFORM_OWNER_TENANT_SLUG;
+		else process.env.PLATFORM_OWNER_TENANT_SLUG = original;
+		vi.restoreAllMocks();
+	});
+
+	it("deja autorizar si todas las empresas de la persona permiten el método", async () => {
+		const { client, rpcCalls } = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID, OWNER_ID],
+		});
+		expect(await consentAllowsLogin(client, USER_ID)).toBe(true);
+		expect(rpcCalls).toEqual([
+			["tenant_allows_login", { p_tenant: TENANT_ID }],
+			["tenant_allows_login", { p_tenant: OWNER_ID }],
+		]);
+	});
+
+	it("si una de sus empresas no permite el método, no deja: el grant vale para todas", async () => {
+		const { client } = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID, OWNER_ID],
+			allowed: (id) => id !== TENANT_ID,
+		});
+		expect(await consentAllowsLogin(client, USER_ID)).toBe(false);
+	});
+
+	it("a un administrador de plataforma lo chequea solo contra el tenant dueño (L12)", async () => {
+		const { client, rpcCalls } = fakeConsentSupabase({
+			ownerRow: { tenant_id: OWNER_ID },
+			tenants: [TENANT_ID, OWNER_ID],
+			allowed: (id) => id === OWNER_ID,
+		});
+		expect(await consentAllowsLogin(client, USER_ID)).toBe(true);
+		expect(rpcCalls).toEqual([["tenant_allows_login", { p_tenant: OWNER_ID }]]);
+	});
+
+	it("si el RPC tira o no se pueden leer sus empresas, no deja", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
+		const tira = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID],
+			allowed: () => new Error("red"),
+		});
+		expect(await consentAllowsLogin(tira.client, USER_ID)).toBe(false);
+		const sinLista = fakeConsentSupabase({
+			ownerRow: null,
+			listError: { message: "boom" },
+		});
+		expect(await consentAllowsLogin(sinLista.client, USER_ID)).toBe(false);
+	});
+
+	it("sin empresas activas no hay nada que autorizar", async () => {
+		const { client } = fakeConsentSupabase({ ownerRow: null, tenants: [] });
+		expect(await consentAllowsLogin(client, USER_ID)).toBe(false);
+	});
+
+	it("el detalle distingue no tener empresas de que una no permita el método", async () => {
+		const sinEmpresas = fakeConsentSupabase({ ownerRow: null, tenants: [] });
+		expect(await consentLoginCheck(sinEmpresas.client, USER_ID)).toBe(
+			"no-tenants",
+		);
+		const negado = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID],
+			allowed: () => false,
+		});
+		expect(await consentLoginCheck(negado.client, USER_ID)).toBe("denied");
+		const permitido = fakeConsentSupabase({
+			ownerRow: null,
+			tenants: [TENANT_ID],
+		});
+		expect(await consentLoginCheck(permitido.client, USER_ID)).toBe("allowed");
 	});
 });

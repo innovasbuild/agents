@@ -53,6 +53,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "ana",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter: fakeLimiter(),
 		});
@@ -66,6 +67,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "ana",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter: fakeLimiter(),
 		});
@@ -84,6 +86,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "ana",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter,
 		});
@@ -94,6 +97,7 @@ describe("buildBrainMcpServer", () => {
 		const writeServer = buildBrainMcpServer({
 			userId: "admin",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter,
 		});
@@ -118,6 +122,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "admin",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter: fakeLimiter(),
 		});
@@ -151,6 +156,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "ana",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter: fakeLimiter(),
 		});
@@ -176,6 +182,7 @@ describe("buildBrainMcpServer", () => {
 		const server = buildBrainMcpServer({
 			userId: "ana",
 			categories: ["comercial"],
+			canon: false,
 			provider,
 			limiter: fakeLimiter(),
 		});

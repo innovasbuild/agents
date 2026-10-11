@@ -39,6 +39,7 @@ function store(overrides: Partial<AccessStore> = {}): AccessStore {
 			tenantId === "tenant-a" ? binding : null,
 		// El tenant dueño de la plataforma es tenant-x (donde vive "root").
 		platformOwnerTenantId: async () => "tenant-x",
+		allowsLogin: async () => true,
 		...overrides,
 	};
 }
@@ -207,6 +208,83 @@ describe("resolveMcpAccess", () => {
 		});
 		expect(await access("Bearer ana", "b", { store: sinBrain })).toMatchObject({
 			status: 403,
+		});
+	});
+
+	describe("el método de login de la sesión (spec etapa 20, L10)", () => {
+		const conMetodo = (method: string) =>
+			vi.fn(async (token: string) => ({
+				sub: token,
+				client_id: "claude",
+				role: "authenticated",
+				amr: [{ method, timestamp: 1 }],
+			}));
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		afterEach(() => error.mockClear());
+
+		it("un token con un método que la empresa permite entra", async () => {
+			const allowsLogin = vi.fn(async () => true);
+			expect(
+				await access("Bearer ana", "a", {
+					verify: conMetodo("otp"),
+					store: store({ allowsLogin }),
+				}),
+			).toMatchObject({ ok: true, role: "tenant_member" });
+			expect(allowsLogin).toHaveBeenCalledWith("ana", "tenant-a");
+		});
+
+		it("un token con un método que la empresa no permite recibe 403", async () => {
+			expect(
+				await access("Bearer ana", "a", {
+					verify: conMetodo("oauth"),
+					store: store({ allowsLogin: async () => false }),
+				}),
+			).toMatchObject({ ok: false, status: 403, code: "forbidden" });
+		});
+
+		it("si el chequeo falla, no entra", async () => {
+			expect(
+				await access("Bearer ana", "a", {
+					verify: conMetodo("otp"),
+					store: store({
+						allowsLogin: async () => {
+							throw new Error("rpc caído");
+						},
+					}),
+				}),
+			).toMatchObject({ ok: false, status: 403, code: "forbidden" });
+			expect(error).toHaveBeenCalled();
+		});
+
+		it("a un platform_admin lo chequea contra el tenant dueño, no contra el que visita", async () => {
+			const allowsLogin = vi.fn(async () => true);
+			expect(
+				await access("Bearer root", "a", {
+					verify: conMetodo("otp"),
+					store: store({ allowsLogin }),
+				}),
+			).toMatchObject({ ok: true, role: "platform_admin" });
+			expect(allowsLogin).toHaveBeenCalledWith("root", "tenant-x");
+		});
+
+		it("un token del servidor OAuth sin método de login no se chequea: lo cortó el consentimiento", async () => {
+			const allowsLogin = vi.fn(async () => false);
+			expect(
+				await access("Bearer ana", "a", {
+					verify: conMetodo("oauth_provider/authorization_code"),
+					store: store({ allowsLogin }),
+				}),
+			).toMatchObject({ ok: true });
+			expect(allowsLogin).not.toHaveBeenCalled();
+		});
+
+		it("no se chequea el método antes de saber si tiene acceso: no filtra qué tenants existen", async () => {
+			const allowsLogin = vi.fn(async () => false);
+			await access("Bearer ana", "b", {
+				verify: conMetodo("otp"),
+				store: store({ allowsLogin }),
+			});
+			expect(allowsLogin).not.toHaveBeenCalled();
 		});
 	});
 

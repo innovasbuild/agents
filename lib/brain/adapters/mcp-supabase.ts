@@ -7,6 +7,7 @@ import {
 	loadMemberships,
 	loadPlatformOwnerTenantId,
 	loadTenantBySlug,
+	tokenAllowsLogin,
 } from "../../auth/oauth-principal";
 import { loadTenantBindings } from "../../connectors/bindings";
 import { createAdminClient } from "../../supabase/admin";
@@ -25,6 +26,7 @@ export function supabaseAccessStore(): AccessStore {
 		brainBinding: (tenantId) =>
 			resolveBrainBinding(tenantId, loadTenantBindings),
 		platformOwnerTenantId: loadPlatformOwnerTenantId,
+		allowsLogin: tokenAllowsLogin,
 	};
 }
 

@@ -63,7 +63,6 @@ export const createTenantSchema = z
 		allowExternalAdmin: z.boolean(),
 		agents: z
 			.array(z.string())
-			.min(1, { error: "Elegí al menos un agente." })
 			.refine((list) => list.every(isCatalogAgent), {
 				error: "Hay un agente que no existe en el catálogo.",
 			})

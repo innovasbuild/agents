@@ -27,8 +27,15 @@ const state = vi.hoisted(() => ({
 	describeCalls: [] as string[],
 	seed: true as boolean | Error,
 	seedCalls: [] as string[][],
-	brainRows: [{ id: "b1" }] as { id: string }[],
+	brainRows: [{ id: "b1" }] as {
+		id: string;
+		config?: Record<string, unknown>;
+	}[],
 	brainRowsError: null as { message: string } | null,
+	agentRows: [{ agent: "outreach" }] as { agent: string }[],
+	agentRowsError: null as { message: string } | null,
+	agentRowsThrow: false,
+	rpcBeforeSeed: [] as string[][],
 }));
 
 vi.mock("next/cache", () => ({
@@ -46,7 +53,19 @@ vi.mock("@/lib/supabase/admin", () => ({
 			state.rpcCalls.push({ fn, args });
 			return state.rpc;
 		},
-		from: (_table: string) => {
+		from: (table: string) => {
+			if (table === "tenant_agents") {
+				if (state.agentRowsThrow) throw new Error("sin red");
+				// La lectura de agentes termina en .eq(): la cadena es la promesa.
+				const agents = Object.assign(
+					Promise.resolve({
+						data: state.agentRows,
+						error: state.agentRowsError,
+					}),
+					{ select: () => agents, eq: () => agents },
+				);
+				return agents;
+			}
 			const chain = {
 				select: () => chain,
 				eq: () => chain,
@@ -72,6 +91,7 @@ vi.mock("@/lib/connectors/env", () => ({ inVercel: () => state.inVercel }));
 vi.mock("@/lib/outreach/canon-seed", () => ({
 	seedCanonPagesForTenant: async (tenantId: string, userId: string) => {
 		state.seedCalls.push([tenantId, userId]);
+		state.rpcBeforeSeed.push(state.rpcCalls.map((c) => c.fn));
 		if (state.seed instanceof Error) throw state.seed;
 		return state.seed;
 	},
@@ -87,6 +107,10 @@ beforeEach(() => {
 	state.brainRowsError = null;
 	state.seed = true;
 	state.seedCalls = [];
+	state.agentRows = [{ agent: "outreach" }];
+	state.agentRowsError = null;
+	state.agentRowsThrow = false;
+	state.rpcBeforeSeed = [];
 	state.admin = true;
 	state.rpc = { data: CONN, error: null };
 	state.rpcCalls = [];
@@ -509,6 +533,159 @@ describe("createBrain: páginas por defecto", () => {
 	});
 });
 
+describe("canon según los agentes (spec 21.4 §4.1)", () => {
+	it("createBrain en una empresa sin agentes no siembra el canon", async () => {
+		state.agentRows = [];
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("createBrain en una empresa con outreach siembra el canon una vez", async () => {
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(1);
+	});
+
+	it("si no puede leer los agentes, createBrain siembra como antes", async () => {
+		state.agentRowsError = { message: "caída" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(1);
+		log.mockRestore();
+	});
+
+	it("habilitar outreach con brain siembra el canon después de guardar", async () => {
+		state.agentRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(1);
+		expect(state.rpcBeforeSeed).toEqual([["platform_set_agent"]]);
+	});
+
+	it("deshabilitar un agente no siembra", async () => {
+		await actions.setAgent("acme", TENANT, "outreach", false, "none");
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("si guardar el agente falla, no siembra", async () => {
+		state.rpc = {
+			data: null,
+			error: { message: "no", hint: "consola" },
+		};
+		await actions.setAgent("acme", TENANT, "outreach", true, "read_write");
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("si la siembra falla y el brain no tiene la categoría del canon, dice que la agreguen primero", async () => {
+		state.agentRows = [];
+		state.seed = false;
+		state.brainRows = [{ id: "b1", config: { categories: ["empresa"] } }];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto: el brain no tiene la categoría comercial. Agregala en Categorías y creá a mano comercial/icp y comercial/hooks.",
+		});
+	});
+
+	it("si la siembra falla con la categoría del canon en el brain, el aviso de siempre", async () => {
+		state.agentRows = [];
+		state.seed = false;
+		state.brainRows = [
+			{ id: "b1", config: { categories: ["empresa", "comercial"] } },
+		];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+	});
+
+	it("si la siembra falla al habilitar, avisa que quedó guardado", async () => {
+		state.agentRows = [];
+		state.seed = false;
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read_write"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+	});
+});
+
+describe("setAgent: el canon se siembra solo al pasar de apagado a prendido", () => {
+	it("un Guardar con el agente ya habilitado no siembra (innovas cambia el acceso al brain)", async () => {
+		state.agentRows = [{ agent: "outreach" }];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({ ok: true });
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
+	it("otro agente habilitado no cuenta como estado previo", async () => {
+		state.agentRows = [{ agent: "otro" }];
+		await actions.setAgent("acme", TENANT, "outreach", true, "read");
+		expect(state.seedCalls).toHaveLength(1);
+	});
+
+	it("de apagado a prendido siembra una vez, después de guardar", async () => {
+		state.agentRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({ ok: true });
+		expect(state.seedCalls).toEqual([[TENANT, "u1"]]);
+		expect(state.rpcBeforeSeed).toEqual([["platform_set_agent"]]);
+	});
+
+	it("si no puede leer el estado previo, guarda igual, no siembra y avisa", async () => {
+		state.agentRows = [];
+		state.agentRowsError = { message: "caída" };
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		expect(state.seedCalls).toHaveLength(0);
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+
+	it("si la siembra tira, el agente queda guardado y se avisa", async () => {
+		state.agentRows = [];
+		state.seed = new Error("brain caído");
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(
+			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
+		).toEqual({
+			ok: false,
+			message:
+				"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+		});
+		expect(state.rpcCalls.map((c) => c.fn)).toEqual(["platform_set_agent"]);
+		log.mockRestore();
+	});
+});
+
+describe("createBrain: la lectura de agentes no lo hace fallar", () => {
+	it("si leer los agentes tira, el brain queda creado y se siembra como antes", async () => {
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.agentRowsThrow = true;
+		expect(await actions.createBrain("acme", TENANT)).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(1);
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+});
+
 describe("setBudget", () => {
 	it("llama platform_set_budget con el actor y el número", async () => {
 		expect(await actions.setBudget("acme", TENANT, "model_usd", "2.5")).toEqual(
@@ -596,5 +773,53 @@ describe("setBudget", () => {
 			ok: false,
 			message: "ese recurso no existe",
 		});
+	});
+});
+
+describe("setBrainCategories", () => {
+	it("sin platform_admin no llama al rpc", async () => {
+		state.admin = false;
+		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
+			SIN_PERMISO,
+		);
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("normaliza la lista y llama a platform_set_brain_categories", async () => {
+		expect(
+			await actions.setBrainCategories("acme", TENANT, "Empresa, trigo"),
+		).toEqual({ ok: true });
+		expect(state.rpcCalls).toEqual([
+			{
+				fn: "platform_set_brain_categories",
+				args: {
+					p_actor: "u1",
+					p_tenant: TENANT,
+					p_categories: ["empresa", "trigo"],
+				},
+			},
+		]);
+		expect(state.revalidated).toContain("/plataforma/acme");
+	});
+
+	it("una categoría inválida devuelve el mensaje y no llama al rpc", async () => {
+		expect(
+			await actions.setBrainCategories("acme", TENANT, "compras de trigo"),
+		).toEqual({
+			ok: false,
+			message:
+				"«compras de trigo» no es válida: usá minúsculas, números y guiones, empezando con una letra.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("muestra el error de la base cuando trae hint consola", async () => {
+		state.rpc = {
+			data: null,
+			error: { message: "La categoría «x» tiene páginas.", hint: "consola" },
+		};
+		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
+			{ ok: false, message: "La categoría «x» tiene páginas." },
+		);
 	});
 });

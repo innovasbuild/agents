@@ -25,15 +25,22 @@ const slugSchema = z
 
 const canon = CANON_TAGS.join(", ");
 
-export function brainContract(categories: string[]) {
+export function brainContract(
+	categories: string[],
+	// Sin canon cuando la empresa no tiene un agente que lo use (spec 21.4 §4.3).
+	{ canon: withCanon = true }: { canon?: boolean } = {},
+) {
 	if (categories.length === 0) {
 		throw new Error("el brain necesita al menos una categoría");
 	}
 	const category = z.enum(categories as [string, ...string[]]);
+	const valid = `Categorías válidas: ${categories.join(", ")}.`;
 
 	return {
 		search: {
-			description: `Busca en el brain de este cliente: canon comercial, ICP, mensajes, voz, hooks, cuentas y producto. Para canon, filtrá por tag: ${canon}. La consulta puede ir vacía si filtrás por tag o categoría.`,
+			description: withCanon
+				? `Busca en el brain de este cliente: canon comercial, ICP, mensajes, voz, hooks, cuentas y producto. Para canon, filtrá por tag: ${canon}. La consulta puede ir vacía si filtrás por tag o categoría.`
+				: `Busca en el brain de esta empresa por texto, categoría o tag. La consulta puede ir vacía si filtrás por tag o categoría. ${valid}`,
 			input: z.object({
 				query: z.string().max(500),
 				category: category.optional(),
@@ -44,11 +51,11 @@ export function brainContract(categories: string[]) {
 		},
 		read: {
 			description:
-				"Lee una página completa del brain de este cliente, con su revisión. Necesitás la revisión para actualizarla con brain_upsert.",
+				"Lee una página completa del brain de esta empresa, con su revisión. Necesitás la revisión para actualizarla con brain_upsert.",
 			input: z.object({ slug: slugSchema }),
 		},
 		upsert: {
-			description: `Crea o actualiza una página del brain de este cliente. Para actualizar, leé la página y pasá su revisión en baseRevision; sin baseRevision solo crea páginas nuevas. Nunca borres: para retirar una página, poné status archivado. Explicá el cambio en reason. Categorías válidas: ${categories.join(", ")}. Tags de canon: ${canon}.`,
+			description: `Crea o actualiza una página del brain de esta empresa. Para actualizar, leé la página y pasá su revisión en baseRevision; sin baseRevision solo crea páginas nuevas. Nunca borres: para retirar una página, poné status archivado. Explicá el cambio en reason. ${valid}${withCanon ? ` Tags de canon: ${canon}.` : ""}`,
 			input: z.object({
 				slug: slugSchema,
 				title: z.string().min(1).max(300),

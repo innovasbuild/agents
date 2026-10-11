@@ -20,11 +20,13 @@ function result(value: Record<string, unknown>, isError = false) {
 export function buildBrainMcpServer(ctx: {
 	userId: string;
 	categories: string[];
+	/** Si las descripciones nombran el canon comercial (spec 21.4 §4.3). */
+	canon: boolean;
 	provider: BrainProvider;
 	limiter: RateLimiter;
 }): McpServer {
 	const server = new McpServer({ name: "innovas-brain", version: "1.0.0" });
-	const contract = brainContract(ctx.categories);
+	const contract = brainContract(ctx.categories, { canon: ctx.canon });
 
 	async function run(
 		kind: "read" | "write",

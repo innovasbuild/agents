@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
+import { parseCategories } from "@/lib/brain/core/categories";
 import { describeConnector } from "@/lib/connectors/auth";
 import { inVercel } from "@/lib/connectors/env";
 import {
@@ -13,8 +14,10 @@ import {
 } from "@/lib/connectors/providers";
 import { checkConnectors, verifiedNameFor } from "@/lib/connectors/verify";
 import { seedCanonPagesForTenant } from "@/lib/outreach/canon-seed";
+import { DEFAULT_CANON_PAGES } from "@/lib/outreach/canon-templates";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
+import { agentsNeedCanon } from "@/lib/tenants/readiness";
 import { budgetResources } from "@/lib/workflows/settings";
 
 export type ConsoleResult = { ok: true } | { ok: false; message: string };
@@ -75,13 +78,68 @@ async function call(
 		| "platform_set_connection_enabled"
 		| "platform_remove_connection"
 		| "platform_mark_connection_verified"
-		| "platform_set_budget",
+		| "platform_set_budget"
+		| "platform_set_brain_categories",
 	args: Record<string, unknown>,
 	byCode?: Record<string, string>,
 ): Promise<ConsoleResult> {
 	// biome-ignore lint/suspicious/noExplicitAny: el nombre de la función y sus argumentos ya están validados arriba
 	const { error } = await createAdminClient().rpc(fn as any, args as any);
 	return done(slug, error ? fromDbError(error, byCode) : { ok: true });
+}
+
+const SIN_CANON: ConsoleResult = {
+	ok: false,
+	message:
+		"Quedó guardado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
+};
+
+// La siembra no puede crear páginas en una categoría que el brain no tiene:
+// ahí el paso que falta es agregarla, no crear las páginas a mano.
+const SIN_CATEGORIA_CANON: ConsoleResult = {
+	ok: false,
+	message:
+		"Quedó guardado, pero no pude crear las páginas por defecto: el brain no tiene la categoría comercial. Agregala en Categorías y creá a mano comercial/icp y comercial/hooks.",
+};
+
+/** true solo si se sabe que al brain le falta alguna categoría del canon. */
+function lacksCanonCategory(config: unknown): boolean {
+	const categories = (config as { categories?: unknown } | null)?.categories;
+	if (!Array.isArray(categories)) return false;
+	return DEFAULT_CANON_PAGES.some(
+		(page) => !categories.includes(page.category),
+	);
+}
+
+/**
+ * Si algún agente habilitado de la empresa usa el canon del brain. Si no se
+ * puede leer, se asume que sí: es lo que pasaba antes de la 21.4, y una página
+ * que ya está no se pisa.
+ */
+async function tenantUsesCanon(tenantId: string): Promise<boolean> {
+	const enabled = await readEnabledAgents(tenantId);
+	return enabled === null ? true : agentsNeedCanon(enabled);
+}
+
+/** Agentes habilitados de la empresa; `null` si no se pudo leer (ya logueado). */
+async function readEnabledAgents(
+	tenantId: string,
+): Promise<{ agent: string }[] | null> {
+	try {
+		const { data, error } = await createAdminClient()
+			.from("tenant_agents")
+			.select("agent")
+			.eq("tenant_id", tenantId)
+			.eq("enabled", true);
+		if (error) {
+			console.error("consola: no pude leer los agentes:", error.message);
+			return null;
+		}
+		return data ?? [];
+	} catch (error) {
+		console.error("consola: no pude leer los agentes:", error);
+		return null;
+	}
 }
 
 export async function setAgent(
@@ -99,10 +157,12 @@ export async function setAgent(
 	if (!(BRAIN_ACCESS as readonly string[]).includes(brain)) return INVALIDO;
 
 	// El catálogo vive en código: la base no sabe qué agente necesita brain.
+	// La config se lee en la misma consulta para el aviso de la siembra.
+	let brainConfig: unknown = null;
 	if (enabled === true && AGENT_CATALOG[agent].requiresBrain) {
 		const { data, error } = await createAdminClient()
 			.from("tenant_connections")
-			.select("id")
+			.select("id, config")
 			.eq("tenant_id", tenantId)
 			.eq("capability", "brain")
 			.eq("enabled", true)
@@ -117,15 +177,39 @@ export async function setAgent(
 				message: "Este agente necesita el brain. Creá el brain primero.",
 			};
 		}
+		brainConfig = data[0].config;
 	}
 
-	return call(slug, "platform_set_agent", {
+	// El canon se siembra solo cuando el agente pasa de apagado a prendido: un
+	// Guardar que solo cambia el acceso al brain no crea plantillas. Si no se
+	// puede saber el estado previo, no se siembra y se avisa.
+	const needsSeed = enabled === true && AGENT_CATALOG[agent].requiresBrain;
+	const before = needsSeed ? await readEnabledAgents(tenantId) : null;
+	const wasOff = before !== null && !before.some((row) => row.agent === agent);
+
+	const saved = await call(slug, "platform_set_agent", {
 		p_actor: admin.userId,
 		p_tenant: tenantId,
 		p_agent: agent,
 		p_enabled: enabled === true,
 		p_brain: brain,
 	});
+	// Las páginas del canon nacen cuando hay un agente que las usa, no con el
+	// brain (spec 21.4 §4.1). El brain ya existe: se verificó arriba. Un brain
+	// que ya tiene canon no recibe plantillas.
+	if (saved.ok && needsSeed && wasOff) {
+		let seeded = false;
+		try {
+			seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
+		} catch (error) {
+			console.error("consola: no pude sembrar el canon:", error);
+		}
+		if (!seeded) {
+			return lacksCanonCategory(brainConfig) ? SIN_CATEGORIA_CANON : SIN_CANON;
+		}
+	}
+	if (saved.ok && needsSeed && before === null) return SIN_CANON;
+	return saved;
 }
 
 export async function createBrain(
@@ -146,6 +230,8 @@ export async function createBrain(
 		p_verified_name: null,
 	});
 	if (!created.ok) return created;
+	// Sin un agente que use el canon, el brain nace vacío (spec 21.4 §4.1).
+	if (!(await tenantUsesCanon(tenantId))) return created;
 	// Carpeta y archivo por defecto para el ICP y los hooks (spec 21.3 §3.6).
 	const seeded = await seedCanonPagesForTenant(tenantId, admin.userId);
 	return seeded
@@ -155,6 +241,26 @@ export async function createBrain(
 				message:
 					"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 			};
+}
+
+export async function setBrainCategories(
+	slug: string,
+	tenantId: string,
+	raw: string,
+): Promise<ConsoleResult> {
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
+	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
+	if (typeof raw !== "string" || raw.length > 2000) return INVALIDO;
+
+	const parsed = parseCategories(raw);
+	if (!parsed.ok) return { ok: false, message: parsed.message };
+
+	return call(slug, "platform_set_brain_categories", {
+		p_actor: admin.userId,
+		p_tenant: tenantId,
+		p_categories: parsed.categories,
+	});
 }
 
 /** Cuántos identificadores lleva un proveedor: ninguno (OAuth de plataforma), uno, o varios. */

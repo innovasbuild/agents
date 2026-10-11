@@ -42,11 +42,43 @@ describe("tenantReadiness", () => {
 		expect(ok()).toEqual({ ready: true, missing: [] });
 	});
 
-	it("sin agentes habilitados", () => {
+	it("sin agentes y con brain, está lista", () => {
 		expect(
-			ok({ agents: [{ agent: "outreach", enabled: false }] }).missing,
-		).toEqual(["agentes"]);
-		expect(ok({ agents: [] }).missing).toEqual(["agentes"]);
+			tenantReadiness({
+				agents: [],
+				connections: [
+					{
+						capability: "brain",
+						provider: "wiki",
+						enabled: true,
+						verifiedAt: null,
+					},
+				],
+			}),
+		).toEqual({ ready: true, missing: [] });
+	});
+
+	it("un agente deshabilitado y brain, está lista", () => {
+		expect(
+			tenantReadiness({
+				agents: [{ agent: "outreach", enabled: false }],
+				connections: [
+					{
+						capability: "brain",
+						provider: "wiki",
+						enabled: true,
+						verifiedAt: null,
+					},
+				],
+			}),
+		).toEqual({ ready: true, missing: [] });
+	});
+
+	it("sin agentes y sin brain, faltan los dos", () => {
+		expect(tenantReadiness({ agents: [], connections: [] }).missing).toEqual([
+			"agentes",
+			"brain",
+		]);
 	});
 
 	it("sin brain habilitado", () => {
@@ -230,7 +262,7 @@ describe("ICP y marco en el brain", () => {
 				agents: [{ agent: "outreach", enabled: false }],
 				canon: { icp: "falta", marco: "falta" },
 			}).missing,
-		).toEqual(["agentes"]);
+		).toEqual([]);
 	});
 
 	it("sin canon en la entrada (el listado) no cambia nada", () => {

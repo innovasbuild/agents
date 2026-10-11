@@ -1,3 +1,5 @@
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
 	emailFromAccessToken,
@@ -214,9 +216,52 @@ describe("landingPathFor", () => {
 		expect(landingPathFor("/acme/chat")).toBe("/login/acme");
 	});
 
+	it("deduce la landing de un next que es solo el slug, con o sin query", () => {
+		expect(landingPathFor("/acme")).toBe("/login/acme");
+		expect(landingPathFor("/acme?x=1")).toBe("/login/acme");
+		expect(landingPathFor("/acme#top")).toBe("/login/acme");
+	});
+
 	it("sin next o con next que no es de una empresa va al login general", () => {
 		expect(landingPathFor(null)).toBe("/login");
 		expect(landingPathFor("/")).toBe("/login");
 		expect(landingPathFor("//evil.test/chat")).toBe("/login");
+	});
+
+	it("las rutas propias de la app no son empresas: van al login general", () => {
+		for (const next of [
+			"/login",
+			"/login/acme",
+			"/plataforma",
+			"/plataforma/acme",
+			"/sin-acceso",
+			"/oauth/consent?x=1",
+			"/auth/callback",
+			"/brain/acme",
+			"/api/invitations",
+			"/eve",
+		]) {
+			expect(landingPathFor(next)).toBe("/login");
+		}
+	});
+
+	it("ninguna carpeta de primer nivel de app/ se toma por empresa", () => {
+		// (auth) es un grupo: su login vive en /login.
+		const routes = readdirSync(join(process.cwd(), "app"), {
+			withFileTypes: true,
+		})
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name)
+			.filter((name) => !name.startsWith("[") && !name.startsWith("("))
+			.concat("login");
+		expect(routes.length).toBeGreaterThan(1);
+		for (const route of routes) {
+			expect(landingPathFor(`/${route}/x`)).toBe("/login");
+		}
+	});
+
+	it("un slug que empieza como una ruta propia sigue siendo empresa", () => {
+		expect(landingPathFor("/login-co/chat")).toBe("/login/login-co");
+		expect(landingPathFor("/apis")).toBe("/login/apis");
 	});
 });

@@ -22,10 +22,16 @@ describe("instructionsFor", () => {
 		for (const client of CLIENTS) expect(CLIENT_LABELS[client]).toBeTruthy();
 	});
 
-	it("solo Claude Code está probado", () => {
+	it("Claude Code, ChatGPT y Codex están probados", () => {
 		expect(
 			CLIENTS.filter((client) => instructionsFor(client, target).tested),
-		).toEqual(["claude-code"]);
+		).toEqual(["claude-code", "chatgpt", "codex"]);
+	});
+
+	it("ChatGPT avisa que el espacio de trabajo corporativo no está probado", () => {
+		expect(instructionsFor("chatgpt", target).steps.at(-1)).toBe(
+			"En un espacio de trabajo corporativo puede hacer falta que un administrador permita conectores propios. Ese caso todavía no lo probamos.",
+		);
 	});
 
 	it("todos tienen al menos dos pasos", () => {

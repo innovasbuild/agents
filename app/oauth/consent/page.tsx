@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { describeScopes } from "@/lib/auth/oauth-scopes";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { consentLoginCheck } from "@/lib/tenants/login-check-server";
 import { approveConsent, denyConsent } from "./actions";
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -40,6 +41,34 @@ export default async function ConsentPage({
 	if (!user) {
 		const next = `/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`;
 		redirect(`/login?next=${encodeURIComponent(next)}`);
+	}
+
+	// Va antes de leer el pedido: si la app ya tenía consentimiento, esa
+	// lectura lo aprueba sola y devuelve la redirección con el código.
+	const check = await consentLoginCheck(supabase, user.id);
+	if (check === "no-tenants") {
+		return (
+			<Frame>
+				<h1 className="text-xl">No podés conectar con esta sesión</h1>
+				<p className="text-muted-foreground">
+					Todavía no estás en ninguna empresa activa, así que no hay nada que
+					conectar. Cuando te sumen a una, volvé a conectar desde tu
+					herramienta.
+				</p>
+			</Frame>
+		);
+	}
+	if (check !== "allowed") {
+		return (
+			<Frame>
+				<h1 className="text-xl">No podés conectar con esta sesión</h1>
+				<p className="text-muted-foreground">
+					Entraste con un método que alguna de tus empresas no permite. Cerrá
+					sesión, entrá con un método permitido y volvé a conectar desde tu
+					herramienta.
+				</p>
+			</Frame>
+		);
 	}
 
 	const { data, error } =

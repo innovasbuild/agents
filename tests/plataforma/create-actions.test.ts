@@ -169,16 +169,18 @@ describe("createTenant", () => {
 			invitedBy: "u1",
 			allowExternal: false,
 			origin: "https://app.test",
-			next: "/acme/chat",
+			next: "/acme",
 		});
 	});
 
-	it("sin agentes marcados no crea nada", async () => {
-		expect(await createTenant(form({ agents: null }))).toEqual({
-			ok: false,
-			message: "Elegí al menos un agente.",
+	it("sin agentes marcados también crea la empresa", async () => {
+		const result = await createTenant(form({ agents: null }));
+
+		expect(result.ok).toBe(true);
+		expect(state.rpcCalls).toHaveLength(1);
+		expect(state.rpcCalls[0]).toMatchObject({
+			args: expect.objectContaining({ p_agents: [] }),
 		});
-		expect(state.rpcCalls).toHaveLength(0);
 	});
 
 	it("un mensaje de regla de la base (hint consola) se muestra tal cual", async () => {
@@ -186,14 +188,14 @@ describe("createTenant", () => {
 			data: null,
 			error: {
 				code: "23514",
-				message: "la empresa necesita al menos un agente",
+				message: "la lista de agentes tiene repetidos",
 				hint: "consola",
 			},
 		};
 
 		expect(await createTenant(form())).toEqual({
 			ok: false,
-			message: "la empresa necesita al menos un agente",
+			message: "la lista de agentes tiene repetidos",
 		});
 	});
 

@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const getClaims = vi.fn();
+const rpc = vi.fn();
+const createClientCalls = vi.hoisted(() => [] as unknown[][]);
 vi.mock("@supabase/supabase-js", () => ({
-	createClient: () => ({ auth: { getClaims } }),
+	createClient: (...args: unknown[]) => {
+		createClientCalls.push(args);
+		return { auth: { getClaims }, rpc };
+	},
 }));
 
 const membershipsRows = vi.hoisted(() => ({ rows: [] as unknown[] }));
@@ -32,8 +37,12 @@ vi.mock("../../lib/supabase/admin", () => ({
 	}),
 }));
 
-const { createOAuthClaimsVerifier, loadMemberships, loadTenantBySlug } =
-	await import("@/lib/auth/oauth-principal");
+const {
+	createOAuthClaimsVerifier,
+	loadMemberships,
+	loadTenantBySlug,
+	tokenAllowsLogin,
+} = await import("@/lib/auth/oauth-principal");
 
 beforeEach(() => {
 	getClaims.mockReset();
@@ -89,5 +98,32 @@ describe("loadTenantBySlug", () => {
 
 	it("null cuando no existe", async () => {
 		expect(await loadTenantBySlug("zzz")).toBeNull();
+	});
+});
+
+describe("tokenAllowsLogin", () => {
+	beforeEach(() => {
+		rpc.mockReset();
+		createClientCalls.length = 0;
+	});
+
+	it("pregunta a la base con el token de la persona, no con service role", async () => {
+		rpc.mockResolvedValue({ data: true, error: null });
+		expect(await tokenAllowsLogin("tok-1", "t-1")).toBe(true);
+		expect(rpc).toHaveBeenCalledWith("tenant_allows_login", {
+			p_tenant: "t-1",
+		});
+		expect(createClientCalls.at(-1)?.[2]).toMatchObject({
+			global: { headers: { Authorization: "Bearer tok-1" } },
+		});
+	});
+
+	it("si la base dice que no o el RPC falla, es falso", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		rpc.mockResolvedValue({ data: false, error: null });
+		expect(await tokenAllowsLogin("tok-1", "t-1")).toBe(false);
+		rpc.mockResolvedValue({ data: true, error: { message: "boom" } });
+		expect(await tokenAllowsLogin("tok-1", "t-1")).toBe(false);
+		error.mockRestore();
 	});
 });

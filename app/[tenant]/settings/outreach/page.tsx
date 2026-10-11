@@ -15,6 +15,7 @@ import {
 import { toListValues } from "@/lib/outreach/outreach-settings-query";
 import { dayStart } from "@/lib/outreach/time";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requireAgent } from "@/lib/tenants/enabled-agents";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import {
 	budgetResources,
@@ -45,6 +46,7 @@ export default async function OutreachSettingsPage({
 	const { tenant: slug } = await params;
 	const tenant = await resolveTenantAccess(slug);
 	if (!tenant) notFound();
+	await requireAgent(tenant.id, "outreach");
 	if (tenant.role === "tenant_member") notFound();
 
 	const supabase = await createServerSupabase();
@@ -56,8 +58,6 @@ export default async function OutreachSettingsPage({
 		.maybeSingle();
 	if (agentError)
 		console.error("outreach settings: tenant_agents:", agentError);
-	// Sin el agente habilitado no hay nada que configurar acá.
-	if (!agentError && agent?.enabled !== true) notFound();
 
 	// Una config guardada rota no puede dejar al administrador sin pantalla
 	// para arreglarla: se muestra el formulario con los defaults.
