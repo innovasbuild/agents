@@ -77,3 +77,34 @@ describe("inventory contra el repo real", () => {
 		expect(keys(inv.providers)).toContain("hubspot");
 	});
 });
+
+describe("inventory, casos de borde", () => {
+	it("una raíz sin nada da listas vacías y no lanza", async () => {
+		const inv = await inventory("tests/fixtures/docs/no-existe", {
+			nodes: {},
+			workflows: {},
+			providers: {},
+		});
+		expect(inv.scripts).toEqual([]);
+		expect(inv.tools).toEqual([]);
+		expect(inv.envVars).toEqual([]);
+	});
+
+	it("un workflow suma sus nodos opcionales y un nodo sin tier queda vacío", async () => {
+		const inv = await inventory("tests/fixtures/docs/no-existe", {
+			nodes: { "d/x": { effect: 0, tier: null } },
+			workflows: {
+				w: {
+					agent: "d",
+					claims: "a",
+					produces: "b",
+					nodes: ["d/x"],
+					optionalNodes: ["d/y"],
+				},
+			},
+			providers: {},
+		});
+		expect(inv.nodes[0].meta?.tier).toBe("");
+		expect(inv.workflows[0].meta?.nodes).toBe("d/x, d/y");
+	});
+});

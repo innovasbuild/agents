@@ -1,6 +1,6 @@
 // Helpers puros para verificar la forma de la wiki (spec etapa 25 §4.3).
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, normalize, relative } from "node:path";
+import { dirname, join, normalize } from "node:path";
 import { parse } from "yaml";
 
 export interface Page {
@@ -92,8 +92,4 @@ export function reachableFrom(index: string, pages: Page[]): Set<string> {
 		}
 	}
 	return seen;
-}
-
-export function relativeTo(root: string, path: string): string {
-	return relative(root, path).split("\\").join("/");
 }

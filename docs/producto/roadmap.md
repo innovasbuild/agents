@@ -629,7 +629,7 @@ La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominio
 
 - [x] Fase 0: esqueleto, documentos movidos con `git mv`, `docs/guias/documentar.md`.
 - [x] Fase 1: inventario, `npm run docs:sync`, tests de forma y de cobertura.
-- [x] Fase 2: README con instalación, `docs:prs`, skill `/docs-wiki`, `VERSION`, `CHANGELOG.md`, CI.
+- [x] Fase 2: README con instalación, `docs:prs`, skill `/docs-wiki`, `VERSION`, `CHANGELOG.md`. El CI quedó afuera hasta habilitar GitHub Actions (contenido en el plan, Task 24).
 - [x] Fase 3: tablas de specs y PR, quince páginas de arquitectura y dominios, siete guías nuevas.
 - [ ] Fase 4: prueba del detector, `/ship`.
 - [ ] Repetir el README con Docker abierto (el ingreso local por Mailpit no se probó).
