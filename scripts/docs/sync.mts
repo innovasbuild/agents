@@ -2,24 +2,13 @@
 import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-	TOOL_LABELS,
-	TOOLS_SIN_ETIQUETA,
-} from "../../lib/agents/running-tool.ts";
-import { SERVICES_EXCLUIDOS } from "../../lib/workflows/registry.ts";
-import { inventory } from "./inventory.ts";
-import { renderReference } from "./sync.ts";
+import { renderRealReference } from "./real.ts";
 
 // Raíz del repo relativa a este script, no a process.cwd().
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
 async function main(): Promise<void> {
-	const inv = await inventory(REPO_ROOT);
-	const pages = renderReference(inv, {
-		toolLabels: TOOL_LABELS,
-		toolsSinEtiqueta: [...TOOLS_SIN_ETIQUETA],
-		servicesExcluidos: SERVICES_EXCLUIDOS,
-	});
+	const pages = await renderRealReference(REPO_ROOT);
 	const dir = join(REPO_ROOT, "docs/referencia");
 	await mkdir(dir, { recursive: true });
 	for (const [name, content] of Object.entries(pages)) {
