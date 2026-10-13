@@ -19,7 +19,7 @@ Este documento es el **tracker de ejecución** del kickoff (`kickoff.md`). Cada 
 1. **Antes de arrancar una etapa:** abrí sesión nueva, corré `/context-restore` si venís de una etapa anterior relacionada, y decile a Claude "trabajemos la Etapa N de `docs/producto/roadmap.md`".
 2. **Modelo de esa sesión:** el indicado en `Modelo Claude Code` de la etapa (lógica completa en kickoff §3a). Si la etapa mezcla spec y wiring, son **dos sesiones separadas** (spec con Opus, implementación con Sonnet en sesión nueva) — está anotado etapa por etapa.
 3. **Proceso dentro de la etapa:** `superpowers:brainstorming` → spec en `docs/superpowers/specs/NN-<etapa>.md` → `superpowers:writing-plans` → plan en `docs/superpowers/plans/NN-<etapa>.md` → TDD/implementación → `superpowers:verification-before-completion` → `/ship`.
-4. **Al cerrar la sesión:** tildar las tareas hechas acá, actualizar el `Estado` de la etapa, y correr `/context-save`.
+4. **Al cerrar la sesión:** tildar las tareas hechas acá, actualizar el `Estado` de la etapa, correr `/docs-wiki` (la wiki tiene que quedar con `npm run docs:check` en verde) y después `/context-save`.
 5. **No saltear el criterio "Terminado cuando"** de cada etapa: es la prueba de que sirve para probar, no una lista de archivos creados.
 
 Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` cerrada (spec + plan + PR mergeado + criterio cumplido).

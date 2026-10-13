@@ -48,6 +48,7 @@ Sin páginas todavía (se escriben en la fase 3 de la Etapa 25).
 
 - [Decisiones por spec](decisiones/README.md): una fila por spec, con su estado y las páginas donde quedó.
 - [Decisiones por PR](decisiones/prs.md): una fila por PR mergeado, con las páginas o el motivo.
+- [Changelog](../CHANGELOG.md): una entrada por PR, la mantiene `/ship`.
 
 ## Producto
 
