@@ -22,7 +22,7 @@ La documentación vive en `docs/` como páginas markdown con frontmatter, agrupa
 | `guias/` | Cómo hacer X, paso a paso | How-to (y `instalacion-local.md` como tutorial) |
 | `referencia/` | Tablas generadas desde el código | Referencia |
 | `decisiones/` | Una fila por spec y una por PR mergeado | Explicación (historia) |
-| `producto/` | Kickoff, roadmap, posicionamiento, evaluaciones | Fuera de Diataxis |
+| `producto/` | Kickoff, roadmap, evaluaciones | Fuera de Diataxis |
 | `diagramas/` | HTML y fuentes de diagramas | Fuera de Diataxis |
 | `superpowers/` | Specs y planes que escriben `brainstorming` y `writing-plans`. No se tocan a mano | Historia |
 

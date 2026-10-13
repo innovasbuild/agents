@@ -87,7 +87,6 @@ docs/
   producto/
     kickoff.md                  movido
     roadmap.md                  movido (01-roadmap-etapas.md), sigue siendo el tracker
-    posicionamiento.md          movido (producto-innovas-ai-os.md)
     evaluacion-gap-2026-10.md   movido
     plan-cierre-gap-2026-10.md  movido
   diagramas/
@@ -229,7 +228,7 @@ No hay GitHub Actions hoy. Un workflow mínimo `.github/workflows/ci.yml`: `npm 
 | `docs/llaves-de-clientes.md` | `docs/guias/llaves-de-clientes.md` | `git mv` + frontmatter. |
 | `docs/brain-mcp-conexion.md` | `docs/guias/conectar-brain-por-mcp.md` | `git mv`. |
 | `docs/agente-mcp-conexion.md` | `docs/guias/conectar-agente-por-mcp.md` | `git mv`. |
-| `docs/producto-innovas-ai-os.md` (sin versionar) | `docs/producto/posicionamiento.md` | `git add` + frontmatter. Mati confirma que va al repo. |
+| `docs/producto-innovas-ai-os.md` (sin versionar) | No entra al repo | Decisión de Mati (2026-10-13): vive en el brain de innovas como `producto/innovas-central-ia`. Se saca de `docs/`. |
 | `docs/2026-10-09-evaluacion-gap-plataforma.md` y `plan-cierre` | `docs/producto/` | `git mv`. |
 | `docs/arquitectura.html` y `.archify.json` | `docs/diagramas/` | `git mv`. El HTML pesa 815 KB: queda, pero la wiki enlaza el JSON como fuente y dice cómo regenerarlo con el skill `archify`. |
 | `lib/brain/README.md` | Queda. | `dominios/brain.md` lo resume y lo enlaza. |

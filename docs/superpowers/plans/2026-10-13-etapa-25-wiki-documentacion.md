@@ -51,7 +51,7 @@
 - Move (git mv): según la tabla de la spec §6.
 - Modify: `CLAUDE.md` (dos paths citados), `docs/README.md`
 
-- [ ] **Step 1:** `git mv` de cada archivo según §6. `docs/producto-innovas-ai-os.md` está sin versionar: `git mv` no sirve, usar `mv` y `git add`.
+- [ ] **Step 1:** `git mv` de cada archivo según §6. `docs/producto-innovas-ai-os.md` no entra al repo (decisión de Mati: vive en el brain de innovas, `producto/innovas-central-ia`); no se mueve ni se versiona.
 - [ ] **Step 2:** Agregar frontmatter (§3.3) a cada archivo movido. Los que ya tienen frontmatter (`roadmap`, `kickoff`) se adaptan al schema: conservar `title`, `fecha` pasa a `updated`, `estado` se borra o pasa a `status: activo`, agregar `category`. `sources` no es obligatorio en `producto/`.
 - [ ] **Step 3:** En `kickoff.md`, agregar debajo del frontmatter una nota de tres líneas: documento fundacional del 2026-09-11, parcialmente superado, lo vigente está en `../arquitectura/`.
 - [ ] **Step 4:** En `CLAUDE.md`, reemplazar `docs/innovas-agents-kickoff.md` por `docs/producto/roadmap.md` (es el tracker, lo que de verdad se usa) y `docs/02-orquestacion.md` por `docs/arquitectura/orquestacion.md`. Buscar con `grep -rn "docs/" CLAUDE.md AGENTS.md README.md` que no quede otro path viejo.
@@ -318,7 +318,7 @@ Cada página de esta fase sigue la forma de §3.4 y lleva `sources`. **Leer las 
 - [ ] **Step 2:** `/docs-wiki` sobre esta misma rama: tiene que terminar sin nada que hacer, salvo la fila del PR de esta etapa (se deja con el número que asigne `gh pr create` en el paso siguiente).
 - [ ] **Step 3:** `/ship`. Verificar en la salida: `VERSION` bumpeada (minor: `0.2.0`), entrada en `CHANGELOG.md`, `Documentation: updated` o `current`, PR creado. Si `/document-release` reporta `blocked`, leer el motivo y corregir en la wiki antes de reintentar; no shippear con riesgo de documentación.
 - [ ] **Step 4:** Agregar la fila del PR a `decisiones/prs.md` y pushear al mismo PR.
-- [ ] **Step 5:** Reporte final para Mati: páginas creadas, exclusiones con motivo, preguntas abiertas (`.codex/` al repo sí o no; `producto/posicionamiento.md` al repo sí o no; CI con GitHub Actions habilitado en el repo), y lo que quedó `en curso`.
+- [ ] **Step 5:** Reporte final para Mati: páginas creadas, exclusiones con motivo, preguntas abiertas (`.codex/` al repo sí o no; CI con GitHub Actions habilitado en el repo), y lo que quedó `en curso`.
 
 ---
 

@@ -42,7 +42,6 @@ Sin páginas todavía (tabla de specs y de PR).
 
 - [Kickoff](producto/kickoff.md): documento fundacional del 2026-09-11.
 - [Roadmap de etapas](producto/roadmap.md): el tracker de ejecución, etapa por etapa.
-- [Posicionamiento](producto/posicionamiento.md): qué es el producto y para quién.
 - [Evaluación de gap (2026-10)](producto/evaluacion-gap-2026-10.md): la plataforma contra la visión.
 - [Plan de cierre del gap (2026-10)](producto/plan-cierre-gap-2026-10.md): las etapas 19 a 23.
 
