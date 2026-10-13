@@ -1,10 +1,12 @@
 ---
-title: INNOV.AS Agents Platform — Kickoff por etapas
-estado: v2, listo para arrancar el repo desde cero
-fecha: 2026-09-11
-autor: Mati + Claude (sesión de planificación)
-repo_destino: github.com/<org-innovas>/innovas-agents
+title: Kickoff por etapas
+category: producto
+status: activo
+tags: [kickoff, fundacional]
+updated: 2026-10-13
 ---
+
+> Documento fundacional del 2026-09-11, parcialmente superado. Lo vigente está en [arquitectura](../arquitectura/orquestacion.md) y en el [índice de la documentación](../README.md).
 
 # INNOV.AS Agents Platform — Kickoff
 
@@ -261,14 +263,14 @@ Cada etapa se corre en **una sesión nueva de Claude Code**, con el modelo indic
 | 9 · Observabilidad por cliente | ⬜ no arrancada — conviene después de la 12 | — |
 | 10 · Agentes inbound y handoff | ⬜ no arrancada | — |
 | 11 · Brain por MCP | ✅ hecho, verificado contra producción el 2026-09-27 | #25 (spec) · #51, #52 |
-| 12 · Modelo de orquestación | ✅ hecho — `refresh-fichas` en producción para `innovas`; la ley en `docs/02-orquestacion.md` | #29, #32, #35, #36, #37, #39 y el de la E4 |
+| 12 · Modelo de orquestación | ✅ hecho — `refresh-fichas` en producción para `innovas`; la ley en `docs/arquitectura/orquestacion.md` | #29, #32, #35, #36, #37, #39 y el de la E4 |
 | 13 · Pipeline de GTM | 🔧 E1–E4 código mergeado; cierre contra producción en pausa por Apollo | #30, #47 |
 | 14 · Subida de eve | ⬜ no arrancada | — |
 | 15 · Propuesta comercial | ⬜ no arrancada | — |
 | 16 · Auto-respuesta con umbral | ⬜ no arrancada — arranca por datos, no por fecha | — |
 | 17 · Permisos del brain por carpeta y por página | 🔧 17.1 (aislamiento) código listo, falta humo manual; 17.2 y 17.3 pendientes | — |
 
-**Orden de ejecución:** 5 → 12 → 13 → 7. El número de una etapa no es su orden; el detalle está en `docs/01-roadmap-etapas.md`, "Orden de ejecución".
+**Orden de ejecución:** 5 → 12 → 13 → 7. El número de una etapa no es su orden; el detalle está en `docs/producto/roadmap.md`, "Orden de ejecución".
 
 Detalle y deuda conocida de la Etapa 5: `.superpowers/sdd/2026-09-19-etapa-5-escucha/progress.md` en el worktree que la corrió (gitignored, no viaja con el repo).
 

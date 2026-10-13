@@ -1,0 +1,7 @@
+{
+	"name": "repo-minimo",
+	"scripts": {
+		"dev": "next dev",
+		"docs:sync": "node x.mts"
+	}
+}

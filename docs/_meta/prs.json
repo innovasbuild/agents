@@ -1,0 +1,548 @@
+[
+	{
+		"number": 1,
+		"title": "feat: conexiones del tenant innovas (Etapa 2, Entregas 1-2)",
+		"mergedAt": "2026-09-13T23:19:34Z",
+		"headRefName": "worktree-conexiones-innovas"
+	},
+	{
+		"number": 2,
+		"title": "feat: brain por tenant con proveedor wiki (Tasks 1-9)",
+		"mergedAt": "2026-09-14T01:05:01Z",
+		"headRefName": "worktree-brain-por-tenant"
+	},
+	{
+		"number": 3,
+		"title": "feat: Etapa 2 Entrega 3 — HubSpot OAuth, send_email por Connect y hooks",
+		"mergedAt": "2026-09-14T01:41:07Z",
+		"headRefName": "worktree-crm-oauth-entrega3"
+	},
+	{
+		"number": 4,
+		"title": "fix: 401 en el primer mensaje de un hilo nuevo del chat",
+		"mergedAt": "2026-09-14T17:51:35Z",
+		"headRefName": "claude/elated-lovelace-8c386a"
+	},
+	{
+		"number": 5,
+		"title": "fix: npm run typecheck falla con 'Cannot find name LayoutProps'",
+		"mergedAt": "2026-09-14T17:57:01Z",
+		"headRefName": "fix/typecheck-next-typegen"
+	},
+	{
+		"number": 6,
+		"title": "fix: aislar el nombre de conexión OAuth por tenant (fuga de credenciales HubSpot cross-tenant)",
+		"mergedAt": "2026-09-14T19:53:31Z",
+		"headRefName": "claude/loving-solomon-3cea71"
+	},
+	{
+		"number": 7,
+		"title": "docs: cierre de la Etapa 2 con verificación contra el deploy",
+		"mergedAt": "2026-09-14T20:25:37Z",
+		"headRefName": "worktree-crm-oauth-entrega3"
+	},
+	{
+		"number": 8,
+		"title": "feat: datos y núcleo de outreach (Etapa 3, Entrega 2)",
+		"mergedAt": "2026-09-15T00:48:40Z",
+		"headRefName": "etapa-3-outreach"
+	},
+	{
+		"number": 9,
+		"title": "feat: ruta temporal de diagnóstico para los spikes de la etapa 3",
+		"mergedAt": "2026-09-15T01:24:49Z",
+		"headRefName": "spike-etapa-3-prod"
+	},
+	{
+		"number": 10,
+		"title": "feat: diagnóstico de auth del AI Gateway en la ruta temporal de spikes",
+		"mergedAt": "2026-09-15T10:38:09Z",
+		"headRefName": "spike-etapa-3-prod-2"
+	},
+	{
+		"number": 11,
+		"title": "chore: borrar la ruta temporal de diagnóstico de los spikes de la etapa 3",
+		"mergedAt": "2026-09-15T18:04:08Z",
+		"headRefName": "chore-borrar-spike-etapa-3"
+	},
+	{
+		"number": 12,
+		"title": "fix: el chat responde las preguntas del agente con sus opciones y no aprueba por texto",
+		"mergedAt": "2026-09-15T18:04:28Z",
+		"headRefName": "fix/chat-preguntas-del-agente"
+	},
+	{
+		"number": 13,
+		"title": "docs: resultado de los spikes y plan de la Entrega 3 de la Etapa 3",
+		"mergedAt": "2026-09-15T19:43:04Z",
+		"headRefName": "docs/spikes-etapa-3"
+	},
+	{
+		"number": 14,
+		"title": "feat: base de diseño cálida con marca por tenant",
+		"mergedAt": "2026-09-15T20:06:56Z",
+		"headRefName": "feat/design-base"
+	},
+	{
+		"number": 15,
+		"title": "feat: entrega 3 de la etapa 3 — agente de primer toque",
+		"mergedAt": "2026-09-16T00:30:02Z",
+		"headRefName": "feat/outreach-entrega-3"
+	},
+	{
+		"number": 16,
+		"title": "chore: ruta temporal de diagnóstico para el spike S2 (lectura de Gmail)",
+		"mergedAt": "2026-09-16T01:09:16Z",
+		"headRefName": "spike/s2-gmail"
+	},
+	{
+		"number": 17,
+		"title": "docs: reglas del CRM de INNOV.AS en CLAUDE.md",
+		"mergedAt": "2026-09-16T01:47:18Z",
+		"headRefName": "docs/crm-innovas"
+	},
+	{
+		"number": 18,
+		"title": "chore: tool temporal para autorizar la lectura de Gmail (spike S2)",
+		"mergedAt": "2026-09-16T02:07:52Z",
+		"headRefName": "spike/s2-readonly"
+	},
+	{
+		"number": 19,
+		"title": "chore: autorizar gmail.readonly desde la ruta del spike S2",
+		"mergedAt": "2026-09-16T02:31:58Z",
+		"headRefName": "spike/s2-readonly"
+	},
+	{
+		"number": 20,
+		"title": "fix: unificar los scopes de Gmail (el envío de producción quedó sin token)",
+		"mergedAt": "2026-09-16T02:49:21Z",
+		"headRefName": "spike/s2-readonly"
+	},
+	{
+		"number": 21,
+		"title": "docs: cerrar el spike S2 y borrar el código temporal",
+		"mergedAt": "2026-09-16T10:26:34Z",
+		"headRefName": "spike/s2-readonly"
+	},
+	{
+		"number": 22,
+		"title": "feat: borrar conversaciones e indicador de actividad en el chat",
+		"mergedAt": "2026-09-16T13:55:24Z",
+		"headRefName": "feat/chat-borrar-hilo-e-indicador"
+	},
+	{
+		"number": 23,
+		"title": "feat: /cola, aprobar y enviar desde el dashboard (Etapa 4, Entrega 1)",
+		"mergedAt": "2026-09-16T15:47:48Z",
+		"headRefName": "feat/etapa-4-cola"
+	},
+	{
+		"number": 24,
+		"title": "feat: /pipeline y /contactos, embudo y ficha de contacto (Etapa 4, Entrega 2)",
+		"mergedAt": "2026-09-19T21:55:11Z",
+		"headRefName": "feat/etapa-4-pipeline"
+	},
+	{
+		"number": 25,
+		"title": "docs: Etapa 11, brain servido por MCP y brains externos por tenant",
+		"mergedAt": "2026-09-19T23:48:47Z",
+		"headRefName": "docs/brain-mcp"
+	},
+	{
+		"number": 26,
+		"title": "feat: Etapa 5 — escucha y follow-ups",
+		"mergedAt": "2026-09-20T18:14:21Z",
+		"headRefName": "feat/etapa-5-escucha"
+	},
+	{
+		"number": 27,
+		"title": "docs: estado de avance de las etapas",
+		"mergedAt": "2026-09-20T21:57:07Z",
+		"headRefName": "docs/estado-de-avance"
+	},
+	{
+		"number": 28,
+		"title": "docs: spec del brain marcada como implementada, con el resultado de la verificación",
+		"mergedAt": "2026-09-20T21:57:25Z",
+		"headRefName": "docs/brain-spec-estado"
+	},
+	{
+		"number": 29,
+		"title": "docs: modelo de orquestación de la plataforma (etapa 12) — spec y plan",
+		"mergedAt": "2026-09-20T22:05:19Z",
+		"headRefName": "worktree-docs-orquestacion-plataforma"
+	},
+	{
+		"number": 30,
+		"title": "docs: pipeline de GTM (etapa 13) — spec y plan",
+		"mergedAt": "2026-09-20T23:43:55Z",
+		"headRefName": "worktree-docs-etapa-13-gtm"
+	},
+	{
+		"number": 31,
+		"title": "docs: etapas 12 a 16 en el roadmap y enmiendas al kickoff",
+		"mergedAt": "2026-09-20T23:55:43Z",
+		"headRefName": "docs/roadmap-etapas-12-16"
+	},
+	{
+		"number": 32,
+		"title": "feat: etapa 12 · E1, medición de consumo",
+		"mergedAt": "2026-09-21T00:21:45Z",
+		"headRefName": "worktree-feat-etapa-12-medicion"
+	},
+	{
+		"number": 33,
+		"title": "fix: tarjeta de aprobación pendiente legible",
+		"mergedAt": "2026-09-21T02:27:11Z",
+		"headRefName": "fix/tarjeta-aprobacion-legible"
+	},
+	{
+		"number": 34,
+		"title": "Tarjeta legible para mensajes redactados y labels de hook/vector/idioma",
+		"mergedAt": "2026-09-21T04:26:42Z",
+		"headRefName": "feat/chat-draft-card-legible"
+	},
+	{
+		"number": 35,
+		"title": "feat: etapa 12 · E2, los rieles (work_items, registry, runner)",
+		"mergedAt": "2026-09-21T04:27:17Z",
+		"headRefName": "worktree-etapa-12-e2"
+	},
+	{
+		"number": 36,
+		"title": "docs: spike S2 cerrado y plan de la Entrega 3 de la Etapa 12",
+		"mergedAt": "2026-09-21T05:16:14Z",
+		"headRefName": "worktree-etapa-12-e2"
+	},
+	{
+		"number": 37,
+		"title": "feat: etapa 12 · E3, primer workflow refresh-fichas y dispatcher",
+		"mergedAt": "2026-09-21T12:18:34Z",
+		"headRefName": "worktree-etapa-12-e3"
+	},
+	{
+		"number": 38,
+		"title": "feat: la ficha guarda los dolores de la cuenta y el primer mensaje se escribe desde ellos",
+		"mergedAt": "2026-09-21T14:51:06Z",
+		"headRefName": "feat/ficha-dolores"
+	},
+	{
+		"number": 39,
+		"title": "docs: cierre de la Entrega 3 de la Etapa 12 contra producción",
+		"mergedAt": "2026-09-21T14:51:18Z",
+		"headRefName": "worktree-etapa-12-e3"
+	},
+	{
+		"number": 40,
+		"title": "fix: la cadencia de los workflows se cuenta desde el inicio de la pasada",
+		"mergedAt": "2026-09-21T14:52:51Z",
+		"headRefName": "claude/nice-cori-65a566"
+	},
+	{
+		"number": 41,
+		"title": "fix: metered asienta el consumo de las llamadas al modelo que tiran",
+		"mergedAt": "2026-09-21T15:00:42Z",
+		"headRefName": "claude/practical-swirles-44d6fd"
+	},
+	{
+		"number": 42,
+		"title": "docs: etapa 12 · E4, la ley de orquestación",
+		"mergedAt": "2026-09-21T15:00:22Z",
+		"headRefName": "worktree-etapa-12-e4"
+	},
+	{
+		"number": 43,
+		"title": "Diagrama de arquitectura y script de prueba de Jev",
+		"mergedAt": "2026-09-21T23:25:55Z",
+		"headRefName": "feat/chat-draft-card-legible"
+	},
+	{
+		"number": 44,
+		"title": "feat: adjuntar archivos en el chat del agente",
+		"mergedAt": "2026-09-21T23:52:54Z",
+		"headRefName": "feat/chat-attachments"
+	},
+	{
+		"number": 45,
+		"title": "feat: Etapa 13 · Pipeline de GTM — E1 (descubrimiento) y E2 (calificación)",
+		"mergedAt": "2026-09-22T01:08:39Z",
+		"headRefName": "worktree-etapa-13-gtm"
+	},
+	{
+		"number": 46,
+		"title": "feat: la voz del ejecutor define la estructura del primer mensaje",
+		"mergedAt": "2026-09-22T01:09:22Z",
+		"headRefName": "feat/voz-manda-estructura"
+	},
+	{
+		"number": 47,
+		"title": "feat: Etapa 13 · Pipeline de GTM — E3 (enrichment y pieza) y E4 (pantallas)",
+		"mergedAt": "2026-09-22T04:38:57Z",
+		"headRefName": "etapa-13-e3-e4-plan"
+	},
+	{
+		"number": 48,
+		"title": "feat: firma del ejecutor en emails de outreach",
+		"mergedAt": "2026-09-23T13:53:55Z",
+		"headRefName": "feat/firma-ejecutor"
+	},
+	{
+		"number": 49,
+		"title": "fix: la IA puede nombrarse en la primera línea del primer mensaje",
+		"mergedAt": "2026-09-25T01:39:36Z",
+		"headRefName": "feat/voz-mati"
+	},
+	{
+		"number": 50,
+		"title": "feat: el chat muestra el mail tal cual sale, con firma",
+		"mergedAt": "2026-09-25T02:00:20Z",
+		"headRefName": "feat/voz-mati"
+	},
+	{
+		"number": 51,
+		"title": "Etapa 11: brain por MCP, emisor OAuth 2.1 y proveedor mcp",
+		"mergedAt": "2026-09-25T17:13:44Z",
+		"headRefName": "etapa-11-brain-mcp"
+	},
+	{
+		"number": 52,
+		"title": "Etapa 11 (seguimiento): rol sin permisos para tokens del emisor OAuth",
+		"mergedAt": "2026-09-25T19:06:22Z",
+		"headRefName": "etapa-11-brain-mcp"
+	},
+	{
+		"number": 53,
+		"title": "Etapa 11: cierre — verificada contra producción",
+		"mergedAt": "2026-09-27T20:00:03Z",
+		"headRefName": "etapa-11-brain-mcp"
+	},
+	{
+		"number": 54,
+		"title": "Etapa 6: canal MCP del agente, reusando el emisor OAuth de la Etapa 11",
+		"mergedAt": "2026-09-27T22:15:30Z",
+		"headRefName": "etapa-6-canal-mcp"
+	},
+	{
+		"number": 55,
+		"title": "feat: editor del brain — leer, entender conexiones y editar",
+		"mergedAt": "2026-09-27T22:20:46Z",
+		"headRefName": "feat/editor-brain"
+	},
+	{
+		"number": 56,
+		"title": "fix: aprobación de envío directa y motivo al rechazar",
+		"mergedAt": "2026-09-27T23:08:33Z",
+		"headRefName": "fix/aprobacion-directa-y-motivo-rechazo"
+	},
+	{
+		"number": 57,
+		"title": "fix: brain_search/brain_read/brain_upsert no aparecían en sesiones MCP",
+		"mergedAt": "2026-09-27T23:25:18Z",
+		"headRefName": "fix/brain-dynamic-tools-mcp"
+	},
+	{
+		"number": 58,
+		"title": "fix: draft_message resuelve la ficha por contacts.domain, no solo por email",
+		"mergedAt": "2026-09-27T23:27:47Z",
+		"headRefName": "claude/ecstatic-fermi-037a33"
+	},
+	{
+		"number": 59,
+		"title": "docs: cerrar Etapa 6 (canal MCP) con M1-M5 verificados en producción",
+		"mergedAt": "2026-09-27T23:54:51Z",
+		"headRefName": "docs/etapa-6-cierre"
+	},
+	{
+		"number": 60,
+		"title": "feat: Etapa 14 — subir eve de 0.54.2 a 0.67.2",
+		"mergedAt": "2026-09-28T22:14:18Z",
+		"headRefName": "feat/etapa-14-subida-eve"
+	},
+	{
+		"number": 61,
+		"title": "Sync entrante de HubSpot: crm_id huérfano, owner y notas",
+		"mergedAt": "2026-09-28T22:13:33Z",
+		"headRefName": "worktree-hubspot-crm-sync"
+	},
+	{
+		"number": 62,
+		"title": "chore: regenera database.types.ts con contacts.crm_synced_at",
+		"mergedAt": "2026-09-29T14:02:47Z",
+		"headRefName": "worktree-hubspot-crm-sync"
+	},
+	{
+		"number": 63,
+		"title": "fix: db:types apunta a la instancia local y no pisa el archivo si falla",
+		"mergedAt": "2026-09-29T14:02:58Z",
+		"headRefName": "worktree-fix-db-types-script"
+	},
+	{
+		"number": 64,
+		"title": "feat: caja del chat multilínea (Shift+Enter y pegado con saltos)",
+		"mergedAt": "2026-09-29T14:32:53Z",
+		"headRefName": "feat/chat-textarea-multilinea"
+	},
+	{
+		"number": 65,
+		"title": "fix: ignorar node_modules anidados, no solo el de la raíz",
+		"mergedAt": "2026-09-29T14:44:51Z",
+		"headRefName": "claude/wonderful-wilbur-c316f5"
+	},
+	{
+		"number": 66,
+		"title": "fix: cerrar runs huérfanos de morning sweep",
+		"mergedAt": "2026-09-29T15:18:28Z",
+		"headRefName": "claude/relaxed-lederberg-72a408"
+	},
+	{
+		"number": 67,
+		"title": "feat: usuarios del tenant con nombre y correo, y roles en castellano",
+		"mergedAt": "2026-10-05T15:23:22Z",
+		"headRefName": "feat/usuarios-nombre-y-roles"
+	},
+	{
+		"number": 68,
+		"title": "feat: elegir el rol al invitar usuarios del tenant",
+		"mergedAt": "2026-10-05T15:37:35Z",
+		"headRefName": "feat/invitar-con-rol"
+	},
+	{
+		"number": 69,
+		"title": "feat: agrupar los destinos de outreach bajo un desplegable en el menú",
+		"mergedAt": "2026-10-05T22:27:51Z",
+		"headRefName": "feat/menu-outreach"
+	},
+	{
+		"number": 70,
+		"title": "feat: consola de plataforma para administrar tenants",
+		"mergedAt": "2026-10-05T23:09:11Z",
+		"headRefName": "feat/consola-plataforma"
+	},
+	{
+		"number": 71,
+		"title": "feat: alta de empresas y landing de login por empresa",
+		"mergedAt": "2026-10-06T01:01:34Z",
+		"headRefName": "feat/alta-empresas-landing"
+	},
+	{
+		"number": 72,
+		"title": "fix: el logo del login de la empresa solo limita el ancho",
+		"mergedAt": "2026-10-06T01:22:36Z",
+		"headRefName": "fix/logo-login-sin-max-height"
+	},
+	{
+		"number": 73,
+		"title": "refactor: aislar lib/brain en core y adapters (etapa 17.1)",
+		"mergedAt": "2026-10-07T14:09:17Z",
+		"headRefName": "feat/etapa-17-permisos-brain"
+	},
+	{
+		"number": 74,
+		"title": "feat: permisos del brain por carpeta y por página (etapa 17.2)",
+		"mergedAt": "2026-10-07T15:18:19Z",
+		"headRefName": "feat/etapa-17-2-permisos"
+	},
+	{
+		"number": 75,
+		"title": "feat: árbol, menú de tres puntos y diálogo de compartir del brain (Etapa 17.3)",
+		"mergedAt": "2026-10-07T17:27:32Z",
+		"headRefName": "feat/etapa-17-3-arbol-compartir"
+	},
+	{
+		"number": 76,
+		"title": "feat: borrado de páginas del brain con limpieza de links (Etapa 18.1)",
+		"mergedAt": "2026-10-08T23:24:04Z",
+		"headRefName": "feat/etapa-18-1-borrado-brain"
+	},
+	{
+		"number": 77,
+		"title": "feat: editor visual de markdown y vista de papel del brain (Etapa 18.2)",
+		"mergedAt": "2026-10-08T23:24:19Z",
+		"headRefName": "feat/etapa-18-2-editor-visual"
+	},
+	{
+		"number": 78,
+		"title": "feat: editor visual de markdown y vista de papel del brain (Etapa 18.2)",
+		"mergedAt": "2026-10-08T23:33:28Z",
+		"headRefName": "feat/etapa-18-2-editor-visual"
+	},
+	{
+		"number": 79,
+		"title": "fix: seguimientos de la Etapa 17, reglas del brain con la membresía y platform_admin por MCP alineado",
+		"mergedAt": "2026-10-08T23:58:35Z",
+		"headRefName": "feat/etapa-17-seguimientos"
+	},
+	{
+		"number": 80,
+		"title": "fix: memberships sin INSERT ni UPDATE de user_id/tenant_id para authenticated",
+		"mergedAt": "2026-10-09T13:59:33Z",
+		"headRefName": "fix/memberships-update-columnas"
+	},
+	{
+		"number": 81,
+		"title": "feat: ingreso por dominio de correo configurable por empresa",
+		"mergedAt": "2026-10-09T16:03:32Z",
+		"headRefName": "feat/ingreso-por-dominio"
+	},
+	{
+		"number": 82,
+		"title": "fix: el canal MCP del agente solo reconoce al platform_admin del tenant dueño",
+		"mergedAt": "2026-10-09T16:17:08Z",
+		"headRefName": "fix/canal-mcp-plataforma-dueno"
+	},
+	{
+		"number": 83,
+		"title": "fix: el login por mail muestra el mismo mensaje con o sin acceso",
+		"mergedAt": "2026-10-09T19:03:57Z",
+		"headRefName": "fix/login-mensaje-uniforme"
+	},
+	{
+		"number": 84,
+		"title": "feat: página Conectar y chequeo de agente habilitado en el canal MCP (Etapa 19)",
+		"mergedAt": "2026-10-09T22:22:00Z",
+		"headRefName": "feat/etapa-19-conectar"
+	},
+	{
+		"number": 85,
+		"title": "feat: Microsoft y métodos de login impuestos en el servidor (Etapa 20.1)",
+		"mergedAt": "2026-10-09T23:53:29Z",
+		"headRefName": "feat/etapa-20-login"
+	},
+	{
+		"number": 86,
+		"title": "feat: bloqueo por persona, cambio de rol y reenvío de invitaciones (Etapa 20.2)",
+		"mergedAt": "2026-10-10T04:09:05Z",
+		"headRefName": "feat/etapa-20-2-usuarios"
+	},
+	{
+		"number": 87,
+		"title": "feat: consola de plataforma, agentes, brain y conectores por empresa (21.1)",
+		"mergedAt": "2026-10-10T19:57:54Z",
+		"headRefName": "feat/etapa-21-1-consola"
+	},
+	{
+		"number": 88,
+		"title": "fix: la interfaz nombra el producto como INNOV.AS - Central IA",
+		"mergedAt": "2026-10-10T21:21:06Z",
+		"headRefName": "fix/nombre-central-ia"
+	},
+	{
+		"number": 89,
+		"title": "feat: settings del cliente y Mis cuentas (etapa 21.2)",
+		"mergedAt": "2026-10-10T22:13:09Z",
+		"headRefName": "feat/etapa-21-2-settings-cliente"
+	},
+	{
+		"number": 90,
+		"title": "feat: etapa 21.3, el brain como fuente del ICP y los hooks, pantalla de outreach y presupuestos",
+		"mergedAt": "2026-10-11T01:12:26Z",
+		"headRefName": "feat/etapa-21-3-config-outreach"
+	},
+	{
+		"number": 91,
+		"title": "feat: etapa 21.4a, una empresa puede usar solo el brain (sin agentes) y entrar con un código por correo",
+		"mergedAt": "2026-10-11T14:21:38Z",
+		"headRefName": "feat/etapa-21-4-segundo-tenant"
+	}
+]

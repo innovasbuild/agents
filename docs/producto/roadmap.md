@@ -1,13 +1,14 @@
 ---
-title: INNOV.AS Agents Platform — Roadmap de etapas (tracking)
-fuente: docs/innovas-agents-kickoff.md
-estado: v1
-fecha: 2026-09-11
+title: Roadmap de etapas
+category: producto
+status: activo
+tags: [roadmap, etapas]
+updated: 2026-10-13
 ---
 
 # Roadmap de etapas
 
-Este documento es el **tracker de ejecución** del kickoff (`docs/innovas-agents-kickoff.md`). Cada etapa de acá abajo es la misma etapa de la §8 del kickoff, pero partida en tareas chequeables para poder:
+Este documento es el **tracker de ejecución** del kickoff (`kickoff.md`). Cada etapa de acá abajo es la misma etapa de la §8 del kickoff, pero partida en tareas chequeables para poder:
 
 - Abrir una sesión nueva de Claude Code por etapa, con el modelo que corresponde (ver `Modelo Claude Code` de cada etapa).
 - Tildar tareas a medida que se cierran, sin depender de tener toda la conversación anterior en contexto.
@@ -15,10 +16,10 @@ Este documento es el **tracker de ejecución** del kickoff (`docs/innovas-agents
 
 ## Cómo usar este documento
 
-1. **Antes de arrancar una etapa:** abrí sesión nueva, corré `/context-restore` si venís de una etapa anterior relacionada, y decile a Claude "trabajemos la Etapa N de `docs/01-roadmap-etapas.md`".
+1. **Antes de arrancar una etapa:** abrí sesión nueva, corré `/context-restore` si venís de una etapa anterior relacionada, y decile a Claude "trabajemos la Etapa N de `docs/producto/roadmap.md`".
 2. **Modelo de esa sesión:** el indicado en `Modelo Claude Code` de la etapa (lógica completa en kickoff §3a). Si la etapa mezcla spec y wiring, son **dos sesiones separadas** (spec con Opus, implementación con Sonnet en sesión nueva) — está anotado etapa por etapa.
 3. **Proceso dentro de la etapa:** `superpowers:brainstorming` → spec en `docs/superpowers/specs/NN-<etapa>.md` → `superpowers:writing-plans` → plan en `docs/superpowers/plans/NN-<etapa>.md` → TDD/implementación → `superpowers:verification-before-completion` → `/ship`.
-4. **Al cerrar la sesión:** tildar las tareas hechas acá, actualizar el `Estado` de la etapa, y correr `/context-save`.
+4. **Al cerrar la sesión:** tildar las tareas hechas acá, actualizar el `Estado` de la etapa, correr `/docs-wiki` (la wiki tiene que quedar con `npm run docs:check` en verde) y después `/context-save`.
 5. **No saltear el criterio "Terminado cuando"** de cada etapa: es la prueba de que sirve para probar, no una lista de archivos creados.
 
 Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` cerrada (spec + plan + PR mergeado + criterio cumplido).
@@ -29,7 +30,7 @@ Convención de estado por etapa: `[ ]` no arrancada · `[~]` en curso · `[x]` c
 
 **5 → 12 → 13 → 7**, y después el resto.
 
-**Enmienda 2026-10-09:** las etapas 19 a 23 salen de `docs/2026-10-09-plan-cierre-gap-plataforma.md` y van en ese orden: **19 → 20 → 21 → 22 → 23**, con 19 y 20 en paralelo si hay dos sesiones. La 7 se corre dentro de la 21.
+**Enmienda 2026-10-09:** las etapas 19 a 23 salen de `docs/producto/plan-cierre-gap-2026-10.md` y van en ese orden: **19 → 20 → 21 → 22 → 23**, con 19 y 20 en paralelo si hay dos sesiones. La 7 se corre dentro de la 21.
 
 - La **12** (orquestación) y la **13** (pipeline de GTM) van **antes** del segundo tenant. La prueba de la Etapa 7 es "corre sin tocar `agents/` ni `lib/`"; hacerla antes validaría con el cliente nuevo la corrida manejada desde el chat, que es justo lo que la 12 y la 13 reemplazan.
 - La **9** (observabilidad) conviene después de la 12, que es la que le genera los datos (`runs` con conteos, `usage_entries`).
@@ -246,7 +247,7 @@ Tareas:
 
 - [x] Supabase Auth como servidor OAuth 2.1 con registro dinámico de clientes. Hecho y verificado contra producción en la Etapa 11 (`docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md` §4, §11): OAuth Server prendido, Allow Dynamic OAuth Apps, pantalla de consentimiento, `next` seguro en el login, `custom_access_token_hook` confirmado corriendo para tokens de cliente OAuth (V3, V7). Este emisor es genérico y ya sirve para cualquier `resource`, no solo el del brain.
 - [x] `channels/mcp.ts` con `oauthResource(verifyMcpChannelToken, { issuer, resource, scopes })`. El tenant sale de `?tenant=<slug>` en la URL de conexión, no de un argumento (la ruta de `mcpChannel` es fija, sin segmento dinámico). Verificado contra producción (M1–M4).
-- [x] Docs de conexión (`docs/agente-mcp-conexion.md`; claude.ai sin probar, igual que con el brain).
+- [x] Docs de conexión (`docs/guias/conectar-agente-por-mcp.md`; claude.ai sin probar, igual que con el brain).
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** conectás el agente desde Claude Code y desde claude.ai, pedís algo simple y el trabajo corre durable en Vercel, con su `run` en `trigger: 'mcp'` y sin fila nueva en `conversations`. Verificado contra producción:
@@ -361,7 +362,7 @@ Agregada el 2026-09-19 a pedido de Matías. El brain de un tenant hoy solo se us
 - [x] Auth con el emisor OAuth de la Etapa 6. El token resuelve tenant y usuario; la membresía define el alcance. Un token de un tenant nunca ve páginas de otro: se lee por el mismo camino, con `tenant_id` y RLS.
 - [x] **Decisión a confirmar en la spec, resuelta por D4 y D5:** por MCP escribe una persona, no el agente, así que `brain_upsert` no pide aprobación (la aprobación existe porque el agente propone). El rol decide qué tools se listan: `tenant_admin` y `platform_admin` ven las tres, `tenant_member` solo lectura. La escritura pasa igual por `brain_upsert_page`, deja revisión con `author_kind: "user"` y evento.
 - [x] Rate limit y tamaño de respuesta: es una superficie pública autenticada, no un endpoint interno.
-- [x] Doc de conexión para el cliente: Claude Code, Codex y claude.ai (`docs/brain-mcp-conexion.md`; Codex sin probar).
+- [x] Doc de conexión para el cliente: Claude Code, Codex y claude.ai (`docs/guias/conectar-brain-por-mcp.md`; Codex sin probar).
 
 ### B. Consumir brains externos
 
@@ -410,7 +411,7 @@ Agregada el 2026-09-20. Las reglas para que todo lo que se construya después (w
 - [x] **E1 · Medición:** `usage_entries`, los nodos que ya llaman al modelo asientan, `runs.cost_usd` se escribe por primera vez. PR #32.
 - [x] **E2 · Rieles:** `work_items` y reclamo con lease, `enqueue()`, registry con tests que obligan, runner, `tenant_workflows`, `tenant_budgets`. PR #35.
 - [x] **E3 · Primer workflow:** `refresh-fichas` y el dispatcher, contra producción. Plan `docs/superpowers/plans/2026-09-21-etapa-12-e3-refresh-fichas.md`, PR #37; cierre contra producción el 2026-09-21, PR #39 (spec §2).
-- [x] **E4 · La ley:** `docs/02-orquestacion.md` y el bloque de reglas en `CLAUDE.md`, que se mergea con el código y no antes.
+- [x] **E4 · La ley:** `docs/arquitectura/orquestacion.md` y el bloque de reglas en `CLAUDE.md`, que se mergea con el código y no antes.
 - [x] `/ship` + `/context-save`.
 
 **En producción:** `refresh-fichas` prendido para `innovas` (cadencia 60, 5 ítems por tick, `model_usd` USD 3 por día). Deuda anotada: asentar el consumo cuando la llamada al modelo se corta o tira adentro de `generateText`, y hilar la señal de abort por `lib/` para que la tool del chat también corte las lecturas en curso.
@@ -527,14 +528,14 @@ Agregada el 2026-10-08. Dos entregas, una sesión y un PR cada una:
 
 **Modelo Claude Code:** Sonnet 5 (UI y docs); Opus 5 solo si la verificación en producción destapa un defecto de permisos.
 **Modelo runtime:** n/a.
-**Spec/Plan:** `docs/superpowers/specs/2026-10-09-etapa-19-conectar-design.md` · `docs/superpowers/plans/2026-10-09-etapa-19-conectar.md`. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** `docs/superpowers/specs/2026-10-09-etapa-19-conectar-design.md` · `docs/superpowers/plans/2026-10-09-etapa-19-conectar.md`. Alcance en `docs/producto/plan-cierre-gap-2026-10.md` §2.
 
 Agregada el 2026-10-09 (plan de cierre del gap, G2 y G6). Una página por usuario con lo que tiene disponible para conectar a Claude, ChatGPT, Claude Code, Codex o Cursor, con instrucciones copiables; y la verificación en producción que las etapas 17, 18 e ingreso por dominio dejaron pendiente.
 
 - [x] Página `/<slug>/conectar`: brain, agentes habilitados, lugar reservado para el MCP de herramientas (Etapa 23). Solo lo que la persona puede usar.
 - [x] Instrucciones por cliente MCP (Claude Code, claude.ai, ChatGPT, Codex, Cursor) con botón de copiar. Sin tokens: autentica el OAuth de Supabase.
 - [ ] Probar claude.ai y ChatGPT contra el brain de `innovas` en producción; decidir si el brain expone `search`/`fetch` para ChatGPT. Lo corre una persona: anexo A de la spec.
-- [x] Corregir `docs/brain-mcp-conexion.md` (ya no es "solo admins escriben") y `docs/agente-mcp-conexion.md`.
+- [x] Corregir `docs/guias/conectar-brain-por-mcp.md` (ya no es "solo admins escriben") y `docs/guias/conectar-agente-por-mcp.md`.
 - [ ] Verificación en producción: criterio de cierre de la 17, recorrido de la 18, ingreso por dominio con una persona nunca invitada, "Confirm email" prendido en Supabase Auth, `PLATFORM_OWNER_TENANT_SLUG` en Vercel. Marcar 17 y 18 como `[x]`. Lo corre una persona: anexo A de la spec.
 - [x] El canal MCP del agente chequea `tenant_agents.enabled` como el canal web.
 - [ ] `/ship` + `/context-save`.
@@ -562,14 +563,14 @@ Agregada el 2026-10-09 (resto del G3 tras el PR #81). Completa el ingreso por do
 
 **Modelo Claude Code:** Opus 5 para la spec (decide la frontera plataforma/tenant); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** el que defina el tenant.
-**Spec/Plan:** 21.1: `docs/superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md` · `docs/superpowers/plans/2026-10-10-etapa-21-1-consola-conectores.md`. 21.2: `docs/superpowers/specs/2026-10-10-etapa-21-2-settings-cliente-design.md` · `docs/superpowers/plans/2026-10-10-etapa-21-2-settings-cliente.md`. 21.3: `docs/superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md` · 21.3a: `docs/superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md` · 21.3b: `docs/superpowers/plans/2026-10-10-etapa-21-3b-pantallas-outreach.md`. 21.4: `docs/superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md` · 21.4a: `docs/superpowers/plans/2026-10-11-etapa-21-4a-empresa-sin-agentes.md` · 21.4b: a escribir. 21.5: a escribir. Alcance general en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** 21.1: `docs/superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md` · `docs/superpowers/plans/2026-10-10-etapa-21-1-consola-conectores.md`. 21.2: `docs/superpowers/specs/2026-10-10-etapa-21-2-settings-cliente-design.md` · `docs/superpowers/plans/2026-10-10-etapa-21-2-settings-cliente.md`. 21.3: `docs/superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md` · 21.3a: `docs/superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md` · 21.3b: `docs/superpowers/plans/2026-10-10-etapa-21-3b-pantallas-outreach.md`. 21.4: `docs/superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md` · 21.4a: `docs/superpowers/plans/2026-10-11-etapa-21-4a-empresa-sin-agentes.md` · 21.4b: a escribir. 21.5: a escribir. Alcance general en `docs/producto/plan-cierre-gap-2026-10.md` §2.
 
 Agregada el 2026-10-09 (G4 y G7). Dar de alta y operar un cliente sin terminal: agentes, conectores, ejecutores y brain desde la consola de plataforma o el settings del tenant. La **Etapa 7** se corre dentro de esta como prueba.
 
-Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador configura sus agentes; INNOV.AS ve el estado de todo y asocia las llaves que el cliente le pasa por un canal seguro (`docs/llaves-de-clientes.md`). Cinco entregas:
+Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador configura sus agentes; INNOV.AS ve el estado de todo y asocia las llaves que el cliente le pasa por un canal seguro (`docs/guias/llaves-de-clientes.md`). Cinco entregas:
 
 - [ ] **21.1 · Consola: conectores y agentes.** Código terminado; falta el cierre en producción: revisar la migración con `migration list` y aplicarla, desplegar, apretar Verificar en cada conector de `innovas`, asociar un conector ColdIQ real y comprobar el rechazo entre empresas. Catálogo de agentes en código; alta de empresa eligiendo agentes; desde `/plataforma/<slug>`, habilitar agentes con su acceso al brain, crear el brain, asociar conectores con verificación contra Vercel, deshabilitar, quitar y verificar; "qué falta" por empresa; `connector_claims` impide que un conector sirva a dos empresas; `tenant_agents` cerrada a `authenticated`; `connections:bind` se va. **Antes de desplegar:** correr en producción la consulta de la spec §9 (ningún conector en dos empresas), aplicar la migración `20261015120000_platform_console` primero (`npx supabase migration list` antes: `db push` aplica todas las pendientes) y recién después el código; al revés, el alta de empresas falla. Después del deploy, apretar Verificar en cada conector de `innovas`.
-- [ ] **21.2 · Settings del cliente.** Código terminado; falta el cierre en producción (anexo A de la spec: autorizar Gmail y HubSpot desde "Mis cuentas", comprobar que cargar la página no rompe un Gmail ya autorizado, que el dueño de HubSpot se guarda solo, que `auto` deja escribir al workflow y que un conector apagado por plataforma no se puede encender desde el cliente). El administrador del cliente edita ejecutores (con techo de 200 por día y sin poder quitar a quien tiene historial), elige la política de los pasos de nivel 2 y enciende o apaga los conectores que INNOV.AS asoció; cualquier miembro autoriza sus cuentas en `/<slug>/mis-cuentas`. Todo por funciones que verifican en la base que quien llama sea administrador de esa empresa. `executors:set` se va. **Antes de desplegar:** `npx supabase migration list` y aplicar `20261016120000_tenant_settings` antes que el código. Comprobar el punto del anexo A del dueño de HubSpot (el `crm_owner_id` se guarda solo al autorizar) antes de dar por cerrada la entrega; si HubSpot rechaza la consulta, usar el runbook "Cargar el owner de HubSpot a mano" de `docs/llaves-de-clientes.md`.
+- [ ] **21.2 · Settings del cliente.** Código terminado; falta el cierre en producción (anexo A de la spec: autorizar Gmail y HubSpot desde "Mis cuentas", comprobar que cargar la página no rompe un Gmail ya autorizado, que el dueño de HubSpot se guarda solo, que `auto` deja escribir al workflow y que un conector apagado por plataforma no se puede encender desde el cliente). El administrador del cliente edita ejecutores (con techo de 200 por día y sin poder quitar a quien tiene historial), elige la política de los pasos de nivel 2 y enciende o apaga los conectores que INNOV.AS asoció; cualquier miembro autoriza sus cuentas en `/<slug>/mis-cuentas`. Todo por funciones que verifican en la base que quien llama sea administrador de esa empresa. `executors:set` se va. **Antes de desplegar:** `npx supabase migration list` y aplicar `20261016120000_tenant_settings` antes que el código. Comprobar el punto del anexo A del dueño de HubSpot (el `crm_owner_id` se guarda solo al autorizar) antes de dar por cerrada la entrega; si HubSpot rechaza la consulta, usar el runbook "Cargar el owner de HubSpot a mano" de `docs/guias/llaves-de-clientes.md`.
 - [ ] **21.3 · Configuración de outreach.** Código terminado; falta el cierre en producción. El ICP, los hooks y los vectores viven en el brain (bloques `icp`, `hooks` y `vectores` en las páginas de canon; guardar una página `canon:hooks` actualiza `config_values` sola). El administrador del cliente edita segmentos, idiomas, datos de outreach y procesos automáticos en `/<slug>/settings/outreach`, y ve su presupuesto y su gasto del día. INNOV.AS fija los presupuestos en `/plataforma/<slug>`. `outreach:config`, `workflows:set` y `tenants/innovas/outreach.json` se van. **Antes de desplegar:** pegar los bloques en las páginas de canon de `innovas` (spec §10 paso 1), con los niveles del ICP de `git show b5cf2b9:tenants/innovas/outreach.json` (último commit que todavía tiene el archivo; la rama lo borra) y **antes** de que alguien use "Guardar datos" en la pantalla, porque ese primer guardado borra la clave `icp` vieja de `config.outreach`; `npx supabase migration list` y aplicar `20261017120000_outreach_marco_reflect` y `20261018120000_outreach_settings` antes que el código. Después del deploy: "Releer del brain" en `/innovas/settings/outreach` y comprobar que no desactiva nada.
   - Verificado en navegador con la base local (empresa `demo`, usuarios de la semilla): como `platform_admin`, tope de modelos en `/plataforma/demo` ("2,5" rechazado con su mensaje, "2" guardado, "Gastado hoy" visible, créditos de búsqueda en 0); como `tenant_admin`, ICP con sus niveles desde una página `canon:icp` real, hooks y vectores, "Releer del brain" con contadores (repuso un vector borrado), alta, cambio de rótulo y baja de segmentos, rechazo de desactivar el único idioma o segmento, datos de outreach con BCC vacío (sigue vacío al recargar) y zona horaria inválida, encender `target-search` con el aviso "No va a correr…", ítems por encima del tope, presupuesto de hoy en `2,00`, "Última corrida" con fecha sin advertencia de hidratación, sin desborde horizontal a 375 px; como `tenant_member`, 404.
   - Sin verificar (necesita producción): el scoring leyendo el brain real de `innovas` y el reflejo de las páginas de canon sobre ese brain.
@@ -584,7 +585,7 @@ Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador
 
 **Modelo Claude Code:** Opus 5 para la spec (toca el modelo de permisos); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** el del tenant; el segundo agente define los suyos en su spec.
-**Spec/Plan:** a escribir. Alcance en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** a escribir. Alcance en `docs/producto/plan-cierre-gap-2026-10.md` §2.
 
 Agregada el 2026-10-09 (G5). Más de un agente, catálogo por empresa, selector en el chat, y permisos de quién puede usar cada agente. Decisión central: generalizar las reglas del brain a reglas de acceso a recursos (`brain | agent | connection`), que la Etapa 23 reusa.
 
@@ -603,7 +604,7 @@ Agregada el 2026-10-09 (G5). Más de un agente, catálogo por empresa, selector 
 
 **Modelo Claude Code:** Fable 5.1 u Opus 5 `high` para la spec (auth, credenciales, efectos); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** n/a (no hay modelo del lado de la plataforma; las tools las llama el cliente MCP de la persona).
-**Spec/Plan:** a escribir. Decisiones a cerrar en `docs/2026-10-09-plan-cierre-gap-plataforma.md` §2.
+**Spec/Plan:** a escribir. Decisiones a cerrar en `docs/producto/plan-cierre-gap-2026-10.md` §2.
 
 Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, construida como la del brain sobre `@modelcontextprotocol/sdk` y el mismo emisor OAuth, que publica las tools de las conexiones del tenant que la persona tiene permitidas, ejecuta con su propia cuenta cuando el proveedor es OAuth (subject `tenant:usuario` de Vercel Connect) y respeta los niveles de efecto. `mcpChannel` de eve no sirve para esto: expone solo `agent_*` por diseño.
 
@@ -615,6 +616,26 @@ Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, constru
 - [ ] `/ship` + `/context-save`.
 
 **Terminado cuando:** desde su claude.ai, una persona de `innovas` conecta el MCP de herramientas, ve solo las tools de HubSpot de lectura que le dieron, busca un contacto con su propia cuenta de HubSpot, y otra persona sin ese permiso no ve esas tools; cada llamada aparece en `usage_entries`.
+
+---
+
+## Etapa 25 · Wiki de documentación y harness — `[x]`
+
+**Modelo Claude Code:** Fable 5.1 para spec y plan; Sonnet 5.5 para ejecutar.
+**Modelo runtime:** n/a.
+**Spec/Plan:** `docs/superpowers/specs/2026-10-13-etapa-25-wiki-documentacion-design.md` · `docs/superpowers/plans/2026-10-13-etapa-25-wiki-documentacion.md`.
+
+La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominios, guías, referencia generada, decisiones y producto) con un harness que se pone rojo cuando una tool, nodo, workflow, tabla, ruta, proveedor, variable de entorno, spec o PR mergeado no dejó rastro. El skill `/docs-wiki` es el procedimiento para cerrarlo.
+
+- [x] Fase 0: esqueleto, documentos movidos con `git mv`, `docs/guias/documentar.md`.
+- [x] Fase 1: inventario, `npm run docs:sync`, tests de forma y de cobertura.
+- [x] Fase 2: README con instalación, `docs:prs`, skill `/docs-wiki`, `VERSION`, `CHANGELOG.md`. El CI quedó afuera hasta habilitar GitHub Actions (contenido en el plan, Task 24).
+- [x] Fase 3: tablas de specs y PR, quince páginas de arquitectura y dominios, siete guías nuevas.
+- [x] Fase 4: prueba del detector, `/ship` (PR 92, versión 0.1.0).
+- [ ] Seguimiento: repetir el README con Docker abierto (el ingreso local por Mailpit no se probó). No bloquea el cierre.
+- [ ] Seguimiento: decidir si `.codex/` entra al repo y, cuando se habilite GitHub Actions, sumar el CI (contenido en el plan, Task 24).
+
+**Terminado cuando:** alguien que no conoce el repo levanta la plataforma en local siguiendo solo `README.md`; `npm run docs:check` está verde en `main`; una tool, una tabla y una ruta falsas hacen fallar el check nombrándolas; y `/ship` deja `VERSION` y `CHANGELOG.md` escritos.
 
 ---
 

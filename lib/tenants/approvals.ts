@@ -1,4 +1,4 @@
-// Política de aprobaciones de nivel 2 (docs/02-orquestacion.md §4 y spec 21.2
+// Política de aprobaciones de nivel 2 (docs/arquitectura/orquestacion.md §4 y spec 21.2
 // S12). El registro de nodos es la única fuente de qué paso admite política:
 // los de effect 2. Un nodo de nivel 3 nunca aparece: lleva aprobación humana
 // siempre. Solo importa datos planos: lo usan componentes cliente.

@@ -10,7 +10,8 @@
 		"Stop": [
 			{
 				"hooks": [
-					{ "type": "command", "command": "npm run typecheck --silent" }
+					{ "type": "command", "command": "npm run typecheck --silent" },
+					{ "type": "command", "command": "npm run docs:check --silent" }
 				]
 			}
 		]
