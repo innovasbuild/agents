@@ -22,6 +22,7 @@ Los scripts de `package.json`.
 | `db:types` | `npx supabase gen types typescript --local > lib/supabase/database.types.ts.tmp && mv lib/supabase/database.types.ts.tmp lib/supabase/database.types.ts && npx biome check --write lib/supabase/database.types.ts` |
 | `dev` | `next dev` |
 | `docs:check` | `vitest run tests/docs` |
+| `docs:prs` | `node scripts/docs/prs.mts` |
 | `docs:sync` | `node scripts/docs/sync.mts` |
 | `evals` | `node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts` |
 | `jev:probe` | `node --env-file=.env.local scripts/jev-probe.mts` |
