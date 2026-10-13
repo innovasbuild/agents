@@ -1,9 +1,10 @@
 // Inventario determinístico de las superficies del repo (spec etapa 25 §4.1).
-// Funciones puras que reciben la raíz: se testean contra tests/fixtures/docs/.
+// Funciones que reciben la raíz y las dependencias del registro, sin red ni
+// modelo: se testean contra tests/fixtures/docs/.
 // Sin modelo, sin red. Todo sale ordenado por `key` para que `docs:sync`
 // produzca los mismos bytes dos veces seguidas.
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { join, relative } from "node:path";
 import { PROVIDERS } from "../../lib/connectors/providers.ts";
 import { NODES, WORKFLOWS } from "../../lib/workflows/registry.ts";
 
@@ -108,10 +109,6 @@ async function walk(root: string, dir: string): Promise<string[]> {
 	return files;
 }
 
-function toPosix(path: string): string {
-	return path.split(sep).join("/");
-}
-
 function byKey(list: Surface[]): Surface[] {
 	return [...list].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
@@ -202,9 +199,7 @@ export async function inventory(
 				(dir) => walk(root, dir),
 			),
 		)
-	)
-		.flat()
-		.map(toPosix);
+	).flat();
 
 	const migrationFiles = files
 		.filter((f) => /^supabase\/migrations\/[^/]+\.sql$/.test(f))

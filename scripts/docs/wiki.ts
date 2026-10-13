@@ -36,7 +36,7 @@ export async function listPages(root: string): Promise<Page[]> {
 export function parseFrontmatter(
 	text: string,
 ): { data: unknown; body: string } | null {
-	const lines = text.split("\n");
+	const lines = text.replace(/\r\n/g, "\n").split("\n");
 	if (lines[0] !== "---") return null;
 	const end = lines.indexOf("---", 1);
 	if (end === -1) return null;

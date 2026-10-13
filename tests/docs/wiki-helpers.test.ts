@@ -17,6 +17,11 @@ describe("helpers de la wiki", () => {
 		expect(parseFrontmatter("# sin frontmatter")).toBeNull();
 	});
 
+	it("parseFrontmatter acepta saltos de línea CRLF", () => {
+		const parsed = parseFrontmatter("---\r\ntitle: X\r\n---\r\n# Hola");
+		expect(parsed?.data).toEqual({ title: "X" });
+	});
+
 	it("extractLinks ignora el código", () => {
 		const text =
 			"[a](x.md#ancla) y `[b](no.md)`\n```\n[c](tampoco.md)\n```\n[d](https://e.com)";

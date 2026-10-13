@@ -62,6 +62,14 @@ describe("cobertura de la wiki", () => {
 			}
 		}
 		for (const row of rows) {
+			if (!row.spec || !existsSync(row.spec)) {
+				problems.push(
+					`${SPECS_TABLE}: una fila apunta a una spec que no existe (${row.spec || "link vacío"})`,
+				);
+			}
+			if (row.plan && !existsSync(row.plan)) {
+				problems.push(`${row.spec}: el plan ${row.plan} no existe`);
+			}
 			if (!ESTADOS.includes(row.state)) {
 				problems.push(
 					`${row.spec}: estado "${row.state}" inválido (${ESTADOS.join(" · ")})`,
