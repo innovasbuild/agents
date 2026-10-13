@@ -619,7 +619,7 @@ Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, constru
 
 ---
 
-## Etapa 25 · Wiki de documentación y harness — `[~]`
+## Etapa 25 · Wiki de documentación y harness — `[x]`
 
 **Modelo Claude Code:** Fable 5.1 para spec y plan; Sonnet 5.5 para ejecutar.
 **Modelo runtime:** n/a.
@@ -631,9 +631,9 @@ La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominio
 - [x] Fase 1: inventario, `npm run docs:sync`, tests de forma y de cobertura.
 - [x] Fase 2: README con instalación, `docs:prs`, skill `/docs-wiki`, `VERSION`, `CHANGELOG.md`. El CI quedó afuera hasta habilitar GitHub Actions (contenido en el plan, Task 24).
 - [x] Fase 3: tablas de specs y PR, quince páginas de arquitectura y dominios, siete guías nuevas.
-- [ ] Fase 4: prueba del detector, `/ship`.
-- [ ] Repetir el README con Docker abierto (el ingreso local por Mailpit no se probó).
-- [ ] Decidir si `.codex/` entra al repo y si se habilita GitHub Actions.
+- [x] Fase 4: prueba del detector, `/ship` (PR 92, versión 0.1.0).
+- [ ] Seguimiento: repetir el README con Docker abierto (el ingreso local por Mailpit no se probó). No bloquea el cierre.
+- [ ] Seguimiento: decidir si `.codex/` entra al repo y, cuando se habilite GitHub Actions, sumar el CI (contenido en el plan, Task 24).
 
 **Terminado cuando:** alguien que no conoce el repo levanta la plataforma en local siguiendo solo `README.md`; `npm run docs:check` está verde en `main`; una tool, una tabla y una ruta falsas hacen fallar el check nombrándolas; y `/ship` deja `VERSION` y `CHANGELOG.md` escritos.
 
