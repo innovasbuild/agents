@@ -202,6 +202,8 @@ Tres líneas en CLAUDE.md, sección nueva "Documentación": dónde vive la wiki,
 
 ### 4.7 CI
 
+> **Nota (2026-10-13):** el workflow no entró con esta etapa. GitHub Actions no está habilitado en el repo y gstack exige una corrida remota para publicar un workflow nuevo. El contenido propuesto quedó en el plan, Task 24, para sumarlo en un PR aparte.
+
 No hay GitHub Actions hoy. Un workflow mínimo `.github/workflows/ci.yml`: `npm ci`, `npm run typecheck`, `npm test`. Sin Docker: los tests de Supabase (`db:test`) y las integraciones (`test:it*`) quedan fuera, igual que hoy. Es lo que vuelve al harness obligatorio para un PR, no solo para quien corre `/ship`.
 
 ## 5. Cómo interactúa con gstack

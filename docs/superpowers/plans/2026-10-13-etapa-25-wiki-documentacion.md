@@ -360,6 +360,30 @@ Se mencionaron las tres en `dominios/outreach.md` y se agregó `dummy_tool` a `T
 
 **Incidente:** al limpiar, `git stash -u` también guardó `.codex/` (sin versionar) y se descartó el stash. Se recuperó íntegro desde el commit suelto del stash. Para limpiar una rama descartable usar `git checkout -- . && git clean -fd <paths propios>`, nunca `stash -u`.
 
+**Desvío registrado (2026-10-13): el CI queda afuera de este PR.** El Step 3 de la Task 12 creó `.github/workflows/ci.yml`, pero gstack (`gstack-pregate`) trata un workflow nuevo como una obligación remota que exige el recibo de una corrida, y GitHub Actions no está habilitado en el repo (decisión abierta). Mati eligió sacarlo. Para sumarlo cuando se habilite Actions, en un PR aparte: crear `.github/workflows/ci.yml` con este contenido, correr el PR y registrar la URL de la corrida.
+
+```yaml
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+```
+
 ### Task 24: Cierre con gstack
 
 - [ ] **Step 1:** `npm run typecheck && npm test && npm run docs:check`. Todo verde.
