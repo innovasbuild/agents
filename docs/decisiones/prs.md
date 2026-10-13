@@ -14,94 +14,94 @@ Las specs están en [README.md](README.md).
 
 | # | fecha | título | páginas o motivo |
 | --- | --- | --- | --- |
-| [1](https://github.com/innovasbuild/agents/pull/1) | 2026-09-13 | feat: conexiones del tenant innovas (Etapa 2, Entregas 1-2) | pendiente |
-| [2](https://github.com/innovasbuild/agents/pull/2) | 2026-09-14 | feat: brain por tenant con proveedor wiki (Tasks 1-9) | pendiente |
-| [3](https://github.com/innovasbuild/agents/pull/3) | 2026-09-14 | feat: Etapa 2 Entrega 3 — HubSpot OAuth, send_email por Connect y hooks | pendiente |
+| [1](https://github.com/innovasbuild/agents/pull/1) | 2026-09-13 | feat: conexiones del tenant innovas (Etapa 2, Entregas 1-2) | [Conectores](../dominios/conectores.md) |
+| [2](https://github.com/innovasbuild/agents/pull/2) | 2026-09-14 | feat: brain por tenant con proveedor wiki (Tasks 1-9) | [Brain](../dominios/brain.md) |
+| [3](https://github.com/innovasbuild/agents/pull/3) | 2026-09-14 | feat: Etapa 2 Entrega 3 — HubSpot OAuth, send_email por Connect y hooks | [Conectores](../dominios/conectores.md) · [Gmail](../dominios/gmail.md) |
 | [4](https://github.com/innovasbuild/agents/pull/4) | 2026-09-14 | fix: 401 en el primer mensaje de un hilo nuevo del chat | fix sin cambio de contrato (401 del primer mensaje de un hilo) |
 | [5](https://github.com/innovasbuild/agents/pull/5) | 2026-09-14 | fix: npm run typecheck falla con 'Cannot find name LayoutProps' | fix de tooling sin cambio de contrato (typecheck) |
-| [6](https://github.com/innovasbuild/agents/pull/6) | 2026-09-14 | fix: aislar el nombre de conexión OAuth por tenant (fuga de credenciales HubSpot cross-tenant) | pendiente |
+| [6](https://github.com/innovasbuild/agents/pull/6) | 2026-09-14 | fix: aislar el nombre de conexión OAuth por tenant (fuga de credenciales HubSpot cross-tenant) | [Tenancy](../arquitectura/tenancy.md) · [Conectores](../dominios/conectores.md) |
 | [7](https://github.com/innovasbuild/agents/pull/7) | 2026-09-14 | docs: cierre de la Etapa 2 con verificación contra el deploy | solo docs de cierre de la etapa 2 |
-| [8](https://github.com/innovasbuild/agents/pull/8) | 2026-09-15 | feat: datos y núcleo de outreach (Etapa 3, Entrega 2) | pendiente |
+| [8](https://github.com/innovasbuild/agents/pull/8) | 2026-09-15 | feat: datos y núcleo de outreach (Etapa 3, Entrega 2) | [Datos](../arquitectura/datos.md) · [Outreach](../dominios/outreach.md) |
 | [9](https://github.com/innovasbuild/agents/pull/9) | 2026-09-15 | feat: ruta temporal de diagnóstico para los spikes de la etapa 3 | spike: ruta temporal de diagnóstico, borrada en #11 |
 | [10](https://github.com/innovasbuild/agents/pull/10) | 2026-09-15 | feat: diagnóstico de auth del AI Gateway en la ruta temporal de spikes | spike: ruta temporal de diagnóstico, borrada en #11 |
 | [11](https://github.com/innovasbuild/agents/pull/11) | 2026-09-15 | chore: borrar la ruta temporal de diagnóstico de los spikes de la etapa 3 | chore: borra la ruta temporal de #9 y #10 |
-| [12](https://github.com/innovasbuild/agents/pull/12) | 2026-09-15 | fix: el chat responde las preguntas del agente con sus opciones y no aprueba por texto | pendiente |
+| [12](https://github.com/innovasbuild/agents/pull/12) | 2026-09-15 | fix: el chat responde las preguntas del agente con sus opciones y no aprueba por texto | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
 | [13](https://github.com/innovasbuild/agents/pull/13) | 2026-09-15 | docs: resultado de los spikes y plan de la Entrega 3 de la Etapa 3 | solo docs/superpowers (resultado de spikes) |
-| [14](https://github.com/innovasbuild/agents/pull/14) | 2026-09-15 | feat: base de diseño cálida con marca por tenant | pendiente |
-| [15](https://github.com/innovasbuild/agents/pull/15) | 2026-09-16 | feat: entrega 3 de la etapa 3 — agente de primer toque | pendiente |
+| [14](https://github.com/innovasbuild/agents/pull/14) | 2026-09-15 | feat: base de diseño cálida con marca por tenant | [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [15](https://github.com/innovasbuild/agents/pull/15) | 2026-09-16 | feat: entrega 3 de la etapa 3 — agente de primer toque | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) · [Outreach](../dominios/outreach.md) |
 | [16](https://github.com/innovasbuild/agents/pull/16) | 2026-09-16 | chore: ruta temporal de diagnóstico para el spike S2 (lectura de Gmail) | spike S2: ruta temporal, borrada en #21 |
 | [17](https://github.com/innovasbuild/agents/pull/17) | 2026-09-16 | docs: reglas del CRM de INNOV.AS en CLAUDE.md | las reglas del CRM viven en CLAUDE.md, no en la wiki |
 | [18](https://github.com/innovasbuild/agents/pull/18) | 2026-09-16 | chore: tool temporal para autorizar la lectura de Gmail (spike S2) | spike S2: tool temporal, borrada en #21 |
 | [19](https://github.com/innovasbuild/agents/pull/19) | 2026-09-16 | chore: autorizar gmail.readonly desde la ruta del spike S2 | spike S2: ruta temporal, borrada en #21 |
-| [20](https://github.com/innovasbuild/agents/pull/20) | 2026-09-16 | fix: unificar los scopes de Gmail (el envío de producción quedó sin token) | pendiente |
+| [20](https://github.com/innovasbuild/agents/pull/20) | 2026-09-16 | fix: unificar los scopes de Gmail (el envío de producción quedó sin token) | [Gmail](../dominios/gmail.md) |
 | [21](https://github.com/innovasbuild/agents/pull/21) | 2026-09-16 | docs: cerrar el spike S2 y borrar el código temporal | cierra el spike S2 y borra el código temporal |
-| [22](https://github.com/innovasbuild/agents/pull/22) | 2026-09-16 | feat: borrar conversaciones e indicador de actividad en el chat | pendiente |
-| [23](https://github.com/innovasbuild/agents/pull/23) | 2026-09-16 | feat: /cola, aprobar y enviar desde el dashboard (Etapa 4, Entrega 1) | pendiente |
-| [24](https://github.com/innovasbuild/agents/pull/24) | 2026-09-19 | feat: /pipeline y /contactos, embudo y ficha de contacto (Etapa 4, Entrega 2) | pendiente |
+| [22](https://github.com/innovasbuild/agents/pull/22) | 2026-09-16 | feat: borrar conversaciones e indicador de actividad en el chat | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [23](https://github.com/innovasbuild/agents/pull/23) | 2026-09-16 | feat: /cola, aprobar y enviar desde el dashboard (Etapa 4, Entrega 1) | [Outreach](../dominios/outreach.md) |
+| [24](https://github.com/innovasbuild/agents/pull/24) | 2026-09-19 | feat: /pipeline y /contactos, embudo y ficha de contacto (Etapa 4, Entrega 2) | [Outreach](../dominios/outreach.md) |
 | [25](https://github.com/innovasbuild/agents/pull/25) | 2026-09-19 | docs: Etapa 11, brain servido por MCP y brains externos por tenant | solo docs/superpowers (spec de la etapa 11) |
-| [26](https://github.com/innovasbuild/agents/pull/26) | 2026-09-20 | feat: Etapa 5 — escucha y follow-ups | pendiente |
+| [26](https://github.com/innovasbuild/agents/pull/26) | 2026-09-20 | feat: Etapa 5 — escucha y follow-ups | [Outreach](../dominios/outreach.md) |
 | [27](https://github.com/innovasbuild/agents/pull/27) | 2026-09-20 | docs: estado de avance de las etapas | solo docs/producto/roadmap |
 | [28](https://github.com/innovasbuild/agents/pull/28) | 2026-09-20 | docs: spec del brain marcada como implementada, con el resultado de la verificación | solo docs/superpowers (spec del brain) |
 | [29](https://github.com/innovasbuild/agents/pull/29) | 2026-09-20 | docs: modelo de orquestación de la plataforma (etapa 12) — spec y plan | solo docs/superpowers (spec y plan de la etapa 12) |
 | [30](https://github.com/innovasbuild/agents/pull/30) | 2026-09-20 | docs: pipeline de GTM (etapa 13) — spec y plan | solo docs/superpowers (spec y plan de la etapa 13) |
 | [31](https://github.com/innovasbuild/agents/pull/31) | 2026-09-20 | docs: etapas 12 a 16 en el roadmap y enmiendas al kickoff | solo roadmap y kickoff (enmiendas) |
-| [32](https://github.com/innovasbuild/agents/pull/32) | 2026-09-21 | feat: etapa 12 · E1, medición de consumo | pendiente |
+| [32](https://github.com/innovasbuild/agents/pull/32) | 2026-09-21 | feat: etapa 12 · E1, medición de consumo | [Datos](../arquitectura/datos.md) · [Orquestación](../arquitectura/orquestacion.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |
 | [33](https://github.com/innovasbuild/agents/pull/33) | 2026-09-21 | fix: tarjeta de aprobación pendiente legible | fix de UI sin cambio de contrato (tarjeta de aprobación) |
 | [34](https://github.com/innovasbuild/agents/pull/34) | 2026-09-21 | Tarjeta legible para mensajes redactados y labels de hook/vector/idioma | fix de UI sin cambio de contrato (tarjeta de mensajes) |
-| [35](https://github.com/innovasbuild/agents/pull/35) | 2026-09-21 | feat: etapa 12 · E2, los rieles (work_items, registry, runner) | pendiente |
+| [35](https://github.com/innovasbuild/agents/pull/35) | 2026-09-21 | feat: etapa 12 · E2, los rieles (work_items, registry, runner) | [Datos](../arquitectura/datos.md) · [Orquestación](../arquitectura/orquestacion.md) · [Workflows](../dominios/workflows.md) |
 | [36](https://github.com/innovasbuild/agents/pull/36) | 2026-09-21 | docs: spike S2 cerrado y plan de la Entrega 3 de la Etapa 12 | solo docs/superpowers (spike S2 y plan de la E3) |
-| [37](https://github.com/innovasbuild/agents/pull/37) | 2026-09-21 | feat: etapa 12 · E3, primer workflow refresh-fichas y dispatcher | pendiente |
-| [38](https://github.com/innovasbuild/agents/pull/38) | 2026-09-21 | feat: la ficha guarda los dolores de la cuenta y el primer mensaje se escribe desde ellos | pendiente |
+| [37](https://github.com/innovasbuild/agents/pull/37) | 2026-09-21 | feat: etapa 12 · E3, primer workflow refresh-fichas y dispatcher | [Orquestación](../arquitectura/orquestacion.md) · [Workflows](../dominios/workflows.md) |
+| [38](https://github.com/innovasbuild/agents/pull/38) | 2026-09-21 | feat: la ficha guarda los dolores de la cuenta y el primer mensaje se escribe desde ellos | [Outreach](../dominios/outreach.md) |
 | [39](https://github.com/innovasbuild/agents/pull/39) | 2026-09-21 | docs: cierre de la Entrega 3 de la Etapa 12 contra producción | solo docs de cierre de la E3 contra producción |
-| [40](https://github.com/innovasbuild/agents/pull/40) | 2026-09-21 | fix: la cadencia de los workflows se cuenta desde el inicio de la pasada | pendiente |
-| [41](https://github.com/innovasbuild/agents/pull/41) | 2026-09-21 | fix: metered asienta el consumo de las llamadas al modelo que tiran | pendiente |
-| [42](https://github.com/innovasbuild/agents/pull/42) | 2026-09-21 | docs: etapa 12 · E4, la ley de orquestación | pendiente |
-| [43](https://github.com/innovasbuild/agents/pull/43) | 2026-09-21 | Diagrama de arquitectura y script de prueba de Jev | pendiente |
-| [44](https://github.com/innovasbuild/agents/pull/44) | 2026-09-21 | feat: adjuntar archivos en el chat del agente | pendiente |
-| [45](https://github.com/innovasbuild/agents/pull/45) | 2026-09-22 | feat: Etapa 13 · Pipeline de GTM — E1 (descubrimiento) y E2 (calificación) | pendiente |
-| [46](https://github.com/innovasbuild/agents/pull/46) | 2026-09-22 | feat: la voz del ejecutor define la estructura del primer mensaje | pendiente |
-| [47](https://github.com/innovasbuild/agents/pull/47) | 2026-09-22 | feat: Etapa 13 · Pipeline de GTM — E3 (enrichment y pieza) y E4 (pantallas) | pendiente |
-| [48](https://github.com/innovasbuild/agents/pull/48) | 2026-09-23 | feat: firma del ejecutor en emails de outreach | pendiente |
+| [40](https://github.com/innovasbuild/agents/pull/40) | 2026-09-21 | fix: la cadencia de los workflows se cuenta desde el inicio de la pasada | [Orquestación](../arquitectura/orquestacion.md) · [Workflows](../dominios/workflows.md) |
+| [41](https://github.com/innovasbuild/agents/pull/41) | 2026-09-21 | fix: metered asienta el consumo de las llamadas al modelo que tiran | [Orquestación](../arquitectura/orquestacion.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |
+| [42](https://github.com/innovasbuild/agents/pull/42) | 2026-09-21 | docs: etapa 12 · E4, la ley de orquestación | [Orquestación](../arquitectura/orquestacion.md) |
+| [43](https://github.com/innovasbuild/agents/pull/43) | 2026-09-21 | Diagrama de arquitectura y script de prueba de Jev | [Visión general](../arquitectura/vision-general.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |
+| [44](https://github.com/innovasbuild/agents/pull/44) | 2026-09-21 | feat: adjuntar archivos en el chat del agente | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [45](https://github.com/innovasbuild/agents/pull/45) | 2026-09-22 | feat: Etapa 13 · Pipeline de GTM — E1 (descubrimiento) y E2 (calificación) | [Orquestación](../arquitectura/orquestacion.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) · [Outreach](../dominios/outreach.md) · [Workflows](../dominios/workflows.md) |
+| [46](https://github.com/innovasbuild/agents/pull/46) | 2026-09-22 | feat: la voz del ejecutor define la estructura del primer mensaje | [Outreach](../dominios/outreach.md) |
+| [47](https://github.com/innovasbuild/agents/pull/47) | 2026-09-22 | feat: Etapa 13 · Pipeline de GTM — E3 (enrichment y pieza) y E4 (pantallas) | [Orquestación](../arquitectura/orquestacion.md) · [Outreach](../dominios/outreach.md) · [Workflows](../dominios/workflows.md) |
+| [48](https://github.com/innovasbuild/agents/pull/48) | 2026-09-23 | feat: firma del ejecutor en emails de outreach | [Outreach](../dominios/outreach.md) · [Gmail](../dominios/gmail.md) |
 | [49](https://github.com/innovasbuild/agents/pull/49) | 2026-09-25 | fix: la IA puede nombrarse en la primera línea del primer mensaje | fix de instrucciones del agente sin cambio de contrato |
-| [50](https://github.com/innovasbuild/agents/pull/50) | 2026-09-25 | feat: el chat muestra el mail tal cual sale, con firma | pendiente |
-| [51](https://github.com/innovasbuild/agents/pull/51) | 2026-09-25 | Etapa 11: brain por MCP, emisor OAuth 2.1 y proveedor mcp | pendiente |
-| [52](https://github.com/innovasbuild/agents/pull/52) | 2026-09-25 | Etapa 11 (seguimiento): rol sin permisos para tokens del emisor OAuth | pendiente |
+| [50](https://github.com/innovasbuild/agents/pull/50) | 2026-09-25 | feat: el chat muestra el mail tal cual sale, con firma | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) · [Gmail](../dominios/gmail.md) |
+| [51](https://github.com/innovasbuild/agents/pull/51) | 2026-09-25 | Etapa 11: brain por MCP, emisor OAuth 2.1 y proveedor mcp | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Brain](../dominios/brain.md) |
+| [52](https://github.com/innovasbuild/agents/pull/52) | 2026-09-25 | Etapa 11 (seguimiento): rol sin permisos para tokens del emisor OAuth | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Brain](../dominios/brain.md) |
 | [53](https://github.com/innovasbuild/agents/pull/53) | 2026-09-27 | Etapa 11: cierre — verificada contra producción | cierre de la etapa 11 verificado contra producción, sin código nuevo |
-| [54](https://github.com/innovasbuild/agents/pull/54) | 2026-09-27 | Etapa 6: canal MCP del agente, reusando el emisor OAuth de la Etapa 11 | pendiente |
-| [55](https://github.com/innovasbuild/agents/pull/55) | 2026-09-27 | feat: editor del brain — leer, entender conexiones y editar | pendiente |
-| [56](https://github.com/innovasbuild/agents/pull/56) | 2026-09-27 | fix: aprobación de envío directa y motivo al rechazar | pendiente |
-| [57](https://github.com/innovasbuild/agents/pull/57) | 2026-09-27 | fix: brain_search/brain_read/brain_upsert no aparecían en sesiones MCP | pendiente |
+| [54](https://github.com/innovasbuild/agents/pull/54) | 2026-09-27 | Etapa 6: canal MCP del agente, reusando el emisor OAuth de la Etapa 11 | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [55](https://github.com/innovasbuild/agents/pull/55) | 2026-09-27 | feat: editor del brain — leer, entender conexiones y editar | [Brain](../dominios/brain.md) |
+| [56](https://github.com/innovasbuild/agents/pull/56) | 2026-09-27 | fix: aprobación de envío directa y motivo al rechazar | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [57](https://github.com/innovasbuild/agents/pull/57) | 2026-09-27 | fix: brain_search/brain_read/brain_upsert no aparecían en sesiones MCP | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
 | [58](https://github.com/innovasbuild/agents/pull/58) | 2026-09-27 | fix: draft_message resuelve la ficha por contacts.domain, no solo por email | fix sin cambio de contrato (draft_message resuelve la ficha por dominio) |
 | [59](https://github.com/innovasbuild/agents/pull/59) | 2026-09-27 | docs: cerrar Etapa 6 (canal MCP) con M1-M5 verificados en producción | solo docs de cierre de la etapa 6 |
-| [60](https://github.com/innovasbuild/agents/pull/60) | 2026-09-28 | feat: Etapa 14 — subir eve de 0.54.2 a 0.67.2 | pendiente |
-| [61](https://github.com/innovasbuild/agents/pull/61) | 2026-09-28 | Sync entrante de HubSpot: crm_id huérfano, owner y notas | pendiente |
+| [60](https://github.com/innovasbuild/agents/pull/60) | 2026-09-28 | feat: Etapa 14 — subir eve de 0.54.2 a 0.67.2 | [Visión general](../arquitectura/vision-general.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) · [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [61](https://github.com/innovasbuild/agents/pull/61) | 2026-09-28 | Sync entrante de HubSpot: crm_id huérfano, owner y notas | [Datos](../arquitectura/datos.md) · [Outreach](../dominios/outreach.md) |
 | [62](https://github.com/innovasbuild/agents/pull/62) | 2026-09-29 | chore: regenera database.types.ts con contacts.crm_synced_at | chore: regenera database.types.ts |
-| [63](https://github.com/innovasbuild/agents/pull/63) | 2026-09-29 | fix: db:types apunta a la instancia local y no pisa el archivo si falla | pendiente |
-| [64](https://github.com/innovasbuild/agents/pull/64) | 2026-09-29 | feat: caja del chat multilínea (Shift+Enter y pegado con saltos) | pendiente |
+| [63](https://github.com/innovasbuild/agents/pull/63) | 2026-09-29 | fix: db:types apunta a la instancia local y no pisa el archivo si falla | [Datos](../arquitectura/datos.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) |
+| [64](https://github.com/innovasbuild/agents/pull/64) | 2026-09-29 | feat: caja del chat multilínea (Shift+Enter y pegado con saltos) | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
 | [65](https://github.com/innovasbuild/agents/pull/65) | 2026-09-29 | fix: ignorar node_modules anidados, no solo el de la raíz | fix de tooling sin cambio de contrato (node_modules anidados) |
-| [66](https://github.com/innovasbuild/agents/pull/66) | 2026-09-29 | fix: cerrar runs huérfanos de morning sweep | pendiente |
-| [67](https://github.com/innovasbuild/agents/pull/67) | 2026-10-05 | feat: usuarios del tenant con nombre y correo, y roles en castellano | pendiente |
-| [68](https://github.com/innovasbuild/agents/pull/68) | 2026-10-05 | feat: elegir el rol al invitar usuarios del tenant | pendiente |
-| [69](https://github.com/innovasbuild/agents/pull/69) | 2026-10-05 | feat: agrupar los destinos de outreach bajo un desplegable en el menú | pendiente |
-| [70](https://github.com/innovasbuild/agents/pull/70) | 2026-10-05 | feat: consola de plataforma para administrar tenants | pendiente |
-| [71](https://github.com/innovasbuild/agents/pull/71) | 2026-10-06 | feat: alta de empresas y landing de login por empresa | pendiente |
+| [66](https://github.com/innovasbuild/agents/pull/66) | 2026-09-29 | fix: cerrar runs huérfanos de morning sweep | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) · [Outreach](../dominios/outreach.md) · [Workflows](../dominios/workflows.md) |
+| [67](https://github.com/innovasbuild/agents/pull/67) | 2026-10-05 | feat: usuarios del tenant con nombre y correo, y roles en castellano | [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [68](https://github.com/innovasbuild/agents/pull/68) | 2026-10-05 | feat: elegir el rol al invitar usuarios del tenant | [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [69](https://github.com/innovasbuild/agents/pull/69) | 2026-10-05 | feat: agrupar los destinos de outreach bajo un desplegable en el menú | [Outreach](../dominios/outreach.md) |
+| [70](https://github.com/innovasbuild/agents/pull/70) | 2026-10-05 | feat: consola de plataforma para administrar tenants | [Tenancy](../arquitectura/tenancy.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [71](https://github.com/innovasbuild/agents/pull/71) | 2026-10-06 | feat: alta de empresas y landing de login por empresa | [Tenancy](../arquitectura/tenancy.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) |
 | [72](https://github.com/innovasbuild/agents/pull/72) | 2026-10-06 | fix: el logo del login de la empresa solo limita el ancho | fix de estilo sin cambio de contrato (logo del login) |
-| [73](https://github.com/innovasbuild/agents/pull/73) | 2026-10-07 | refactor: aislar lib/brain en core y adapters (etapa 17.1) | pendiente |
-| [74](https://github.com/innovasbuild/agents/pull/74) | 2026-10-07 | feat: permisos del brain por carpeta y por página (etapa 17.2) | pendiente |
-| [75](https://github.com/innovasbuild/agents/pull/75) | 2026-10-07 | feat: árbol, menú de tres puntos y diálogo de compartir del brain (Etapa 17.3) | pendiente |
-| [76](https://github.com/innovasbuild/agents/pull/76) | 2026-10-08 | feat: borrado de páginas del brain con limpieza de links (Etapa 18.1) | pendiente |
-| [77](https://github.com/innovasbuild/agents/pull/77) | 2026-10-08 | feat: editor visual de markdown y vista de papel del brain (Etapa 18.2) | pendiente |
-| [78](https://github.com/innovasbuild/agents/pull/78) | 2026-10-08 | feat: editor visual de markdown y vista de papel del brain (Etapa 18.2) | pendiente |
-| [79](https://github.com/innovasbuild/agents/pull/79) | 2026-10-08 | fix: seguimientos de la Etapa 17, reglas del brain con la membresía y platform_admin por MCP alineado | pendiente |
-| [80](https://github.com/innovasbuild/agents/pull/80) | 2026-10-09 | fix: memberships sin INSERT ni UPDATE de user_id/tenant_id para authenticated | pendiente |
-| [81](https://github.com/innovasbuild/agents/pull/81) | 2026-10-09 | feat: ingreso por dominio de correo configurable por empresa | pendiente |
-| [82](https://github.com/innovasbuild/agents/pull/82) | 2026-10-09 | fix: el canal MCP del agente solo reconoce al platform_admin del tenant dueño | pendiente |
-| [83](https://github.com/innovasbuild/agents/pull/83) | 2026-10-09 | fix: el login por mail muestra el mismo mensaje con o sin acceso | pendiente |
-| [84](https://github.com/innovasbuild/agents/pull/84) | 2026-10-09 | feat: página Conectar y chequeo de agente habilitado en el canal MCP (Etapa 19) | pendiente |
-| [85](https://github.com/innovasbuild/agents/pull/85) | 2026-10-09 | feat: Microsoft y métodos de login impuestos en el servidor (Etapa 20.1) | pendiente |
-| [86](https://github.com/innovasbuild/agents/pull/86) | 2026-10-10 | feat: bloqueo por persona, cambio de rol y reenvío de invitaciones (Etapa 20.2) | pendiente |
-| [87](https://github.com/innovasbuild/agents/pull/87) | 2026-10-10 | feat: consola de plataforma, agentes, brain y conectores por empresa (21.1) | pendiente |
+| [73](https://github.com/innovasbuild/agents/pull/73) | 2026-10-07 | refactor: aislar lib/brain en core y adapters (etapa 17.1) | [Brain](../dominios/brain.md) |
+| [74](https://github.com/innovasbuild/agents/pull/74) | 2026-10-07 | feat: permisos del brain por carpeta y por página (etapa 17.2) | [Brain](../dominios/brain.md) |
+| [75](https://github.com/innovasbuild/agents/pull/75) | 2026-10-07 | feat: árbol, menú de tres puntos y diálogo de compartir del brain (Etapa 17.3) | [Brain](../dominios/brain.md) |
+| [76](https://github.com/innovasbuild/agents/pull/76) | 2026-10-08 | feat: borrado de páginas del brain con limpieza de links (Etapa 18.1) | [Brain](../dominios/brain.md) |
+| [77](https://github.com/innovasbuild/agents/pull/77) | 2026-10-08 | feat: editor visual de markdown y vista de papel del brain (Etapa 18.2) | [Brain](../dominios/brain.md) |
+| [78](https://github.com/innovasbuild/agents/pull/78) | 2026-10-08 | feat: editor visual de markdown y vista de papel del brain (Etapa 18.2) | [Brain](../dominios/brain.md) |
+| [79](https://github.com/innovasbuild/agents/pull/79) | 2026-10-08 | fix: seguimientos de la Etapa 17, reglas del brain con la membresía y platform_admin por MCP alineado | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Brain](../dominios/brain.md) |
+| [80](https://github.com/innovasbuild/agents/pull/80) | 2026-10-09 | fix: memberships sin INSERT ni UPDATE de user_id/tenant_id para authenticated | [Tenancy](../arquitectura/tenancy.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [81](https://github.com/innovasbuild/agents/pull/81) | 2026-10-09 | feat: ingreso por dominio de correo configurable por empresa | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [82](https://github.com/innovasbuild/agents/pull/82) | 2026-10-09 | fix: el canal MCP del agente solo reconoce al platform_admin del tenant dueño | [Tenancy](../arquitectura/tenancy.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) |
+| [83](https://github.com/innovasbuild/agents/pull/83) | 2026-10-09 | fix: el login por mail muestra el mismo mensaje con o sin acceso | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
+| [84](https://github.com/innovasbuild/agents/pull/84) | 2026-10-09 | feat: página Conectar y chequeo de agente habilitado en el canal MCP (Etapa 19) | [Agentes eve (agente de outreach)](../dominios/agentes-eve.md) · [Conectores](../dominios/conectores.md) |
+| [85](https://github.com/innovasbuild/agents/pull/85) | 2026-10-09 | feat: Microsoft y métodos de login impuestos en el servidor (Etapa 20.1) | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [86](https://github.com/innovasbuild/agents/pull/86) | 2026-10-10 | feat: bloqueo por persona, cambio de rol y reenvío de invitaciones (Etapa 20.2) | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md) |
+| [87](https://github.com/innovasbuild/agents/pull/87) | 2026-10-10 | feat: consola de plataforma, agentes, brain y conectores por empresa (21.1) | [Tenancy](../arquitectura/tenancy.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) · [Conectores](../dominios/conectores.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) |
 | [88](https://github.com/innovasbuild/agents/pull/88) | 2026-10-10 | fix: la interfaz nombra el producto como INNOV.AS - Central IA | fix de texto sin cambio de contrato (nombre del producto en la interfaz) |
-| [89](https://github.com/innovasbuild/agents/pull/89) | 2026-10-10 | feat: settings del cliente y Mis cuentas (etapa 21.2) | pendiente |
-| [90](https://github.com/innovasbuild/agents/pull/90) | 2026-10-11 | feat: etapa 21.3, el brain como fuente del ICP y los hooks, pantalla de outreach y presupuestos | pendiente |
-| [91](https://github.com/innovasbuild/agents/pull/91) | 2026-10-11 | feat: etapa 21.4a, una empresa puede usar solo el brain (sin agentes) y entrar con un código por correo | pendiente |
+| [89](https://github.com/innovasbuild/agents/pull/89) | 2026-10-10 | feat: settings del cliente y Mis cuentas (etapa 21.2) | [Conectores](../dominios/conectores.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [90](https://github.com/innovasbuild/agents/pull/90) | 2026-10-11 | feat: etapa 21.3, el brain como fuente del ICP y los hooks, pantalla de outreach y presupuestos | [Modelos y costos](../arquitectura/modelos-y-costos.md) · [Outreach](../dominios/outreach.md) · [Brain](../dominios/brain.md) |
+| [91](https://github.com/innovasbuild/agents/pull/91) | 2026-10-11 | feat: etapa 21.4a, una empresa puede usar solo el brain (sin agentes) y entrar con un código por correo | [Tenancy](../arquitectura/tenancy.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) |

@@ -143,9 +143,7 @@
 		"mergedAt": "2026-09-14T17:57:01Z",
 		"headRefName": "fix/typecheck-next-typegen",
 		"body": "## Resumen\n\n- `npm run typecheck` (`tsc --noEmit`) falla con `Cannot find name 'LayoutProps'` en `app/layout.tsx:20` en cualquier checkout o worktree que nunca corrió `next dev`/`next build`.\n- No es un bug de `app/layout.tsx`: `LayoutProps<\"/\">` es un tipo global que Next.js genera en `.next/types/` (route typegen). Sin un build/dev previo, ese directorio no existe y `tsc` no encuentra el tipo.\n- Fix: `\"typecheck\": \"next typegen && tsc --noEmit\"` — `next typegen` genera esos tipos sin correr un build completo, así que el comando queda autosuficiente en cualquier entorno fresco.\n\n## Test plan\n\n- [x] Con `.next/` borrado, `npm run typecheck` corre limpio.\n- [x] `npm test`: 179 tests OK (3 skipped).\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"package.json"
-		]
+		"files": ["package.json"]
 	},
 	{
 		"number": 6,
@@ -419,9 +417,7 @@
 		"mergedAt": "2026-09-16T01:47:18Z",
 		"headRefName": "docs/crm-innovas",
 		"body": "## Qué agrega\n\nEl bloque de reglas del CRM de INNOV.AS (portal 51464889) al `CLAUDE.md` del repo, tomado del instructivo `operacion/setup-mcp-innov.md` y `comercial/outreach/21-crm.md` del brain.\n\nLo importante: **HubSpot de INNOV.AS se opera únicamente con el server MCP `hubspot-innov`**, y cualquier otro conector de HubSpot que aparezca en la sesión pertenece a otra empresa y está prohibido, incluso como fallback. Antes de cualquier tarea de CRM hay que correr `hubspot-get-user-details` y frenar si el `hubId` no es 51464889.\n\nAdemás quedan fijados los `ownerId` de los ejecutores (matias 92296278, marcos 92296386), el pipeline `default` con sus etapas, los ids de asociación, las reglas de escritura (buscar antes de escribir, claim por autoría de notas, las diez propiedades de atribución en la misma llamada, nota por interacción, task por follow up) y que toda escritura pide confirmación mostrando el payload.\n\n## Por qué ahora\n\nDurante el spike S2 usé el conector de HubSpot que estaba attachado a la sesión, que resultó ser el de otra empresa. De ahí saqué un `ownerId` equivocado, que terminó cargado como `crm_owner_id` del ejecutor en producción y provocó un `claim_ajeno` en el primer envío de prueba: con un owner que no existe en el portal, la autoría de las notas propias se lee como ajena.\n\nEl freno funcionó como tenía que funcionar, pero la regla que faltaba es esta.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"CLAUDE.md"
-		]
+		"files": ["CLAUDE.md"]
 	},
 	{
 		"number": 18,
@@ -429,9 +425,7 @@
 		"mergedAt": "2026-09-16T02:07:52Z",
 		"headRefName": "spike/s2-readonly",
 		"body": "## Por qué\n\nEl diagnóstico del spike S2 en producción devolvió que el grant de `gmail.send` está vivo, pero `gmail.readonly` no viene incluido: Connect responde `UserAuthorizationRequired`. El consentimiento sale del flujo del chat (la tarjeta de autorización que arma eve), no de una ruta GET, y ninguna tool de producción pide ese scope, así que no hay forma de disparar la autorización.\n\nEsta tool temporal la dispara: pide el token de Google con `gmail.send` + `gmail.readonly` y no hace nada más.\n\n## Qué hace y qué no\n\n- No lee mails, no manda mails, no escribe en la base. Solo `getToken` y un mensaje.\n- Con `SPIKE_S2` distinto de `1` devuelve la negativa `spike_apagado`, así que fuera del spike es inerte aunque quede deployada.\n- Sin binding de Gmail en el tenant, devuelve `sin_gmail`.\n- El token no sale de la función ni se loguea.\n- Reusa `GMAIL_AUTH_OPTIONS` (`authKey: \"gmail\"`), así que el hook de ejecutores estampa la autorización igual que hoy.\n- La descripción le dice al modelo que la use solo si el usuario la pide por nombre.\n\nSe borra junto con la ruta `/api/admin/spike-s2` cuando cierre el spike.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"agents/outreach/tools/spike_gmail_readonly.ts"
-		]
+		"files": ["agents/outreach/tools/spike_gmail_readonly.ts"]
 	},
 	{
 		"number": 19,
@@ -613,9 +607,7 @@
 		"mergedAt": "2026-09-20T21:57:07Z",
 		"headRefName": "docs/estado-de-avance",
 		"body": "Agrega una tabla de estado en el kickoff. Etapas 0-5 hechas (la 5 recién vía #26), 6-8 sin arrancar.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"docs/innovas-agents-kickoff.md"
-		]
+		"files": ["docs/innovas-agents-kickoff.md"]
 	},
 	{
 		"number": 28,
@@ -623,9 +615,7 @@
 		"mergedAt": "2026-09-20T21:57:25Z",
 		"headRefName": "docs/brain-spec-estado",
 		"body": "## Resumen\n\nLa spec del brain seguía diciendo `estado: aprobada en brainstorming` cuando el brain ya está mergeado (PR #2), verificado en producción el 2026-09-14 y en uso por la Etapa 3. Este PR corrige el rótulo y agrega la sección que faltaba del plan.\n\n- Frontmatter: `estado: implementada (ver §15)`.\n- Nueva **§15 Resultado de la verificación**: qué se implementó y por dónde entró, qué se verificó contra producción en el cierre de la Etapa 2 (criterios 1 y 3 de §1), el uso posterior desde `lib/outreach/canon.ts`, y el desvío de `approved_by_user_id`, que queda nulo porque en eve 0.54.2 el responder solo llega a la política de respuesta.\n- Deja las dos consultas SQL para completar el detalle del import (páginas por categoría y tags de canon), que necesita acceso a producción.\n- Deja apuntados los pendientes ya planificados: editor en la Etapa 4, proveedor `mcp` y brain servido por MCP en la Etapa 11, búsqueda híbrida en la misma etapa como \"cuando haga falta\".\n\nNo inventa números del import: los deja como pendiente explícito con la consulta al lado.\n\n## Test plan\n\n- [ ] Leer §15 y confirmar que refleja lo que pasó en la verificación del 2026-09-14.\n- [ ] Correr las dos consultas contra producción y completar el detalle del import (opcional, se puede hacer después).\n\nSolo documentación: no toca código, migraciones ni tests.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"docs/superpowers/specs/2026-09-13-brain-design.md"
-		]
+		"files": ["docs/superpowers/specs/2026-09-13-brain-design.md"]
 	},
 	{
 		"number": 29,
@@ -693,9 +683,7 @@
 		"mergedAt": "2026-09-21T02:27:11Z",
 		"headRefName": "fix/tarjeta-aprobacion-legible",
 		"body": "## Resumen\n- El título de la tarjeta de aprobación mostraba el id técnico crudo de la tool (ej. `crm_setup_outreach_properties`) en vez de una etiqueta en castellano.\n- El payload se mostraba siempre como JSON crudo (`JSON.stringify`), incluso cuando estaba vacío `{}`.\n- Solo `send_email` tenía un render legible por campos; el resto caía al fallback genérico.\n\n## Cambios\n- El título usa `runningToolLabel(request.toolName)` (ya existía en `lib/agents/running-tool.ts`, solo faltaba conectarlo).\n- Nuevo componente `ApprovalPayload` que reemplaza tanto el caso especial de `send_email` como el fallback de JSON crudo: campos cortos en una lista clave/valor con etiqueta en castellano (`APPROVAL_FIELD_LABELS`, con fallback humanizado para campos sin etiqueta), texto largo o con saltos de línea en su propio bloque, input vacío no muestra nada.\n\n## Test plan\n- [x] `npx tsc --noEmit`\n- [x] `npx biome check` sobre el archivo modificado\n- [ ] Verificación visual en una aprobación real pendiente (no se pudo reproducir en esta sesión sin disparar una sesión de eve real)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/[tenant]/chat/chat-client.tsx"
-		]
+		"files": ["app/[tenant]/chat/chat-client.tsx"]
 	},
 	{
 		"number": 34,
@@ -895,9 +883,7 @@
 		"mergedAt": "2026-09-21T23:52:54Z",
 		"headRefName": "feat/chat-attachments",
 		"body": "## Summary\n- El composer del chat (`app/[tenant]/chat/chat-client.tsx`) ahora tiene un botón de clip para adjuntar un archivo, además del texto.\n- El archivo se lee a `data:` URL en base64 y se manda como parte `file` del `UserContent` que ya acepta `agent.send()` de `eve/react` — no requiere cambios del lado del agente.\n- Tope de 15 MB del lado del cliente, con mensaje de error inline si se pasa.\n- Caso de uso que lo motivó: pegar un CSV de leads como adjunto en vez de como texto plano en el chat, para que `import_contacts` lo procese luego de que el agente lo lea del sandbox con `read_file`.\n\n## Test plan\n- [x] `npx tsc --noEmit` sin errores\n- [x] `npm run lint:fix` (se revirtieron los archivos ajenos que reformatea siempre)\n- [ ] QA manual en prod: adjuntar un CSV en un hilo del chat y confirmar que el agente lo procesa con `import_contacts`\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/[tenant]/chat/chat-client.tsx"
-		]
+		"files": ["app/[tenant]/chat/chat-client.tsx"]
 	},
 	{
 		"number": 45,
@@ -1045,9 +1031,7 @@
 		"mergedAt": "2026-09-25T01:39:36Z",
 		"headRefName": "feat/voz-mati",
 		"body": "## Qué cambia\n\n`agents/outreach/skills/outreach-redaccion/SKILL.md` tenía \"Nunca: IA en la primera línea\". INNOV.AS vende justamente trabajo asistido por agentes, así que nombrarlo en la apertura es el mensaje, no un desliz.\n\nLos demás límites quedan: no contar que investigamos la empresa, no prometer lo que la ficha no respalda, no inventar clientes ni cifras.\n\nEl gate no cambia: sigue vetando el cliché \"soluciones de inteligencia artificial\", que es otra cosa.\n\n## Tests\n\n- `npm test`: 944 pasan, 12 salteados\n- `npm run typecheck`: limpio\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n",
-		"files": [
-			"agents/outreach/skills/outreach-redaccion/SKILL.md"
-		]
+		"files": ["agents/outreach/skills/outreach-redaccion/SKILL.md"]
 	},
 	{
 		"number": 50,
@@ -1272,10 +1256,7 @@
 		"mergedAt": "2026-09-27T23:25:18Z",
 		"headRefName": "fix/brain-dynamic-tools-mcp",
 		"body": "## Resumen\n\n- `brain_search`/`brain_read`/`brain_upsert` (Etapa 11) no aparecían en ninguna sesión invocada por el canal MCP de Etapa 6, aunque el tenant tuviera brain declarado (`\"brain\": \"read_write\"`) y binding resuelto correctamente.\n- Causa raíz confirmada en logs de producción: `execute()` cerraba sobre una función local `provider` (`() => (deps.provider ?? getBrainProvider)(binding)`). eve compila los callbacks de tools dinámicas (`defineDynamic` en `session.started`) para poder rehidratarlos entre invocaciones, y solo tolera cerrar sobre datos JSON-serializables más llamadas directas a imports estables (`guides/dynamic-capabilities.md`). Una función guardada en variable local no lo es, y eve descarta **todo** el resolver silenciosamente:\n  ```\n  [eve:dynamic-tools] Dynamic tool resolver (session.started) failed — skipping its complete result.\n  { error: 'Dynamic tool \"brain_search\" callback \"execute\" has a non-serializable capture. Expected a JSON-serializable value.' }\n  ```\n- El endpoint standalone del brain de Etapa 11 (`/brain/[tenant]/mcp`) no se ve afectado: arma su propio servidor MCP a mano, sin pasar por el compilador de dynamic tools de eve.\n\n## Fix\n\n`execute()` ahora llama a `getBrainProvider` directo, con `binding` (dato plano) como closure, en vez de indireccionar por una función local.\n\n## Test plan\n\n- [x] `npx vitest run tests/brain` (165 tests, incluye un test nuevo que ejercita `execute()` de punta a punta)\n- [x] `npm run typecheck`\n- [ ] Verificar en producción tras el merge: `agent_start` por MCP contra un tenant con brain habilitado y confirmar que `brain_search`/`brain_read`/`brain_upsert` aparecen en la lista de tools de la sesión\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"lib/brain/tools.ts",
-			"tests/brain/tools.test.ts"
-		]
+		"files": ["lib/brain/tools.ts", "tests/brain/tools.test.ts"]
 	},
 	{
 		"number": 58,
@@ -1302,9 +1283,7 @@
 		"mergedAt": "2026-09-27T23:54:51Z",
 		"headRefName": "docs/etapa-6-cierre",
 		"body": "## Resumen\n\nActualiza `docs/01-roadmap-etapas.md`: Etapa 6 pasa de `[ ]` a `[x]`, con la tabla de verificaciones M1-M6 completada con los resultados reales contra producción (ver [PR #57](https://github.com/innovasbuild/agents/pull/57) para el fix de brain tools encontrado durante M1).\n\nM6 (claude.ai como conector remoto) queda sin probar, sin bloquear el cierre según la propia spec.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"docs/01-roadmap-etapas.md"
-		]
+		"files": ["docs/01-roadmap-etapas.md"]
 	},
 	{
 		"number": 60,
@@ -1377,9 +1356,7 @@
 		"mergedAt": "2026-09-29T14:02:47Z",
 		"headRefName": "worktree-hubspot-crm-sync",
 		"body": "## Resumen\n\nFollow-up del PR #61 (ya mergeado): ese PR agregó la migración `contacts.crm_synced_at` pero no pudo regenerar `lib/supabase/database.types.ts` en el sandbox donde se construyó (sin Docker en ese momento). `main` sigue sin la columna nueva en los tipos generados.\n\n## Qué hace este commit\n\n- `npm run db:reset` local (aplica todas las migraciones, incluida la de `crm_synced_at`).\n- Regenera `database.types.ts`.\n\n## Un problema real que encontré de paso\n\nEl script `db:types` usa `supabase gen types typescript --linked`, que apunta al proyecto remoto vinculado (`supabase link`), no a la instancia local recién reseteada. En este entorno, sin ese link, el comando falla con `ProjectRefNotLinkedError` — y como el script usa `> archivo` para redirigir la salida, un fallo vacía el archivo en vez de dejarlo sin tocar (lo agarré antes de commitearlo, así que no llegó a pisar nada en el historial). Generé el archivo con `--local` en su lugar, que sí apunta a la instancia local, y lo formateé con `npm run lint:fix` (revirtiendo después los ~26 archivos ajenos que ese comando reformatea siempre en este repo — comportamiento ya conocido).\n\nVale la pena un PR aparte para que `db:types` use `--local` por default, o al menos falle sin vaciar el archivo. No lo toco acá para mantener este PR mínimo.\n\n## Test plan\n\n- `npm run typecheck`: sin errores.\n- `npm test`: 147 archivos / 1236 tests en verde.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"lib/supabase/database.types.ts"
-		]
+		"files": ["lib/supabase/database.types.ts"]
 	},
 	{
 		"number": 63,
@@ -1387,9 +1364,7 @@
 		"mergedAt": "2026-09-29T14:02:58Z",
 		"headRefName": "worktree-fix-db-types-script",
 		"body": "## Resumen\n\nEncontrado al regenerar `lib/supabase/database.types.ts` para el PR #62: `npm run db:types` usaba `supabase gen types typescript --linked`, que requiere `supabase link` contra un proyecto remoto. Sin ese link (no configurado en todos los entornos — CLAUDE.md documenta `db:types` junto a `db:start`/`db:reset`, que solo necesitan Docker, no la nube), el comando falla con `ProjectRefNotLinkedError`.\n\nEl problema real no es solo que falle: como el script redirigía la salida directo con `>`, un fallo **vaciaba** `database.types.ts` en vez de dejarlo intacto. Lo agarré a tiempo con `git checkout --` antes de commitear nada roto, pero es un footgun real para cualquiera que lo corra sin el link configurado.\n\n## Qué cambia\n\n```diff\n- \"db:types\": \"npx supabase gen types typescript --linked > lib/supabase/database.types.ts\",\n+ \"db:types\": \"npx supabase gen types typescript --local > lib/supabase/database.types.ts.tmp && mv lib/supabase/database.types.ts.tmp lib/supabase/database.types.ts && npx biome check --write lib/supabase/database.types.ts\",\n```\n\n- `--local` en vez de `--linked`: apunta a la instancia de Docker que `db:start`/`db:reset` ya levantan, sin depender de un link a un proyecto de Supabase Cloud.\n- Genera a un `.tmp` y lo mueve al destino solo si el comando anterior salió bien (`&&`) — un fallo deja `database.types.ts` intacto, con a lo sumo un `.tmp` descartable de sobra.\n- Formatea con `biome check --write` apuntado directo al archivo (no el `.` de `lint:fix`, que reformatearía medio repo) — el generador de Supabase tira el TypeScript sin formato, y así queda en el mismo estilo que el resto del repo.\n\n## Test plan\n\n- Corrida exitosa: `npm run db:types` genera el archivo esperado (confirmé `crm_synced_at` presente) y `git status` no muestra ningún otro archivo tocado.\n- Simulé el fallo original (`--linked` sin link) con la misma cadena seguro/`.tmp`: el archivo real quedó intacto, código de salida 1, solo quedó un `.tmp` descartable.\n- `npm run typecheck` y `npm test`: verdes (147 archivos / 1237 tests) — no dependen de este archivo generado.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"package.json"
-		]
+		"files": ["package.json"]
 	},
 	{
 		"number": 64,
@@ -1397,9 +1372,7 @@
 		"mergedAt": "2026-09-29T14:32:53Z",
 		"headRefName": "feat/chat-textarea-multilinea",
 		"body": "## Qué cambia\n- La caja del chat pasa de `<Input>` (una línea) a `<Textarea>`: crece con el contenido hasta 240 px y después hace scroll.\n- Enter envía; Shift+Enter inserta un salto de línea. Un Enter que confirma una composición IME no envía.\n- Al pegar texto se conservan los saltos de línea (el input de una línea los descartaba).\n\n## Prueba\n- typecheck y biome sin errores en el archivo. No probado en navegador: conviene chequear Shift+Enter y pegar un texto multilínea en el preview.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/[tenant]/chat/chat-client.tsx"
-		]
+		"files": ["app/[tenant]/chat/chat-client.tsx"]
 	},
 	{
 		"number": 65,
@@ -1407,9 +1380,7 @@
 		"mergedAt": "2026-09-29T14:44:51Z",
 		"headRefName": "claude/wonderful-wilbur-c316f5",
 		"body": "La regla estaba anclada (/node_modules), así que el build de eve dejaba agents/outreach/node_modules/.nitro/last-build.json como archivo sin trackear.\r\n\r\nNada trackeado queda ignorado por el cambio: `git ls-files | grep node_modules` y `git ls-files -i -c --exclude-standard` salen vacíos antes y después.",
-		"files": [
-			".gitignore"
-		]
+		"files": [".gitignore"]
 	},
 	{
 		"number": 66,
@@ -1441,9 +1412,7 @@
 		"mergedAt": "2026-10-05T15:37:35Z",
 		"headRefName": "feat/invitar-con-rol",
 		"body": "El formulario de Usuarios mandaba siempre `tenant_member`. Se agrega un selector Usuario / Administrador; el API ya aceptaba ambos roles y `accept_pending_invitations` crea la membership con el rol de la invitación.\n\nUn `tenant_admin` ya tenía escritura en el brain (editor, MCP y aprobación en chat); no se tocó.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/[tenant]/settings/usuarios/invite-form.tsx"
-		]
+		"files": ["app/[tenant]/settings/usuarios/invite-form.tsx"]
 	},
 	{
 		"number": 69,
@@ -1451,9 +1420,7 @@
 		"mergedAt": "2026-10-05T22:27:51Z",
 		"headRefName": "feat/menu-outreach",
 		"body": "## Qué cambia\nEl menú superior ponía todo al mismo nivel. Ahora Cola, Pipeline, Contactos, Cuentas y Focos quedan bajo un desplegable **Outreach**:\n\nChat · Outreach ▾ · Brain · Métricas · Configuración\n\nLas rutas no cambian. Un solo archivo: `app/[tenant]/layout.tsx`, usando el `DropdownMenu` que ya existía.\n\n## Verificación\n- `npm run typecheck` pasa.\n- Probado en el navegador contra el tenant `innovas` a ~580px de ancho: el desplegable abre con los cinco destinos y Pipeline navega bien. No se probó a ancho de escritorio.\n\n## Fuera de alcance\nEl menú sigue sin marcar la sección activa.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/[tenant]/layout.tsx"
-		]
+		"files": ["app/[tenant]/layout.tsx"]
 	},
 	{
 		"number": 70,
@@ -1539,9 +1506,7 @@
 		"mergedAt": "2026-10-06T01:22:36Z",
 		"headRefName": "fix/logo-login-sin-max-height",
 		"body": "## Qué cambia\n- Se saca `max-h-12` del logo en `app/(auth)/login/[tenant]/page.tsx`. Queda solo `max-w-[200px]`, así un logo más alto se ve más grande en la landing de la empresa.\n\n## Verificación\n- Sin probar en navegador ni typecheck (cambio de una clase de Tailwind).\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/(auth)/login/[tenant]/page.tsx"
-		]
+		"files": ["app/(auth)/login/[tenant]/page.tsx"]
 	},
 	{
 		"number": 73,
@@ -2164,10 +2129,7 @@
 		"mergedAt": "2026-10-10T21:21:06Z",
 		"headRefName": "fix/nombre-central-ia",
 		"body": "## Qué cambia\n\nEl nombre del producto es Central IA desde el 2026-10-10. La interfaz todavía decía \"INNOV.AS Agents\" en dos lugares:\n\n- Título del login general (`/login`): pasa a \"INNOV.AS - Central IA\".\n- Título de la pestaña del navegador (`app/layout.tsx`): igual.\n- Descripción de la página: de \"Agentes de INNOV.AS para cada cliente\" a \"La plataforma que ordena la adopción de IA en tu empresa\".\n\n## Qué no cambia\n\n- El login por empresa (`/login/<slug>`) sigue mostrando la marca de cada cliente.\n- El encabezado de la consola (\"Plataforma\") y los documentos del repo.\n\n## Verificación\n\n- `npx tsc --noEmit`: pasa.\n- `biome check` sobre los dos archivos: pasa.\n- Sin probar en navegador.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)",
-		"files": [
-			"app/(auth)/login/page.tsx",
-			"app/layout.tsx"
-		]
+		"files": ["app/(auth)/login/page.tsx", "app/layout.tsx"]
 	},
 	{
 		"number": 89,

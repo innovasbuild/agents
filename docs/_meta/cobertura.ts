@@ -4,4 +4,7 @@
 // caracteres. tests/docs/cobertura.test.ts falla si una entrada ya no existe
 // en el disco. Nunca se agrega una entrada para poner un test en verde sin
 // decidir: la salida normal es escribir la página.
-export const SIN_DOCUMENTAR: Record<string, string> = {};
+export const SIN_DOCUMENTAR: Record<string, string> = {
+	"env:APOLLO_KEY":
+		"la lee solo scripts/spike-apollo.mts, un script de prueba que no forma parte de la plataforma",
+};

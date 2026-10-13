@@ -18,7 +18,7 @@ Y para INNOV.AS: que la documentación se **mantenga sola**. Cada feature nueva 
 |---|---|
 | `README.md` | El de `create-next-app`. No dice qué es el proyecto ni cómo levantarlo. |
 | `docs/` | Once archivos sueltos sin índice: kickoff, roadmap, orquestación, llaves, dos guías de MCP, producto, evaluación y plan de cierre del gap, un diagrama `archify` (HTML de 815 KB más su JSON). |
-| `docs/superpowers/specs` y `plans` | 29 specs y 33 planes, una por etapa. Es la memoria real del proyecto, pero no hay nada que las ordene ni que diga cuál sigue vigente. |
+| `docs/superpowers/specs` y `plans` | 28 specs y 32 planes, una por etapa. Es la memoria real del proyecto, pero no hay nada que las ordene ni que diga cuál sigue vigente. |
 | `lib/brain/README.md` | La única doc por módulo que existe. Buena. Queda donde está y la wiki la enlaza. |
 | `CLAUDE.md` | Reglas de trabajo para el modelo. No dice dónde se documenta. |
 | Patrón de "tabla a mano contra el disco" | `tests/workflows/registry.test.ts` y `tests/agents/running-tool.test.ts` fallan hasta que alguien decide qué hacer con lo nuevo. Es el idioma del repo para detectar features. |
@@ -239,7 +239,7 @@ No hay GitHub Actions hoy. Un workflow mínimo `.github/workflows/ci.yml`: `npm 
 2. `npm run docs:check` verde en `main`.
 3. Prueba del detector: en una rama descartable se agrega `agents/outreach/tools/dummy_tool.ts`, una tabla en una migración y una ruta; `docs:check` falla nombrando las tres; se documentan; pasa. Se registra en el plan como verificación, no se mergea.
 4. `/ship` de esta misma etapa termina con `Documentation: updated` o `current`, `VERSION` y `CHANGELOG.md` escritos por el skill.
-5. `docs/decisiones/README.md` tiene las 29 specs con estado, y toda `cerrada` apunta a páginas.
+5. `docs/decisiones/README.md` tiene las 28 specs con estado, y toda `cerrada` apunta a páginas.
 6. `docs/decisiones/prs.md` tiene los 91 PR con páginas o motivo, y lo que dicen los cuerpos de los PR `feat:` está reflejado en `dominios/` y `arquitectura/`.
 
 ## 8. Fuera de alcance

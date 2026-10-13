@@ -619,6 +619,26 @@ Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, constru
 
 ---
 
+## Etapa 25 · Wiki de documentación y harness — `[~]`
+
+**Modelo Claude Code:** Fable 5.1 para spec y plan; Sonnet 5.5 para ejecutar.
+**Modelo runtime:** n/a.
+**Spec/Plan:** `docs/superpowers/specs/2026-10-13-etapa-25-wiki-documentacion-design.md` · `docs/superpowers/plans/2026-10-13-etapa-25-wiki-documentacion.md`.
+
+La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominios, guías, referencia generada, decisiones y producto) con un harness que se pone rojo cuando una tool, nodo, workflow, tabla, ruta, proveedor, variable de entorno, spec o PR mergeado no dejó rastro. El skill `/docs-wiki` es el procedimiento para cerrarlo.
+
+- [x] Fase 0: esqueleto, documentos movidos con `git mv`, `docs/guias/documentar.md`.
+- [x] Fase 1: inventario, `npm run docs:sync`, tests de forma y de cobertura.
+- [x] Fase 2: README con instalación, `docs:prs`, skill `/docs-wiki`, `VERSION`, `CHANGELOG.md`, CI.
+- [x] Fase 3: tablas de specs y PR, quince páginas de arquitectura y dominios, siete guías nuevas.
+- [ ] Fase 4: prueba del detector, `/ship`.
+- [ ] Repetir el README con Docker abierto (el ingreso local por Mailpit no se probó).
+- [ ] Decidir si `.codex/` entra al repo y si se habilita GitHub Actions.
+
+**Terminado cuando:** alguien que no conoce el repo levanta la plataforma en local siguiendo solo `README.md`; `npm run docs:check` está verde en `main`; una tool, una tabla y una ruta falsas hacen fallar el check nombrándolas; y `/ship` deja `VERSION` y `CHANGELOG.md` escritos.
+
+---
+
 ## Fuera de etapas · Sync entrante de HubSpot — `[ ]`
 
 Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué. Implementado y revisado; falta su primera corrida real en producción y correr `npm run db:reset`/`npm run db:types` (necesitan Docker, no disponible en el entorno donde se construyó esto).

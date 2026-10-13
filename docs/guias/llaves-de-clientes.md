@@ -6,6 +6,15 @@ tags: [llaves, vercel-connect]
 updated: 2026-10-13
 sources:
   - lib/connectors/providers.ts
+  - lib/connectors/auth.ts
+  - lib/connectors/verify.ts
+  - lib/connectors/executors.ts
+  - lib/connectors/crm/owner.ts
+  - app/plataforma/[slug]/console-actions.ts
+  - app/plataforma/[slug]/console/connections-section.tsx
+  - app/[tenant]/mis-cuentas/page.tsx
+  - supabase/migrations/20261015120000_platform_console.sql
+  - docs/superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md
 ---
 
 # Llaves de clientes: cómo entran a la plataforma
@@ -38,7 +47,7 @@ vercel connect attach <uid> --yes
 El nombre lleva el slug de la empresa para que `vercel connect list` lo muestre sin ambigüedad. El comando pide la llave en el momento; no se guarda en ningún archivo. Después:
 
 1. Si la llave quedó en el portapapeles, en el historial de la terminal o en un archivo temporal, borrarla.
-2. En `/plataforma/<slug>`, sección Conectores, elegir el proveedor y pegar el `uid`. La consola le pregunta a Vercel si existe y está adjunto, y recién ahí lo guarda. Si Vercel no lo conoce, no se guarda nada.
+2. En `/plataforma/<slug>`, sección Conectores, elegir el proveedor y pegar el `uid`. En un deploy, la consola le pregunta a Vercel si existe y está adjunto, y recién ahí lo guarda; si Vercel no lo conoce, no se guarda nada. En local no consulta a Vercel y la fila queda "Sin verificar" hasta que alguien aprieta Verificar en un deploy.
 3. Un `uid` solo puede estar asociado a una empresa. Si la consola dice que ya está asociado a otra, no es un error de tipeo: es una llave de otro cliente.
 
 ## Rotación

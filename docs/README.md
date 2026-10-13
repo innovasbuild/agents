@@ -19,14 +19,34 @@ Cómo se mantiene todo esto (y qué verifica el harness) está en [Cómo mantene
 
 ## Arquitectura
 
+- [Visión general](arquitectura/vision-general.md): el dibujo de la plataforma, los principios y el mapa de carpetas.
+- [Tenancy](arquitectura/tenancy.md): empresas, membresías, roles, RLS y el tenant dueño.
 - [Orquestación](arquitectura/orquestacion.md): las reglas para construir nodos, workflows y agentes.
+- [Datos](arquitectura/datos.md): las tablas por dominio, `events` append-only y las convenciones de migraciones.
+- [Identidad y acceso](arquitectura/identidad-y-acceso.md): login, ingreso por dominio, métodos impuestos, OAuth para el canal MCP.
+- [Entornos y deploy](arquitectura/entornos-y-deploy.md): local, preview y producción; migración antes que código.
+- [Modelos y costos](arquitectura/modelos-y-costos.md): AI Gateway, tiers, `metered()`, presupuestos y caps.
 
 ## Dominios
 
-Sin páginas todavía (se escriben en la fase 3 de la Etapa 25).
+- [Agentes eve (agente de outreach)](dominios/agentes-eve.md): cómo está armado el agente, sus tools, schedules y evals.
+- [Outreach](dominios/outreach.md): el proceso comercial: cola, pipeline, focos, fichas, CRM.
+- [Brain](dominios/brain.md): el brain por empresa: páginas, permisos, editor, MCP.
+- [Workflows](dominios/workflows.md): la mecánica de los workflows, `work_items` y el dispatcher.
+- [Conectores](dominios/conectores.md): proveedores, Vercel Connect, bindings y la página Conectar.
+- [Plataforma y settings por empresa](dominios/plataforma.md): la consola `/plataforma`, alta de empresas y settings del cliente.
+- [Invitaciones y usuarios](dominios/invitaciones-y-usuarios.md): invitaciones, roles, bloqueo por persona.
+- [Gmail](dominios/gmail.md): lectura y envío de mail desde el agente.
 
 ## Guías
 
+- [Alta de una empresa nueva](guias/alta-de-tenant.md): dar de alta una empresa nueva desde la consola.
+- [Migraciones a producción](guias/migraciones-a-produccion.md): aplicar migraciones en local y en producción sin sorpresas.
+- [Agregar una tool al agente](guias/agregar-una-tool.md): una tool nueva del agente, con su etiqueta y su aprobación.
+- [Agregar un nodo o un workflow](guias/agregar-un-nodo-o-workflow.md): un nodo o workflow nuevo, registrado y medido.
+- [Agregar un conector (proveedor)](guias/agregar-un-conector.md): un proveedor nuevo de conectores.
+- [Agregar una pantalla](guias/agregar-una-pantalla.md): una pantalla nueva con su guard, su menú y su marca.
+- [Correr las evals del agente](guias/correr-evals.md): correr y escribir evals del agente en local.
 - [Llaves de clientes](guias/llaves-de-clientes.md): cómo entran las llaves de API de un cliente a la plataforma.
 - [Conectar el brain por MCP](guias/conectar-brain-por-mcp.md): URL y pasos para Claude Code, Codex y claude.ai.
 - [Conectar el agente por MCP](guias/conectar-agente-por-mcp.md): lo mismo para el agente de outreach.
