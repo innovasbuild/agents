@@ -45,7 +45,8 @@ Sin páginas todavía (se escriben en la fase 3 de la Etapa 25).
 
 ## Decisiones
 
-Sin páginas todavía (tabla de specs y de PR).
+- [Decisiones por spec](decisiones/README.md): una fila por spec, con su estado y las páginas donde quedó.
+- [Decisiones por PR](decisiones/prs.md): una fila por PR mergeado, con las páginas o el motivo.
 
 ## Producto
 
