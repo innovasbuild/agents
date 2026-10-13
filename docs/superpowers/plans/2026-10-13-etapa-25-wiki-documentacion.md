@@ -174,6 +174,13 @@
 - [ ] **Step 2:** Cada traba se corrige en el README o en `instalacion-local.md`, no en la cabeza.
 - [ ] **Step 3:** Registrar en este plan, debajo de esta tarea, qué trabó y qué se cambió. Borrar la carpeta de prueba. Commit `docs: README probado en limpio`.
 
+**Resultado de la prueba (2026-10-13, Sonnet 5.5, Docker apagado en la máquina):**
+
+- Probado en un clon limpio de la rama: `nvm use`, `npm ci`, `npm run typecheck`, `env -i ... npm test` (sin `.env.local`: pasa todo salvo los dos tests de cobertura que esperan la Fase 3) y `next dev` con el `.env.local` del README (la app levanta; `/login/demo` da 404 porque no hay base).
+- **No probado: `db:start`, `db:reset`, el ingreso con código por Mailpit ni el `update tenants` por `docker exec`.** Docker estaba apagado. Hay que repetirlo con Docker abierto, idealmente con el programador nuevo el primer día, y corregir `README.md` o `instalacion-local.md` con lo que trabe.
+- Hallazgo: el `.env.local` que baja `vercel env pull` apunta a la Supabase de la nube. El README ya pide bajarlo a `.env.vercel` y copiar solo la llave del modelo.
+- El clon avisa `Ignoring unsupported directory "evals/"` al arrancar eve: es ruido conocido, no bloquea.
+
 ### Task 10: Hooks, CLAUDE.md, AGENTS.md
 
 **Files:**
