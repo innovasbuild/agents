@@ -149,11 +149,16 @@ async function readTables(
 	const seen = new Map<string, string>();
 	for (const file of migrations) {
 		const text = await readFile(join(root, file), "utf8");
+		// En orden de aparición: una tabla creada y borrada después no existe.
 		for (const match of text.matchAll(
-			/create table (?:if not exists )?public\.([a-z_0-9]+)/gi,
+			/create table (?:if not exists )?public\.([a-z_0-9]+)|drop table (?:if exists )?public\.([a-z_0-9]+)/gi,
 		)) {
-			const name = match[1].toLowerCase();
-			if (!seen.has(name)) seen.set(name, file);
+			if (match[1]) {
+				const name = match[1].toLowerCase();
+				if (!seen.has(name)) seen.set(name, file);
+			} else {
+				seen.delete(match[2].toLowerCase());
+			}
 		}
 	}
 	return byKey([...seen].map(([key, path]) => ({ key, path })));

@@ -22,8 +22,11 @@ describe("inventory contra el repo de juguete", () => {
 		expect(keys(inv.tools)).toEqual(["demo/bye", "demo/hello"]);
 		expect(keys(inv.schedules)).toEqual(["demo/tick"]);
 		expect(keys(inv.evals)).toEqual(["demo/smoke"]);
-		expect(keys(inv.tables)).toEqual(["cosas", "otras"]);
-		expect(keys(inv.migrations)).toEqual(["20260101000000_cosas"]);
+		expect(keys(inv.tables)).toEqual(["cosas"]);
+		expect(keys(inv.migrations)).toEqual([
+			"20260101000000_cosas",
+			"20260102000000_borra_otras",
+		]);
 		expect(keys(inv.routes)).toEqual(["/", "/[tenant]/cosa", "/api/x"]);
 		expect(keys(inv.scripts)).toEqual(["dev", "docs:sync"]);
 		expect(keys(inv.specs)).toEqual(["2026-01-01-demo-design.md"]);

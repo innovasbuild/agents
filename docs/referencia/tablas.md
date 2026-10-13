@@ -24,7 +24,6 @@ Las tablas de `public` y la migración que cada una crea.
 | `conversations` | `supabase/migrations/20260912193318_conversations_tenant_agents.sql` |
 | `events` | `supabase/migrations/20260912194530_runs_events.sql` |
 | `executors` | `supabase/migrations/20260913221734_tenant_connections_executors.sql` |
-| `google_tokens` | `supabase/migrations/20260911234604_google_tokens.sql` |
 | `invitations` | `supabase/migrations/20260912192841_invitations.sql` |
 | `membership_blocks` | `supabase/migrations/20261014120000_member_blocks.sql` |
 | `memberships` | `supabase/migrations/20260912192239_tenants_memberships.sql` |
