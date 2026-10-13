@@ -191,6 +191,8 @@
 - [ ] **Step 3:** `AGENTS.md`: una línea debajo del bloque de Next.js: `Documentación del repo: docs/README.md. Cómo mantenerla: docs/guias/documentar.md.`
 - [ ] **Step 4:** Commit `feat: el Stop hook corre docs:check y CLAUDE.md apunta a la wiki`.
 
+**Desvío registrado (2026-10-13):** el Step 1 de esta tarea (agregar `npm run docs:check --silent` al `Stop` hook de `.claude/settings.json` y `.codex/hooks.json`) **se mueve al final de la Task 20**, cuando `docs:check` ya esté verde. Con la Fase 3 en rojo a propósito, el hook devolvería el turno al modelo en cada `Stop` y lo empujaría a cerrar la cobertura de golpe. Los Steps 2 y 3 (CLAUDE.md y AGENTS.md) se hicieron acá.
+
 ### Task 11: Snapshot de PR y `docs:prs`
 
 **Files:**
