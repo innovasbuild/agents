@@ -5,7 +5,8 @@ import { extractLinks, isExternal, resolveLink } from "./wiki.ts";
 export function parseTable(text: string): string[][] {
 	const rows: string[][] = [];
 	let header = false;
-	for (const line of text.split("\n")) {
+	for (const rawLine of text.split("\n")) {
+		const line = rawLine.replace(/\r$/, "");
 		if (!line.startsWith("|")) continue;
 		const cells = line
 			.replace(/^\||\|$/g, "")
@@ -43,8 +44,6 @@ export function parsePrTable(text: string): PrRow[] {
 	}
 	return rows;
 }
-
-export type SpecState = "en curso" | "cerrada" | "descartada";
 
 export interface SpecRow {
 	date: string;

@@ -55,4 +55,19 @@ describe("parsers de las tablas de decisiones", () => {
 			reason: "fix menor",
 		});
 	});
+
+	it("parseTable tolera pipes escapados, CRLF y filas cortas", () => {
+		const text =
+			"| a | b |\r\n| --- | --- |\r\n| x \\| y | z |\r\n| solo |\r\n";
+		expect(parseTable(text)).toEqual([["x | y", "z"], ["solo"]]);
+	});
+
+	it("parsePrTable salta filas sin número y parseSpecTable deja vacío un link externo", () => {
+		const prs =
+			"| # | f | t | p |\n| --- | --- | --- | --- |\n| sin número | 2026 | x | y |\n";
+		expect(parsePrTable(prs)).toEqual([]);
+		const specs =
+			"| f | e | s | p | estado | pg |\n| --- | --- | --- | --- | --- | --- |\n| 2026 | x | [s](https://e.com/a.md) |  | en curso |  |\n";
+		expect(parseSpecTable(specs, "docs/decisiones/README.md")[0].spec).toBe("");
+	});
 });

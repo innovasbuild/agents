@@ -9,6 +9,9 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
+// Si el repo llega a este tope, el snapshot quedaría truncado sin avisar.
+const PR_LIMIT = 500;
+
 // Raíz del repo relativa a este script, no a process.cwd().
 const REPO_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 
@@ -30,7 +33,7 @@ async function main(): Promise<void> {
 			"--state",
 			"merged",
 			"--limit",
-			"500",
+			String(PR_LIMIT),
 			"--json",
 			"number,title,mergedAt,headRefName,body,files",
 		],
@@ -46,6 +49,11 @@ async function main(): Promise<void> {
 			files: pr.files.map((file) => file.path),
 		}))
 		.sort((a, b) => a.number - b.number);
+	if (prs.length >= PR_LIMIT) {
+		throw new Error(
+			`gh devolvió ${prs.length} PR, el tope (${PR_LIMIT}): el snapshot quedaría incompleto. Subí PR_LIMIT.`,
+		);
+	}
 	await writeFile(
 		join(REPO_ROOT, "docs/_meta/prs.json"),
 		`${JSON.stringify(prs, null, "\t")}\n`,

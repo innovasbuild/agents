@@ -8,7 +8,7 @@ import {
 	parseSpecTable,
 	splitPagesAndReason,
 } from "../../scripts/docs/prs.ts";
-import { listPages } from "../../scripts/docs/wiki.ts";
+import { listPages, mentions } from "../../scripts/docs/wiki.ts";
 
 const ROOT = ".";
 const inv = await inventory(ROOT);
@@ -19,18 +19,6 @@ const ESTADOS = ["en curso", "cerrada", "descartada"];
 
 const SPECS_TABLE = "docs/decisiones/README.md";
 const PRS_TABLE = "docs/decisiones/prs.md";
-
-function escape(text: string): string {
-	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/** Mención literal, sin pegarse a otro identificador (`cosas` no cuenta dentro de `cosas_x`). */
-function mentions(text: string, needle: string): boolean {
-	if (needle === "/") return text.includes("`/`");
-	return new RegExp(`(?<![A-Za-z0-9_])${escape(needle)}(?![A-Za-z0-9_])`).test(
-		text,
-	);
-}
 
 const prose = pages
 	.filter((p) => /^docs\/(arquitectura|dominios|guias)\//.test(p.path))

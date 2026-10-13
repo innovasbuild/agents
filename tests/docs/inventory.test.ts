@@ -56,6 +56,10 @@ describe("helpers", () => {
 		expect(routeFromFile("app/(auth)/ingresar/page.tsx")).toBe("/ingresar");
 		expect(routeFromFile("app/.well-known/x/route.ts")).toBe("/.well-known/x");
 		expect(routeFromFile("app/layout.tsx")).toBeNull();
+		expect(routeFromFile("app/[tenant]/brain/p/[...slug]/page.tsx")).toBe(
+			"/[tenant]/brain/p/[...slug]",
+		);
+		expect(routeFromFile("app/(auth)/page.tsx")).toBe("/");
 	});
 
 	it("isPlatformEnvVar reconoce prefijos", () => {

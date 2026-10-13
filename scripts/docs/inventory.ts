@@ -134,9 +134,9 @@ function agentSurfaces(
 }
 
 export function routeFromFile(file: string): string | null {
-	const match = /^app\/(.*?)(?:^|\/)?(page\.tsx|route\.ts)$/.exec(file);
+	const match = /^app\/(?:(.*)\/)?(?:page\.tsx|route\.ts)$/.exec(file);
 	if (!match) return null;
-	const segments = match[1]
+	const segments = (match[1] ?? "")
 		.split("/")
 		.filter((segment) => segment && !/^\(.*\)$/.test(segment));
 	return `/${segments.join("/")}`;

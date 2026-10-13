@@ -93,3 +93,19 @@ export function reachableFrom(index: string, pages: Page[]): Set<string> {
 	}
 	return seen;
 }
+
+function escapeRegex(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Mención literal de `needle` en `text`, sin pegarse a otro identificador
+ * (`cosas` no cuenta dentro de `cosas_x`). La raíz `/` solo cuenta entre
+ * backticks, si no coincidiría con cualquier texto.
+ */
+export function mentions(text: string, needle: string): boolean {
+	if (needle === "/") return text.includes("`/`");
+	return new RegExp(
+		`(?<![A-Za-z0-9_])${escapeRegex(needle)}(?![A-Za-z0-9_])`,
+	).test(text);
+}

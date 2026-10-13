@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	extractLinks,
+	mentions,
 	parseFrontmatter,
 	reachableFrom,
 	resolveLink,
@@ -41,5 +42,23 @@ describe("helpers de la wiki", () => {
 			"docs/a.md",
 			"docs/b.md",
 		]);
+	});
+});
+
+describe("mentions", () => {
+	it("no cuenta un nombre pegado a otro identificador", () => {
+		expect(mentions("la tabla `cosas_x`", "cosas")).toBe(false);
+		expect(mentions("la tabla `cosas`", "cosas")).toBe(true);
+		expect(mentions("xcosas", "cosas")).toBe(false);
+	});
+
+	it("la raíz solo cuenta entre backticks", () => {
+		expect(mentions("la ruta `/` redirige", "/")).toBe(true);
+		expect(mentions("la ruta /cola", "/")).toBe(false);
+	});
+
+	it("escapa los corchetes de las rutas", () => {
+		expect(mentions("ver `/[tenant]/cola`", "/[tenant]/cola")).toBe(true);
+		expect(mentions("ver `/t/cola`", "/[tenant]/cola")).toBe(false);
 	});
 });
