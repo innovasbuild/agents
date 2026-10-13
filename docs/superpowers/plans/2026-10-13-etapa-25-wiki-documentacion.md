@@ -203,6 +203,8 @@
 - [ ] **Step 2:** Correr `npm run docs:prs`. Verificar que hay 91 PR (o más si se mergeó algo). Mirar el tamaño del archivo: si supera 1 MB por los cuerpos, dejar `body` igual (es la fuente) y anotarlo.
 - [ ] **Step 3:** Commit `feat: docs:prs guarda el snapshot de PR mergeados`.
 
+**Desvío registrado (2026-10-13):** `docs/_meta/prs.json` quedó sin `body` ni `files` (16 KB en vez de 314 KB). El repo `innovasbuild/agents` es público y la revisión adversarial de `/ship` marcó que copiar los cuerpos duplica mails y URLs de producción y los vuelve texto que un agente lee como fuente. Mati eligió sacarlos. Para leer un PR: `gh pr view N --json body,files` (el comando `node -e ... p.body` de la Fase 3 ya no sirve).
+
 ### Task 12: Skill de proyecto `/docs-wiki`, VERSION, CHANGELOG, CI
 
 **Files:**

@@ -1,6 +1,7 @@
 // `npm run docs:prs`: guarda en docs/_meta/prs.json el snapshot de los PR
 // mergeados (spec etapa 25 §4.1b). Se versiona para que los tests de la wiki
-// corran en CI sin credenciales de GitHub.
+// corran sin credenciales de GitHub. Sin cuerpos ni archivos a propósito: el
+// repo es público y el detalle de cada PR se lee con `gh pr view N`.
 import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -20,8 +21,6 @@ interface RawPr {
 	title: string;
 	mergedAt: string;
 	headRefName: string;
-	body: string;
-	files: { path: string }[];
 }
 
 async function main(): Promise<void> {
@@ -35,7 +34,7 @@ async function main(): Promise<void> {
 			"--limit",
 			String(PR_LIMIT),
 			"--json",
-			"number,title,mergedAt,headRefName,body,files",
+			"number,title,mergedAt,headRefName",
 		],
 		{ cwd: REPO_ROOT, maxBuffer: 256 * 1024 * 1024 },
 	);
@@ -45,8 +44,6 @@ async function main(): Promise<void> {
 			title: pr.title,
 			mergedAt: pr.mergedAt,
 			headRefName: pr.headRefName,
-			body: pr.body,
-			files: pr.files.map((file) => file.path),
 		}))
 		.sort((a, b) => a.number - b.number);
 	if (prs.length >= PR_LIMIT) {
