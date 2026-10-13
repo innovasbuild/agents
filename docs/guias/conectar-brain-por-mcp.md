@@ -1,3 +1,13 @@
+---
+title: Conectar el brain por MCP
+category: guias
+status: activo
+tags: [brain, mcp]
+updated: 2026-10-13
+sources:
+  - lib/brain/README.md
+---
+
 # Conectar el brain desde tus herramientas
 
 Cada cliente tiene su brain en una URL propia:

@@ -1,3 +1,13 @@
+---
+title: Conectar el agente por MCP
+category: guias
+status: activo
+tags: [agente, mcp]
+updated: 2026-10-13
+sources:
+  - agents/outreach
+---
+
 # Conectar el agente por MCP
 
 Cada tenant usa la misma URL del agente, con el tenant como parámetro de conexión:

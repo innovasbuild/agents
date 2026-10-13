@@ -1,3 +1,14 @@
+---
+title: Orquestación
+category: arquitectura
+status: activo
+tags: [orquestacion, nodos, workflows]
+updated: 2026-10-13
+sources:
+  - docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md
+  - lib/workflows/registry.ts
+---
+
 # Orquestación
 
 Las reglas para construir nodos, workflows y agentes en esta plataforma. Leer antes de crear cualquiera de los tres. El porqué de cada regla está en la spec: `docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md`. Acá va solo la ley y cómo aplicarla.

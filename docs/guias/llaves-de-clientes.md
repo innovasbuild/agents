@@ -1,3 +1,13 @@
+---
+title: Llaves de clientes
+category: guias
+status: activo
+tags: [llaves, vercel-connect]
+updated: 2026-10-13
+sources:
+  - lib/connectors/providers.ts
+---
+
 # Llaves de clientes: cómo entran a la plataforma
 
 Las llaves de API de un cliente (ColdIQ, Apollo, Google Places) son del cliente. Viven en Vercel Connect, nunca en nuestra base, en el código, en un mail ni en una pantalla de la plataforma. La plataforma guarda solo el **identificador** del conector, que no es secreto.
