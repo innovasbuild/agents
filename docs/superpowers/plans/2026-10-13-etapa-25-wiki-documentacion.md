@@ -231,6 +231,29 @@ Cada página de esta fase sigue la forma de §3.4 y lleva `sources`. **Leer las 
 - [ ] **Step 3:** Armar en este plan, debajo de esta tarea, la **asignación**: para cada página de las Tasks 14 a 21, la lista de números de PR y specs que la respaldan. Es el insumo de cada tarea siguiente; se escribe acá para que un subagente por tarea no tenga que releer los 91.
 - [ ] **Step 4:** Commit `docs: tablas de specs y PR con asignación por dominio`.
 
+**Asignación de PR y specs por página (Task 13, Step 3).** Los specs se citan por el nombre de archivo sin fecha ni `-design`. Los PR marcados `pendiente` en `decisiones/prs.md` se reemplazan por la página en la Task 20, con esta misma tabla. Los PR de `docs`/`chore`/spike ya tienen su motivo y no figuran acá, salvo que sirvan de lectura.
+
+| Página | Specs | PR (leer el cuerpo antes de escribir) |
+|---|---|---|
+| `arquitectura/vision-general.md` | arquitectura-plataforma, 00-bootstrap, 01-multi-tenant | 31, 43, 60 (más 29 y 42 como lectura) |
+| `arquitectura/tenancy.md` | 01-multi-tenant, consola-plataforma, alta-empresas-landing, etapa-21-4 | 6, 70, 71, 80, 82, 87, 91 |
+| `arquitectura/datos.md` | 03-agente-outreach-v1, orquestacion-plataforma, etapa-5 | 8, 32, 35, 61, 63 |
+| `arquitectura/orquestacion.md` (revisión) | orquestacion-plataforma, etapa-13 | 32, 35, 37, 40, 41, 42, 45, 47 |
+| `arquitectura/identidad-y-acceso.md` | etapa-20-login, ingreso-por-dominio, etapa-11, etapa-6, alta-empresas-landing | 51, 52, 54, 57, 79, 80, 81, 82, 83, 85, 86, 91 |
+| `arquitectura/entornos-y-deploy.md` | etapa-21-4, etapa-14 | 60, 63, 87, 91 (más 7, 39, 53, 59 como lectura de cierres) |
+| `arquitectura/modelos-y-costos.md` | orquestacion-plataforma, etapa-13 | 32, 41, 43, 45, 90 |
+| `dominios/agentes-eve.md` | 03-agente-outreach-v1, etapa-6, etapa-14 | 12, 15, 22, 44, 50, 54, 56, 57, 60, 64, 66, 82, 84 |
+| `dominios/outreach.md` | 03-agente-outreach-v1, etapa-4, etapa-5, etapa-13, hubspot-crm-sync, etapa-21-3 | 8, 15, 23, 24, 26, 38, 45, 46, 47, 48, 61, 66, 69, 90 |
+| `dominios/brain.md` | brain, etapa-11, editor-brain, etapa-17, etapa-18-1, etapa-18-2, etapa-21-3a | 2, 51, 52, 55, 73, 74, 75, 76, 77, 78, 79, 90 |
+| `dominios/workflows.md` | orquestacion-plataforma | 35, 37, 40, 45, 47, 66 |
+| `dominios/conectores.md` | 02-conexiones-innovas, etapa-19, etapa-21-1, llaves-de-clientes | 1, 3, 6, 84, 87, 89 |
+| `dominios/plataforma.md` | consola-plataforma, alta-empresas-landing, etapa-21-1, etapa-21-2 | 14, 70, 71, 87, 89 |
+| `dominios/invitaciones-y-usuarios.md` | etapa-20-login (20.2), ingreso-por-dominio | 67, 68, 80, 81, 85, 86 |
+| `dominios/gmail.md` | 02-conexiones-innovas, 00-bootstrap | 3, 20, 48, 50 |
+| `guias/*` | las del dominio que corresponda | las del dominio |
+
+El resto de los PR `pendiente` (por ejemplo 12, 22, 33) cuelgan de la página de la fila donde aparecen. Si un PR no figura en ninguna fila, la Task 20 lo reparte leyendo su cuerpo.
+
 ### Task 14: Arquitectura: visión general, tenancy, datos
 
 **Files:**
