@@ -344,6 +344,22 @@ El resto de los PR `pendiente` (por ejemplo 12, 22, 33) cuelgan de la página de
 - [ ] **Step 2:** Verificar que falla nombrando `dummy_tool`, `dummy_things` y `/[tenant]/dummy`, y que `running-tool.test.ts` también falla por la etiqueta. Copiar la salida (recortada) debajo de esta tarea en el plan, en la rama real.
 - [ ] **Step 3:** Documentar las tres en una página, volver a correr, verificar verde. Borrar la rama: `git checkout docs/etapa-25-wiki && git branch -D tmp/prueba-detector`. Revertir cualquier archivo generado que haya quedado. Commit del plan con la evidencia.
 
+**Evidencia de la prueba (2026-10-13, rama descartable `tmp/prueba-detector`, ya borrada):** se agregaron `agents/outreach/tools/dummy_tool.ts`, `supabase/migrations/20991231000000_dummy.sql` (`dummy_things`) y `app/[tenant]/dummy/page.tsx`, y se corrió `npm run docs:sync && npx vitest run tests/docs tests/agents/running-tool.test.ts`:
+
+```
+× todo tool de outreach tiene etiqueta, salvo los excluidos a propósito      (running-tool.test.ts)
+    expected [ 'dummy_tool' ] to deeply equal []
+× 8 · toda superficie está mencionada en arquitectura/, dominios/ o guias/, o excluida con motivo
+    tool:outreach/dummy_tool: no aparece en la wiki. Documentala en la página que corresponde o agregala a docs/_meta/cobertura.ts con un motivo
+    table:dummy_things: no aparece en la wiki. ...
+    route:/[tenant]/dummy: no aparece en la wiki. ...
+Tests  2 failed | 53 passed (55)
+```
+
+Se mencionaron las tres en `dominios/outreach.md` y se agregó `dummy_tool` a `TOOL_LABELS`: `Tests  55 passed (55)`. Rama borrada y archivos descartados.
+
+**Incidente:** al limpiar, `git stash -u` también guardó `.codex/` (sin versionar) y se descartó el stash. Se recuperó íntegro desde el commit suelto del stash. Para limpiar una rama descartable usar `git checkout -- . && git clean -fd <paths propios>`, nunca `stash -u`.
+
 ### Task 24: Cierre con gstack
 
 - [ ] **Step 1:** `npm run typecheck && npm test && npm run docs:check`. Todo verde.
