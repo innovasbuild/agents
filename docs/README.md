@@ -14,6 +14,7 @@ Cómo se mantiene todo esto (y qué verifica el harness) está en [Cómo mantene
 
 ## Empezar acá
 
+- [Instalación local](guias/instalacion-local.md): levantar la plataforma en tu máquina, con los problemas conocidos.
 - [Cómo mantener la wiki](guias/documentar.md): dónde va cada cosa, frontmatter, harness y procedimiento al cerrar una etapa.
 
 ## Arquitectura
