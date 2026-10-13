@@ -36,7 +36,14 @@ export interface InventoryDeps {
 	>;
 	workflows: Record<
 		string,
-		{ agent: string; claims: string; produces: string | null }
+		{
+			agent: string;
+			claims: string;
+			produces: string | null;
+			nodes?: readonly string[];
+			optionalNodes?: readonly string[];
+			caps?: { itemsPerTick: number; costUsdPerRun: number };
+		}
 	>;
 	providers: Record<
 		string,
@@ -239,6 +246,12 @@ export async function inventory(
 					agent: info.agent,
 					claims: info.claims,
 					produces: info.produces ?? "",
+					nodes: [...(info.nodes ?? []), ...(info.optionalNodes ?? [])].join(
+						", ",
+					),
+					caps: info.caps
+						? `${info.caps.itemsPerTick} ítems por tick · USD ${info.caps.costUsdPerRun} por corrida`
+						: "",
 				},
 			})),
 		),

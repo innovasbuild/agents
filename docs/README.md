@@ -32,7 +32,16 @@ Sin páginas todavía (se escriben en la fase 3 de la Etapa 25).
 
 ## Referencia
 
-Sin páginas todavía (las genera `npm run docs:sync`).
+- [Comandos](referencia/comandos.md): los scripts de `package.json`.
+- [Variables de entorno](referencia/variables-de-entorno.md): las que lee el código propio y quién las lee.
+- [Tablas](referencia/tablas.md): las tablas de `public` y la migración que crea cada una.
+- [Migraciones](referencia/migraciones.md): `supabase/migrations`, en orden.
+- [Rutas](referencia/rutas.md): páginas y endpoints de `app/`.
+- [Tools del agente](referencia/tools-del-agente.md): con su etiqueta en castellano.
+- [Nodos y workflows](referencia/nodos-y-workflows.md): lo que declara el registro, con niveles de efecto y caps.
+- [Proveedores de conectores](referencia/proveedores.md): capacidad, tipo de auth y si admite varios.
+- [Schedules](referencia/schedules.md): los procesos programados del agente.
+- [Evals](referencia/evals.md): las evals del agente.
 
 ## Decisiones
 
