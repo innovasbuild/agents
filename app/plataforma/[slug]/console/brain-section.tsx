@@ -2,9 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { createBrain, setBrainCategories } from "../console-actions";
+import { createBrain } from "../console-actions";
 import { ConsoleButton } from "./console-button";
 
 export interface BrainState {
@@ -15,38 +13,6 @@ export interface BrainState {
 }
 
 const fecha = (value: string) => new Date(value).toLocaleDateString("es-AR");
-
-function CategoriesForm({
-	slug,
-	tenantId,
-	categories,
-}: {
-	slug: string;
-	tenantId: string;
-	categories: string[];
-}) {
-	const [value, setValue] = useState(categories.join(", "));
-	return (
-		<div className="mt-2 flex flex-wrap items-center gap-2">
-			<label
-				className="text-muted-foreground text-xs"
-				htmlFor="brain-categories"
-			>
-				Categorías
-			</label>
-			<Input
-				className="h-8 min-w-0 flex-1 text-xs"
-				id="brain-categories"
-				onChange={(event) => setValue(event.target.value)}
-				value={value}
-			/>
-			<ConsoleButton
-				label="Guardar"
-				run={() => setBrainCategories(slug, tenantId, value)}
-			/>
-		</div>
-	);
-}
 
 export function BrainSection({
 	slug,
@@ -78,13 +44,16 @@ export function BrainSection({
 				<div>
 					Proveedor {brain.provider} · desde el {fecha(brain.createdAt)}
 				</div>
-				<CategoriesForm
-					categories={brain.categories}
-					slug={slug}
-					tenantId={tenantId}
-				/>
+				<div className="mt-2 text-xs">
+					<span className="text-muted-foreground">Categorías: </span>
+					{brain.categories.join(", ")}
+				</div>
 				<p className="text-muted-foreground text-xs">
-					Separadas por coma. No se puede quitar una que tenga páginas.
+					Son las carpetas de primer nivel.{" "}
+					<Link className="underline" href={`/${slug}/brain`}>
+						Editar en el brain
+					</Link>
+					.
 				</p>
 				{brain.enabled === false ? (
 					<div className="text-muted-foreground text-xs">Deshabilitado</div>

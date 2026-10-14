@@ -27,6 +27,7 @@ const state = vi.hoisted(() => ({
 	describeCalls: [] as string[],
 	seed: true as boolean | Error,
 	seedCalls: [] as string[][],
+	failFn: null as string | null,
 	brainRows: [{ id: "b1" }] as {
 		id: string;
 		config?: Record<string, unknown>;
@@ -51,6 +52,9 @@ vi.mock("@/lib/supabase/admin", () => ({
 	createAdminClient: () => ({
 		rpc: async (fn: string, args: Record<string, unknown>) => {
 			state.rpcCalls.push({ fn, args });
+			if (fn === state.failFn) {
+				return { data: null, error: { code: "XX000", message: "sin red" } };
+			}
 			return state.rpc;
 		},
 		from: (table: string) => {
@@ -107,6 +111,7 @@ beforeEach(() => {
 	state.brainRowsError = null;
 	state.seed = true;
 	state.seedCalls = [];
+	state.failFn = null;
 	state.agentRows = [{ agent: "outreach" }];
 	state.agentRowsError = null;
 	state.agentRowsThrow = false;
@@ -267,6 +272,25 @@ describe("createBrain", () => {
 				p_verified_name: null,
 			},
 		});
+		expect(state.rpcCalls[1]).toEqual({
+			fn: "brain_folders_from_config",
+			args: { p_tenant: TENANT },
+		});
+	});
+});
+
+describe("createBrain, carpetas", () => {
+	it("si fallan las carpetas avisa que se creen desde el brain y no siembra el canon", async () => {
+		state.failFn = "brain_folders_from_config";
+		const log = vi.spyOn(console, "error").mockImplementation(() => {});
+		expect(await actions.createBrain("acme", TENANT)).toEqual({
+			ok: false,
+			message:
+				"El brain se creó, pero no sus carpetas. Crealas desde el brain.",
+		});
+		expect(log).toHaveBeenCalled();
+		expect(state.seedCalls).toEqual([]);
+		log.mockRestore();
 	});
 });
 
@@ -781,53 +805,5 @@ describe("setBudget", () => {
 			ok: false,
 			message: "ese recurso no existe",
 		});
-	});
-});
-
-describe("setBrainCategories", () => {
-	it("sin platform_admin no llama al rpc", async () => {
-		state.admin = false;
-		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
-			SIN_PERMISO,
-		);
-		expect(state.rpcCalls).toHaveLength(0);
-	});
-
-	it("normaliza la lista y llama a platform_set_brain_categories", async () => {
-		expect(
-			await actions.setBrainCategories("acme", TENANT, "Empresa, trigo"),
-		).toEqual({ ok: true });
-		expect(state.rpcCalls).toEqual([
-			{
-				fn: "platform_set_brain_categories",
-				args: {
-					p_actor: "u1",
-					p_tenant: TENANT,
-					p_categories: ["empresa", "trigo"],
-				},
-			},
-		]);
-		expect(state.revalidated).toContain("/plataforma/acme");
-	});
-
-	it("una categoría inválida devuelve el mensaje y no llama al rpc", async () => {
-		expect(
-			await actions.setBrainCategories("acme", TENANT, "compras de trigo"),
-		).toEqual({
-			ok: false,
-			message:
-				"«compras de trigo» no es válida: usá minúsculas, números y guiones, empezando con una letra.",
-		});
-		expect(state.rpcCalls).toHaveLength(0);
-	});
-
-	it("muestra el error de la base cuando trae hint consola", async () => {
-		state.rpc = {
-			data: null,
-			error: { message: "La categoría «x» tiene páginas.", hint: "consola" },
-		};
-		expect(await actions.setBrainCategories("acme", TENANT, "empresa")).toEqual(
-			{ ok: false, message: "La categoría «x» tiene páginas." },
-		);
 	});
 });

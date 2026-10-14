@@ -23,6 +23,7 @@
     "docs:prs": "node scripts/docs/prs.mts",
     "docs:check": "vitest run tests/docs",
     "brain:import": "node --env-file=.env.local scripts/brain-import.mts",
+    "brain:folders-report": "node --env-file=.env.local scripts/brain-folders-report.mts",
     "evals": "node --env-file=.env.local --env-file=.env.eval scripts/run-evals.mts",
     "jev:probe": "node --env-file=.env.local scripts/jev-probe.mts",
     "oauth:probe": "node --env-file=.env.local scripts/oauth-probe.mts"

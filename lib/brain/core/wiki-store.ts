@@ -1,6 +1,7 @@
 // Acceso a Supabase del proveedor wiki. Sin lógica: la valida wiki.ts y la
 // prueban los tests pgTAP de las funciones. Recibe el cliente por parámetro.
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BrainFolder } from "./folders.ts";
 import type {
 	BrainAuthor,
 	BrainPage,
@@ -85,6 +86,7 @@ export interface WikiStore {
 		tenantId: string,
 		slug: string,
 	): Promise<BrainRevision[] | null>;
+	listFolders(tenantId: string): Promise<BrainFolder[]>;
 	upsert(params: UpsertParams): Promise<{ slug: string; revision: number }>;
 }
 
@@ -167,6 +169,18 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 			if (error) throw storeError(error);
 
 			return ((data ?? []) as Array<Record<string, unknown>>).map(toRevision);
+		},
+
+		async listFolders(tenantId) {
+			const { data, error } = await client
+				.from("brain_folders")
+				.select("path, description")
+				.eq("tenant_id", tenantId)
+				.order("path");
+			if (error) throw storeError(error);
+			return ((data ?? []) as Array<{ path: string; description: string }>).map(
+				(row) => ({ path: row.path, description: row.description }),
+			);
 		},
 
 		async upsert(params) {

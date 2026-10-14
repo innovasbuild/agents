@@ -48,6 +48,7 @@ Detalle en [tenancy](tenancy.md).
 |---|---|
 | `brain_pages` | Las páginas vigentes del brain de cada empresa, con búsqueda de texto |
 | `brain_revisions` | Cada versión anterior de una página; append-only |
+| `brain_folders` | Las carpetas del brain (cualquier nivel, también vacías); las de primer nivel son las categorías. Solo el servidor la toca |
 | `brain_access_rules` | Reglas de acceso por carpeta o página; las lee y escribe solo el servidor |
 | `brain_mcp_usage` | Contador por minuto del endpoint MCP del brain, por persona y empresa |
 

@@ -13,6 +13,7 @@ Los scripts de `package.json`.
 
 | Script | Comando |
 | --- | --- |
+| `brain:folders-report` | `node --env-file=.env.local scripts/brain-folders-report.mts` |
 | `brain:import` | `node --env-file=.env.local scripts/brain-import.mts` |
 | `build` | `next build` |
 | `db:reset` | `npx supabase db reset` |

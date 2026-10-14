@@ -8,25 +8,51 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { TreeNode } from "@/lib/brain/core/access/tree";
-import { atLeast } from "@/lib/brain/core/access/types";
+import { isFolderNode, type TreeNode } from "@/lib/brain/core/access/tree";
+import { atLeast, type Level } from "@/lib/brain/core/access/types";
 import { historyHref } from "@/lib/brain/core/editor/slug";
+
+export type FolderMenuItem = "new-subfolder" | "describe" | "delete-folder";
+
+// Acciones de carpeta: solo para quien administra. Una carpeta implícita (sin
+// fila en brain_folders) no ofrece ninguna: la base pide la fila del padre para
+// crear adentro. Borrar una de primer nivel pide administrar la raíz.
+export function folderMenuItems(
+	node: TreeNode,
+	rootLevel: Level | null,
+): FolderMenuItem[] {
+	if (node.level !== "administrador" || !isFolderNode(node)) return [];
+	if (node.path === "") return ["new-subfolder"];
+	if (node.folder === null) return [];
+	const items: FolderMenuItem[] = ["new-subfolder", "describe"];
+	if (node.path.includes("/") || rootLevel === "administrador")
+		items.push("delete-folder");
+	return items;
+}
 
 // Ítems según §7.2: lo que no corresponde no se muestra.
 export function TreeRowMenu({
 	tenantSlug,
 	node,
+	rootLevel,
 	onShare,
 	onDelete,
+	onNewFolder,
+	onDescribe,
+	onDeleteFolder,
 	label,
 }: {
 	tenantSlug: string;
 	node: TreeNode;
+	rootLevel: Level | null;
 	onShare: () => void;
 	onDelete: () => void;
+	onNewFolder: () => void;
+	onDescribe: () => void;
+	onDeleteFolder: () => void;
 	label?: string;
 }) {
-	const isFolder = node.children.length > 0;
+	const isFolder = isFolderNode(node);
 	const canEdit = atLeast(node.level, "editor");
 	const items: React.ReactNode[] = [];
 
@@ -65,6 +91,40 @@ export function TreeRowMenu({
 				onSelect={onDelete}
 			>
 				Borrar…
+			</DropdownMenuItem>,
+		);
+	}
+	const folderItems = folderMenuItems(node, rootLevel);
+	if (folderItems.includes("new-subfolder")) {
+		items.push(
+			<DropdownMenuItem
+				key="new-folder"
+				className="min-h-11 lg:min-h-0"
+				onSelect={onNewFolder}
+			>
+				{node.path === "" ? "Nueva carpeta…" : "Nueva subcarpeta…"}
+			</DropdownMenuItem>,
+		);
+	}
+	if (folderItems.includes("describe")) {
+		items.push(
+			<DropdownMenuItem
+				key="describe"
+				className="min-h-11 lg:min-h-0"
+				onSelect={onDescribe}
+			>
+				Editar descripción…
+			</DropdownMenuItem>,
+		);
+	}
+	if (folderItems.includes("delete-folder")) {
+		items.push(
+			<DropdownMenuItem
+				key="delete-folder"
+				className="min-h-11 text-destructive focus:text-destructive lg:min-h-0"
+				onSelect={onDeleteFolder}
+			>
+				Borrar carpeta…
 			</DropdownMenuItem>,
 		);
 	}

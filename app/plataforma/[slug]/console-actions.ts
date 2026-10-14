@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
-import { parseCategories } from "@/lib/brain/core/categories";
 import { describeConnector } from "@/lib/connectors/auth";
 import { inVercel } from "@/lib/connectors/env";
 import {
@@ -78,8 +77,7 @@ async function call(
 		| "platform_set_connection_enabled"
 		| "platform_remove_connection"
 		| "platform_mark_connection_verified"
-		| "platform_set_budget"
-		| "platform_set_brain_categories",
+		| "platform_set_budget",
 	args: Record<string, unknown>,
 	byCode?: Record<string, string>,
 ): Promise<ConsoleResult> {
@@ -230,6 +228,22 @@ export async function createBrain(
 		p_verified_name: null,
 	});
 	if (!created.ok) return created;
+	// Las carpetas de primer nivel son las categorías (spec etapa 26 D1).
+	const { error: foldersError } = await createAdminClient().rpc(
+		"brain_folders_from_config",
+		{ p_tenant: tenantId },
+	);
+	if (foldersError) {
+		console.error(
+			"consola: no pude crear las carpetas del brain",
+			foldersError,
+		);
+		return {
+			ok: false,
+			message:
+				"El brain se creó, pero no sus carpetas. Crealas desde el brain.",
+		};
+	}
 	// Sin un agente que use el canon, el brain nace vacío (spec 21.4 §4.1).
 	if (!(await tenantUsesCanon(tenantId))) return created;
 	// Carpeta y archivo por defecto para el ICP y los hooks (spec 21.3 §3.6).
@@ -241,26 +255,6 @@ export async function createBrain(
 				message:
 					"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 			};
-}
-
-export async function setBrainCategories(
-	slug: string,
-	tenantId: string,
-	raw: string,
-): Promise<ConsoleResult> {
-	const admin = await requirePlatformAdmin();
-	if (!admin) return SIN_PERMISO;
-	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
-	if (typeof raw !== "string" || raw.length > 2000) return INVALIDO;
-
-	const parsed = parseCategories(raw);
-	if (!parsed.ok) return { ok: false, message: parsed.message };
-
-	return call(slug, "platform_set_brain_categories", {
-		p_actor: admin.userId,
-		p_tenant: tenantId,
-		p_categories: parsed.categories,
-	});
 }
 
 /** Cuántos identificadores lleva un proveedor: ninguno (OAuth de plataforma), uno, o varios. */

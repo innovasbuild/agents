@@ -53,6 +53,15 @@ values
    E'# Voz\n\nTuteo rioplatense, frases cortas, sin adjetivos de venta. Firma: Eval.\n\n## Par 1\n\nBorrador: Quería contarte que ayudamos a empresas a crecer.\nEnviado: Una empresa con dos plantas sabe que coordinar entre ellas cuesta más que vender.\nPor qué: arrancar por el negocio de ellos, no por nosotros, y sin contar que lo investigamos.\n\n```gate\nmax_chars: email=900\n```')
 on conflict do nothing;
 
+-- Las páginas entran directo a brain_pages: sus carpetas se crean aparte (spec etapa 26 §3.1).
+select public.brain_folders_from_config('e7a1e7a1-0000-0000-0000-0000000000aa');
+select public.brain_ensure_folders(tenant_id, prefix, null)
+from (
+  select distinct tenant_id, regexp_replace(slug, '/[^/]+$', '') as prefix
+  from public.brain_pages
+  where tenant_id = 'e7a1e7a1-0000-0000-0000-0000000000aa' and position('/' in slug) > 0
+) p;
+
 insert into public.config_values (tenant_id, kind, value, label, meta)
 values
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'segmento', 'mid_market_ar', 'Mid market Argentina', '{}'),

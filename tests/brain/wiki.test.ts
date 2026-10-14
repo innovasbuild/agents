@@ -33,6 +33,7 @@ function fakeStore(overrides: Partial<WikiStore> = {}): WikiStore {
 		read: vi.fn(async () => null),
 		list: async () => [],
 		listRevisions: async () => null,
+		listFolders: async () => [],
 		upsert: vi.fn(async (params) => ({ slug: params.slug, revision: 1 })),
 		...overrides,
 	};
@@ -148,7 +149,7 @@ describe("createWikiProvider", () => {
 		const store = fakeStore();
 		await expect(
 			provider(store).upsert(
-				{ ...write, category: "finanzas" },
+				{ ...write, slug: "finanzas/icp", category: "finanzas" },
 				{ kind: "user", userId: "u" },
 			),
 		).rejects.toBeInstanceOf(BrainValidation);

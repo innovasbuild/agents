@@ -65,3 +65,4 @@ Las migraciones de `supabase/migrations`, en orden.
 | `20261022120000_skill_packages_bucket` | `supabase/migrations/20261022120000_skill_packages_bucket.sql` |
 | `20261023120000_spend_report` | `supabase/migrations/20261023120000_spend_report.sql` |
 | `20261024120000_tenant_domains` | `supabase/migrations/20261024120000_tenant_domains.sql` |
+| `20261025120000_brain_folders` | `supabase/migrations/20261025120000_brain_folders.sql` |

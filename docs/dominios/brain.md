@@ -39,6 +39,12 @@ sources:
   - docs/superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md
   - docs/superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md
   - docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md
+  - docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md
+  - docs/superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md
+  - lib/brain/core/folders.ts
+  - lib/brain/core/folders-report.ts
+  - scripts/brain-folders-report.mts
+  - supabase/migrations/20261025120000_brain_folders.sql
 ---
 
 # Brain
@@ -73,7 +79,10 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `lib/brain/core/skills/` | Skills de empresa: reglas del paquete, estados, qué ve cada uno (`withoutSkills`, `withSkillView`), publicar, archivos e importación |
 | `lib/brain/core/skills/catalog.ts`, `skill-md.ts` | Catálogo de skills publicadas para el MCP y armado del `SKILL.md` del zip |
 | `lib/brain/adapters/skill-zip.ts`, `skills.ts` | Lector y escritor de zip, Storage de archivos y armado de dependencias de las skills |
-| `lib/brain/core/categories.ts`, `config.ts` | Lectura y validación de las categorías del tenant |
+| `lib/brain/core/folders.ts`, `folders-store.ts` | Carpetas: tipos, `categoryForPath`, validación de rutas, rutas reservadas y el contrato del almacén |
+| `lib/brain/core/editor/folders.ts`, `adapters/folders.ts` | Crear, describir y borrar carpetas (permisos incluidos) y su cableado a Supabase y a las server actions |
+| `lib/brain/core/folders-report.ts` | Reporte en seco de la migración de carpetas |
+| `lib/brain/core/config.ts` | Lectura y validación de la config del binding |
 | `lib/brain/adapters/` | Lo que toca la plataforma: Supabase admin, sesión, eve, Next, reflejo del canon |
 | `app/[tenant]/brain/` | Pantallas y server actions del brain |
 | `app/brain/[tenant]/mcp/route.ts` | Endpoint MCP |
@@ -105,7 +114,7 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 - `brain_revisions` es **append-only**: cada escritura deja una revisión nueva con autor (`user`, `agent` o `import`), quién aprobó, sesión y motivo obligatorio.
 - El único camino de escritura es la función SQL `brain_upsert_page`, con control de concurrencia optimista: para actualizar hay que pasar `baseRevision`; sin ella solo se crean páginas nuevas. Un desfase devuelve conflicto (`BR409`). Los otros códigos son `BR404` y `BR422`. La función ejecuta solo `service_role`.
 - Los miembros no leen las tablas por la API de Supabase: desde la 17.2 se revocó el `select` de `authenticated` sobre `brain_pages` y `brain_revisions`. Todo pasa por el proveedor, con el cliente admin y el tenant que resuelve la app.
-- Las categorías válidas son una lista por tenant que vive en la config del binding (`^[a-z][a-z0-9-]{0,40}$`, hasta 20). La base solo valida el formato. Las edita la consola de plataforma con `parseCategories` (`core/categories.ts`).
+- Las categorías válidas son las carpetas de primer nivel del tenant (ver [Carpetas](#carpetas-etapa-261a)); la base valida el formato (`^[a-z][a-z0-9-]{0,40}$`, hasta 20).
 - Una página se retira con `status: archivado`. Ni el agente ni el MCP pueden borrar.
 
 ### Búsqueda
@@ -160,8 +169,18 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 
 ### Categorías y canon
 
-- Las categorías son de la empresa (por ejemplo `empresa`, `producto`, `comercial`, `operacion` como valores de ejemplo).
+- Las categorías son las carpetas de primer nivel de la empresa (`brain_folders`; por ejemplo `empresa`, `producto`, `comercial`, `operacion` como valores de ejemplo). `config.categories` del binding es un reflejo: lo mantiene la función SQL `brain_sync_categories` y nadie lo edita a mano. La categoría de una página sale de su ruta (`categoryForPath` en `core/folders.ts`: el primer segmento, con `skills` → `skill`).
 - El **canon** son páginas con tags `canon:icp`, `canon:mensajes`, `canon:voz`, `canon:hooks` y `canon:objeciones`. Ningún nodo ni workflow escribe páginas `canon:*` sin aprobación humana (ver [orquestación](../arquitectura/orquestacion.md)).
+
+### Carpetas (etapa 26.1a)
+
+- **Tabla `brain_folders`** (`tenant_id`, `path`, `description`, `created_by`): una fila por carpeta, de cualquier nivel. Tiene RLS activado y sin grants para `anon` ni `authenticated`: solo el servidor la lee y escribe, y lo que ve cada persona lo decide `withAccess`. El árbol y el índice muestran también las carpetas vacías.
+- **Funciones SQL** (migración `20261025120000_brain_folders`): `brain_category_for` (la categoría de una ruta), `brain_sync_categories` (refleja los primeros niveles en `config.categories`), `brain_ensure_folders` y `brain_folders_from_config` (el backfill de la migración), `brain_create_folder`, `brain_set_folder_description` y `brain_delete_folder`. Crear, describir y borrar dejan evento (`brain.folder_created`, `brain.folder_described`, `brain.folder_deleted`). La categoría de una página la calcula el proveedor `wiki` (`createWikiProvider`, con `categoryForPath`) antes de escribir; `brain_upsert_page` solo crea, con `brain_ensure_folders`, las carpetas que falten del camino de una página nueva. Crear o borrar una de primer nivel bloquea primero la fila del binding del tenant (`tenant_connections ... for update`), así dos administradores a la vez no pasan juntos el tope de 20 ni borran juntos las dos últimas; `brain_sync_categories` además deduplica.
+- **Permisos** (`core/editor/folders.ts`): para crear una carpeta hay que ser `administrador` del padre (para una de primer nivel, de la raíz); para describirla, de la propia carpeta, también si es de primer nivel; para borrarla, de la propia carpeta, salvo las de primer nivel, que piden administrador de la raíz. Solo se borran carpetas vacías y nunca la última de primer nivel. El menú del árbol muestra lo mismo: una carpeta implícita (con páginas pero sin fila en `brain_folders`) no ofrece acciones de carpeta, y "Borrar carpeta" en una de primer nivel aparece solo para quien administra la raíz.
+- **Errores:** una página nueva cuya carpeta padre (de segundo nivel o más) no existe se rechaza con un `BrainValidation` de código `validation` y `fields: ["folder"]`, con un mensaje que nombra la carpeta más cercana (lo chequea el proveedor `wiki` en `core/wiki.ts`, salvo en el import); una página nueva en la raíz, sin `/`, con código `validation` y `fields: ["slug"]`. No hay códigos `folder_not_found` ni `folder_required`. En cambio la base **crea las carpetas que falten** del camino de una página nueva, así que "toda página tiene su carpeta" lo garantiza ella y el import sigue andando.
+- **El import y las de primer nivel:** `brain-import` escribe por el proveedor, y `validateWrite` exige que la categoría (el primer segmento) ya esté en `config.categories`. Por eso el import crea subcarpetas bajo categorías que existen, pero **no crea una carpeta de primer nivel nueva**; eso solo pasa llamando `brain_upsert_page` directo por SQL (como el backfill).
+- **Rutas reservadas de primer nivel** (`RESERVED_TOP_FOLDERS` en `core/folders.ts` y `brain_create_folder`): `skills` (solo existe si el brain ya tenía la categoría `skill`), `skill` (es la categoría de `skills/`: una carpeta `skill` la duplicaría en `config.categories` y el brain dejaría de resolverse) y `brain` (instrucciones de la raíz, 26.2) no se crean desde el árbol. `brain_ensure_folders` también rechaza `skill/`, así que una página nueva bajo `skill/` falla con `reserved_path`. Borrar: la base solo se niega a borrar `skills`; `brain`, si existe y está vacía, se borra como cualquier otra.
+- **Reporte en seco:** `npm run brain:folders-report` (`core/folders-report.ts`, `scripts/brain-folders-report.mts`) corre antes de la migración y no escribe nada. Sin `--tenant` recorre todas las empresas, que es como hay que correrlo antes de `db push`, porque el backfill corre para todas y un bloqueante en cualquiera aborta la migración; `-- --tenant <slug>` mira una sola. Lista las categorías nuevas que se agregarían, los slugs bajo `brain/` y los de `skills/` sin la categoría `skill`. Sale con código 2 si hay **bloqueantes**: slugs con `/` cuyo primer segmento no cumple `^[a-z][a-z0-9-]{0,40}$` (empieza con un número o pasa de 41 caracteres) o es `skill`, y entradas inválidas en `config.categories`. Con un bloqueante el backfill de la migración abortaría (con `check_violation`, o con `reserved_path` para `skill/`): la migración es transaccional y se deshace sin perder datos, pero el deploy queda frenado hasta que una persona renombre esas páginas. El reporte **nunca se corrió contra una base real**; hay que correrlo a mano, con el env de producción, antes de `db push`.
 
 ### El canon como fuente del ICP y de los hooks (etapa 21.3a)
 
@@ -220,7 +239,7 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 | Skills | `tests/brain/skills-*.test.ts` (paquete, estados, vistas, publicar, archivos, zip, ruta, catálogo, `SKILL.md` y ruta de descarga `skills-package-route.test.ts`) y pgTAP `34_brain_skills` |
 | Endpoint MCP | `tests/brain/mcp-server/` (acceso, handler, límites, producción, tools de skills) |
 | Canon como fuente | `tests/brain/canon-reflection.test.ts` y `tests/outreach/canon.test.ts` |
-| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`. Corren con `npm run db:test` (necesita Docker) |
+| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`, `37_brain_folders`. Corren con `npm run db:test` (necesita Docker) |
 
 ## 5. Decisiones
 
@@ -232,6 +251,7 @@ Specs y planes en `docs/superpowers/`:
 [etapa 18.1, borrado](../superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md) ·
 [etapa 18.2, editor visual](../superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md) ·
 [etapa 21.3, config de outreach](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) y [plan 21.3a](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md) ·
+[etapa 26, carpetas y reglas](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md) y [plan 26.1a](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) ·
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
 [etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
 [etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md).
