@@ -23,8 +23,9 @@ export function stepUsageEntry(input: {
 	stepIndex: number;
 	usage: StepUsage | undefined;
 	// Id de la generación en el gateway (providerMetadata.gateway.generationId
-	// del step.completed). Distingue un evento reentregado de una llamada
-	// reintentada de verdad, y deja conciliar por generación.
+	// del step.completed). Se guarda en meta para poder distinguir más adelante
+	// un evento reentregado de una llamada reintentada de verdad, y conciliar
+	// por generación; hoy nada lo lee.
 	generationId?: string | null;
 }): UsageEntry | null {
 	const { usage } = input;
