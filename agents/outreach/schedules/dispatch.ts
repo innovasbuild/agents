@@ -52,6 +52,7 @@ import {
 	ITEM_TIMEOUT_MS,
 	runDispatch,
 } from "../../../lib/workflows/dispatch";
+import { createGatewayOptions } from "../../../lib/workflows/gateway-options";
 import { createSupabaseWorkflowStore } from "../../../lib/workflows/store";
 import { createUsageRecorder, metered } from "../../../lib/workflows/usage";
 
@@ -65,6 +66,7 @@ export default defineSchedule({
 		const admin = createAdminClient();
 		const outreach = createSupabaseOutreachStore(admin);
 		const record = createUsageRecorder(admin);
+		const gatewayOptionsFor = createGatewayOptions(admin);
 
 		const research: ResearchNode = ({
 			tenantId,
@@ -98,8 +100,12 @@ export default defineSchedule({
 								}),
 						}),
 					generate: metered(
-						(args: Parameters<typeof generateResearch>[0]) =>
-							generateResearch(args, { generateText, abortSignal: signal }),
+						async (args: Parameters<typeof generateResearch>[0]) =>
+							generateResearch(args, {
+								generateText,
+								abortSignal: signal,
+								providerOptions: await gatewayOptionsFor(tenantId),
+							}),
 						{
 							model: (args) => args.model,
 							record,
@@ -127,8 +133,11 @@ export default defineSchedule({
 					loadIcp: (id) => loadIcpOnce(id, runId),
 					now: () => new Date(),
 					evaluate: metered(
-						(args: Parameters<typeof runEvaluation>[0]) =>
-							runEvaluation(args, { evaluate: experimental_evaluate }),
+						async (args: Parameters<typeof runEvaluation>[0]) =>
+							runEvaluation(args, {
+								evaluate: experimental_evaluate,
+								providerOptions: await gatewayOptionsFor(tenantId),
+							}),
 						{
 							model: (args) => args.model,
 							record,
@@ -361,10 +370,11 @@ export default defineSchedule({
 						store: outreach,
 						loadCanon: (slug) => loadCanon(brain, slug),
 						generate: metered(
-							(model: string, system: string, prompt: string) =>
+							async (model: string, system: string, prompt: string) =>
 								generateDraft(model, system, prompt, {
 									generateText,
 									abortSignal: signal,
+									providerOptions: await gatewayOptionsFor(tenantId),
 								}),
 							{
 								model: (model) => model,
@@ -418,8 +428,11 @@ export default defineSchedule({
 						return result.ok ? result.page.text : null;
 					},
 					evaluate: metered(
-						(args: Parameters<typeof runEvaluation>[0]) =>
-							runEvaluation(args, { evaluate: experimental_evaluate }),
+						async (args: Parameters<typeof runEvaluation>[0]) =>
+							runEvaluation(args, {
+								evaluate: experimental_evaluate,
+								providerOptions: await gatewayOptionsFor(tenantId),
+							}),
 						{
 							model: (args) => args.model,
 							record,

@@ -3,7 +3,7 @@ title: Agentes eve
 category: dominios
 status: activo
 tags: [eve, agente, outreach, asistente, tools, mcp, chat, aprobaciones]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - agents/outreach/agent.ts
   - agents/outreach/instructions.md
@@ -55,8 +55,8 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 
 | Ruta | Qué es |
 |---|---|
-| `agents/asistente/` | El agente Asistente: `agent.ts`, `instructions.md`, `instructions/tenant.ts`, `channels/eve.ts`, `hooks/{bind-session,runs}.ts`, `tools/brain.ts` y cinco evals |
-| `lib/agents/eve/` | Lo que comparten los agentes: `webChannel`, `bindSessionHook`, `runsHook`, `tenantModel`, `brainTools` y `attribute` |
+| `agents/asistente/` | El agente Asistente: `agent.ts`, `instructions.md`, `instructions/tenant.ts`, `channels/eve.ts`, `hooks/{bind-session,runs,usage}.ts`, `tools/brain.ts` y cinco evals |
+| `lib/agents/eve/` | Lo que comparten los agentes: `webChannel`, `bindSessionHook`, `runsHook`, `usageHook`, `tenantModel`, `brainTools` y `attribute` |
 | `lib/agents/chat-agents.ts` | `availableChatAgents` y `defaultChatAgent`: qué agentes ofrece el chat y cuál queda elegido |
 | `lib/agents/assistant-instructions.ts` | El contexto que se suma a las instrucciones del Asistente |
 | `agents/outreach/agent.ts` | Config del agente. Solo el modelo, resuelto por tenant en `session.started` |
@@ -66,7 +66,7 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `agents/outreach/connections/tenant.ts` | Conexiones del tenant, un solo resolver dinámico |
 | `agents/outreach/channels/eve.ts` | Canal del chat del dashboard (auth Supabase) |
 | `agents/outreach/channels/mcp.ts` | Canal MCP para Claude Code y claude.ai (OAuth) |
-| `agents/outreach/hooks/{bind-session,runs,executors}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado |
+| `agents/outreach/hooks/{bind-session,runs,executors,usage}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado, asientan cada paso del modelo en `usage_entries` (ver [modelos y costos](../arquitectura/modelos-y-costos.md#los-pasos-del-agente-en-el-chat)) |
 | `agents/outreach/schedules/*.ts` | Los cuatro schedules (cableado; la lógica vive en `lib/`) |
 | `agents/outreach/skills/*/SKILL.md` | `outreach-corrida`, `outreach-redaccion`, `outreach-crm`, `outreach-escucha` |
 | `agents/outreach/evals/` | Las nueve evals de outreach y su `support.ts` |
@@ -93,7 +93,7 @@ Los valores salen de `AGENT_CATALOG`. Los dos piden brain para trabajar (`requir
 
 ### Lo que comparten
 
-`lib/agents/eve/` tiene lo que antes era de outreach: `webChannel(agent)` (el canal del chat), `bindSessionHook()` y `runsHook()` (atan la sesión a la conversación y abren y cierran `runs`), `tenantModel(agent)` (el modelo por tenant) y `brainTools(agent)` (las tools del brain), más `attribute.ts` con el helper que lee los atributos de la auth. Cada agente los monta desde archivos de pocas líneas: `agents/asistente/agent.ts` es `defineAgent({ model: tenantModel("asistente") })`, `channels/eve.ts` es `export default webChannel("asistente")` y `tools/brain.ts` es `export default brainTools("asistente")`. Los de `agents/outreach/` son lo mismo con su nombre.
+`lib/agents/eve/` tiene lo que antes era de outreach: `webChannel(agent)` (el canal del chat), `bindSessionHook()`, `runsHook()` y `usageHook()` (atan la sesión a la conversación, abren y cierran `runs` y asientan cada paso del modelo), `tenantModel(agent)` (el modelo por tenant, con la etiqueta `tenant:<slug>` del gateway) y `brainTools(agent)` (las tools del brain), más `attribute.ts` con el helper que lee los atributos de la auth. Cada agente los monta desde archivos de pocas líneas: `agents/asistente/agent.ts` es `defineAgent({ model: tenantModel("asistente") })`, `channels/eve.ts` es `export default webChannel("asistente")` y `tools/brain.ts` es `export default brainTools("asistente")`. Los de `agents/outreach/` son lo mismo con su nombre.
 
 Quedó el camino directo del spike: eve compila esos archivos con la fábrica importada desde `lib/agents/eve/`, y las evals `brain-tools` de los dos agentes lo prueban contra el agente compilado. Los módulos que importa una carpeta de `agents/` usan imports relativos, nunca `@/`, porque eve no resuelve los paths de `tsconfig`.
 
@@ -111,7 +111,7 @@ Todo lo que cambia por cliente se resuelve con `defineDynamic` en el evento `ses
 
 | Slot | Qué resuelve |
 |---|---|
-| `model` (`agent.ts`) | `resolveModelForTenant`: override del agente en `tenant_agents.model`, después lo elegido en el hilo (`conversations.model`), después `tenants.default_model`. Un modelo solo vale si está en `tenants.allowed_models` |
+| `model` (`agent.ts`) | `resolveModelForTenant`: override del agente en `tenant_agents.model`, después lo elegido en el hilo (`conversations.model`), después `tenants.default_model`. Un modelo solo vale si está en `tenants.allowed_models`. Con el slug del tenant en la auth, `modelSelection` lo devuelve junto con el tag `tenant:<slug>` del AI Gateway |
 | `instructions/tenant.ts` | Resumen de sesión (`sessionSummary`) para un usuario; si la base falla, la sesión arranca igual con una línea mínima. Suma las alertas de workflows de las últimas horas |
 | `connections/tenant.ts` | `resolveTenantConnections` con los bindings del tenant. Un tenant sin binding de una capacidad no tiene esa clave |
 | `tools/brain.ts` | Tools del brain (`brain_search`, `brain_read`, y `brain_upsert` con aprobación de un administrador) solo si el agente tiene acceso declarado y el tenant tiene binding. Los schemas van inline: un schema en una variable es una captura no serializable y eve descarta todo el resolver en silencio (causa de [#57](https://github.com/innovasbuild/agents/pull/57) y de la regla de la 0.59) |
@@ -174,6 +174,7 @@ Límite conocido: con tools en paralelo en un mismo mensaje, un hermano ya termi
 - `hooks/bind-session.ts` (en `session.started`) llama `bindSessionToConversation`: escribe `conversations.eve_session_id`. Última escritura gana, a propósito. Sin try/catch: si falla, el turno tiene que fallar, porque sin esa fila nadie puede continuar la sesión. Las sesiones con `authenticator` `oauth` (canal MCP) no se atan: no crean conversación.
 - `hooks/runs.ts` abre una fila de `runs` en `turn.started` (`trigger` `chat` o `mcp`) y la cierra en `turn.completed`, `turn.failed` o `turn.cancelled`; al cerrar calcula el costo desde el libro de consumo (`set_run_cost`). Es observabilidad: todo va en try/catch, porque un hook que tira termina en `turn.failed`.
 - `lib/agents/channel-context.ts` es la puerta del canal del chat: eve no valida ownership de sesión, así que acá se resuelve el tenant. Al crear la sesión sale de la conversación (header `x-innovas-conversation`); al continuar, se busca por `eve_session_id` y se ignora lo que mande el browser. Exige que la conversación sea del usuario, que sea miembro del tenant, que el agente esté habilitado en `tenant_agents` y que el método de login esté permitido. Hay una escalera de reintentos (hasta ~3 s) por la carrera con `bind-session`, que se corta si la conversación ya no existe.
+- `hooks/usage.ts` (en `step.completed`) asienta cada paso del modelo en `usage_entries` (`node: agent/step`, `resource: model_usd`) con la corrida del turno y, para el respaldo de precio, el modelo que recordó de `step.started`. La lógica vive en `usageHook()` de `lib/agents/eve/hooks.ts`, junto a `runsHook()`: cada agente la exporta desde su `hooks/usage.ts` (outreach y asistente). Como `runs.ts`, es observabilidad: todo va en try/catch y nunca tumba un turno. Un agente nuevo exporta el mismo hook; `tests/agents/usage-wiring.test.ts` falla si falta. Detalle en [modelos y costos](../arquitectura/modelos-y-costos.md#los-pasos-del-agente-en-el-chat).
 - `agents/outreach/channels/eve.ts` (y el del Asistente, que es el mismo `webChannel`) usa `supabaseAuth(agent)`; solo fuera de Vercel suma la auth de eval y `localDev()`. `localDev()` nunca puede quedar activo en un deploy.
 
 ### Canal MCP del agente
@@ -245,7 +246,7 @@ Nueve evals de outreach en `agents/outreach/evals/`, con `evals.config.ts` (conc
 | Aprobaciones y pedidos de input | `tests/agents/input-requests.test.ts` |
 | Canal del chat y acceso al canal MCP | `tests/agents/channel-context.test.ts`, `tests/agents/mcp-channel-auth.test.ts`, `tests/agents/agent-enabled.test.ts`, `tests/channel/auth.test.ts` |
 | Modelo, catálogo, sesiones, preview de mail, auth de eval | `tests/agents/{model,catalog,session-store,mail-preview,eval-auth}.test.ts` |
-| Hooks | `tests/hooks/{bind-session,runs,executors}.test.ts` |
+| Hooks | `tests/hooks/{bind-session,runs,executors,usage}.test.ts`; `tests/agents/usage-wiring.test.ts` exige que cada agente tenga `usage.ts` y que `tenantModel` etiquete con `modelSelection(` |
 | Tools | `tests/agents/outreach/tools/`, `tests/tools/send-email.test.ts`, `tests/tools/crm-setup-outreach-properties.test.ts` |
 | Acciones del chat (borrar hilo) | `tests/chat/actions.test.ts` |
 | Selector, hilos por agente y puerta del canal | `tests/agents/chat-agents.test.ts`, `tests/agents/channel-context.test.ts`, `tests/chat/actions.test.ts` |

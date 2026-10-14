@@ -42,7 +42,8 @@ vi.mock("@/lib/supabase/admin", () => ({
 		}),
 	}),
 }));
-vi.mock("@/lib/agents/model", () => ({
+vi.mock("@/lib/agents/model", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/lib/agents/model")>()),
 	resolveModelForTenant: async (...args: unknown[]) => {
 		state.modelCalls.push(args);
 		return "anthropic/claude-haiku-4.5";
@@ -93,6 +94,23 @@ describe("agente asistente", () => {
 
 		expect(model).toBe("anthropic/claude-haiku-4.5");
 		expect(state.modelCalls).toEqual([["t1", "asistente", "c1"]]);
+	});
+
+	it("con el slug en el principal, el modelo sale con el tag de la empresa (spec 21.5)", async () => {
+		const handler = tenantModel("asistente").events["session.started"];
+		if (!handler) throw new Error("tenantModel no define session.started");
+
+		expect(
+			await handler(
+				{},
+				ctx({ tenantId: "t1", tenantSlug: "acme", conversationId: "c1" }),
+			),
+		).toEqual({
+			model: "anthropic/claude-haiku-4.5",
+			modelOptions: {
+				providerOptions: { gateway: { tags: ["tenant:acme"] } },
+			},
+		});
 	});
 
 	it("sin tenant en el principal, el modelo es el default de la plataforma", async () => {

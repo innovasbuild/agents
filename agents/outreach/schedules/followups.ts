@@ -47,6 +47,7 @@ import {
 	type OutreachStore,
 } from "../../../lib/outreach/store";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import { createGatewayOptions } from "../../../lib/workflows/gateway-options";
 import { createUsageRecorder, metered } from "../../../lib/workflows/usage";
 
 const SCHEDULE = "followups";
@@ -84,6 +85,7 @@ async function crmForExecutor(
  * de la conversación, y encola. */
 async function draftAndQueue(
 	store: OutreachStore,
+	gatewayOptionsFor: ReturnType<typeof createGatewayOptions>,
 	input: DraftAndQueueInput,
 ): Promise<DraftAndQueueResult> {
 	const [contact] = await store.findContactsByKeys(input.tenantId, [
@@ -176,8 +178,11 @@ async function draftAndQueue(
 			store,
 			loadCanon: (slug) => loadCanon(brain, slug),
 			generate: metered(
-				(model: string, system: string, prompt: string) =>
-					generateDraft(model, system, prompt, { generateText }),
+				async (model: string, system: string, prompt: string) =>
+					generateDraft(model, system, prompt, {
+						generateText,
+						providerOptions: await gatewayOptionsFor(input.tenantId),
+					}),
 				{
 					model: (model) => model,
 					record: createUsageRecorder(admin),
@@ -275,6 +280,8 @@ export default defineSchedule({
 	async run() {
 		const admin = createAdminClient();
 		const store = createSupabaseOutreachStore(admin);
+		// Una vez por corrida: el resolvedor cachea el slug por empresa.
+		const gatewayOptionsFor = createGatewayOptions(admin);
 		const now = new Date();
 		const scheduleKey = scheduleKeyFor(SCHEDULE, now);
 
@@ -285,7 +292,7 @@ export default defineSchedule({
 		// del tenant: se pasa cualquier tenant activo solo para la FK.
 		const result = await runScheduledFollowups({
 			store: buildFollowupsStore(store),
-			draftAndQueue: (input) => draftAndQueue(store, input),
+			draftAndQueue: (input) => draftAndQueue(store, gatewayOptionsFor, input),
 			listOpenDeals: (input) => listOpenDeals(store, input),
 			now: () => new Date(),
 			takeLock: async (tenants) => {

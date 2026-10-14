@@ -3,7 +3,7 @@ title: Plataforma y settings por empresa
 category: dominios
 status: activo
 tags: [plataforma, consola, tenants, marca, settings, presupuestos]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - app/plataforma
   - app/(auth)/login/[tenant]/page.tsx
@@ -16,13 +16,17 @@ sources:
   - lib/tenants/tenant-form.ts
   - lib/tenants/auth-methods.ts
   - lib/brand/contrast.ts
+  - lib/usage/report.ts
+  - lib/usage/reconcile.ts
   - lib/agents/catalog.ts
   - supabase/migrations/20261015120000_platform_console.sql
+  - supabase/migrations/20261023120000_spend_report.sql
   - supabase/migrations/20260912195514_brand_bucket.sql
   - docs/superpowers/specs/2026-10-05-consola-plataforma-design.md
   - docs/superpowers/specs/2026-10-05-alta-empresas-landing-design.md
   - docs/superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md
   - docs/superpowers/specs/2026-10-10-etapa-21-2-settings-cliente-design.md
+  - docs/superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md
 ---
 
 # Plataforma y settings por empresa
@@ -40,12 +44,14 @@ Nada específico de una empresa está en el código: la diferencia entre empresa
 | `/plataforma` (`app/plataforma/page.tsx`) | Listado de empresas: estado, usuarios, "qué falta" por empresa |
 | `/plataforma/nueva` | Alta de una empresa (`nueva/actions.ts`, `create-form.tsx`) |
 | `/plataforma/[slug]` | Detalle: datos y marca, qué falta, agentes, brain, conectores, presupuestos, usuarios (solo lectura) |
+| `/plataforma/gasto` (`app/plataforma/gasto/`) | Gasto en modelos de todas las empresas y conciliación contra el AI Gateway (`page.tsx`, `reconcile-panel.tsx`, `actions.ts`) |
 | `app/plataforma/[slug]/console-actions.ts` | Server actions de la consola (agentes, brain, conectores, presupuestos) |
 | `app/plataforma/[slug]/actions.ts` | `updateTenant`: nombre, dominios, modelos, métodos de login, colores, logo, activo |
 | `/login/[tenant]` | Landing pública de login de cada empresa |
 | `/[tenant]/settings` | Settings del administrador del cliente |
 | `/[tenant]/settings/usuarios` | Usuarios e invitaciones: ver [invitaciones y usuarios](invitaciones-y-usuarios.md) |
 | `/[tenant]/settings/outreach` | Configuración del agente de outreach |
+| `/[tenant]/settings/gasto` | Gasto del mes en modelos de IA de la empresa (solo administrador) |
 | `lib/tenants/platform.ts`, `platform-owner.ts` | `requirePlatformAdmin`, `platformOwnerSlug` |
 | `lib/tenants/public.ts` | `loadPublicTenant` (landing) y `loadOfferedMethods` (`/login`) |
 | `lib/tenants/readiness.ts` | "Qué falta" de una empresa, puro |
@@ -77,6 +83,10 @@ La marca vive en `tenants.brand` (`primary`, `secondary`, `logoUrl`). `brandStyl
 - **Conectores**: ver [conectores](conectores.md).
 - **Presupuestos** (`setBudget`): límite diario por recurso en `tenant_budgets`, vía `platform_set_budget`. Los recursos salen del registro en código (`budgetResources`), no de la base. Con límite en 0 los procesos que usan ese recurso no corren. El día se corta en UTC.
 
+### Gasto en modelos: `/plataforma/gasto`
+
+Desde `/plataforma` el link "Gasto" lleva a una tabla con una fila por empresa (hoy, mes en curso y mes anterior, todo en UTC) y la fila de total. La página llama a `requirePlatformAdmin` (404 si no) y recién después lee con `service_role` la función `platform_spend_report`, que no es ejecutable por `authenticated` y devuelve una fila por empresa y rango (la página pide tres: hoy, mes en curso y mes anterior). Debajo está el panel de conciliación: un botón por período (mes en curso o anterior) que dispara la server action `reconcileSpend`, la cual vuelve a comprobar `requirePlatformAdmin`, pide al AI Gateway el gasto por tag y por día, y lo compara con el libro. Se marca una diferencia mayor a US$ 1 o al 5 % del gateway, la que sea más grande; una fila "Sin etiqueta" muestra lo que el gateway cobró sin tag de empresa. Si el gateway rechaza la consulta, la pantalla lo dice y el resto sigue funcionando. Cómo se calcula, el tag `tenant:<slug>` y las causas conocidas de diferencia están en [modelos y costos](../arquitectura/modelos-y-costos.md#reporte-por-período-y-conciliación).
+
 ### Settings del cliente
 
 `/[tenant]/settings` es territorio de administrador: un `tenant_member` recibe 404 aunque la RLS le dejaría leer. Las secciones que muestra la página:
@@ -91,23 +101,26 @@ La marca vive en `tenants.brand` (`primary`, `secondary`, `logoUrl`). `brandStyl
 
 Ejecutores, aprobaciones y conectores usan las funciones `set_executor`, `remove_executor`, `set_approval` y `set_connection_enabled`, ejecutables por `authenticated` pero que verifican adentro `tenant_admin` de esa empresa o plataforma. Las server actions resuelven la empresa por `slug` con la sesión y nunca toman un `tenant_id` del navegador. Un `tenant_admin` solo puede escribir `default_model` y `self_signup_by_domain` en `tenants` (trigger `tenants_guard_columns`).
 
+`/[tenant]/settings/gasto` es la vista del administrador de su propio gasto: mes en curso o anterior (`?periodo=anterior`), total, tabla por día y por origen (chat, procesos programados o el workflow). Lee con la sesión la función `tenant_spend_report`, que verifica adentro `tenant_admin` de esa empresa o plataforma; un `tenant_member` recibe 404. Se llega desde el link "Gasto →" de la página de settings.
+
 `/[tenant]/settings/outreach` (requiere el agente `outreach` habilitado) muestra: Cliente ideal (ICP) y Hooks y vectores (resumen leído del brain, con relectura), Segmentos e idiomas y Datos de outreach (zona horaria, BCC, pipeline y etapa de negocio, empresa que firma, modelos), Procesos automáticos y Presupuesto de hoy. Lee `config_values` (listas de segmentos, idiomas, hooks y vectores) y `tenant_workflows` (qué procesos automáticos corre la empresa), y escribe con `set_list_value`, `set_outreach_config` y `set_workflow`. Los workflows en sí se explican en [workflows](workflows.md) y el agente en [outreach](outreach.md).
 
 ## 4. Cómo se prueba
 
 ```bash
 npm test -- tests/plataforma tests/tenants tests/brand tests/settings
-npm run db:test   # 29_platform_console, 30_tenant_settings, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
+npm run db:test   # 29_platform_console, 30_tenant_settings, 36_spend_report, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
 ```
 
-Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach). No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)).
+Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach, gasto), `tests/plataforma/gasto-*.test.ts` (pantalla y conciliación). No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)).
 
 ## 5. Decisiones
 
-- Specs: [consola de plataforma](../superpowers/specs/2026-10-05-consola-plataforma-design.md), [alta de empresas y landing](../superpowers/specs/2026-10-05-alta-empresas-landing-design.md), [etapa 21.1](../superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md), [etapa 21.2](../superpowers/specs/2026-10-10-etapa-21-2-settings-cliente-design.md).
+- Specs: [gasto de IA (21.5)](../superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md), [consola de plataforma](../superpowers/specs/2026-10-05-consola-plataforma-design.md), [alta de empresas y landing](../superpowers/specs/2026-10-05-alta-empresas-landing-design.md), [etapa 21.1](../superpowers/specs/2026-10-10-etapa-21-1-consola-conectores-design.md), [etapa 21.2](../superpowers/specs/2026-10-10-etapa-21-2-settings-cliente-design.md).
 - [#14](https://github.com/innovasbuild/agents/pull/14): base de diseño y marca por tenant (`brandStyle`, `--ring`, contraste).
 - [#70](https://github.com/innovasbuild/agents/pull/70): consola de plataforma; el dueño sale de `PLATFORM_OWNER_TENANT_SLUG`.
 - [#71](https://github.com/innovasbuild/agents/pull/71): alta de empresas y landing `/login/<slug>`. Su cuerpo habla de `create_tenant` y de dos métodos de login; hoy la función es `platform_create_tenant` y hay tres métodos (la spec de alta quedó atrás).
 - [#87](https://github.com/innovasbuild/agents/pull/87): agentes, brain y conectores por empresa; `tenant_agents` cerrado a escritura desde la sesión.
 - [#89](https://github.com/innovasbuild/agents/pull/89): settings del cliente (ejecutores, aprobaciones, conectores).
 - #71 dice que los métodos de login se restringen solo en pantalla; desde la Etapa 20.1 se imponen también en el servidor ([#85](https://github.com/innovasbuild/agents/pull/85), ver [identidad y acceso](../arquitectura/identidad-y-acceso.md)).
+- [Etapa 21.5](../superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md): gasto de IA por empresa; las dos pantallas de gasto y la conciliación. El detalle de costos está en [modelos y costos](../arquitectura/modelos-y-costos.md).

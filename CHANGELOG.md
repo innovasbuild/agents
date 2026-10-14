@@ -2,6 +2,18 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.3.0] - 2026-10-14
+
+### Added
+
+- Gasto de IA por empresa. El administrador de cada empresa ve cuánto gastó en modelos de IA en el mes en curso y en el anterior, por día y por origen (chat y cada proceso automático), en `/<slug>/settings/gasto`. INNOV.AS ve el gasto de todas las empresas (hoy, mes en curso y mes anterior) en `/plataforma/gasto`.
+- Conciliación a pedido: INNOV.AS compara lo asentado en el libro de consumo contra lo que cobró el AI Gateway por empresa y marca las diferencias que superan el mayor entre US$ 1 y el 5 %, o un libro en cero con gasto en el gateway. Cada consulta al gateway tiene costo, por eso no corre sola.
+- Toda llamada a un modelo sale etiquetada con la empresa (`tenant:<slug>`), también las del chat del agente de outreach y del Asistente, y un test falla si una puerta nueva no la manda. Así el AI Gateway puede agrupar el gasto por empresa sin una clave por cliente.
+
+### Changed
+
+- Los pasos del agente en el chat ahora se asientan en el libro de consumo, que hasta hoy solo veía las llamadas de las tools y de los procesos automáticos, y cuentan contra el mismo límite diario de gasto en modelos. El chat sigue sin cortarse por presupuesto: revisá el límite de cada empresa después de tres días de libro antes de confiar en él.
+
 ## [0.2.0] - 2026-10-14
 
 ### Added

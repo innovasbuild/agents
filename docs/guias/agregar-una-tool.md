@@ -3,7 +3,7 @@ title: Agregar una tool al agente
 category: guias
 status: activo
 tags: [tools, agente, eve, approval]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - agents/outreach/tools/send_email.ts
   - agents/outreach/tools/list_queue.ts
@@ -85,6 +85,7 @@ Antes de escribir código de eve, leé `node_modules/eve/docs/README.md` y la gu
 | Documentar la tool | "toda superficie está mencionada en arquitectura/, dominios/ o guias/, o excluida con motivo" | `tests/docs/cobertura.test.ts` |
 | Que la exclusión de `cobertura.ts` tenga motivo, o que el objeto ya no exista | "SIN_DOCUMENTAR no guarda nada que ya no exista y todo tiene motivo" | `tests/docs/cobertura.test.ts` |
 | Importar `generateText` dentro de la tool sin `metered(` | "todo archivo que importa generateText o experimental_evaluate usa metered" | `tests/workflows/model-calls.test.ts` |
+| Pasar `gatewayOptions(` o `createGatewayOptions(` a la llamada al modelo (el tag `tenant:<slug>` del gasto) | "todo archivo que importa generateText o experimental_evaluate etiqueta la llamada" | `tests/workflows/model-calls.test.ts` |
 | El `approval` de una tool de nivel 2 o 3 | Nada falla solo. Si falta, la tool corre sin aprobación | revisión del PR |
 
 No verificado: que una tool nueva aparezca en el agente ya desplegado (no hay un test ni un comando en el repo para eso). Después del deploy, comprobalo a mano pidiéndole al agente que liste sus tools en un hilo nuevo.

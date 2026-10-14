@@ -6,6 +6,7 @@ import { MockLanguageModelV4 } from "ai/test";
 import { describe, expect, it, vi } from "vitest";
 import { generateResearch } from "@/lib/outreach/services/generate-research";
 import type { WebPageResult } from "@/lib/outreach/web-page";
+import { gatewayOptions } from "@/lib/workflows/gateway-options";
 import { metered } from "@/lib/workflows/usage";
 
 type LeerPagina = {
@@ -271,6 +272,33 @@ describe("generateResearch", () => {
 					outputTokens: 20,
 					failed: true,
 				},
+			}),
+		);
+	});
+});
+
+describe("generateResearch — opciones del gateway", () => {
+	it("pasa el tag de la empresa a generateText", async () => {
+		const generateText = vi.fn(async () => ({
+			output: {},
+			usage: {},
+			providerMetadata: undefined,
+		}));
+		await generateResearch(
+			{
+				model: "m",
+				system: "s",
+				prompt: "p",
+				readPage: async () => ({ ok: false, reason: "x" }) as never,
+			},
+			{
+				generateText: generateText as never,
+				providerOptions: gatewayOptions("acme"),
+			},
+		);
+		expect(generateText).toHaveBeenCalledWith(
+			expect.objectContaining({
+				providerOptions: { gateway: { tags: ["tenant:acme"] } },
 			}),
 		);
 	});

@@ -6,6 +6,7 @@
 // `generateText`). Por eso este archivo no necesita `metered`: la medición
 // se engancha en la puerta que arma esas deps.
 import type { experimental_evaluate as evaluate } from "ai";
+import type { GatewayOptions } from "../../workflows/gateway-options";
 
 export interface JevScore {
 	score: number;
@@ -80,15 +81,24 @@ export interface EvaluationArgs {
  */
 export async function runEvaluation(
 	args: EvaluationArgs,
-	deps: { evaluate: typeof evaluate; abortSignal?: AbortSignal },
+	deps: {
+		evaluate: typeof evaluate;
+		abortSignal?: AbortSignal;
+		providerOptions?: GatewayOptions;
+	},
 ): Promise<{ answers: Row; usage: unknown; providerMetadata: unknown }> {
 	const result = await deps.evaluate({
 		model: args.model,
 		state: args.state,
 		questions: args.questions,
 		abortSignal: deps.abortSignal,
-		// Datos personales de terceros pasando por un modelo.
-		providerOptions: { gateway: { zeroDataRetention: true } },
+		providerOptions: {
+			gateway: {
+				...deps.providerOptions?.gateway,
+				// Datos personales de terceros pasando por un modelo.
+				zeroDataRetention: true,
+			},
+		},
 	} as Parameters<typeof evaluate>[0]);
 
 	return {

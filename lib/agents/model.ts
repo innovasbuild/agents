@@ -1,5 +1,9 @@
 // Import relativo: lo importa lib/agents/eve/model.ts, que montan los agent.ts de agents/ (ver Global Constraints).
 import { createAdminClient } from "../supabase/admin";
+import {
+	type GatewayOptions,
+	gatewayOptions,
+} from "../workflows/gateway-options";
 
 export interface PickModelInput {
 	agentModel: string | null;
@@ -57,4 +61,24 @@ export async function resolveModelForTenant(
 		defaultModel: tenant?.default_model ?? "anthropic/claude-sonnet-5",
 		allowedModels: tenant?.allowed_models ?? ["anthropic/claude-sonnet-5"],
 	});
+}
+
+export type ModelSelection =
+	| string
+	| { model: string; modelOptions: { providerOptions: GatewayOptions } };
+
+/**
+ * Lo que devuelve el modelo dinámico del agente. Con slug suma el tag de la
+ * empresa, que es lo que separa el gasto del chat en el AI Gateway (spec 21.5
+ * §4.3). eve agrega su `sessionId` a las mismas opciones sin pisar los tags.
+ */
+export function modelSelection(
+	model: string,
+	tenantSlug: string,
+): ModelSelection {
+	if (!tenantSlug) return model;
+	return {
+		model,
+		modelOptions: { providerOptions: gatewayOptions(tenantSlug) },
+	};
 }

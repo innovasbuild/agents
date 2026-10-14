@@ -10,6 +10,7 @@ import {
 	tool,
 } from "ai";
 import { z } from "zod";
+import type { GatewayOptions } from "../../workflows/gateway-options";
 import { attachSpend, createStepSpend } from "../../workflows/usage";
 import { fichaResearchSchema } from "../ficha";
 import type { WebPageResult } from "../web-page";
@@ -28,7 +29,11 @@ export async function generateResearch(
 		prompt: string;
 		readPage: (url: string) => Promise<WebPageResult>;
 	},
-	deps: { generateText: typeof generateText; abortSignal?: AbortSignal },
+	deps: {
+		generateText: typeof generateText;
+		abortSignal?: AbortSignal;
+		providerOptions?: GatewayOptions;
+	},
 ): Promise<{
 	output: unknown;
 	pagesRead: number;
@@ -55,6 +60,7 @@ export async function generateResearch(
 			model: args.model,
 			system: args.system,
 			prompt: args.prompt,
+			providerOptions: deps.providerOptions,
 			tools: {
 				leer_pagina: tool({
 					description:

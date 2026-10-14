@@ -1,5 +1,5 @@
 import { defineDynamic } from "eve";
-import { resolveModelForTenant } from "../model";
+import { modelSelection, resolveModelForTenant } from "../model";
 import { attribute } from "./attribute";
 
 /**
@@ -16,11 +16,14 @@ export function tenantModel(agent: string) {
 				const tenantId = attribute(auth?.attributes?.tenantId);
 				if (!tenantId) return "anthropic/claude-sonnet-5";
 
-				return await resolveModelForTenant(
+				const model = await resolveModelForTenant(
 					tenantId,
 					agent,
 					attribute(auth?.attributes?.conversationId) || null,
 				);
+				// El tag tenant:<slug> es el que atribuye el gasto del chat en el
+				// reporte del AI Gateway (spec 21.5 §4).
+				return modelSelection(model, attribute(auth?.attributes?.tenantSlug));
 			},
 		},
 	});

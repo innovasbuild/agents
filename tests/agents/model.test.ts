@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pickModel } from "@/lib/agents/model";
+import { modelSelection, pickModel } from "@/lib/agents/model";
 
 const allowed = ["anthropic/claude-sonnet-5", "anthropic/claude-haiku-4.5"];
 
@@ -46,5 +46,22 @@ describe("pickModel", () => {
 				allowedModels: allowed,
 			}),
 		).toBe("anthropic/claude-sonnet-5");
+	});
+});
+
+describe("modelSelection", () => {
+	it("con slug, devuelve el modelo con el tag de la empresa", () => {
+		expect(modelSelection("anthropic/claude-sonnet-5", "acme")).toEqual({
+			model: "anthropic/claude-sonnet-5",
+			modelOptions: {
+				providerOptions: { gateway: { tags: ["tenant:acme"] } },
+			},
+		});
+	});
+
+	it("sin slug, devuelve solo el modelo", () => {
+		expect(modelSelection("anthropic/claude-sonnet-5", "")).toBe(
+			"anthropic/claude-sonnet-5",
+		);
 	});
 });

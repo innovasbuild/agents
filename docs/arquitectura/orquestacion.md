@@ -3,7 +3,7 @@ title: Orquestación
 category: arquitectura
 status: activo
 tags: [orquestacion, nodos, workflows]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md
   - docs/superpowers/specs/2026-09-20-etapa-13-pipeline-gtm-design.md
@@ -142,7 +142,7 @@ Una tool de eve no contiene llamadas al modelo ni lógica de negocio. Si la tien
 - **En un workflow**, el runner lo hace cumplir en `ctx.useNode(nombre)` (`lib/workflows/runner.ts`): niega todo nodo que el workflow no declara, todo nodo de nivel 3, y los de nivel 2 cuya política no sea `auto`. La política vive en `tenant_agents.config.approvals`, un mapa `nodo → always | once | auto`.
 - **En el chat**, toda tool de nivel 2 o 3 lleva `approval` explícito de eve. La excepción del nivel 3 (auto-respuesta con umbral) está diseñada y apagada: es la Etapa 16.
 
-**Medición.** La medición se engancha en la puerta, no en el servicio: `metered()` (`lib/workflows/usage.ts`) envuelve la función `generate` que la puerta le inyecta al nodo y asienta cada llamada en `usage_entries` con su `run_id`, `workflow` y `node`. El costo sale de lo que informa el AI Gateway, y si no informa, de `MODEL_PRICES` (`lib/workflows/pricing.ts`). Si la llamada tira después de cerrar pasos, `metered` asienta igual lo ya consumido (`meta.failed: true`) y relanza el mismo error, para que el tope y el presupuesto lo vean (el servicio lo cuelga con `attachSpend`). Un paso cortado a la mitad por el abort no se puede asentar: nadie informa esos tokens. Los créditos de Apollo se asientan como `apollo_credits` (unidad `credits`) desde el dispatcher. `runs.cost_usd` es la suma de la pasada, escrita al cerrarla.
+**Medición.** La medición se engancha en la puerta, no en el servicio: `metered()` (`lib/workflows/usage.ts`) envuelve la función `generate` que la puerta le inyecta al nodo y asienta cada llamada en `usage_entries` con su `run_id`, `workflow` y `node`. El costo sale de lo que informa el AI Gateway, y si no informa, de `MODEL_PRICES` (`lib/workflows/pricing.ts`). Si la llamada tira después de cerrar pasos, `metered` asienta igual lo ya consumido (`meta.failed: true`) y relanza el mismo error, para que el tope y el presupuesto lo vean (el servicio lo cuelga con `attachSpend`). Un paso cortado a la mitad por el abort no se puede asentar: nadie informa esos tokens. Los créditos de Apollo se asientan como `apollo_credits` (unidad `credits`) desde el dispatcher. Los pasos del propio agente en el chat no pasan por `metered`: los asienta `usageHook()` como `agent/step` (ver [modelos y costos](modelos-y-costos.md#los-pasos-del-agente-en-el-chat)), y toda llamada al modelo sale con el tag `tenant:<slug>` del gateway. `runs.cost_usd` es la suma de la pasada, escrita al cerrarla.
 
 **Presupuesto.** `tenant_budgets` guarda un límite diario por tenant y por recurso. Sin fila, el límite es cero: nada desatendido gasta sin permiso explícito. La suma del día incluye el chat, pero **solo el runner se corta**: al chat el tope no lo frena nunca. Un día de mucho chat puede dejar a los workflows sin presupuesto hasta el día siguiente. El día se corta en la zona horaria del tenant.
 

@@ -28,4 +28,45 @@ describe("llamadas al modelo", () => {
 
 		expect(sinMedir).toEqual([]);
 	});
+
+	it("todo archivo que importa generateText o experimental_evaluate etiqueta la llamada", () => {
+		// Spec 21.5 §4.4: una llamada sin tag no se nota hasta conciliar contra
+		// el gateway. La puerta arma las opciones con gatewayOptions o con el
+		// resolvedor que devuelve createGatewayOptions.
+		const sinEtiqueta = [...walk("agents"), ...walk("lib"), ...walk("app")]
+			.filter((file) => /\.(ts|tsx|mts)$/.test(file))
+			.filter((file) => IMPORTS_MODEL_CALL.test(readFileSync(file, "utf8")))
+			.filter(
+				(file) =>
+					!/\b(gatewayOptions|createGatewayOptions)\(/.test(
+						readFileSync(file, "utf8"),
+					),
+			);
+
+		expect(sinEtiqueta).toEqual([]);
+	});
+
+	it("cada llamada medida de las puertas de los schedules lleva las opciones del gateway", () => {
+		// Por sitio de llamada, no por archivo: un `metered(` nuevo sin tag pasaría
+		// el chequeo de arriba mientras otro del mismo archivo lo tenga.
+		const sinOpciones: string[] = [];
+		for (const file of [
+			"agents/outreach/schedules/dispatch.ts",
+			"agents/outreach/schedules/followups.ts",
+		]) {
+			const source = readFileSync(file, "utf8");
+			const starts = [...source.matchAll(/\bmetered\(/g)].map((m) => m.index);
+			expect(starts.length).toBeGreaterThan(0);
+			starts.forEach((start, i) => {
+				const block = source.slice(start, starts[i + 1] ?? source.length);
+				if (!/providerOptions|gatewayOptionsFor\(/.test(block)) {
+					sinOpciones.push(
+						`${file}:${source.slice(0, start).split("\n").length}`,
+					);
+				}
+			});
+		}
+
+		expect(sinOpciones).toEqual([]);
+	});
 });

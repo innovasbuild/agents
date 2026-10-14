@@ -6,6 +6,7 @@
 import { NoObjectGeneratedError } from "ai";
 import { describe, expect, it, vi } from "vitest";
 import { generateDraft } from "@/lib/outreach/services/generate-draft";
+import { gatewayOptions } from "@/lib/workflows/gateway-options";
 import { metered } from "@/lib/workflows/usage";
 
 const responseStub = {
@@ -173,5 +174,23 @@ describe("generateDraft", () => {
 			).rejects.toThrow("abort");
 			expect(record).not.toHaveBeenCalled();
 		});
+	});
+});
+
+describe("generateDraft — opciones del gateway", () => {
+	it("pasa el tag de la empresa a generateText", async () => {
+		const generateText = vi.fn(async () => ({
+			output: { subject: "s", body: "b" },
+			usage: usageStub,
+		}));
+		await generateDraft("m", "system", "prompt", {
+			generateText: generateText as never,
+			providerOptions: gatewayOptions("acme"),
+		});
+		expect(generateText).toHaveBeenCalledWith(
+			expect.objectContaining({
+				providerOptions: { gateway: { tags: ["tenant:acme"] } },
+			}),
+		);
 	});
 });

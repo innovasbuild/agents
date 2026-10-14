@@ -7,6 +7,7 @@ import { generateDraft } from "../../../lib/outreach/services/generate-draft";
 import { callerFromSession } from "../../../lib/outreach/session";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import { createGatewayOptions } from "../../../lib/workflows/gateway-options";
 import {
 	createUsageRecorder,
 	metered,
@@ -25,6 +26,7 @@ export default defineTool({
 	async execute({ contactKey, kind }, ctx) {
 		const caller = callerFromSession(ctx.session);
 		const admin = createAdminClient();
+		const gatewayOptionsFor = createGatewayOptions(admin);
 		const brain = await brainForTenant(caller.tenantId);
 		// `turn.id` es el mismo que hooks/runs.ts guarda en runs.eve_turn_id.
 		const runId = await resolveRunId(
@@ -38,10 +40,11 @@ export default defineTool({
 				store: createSupabaseOutreachStore(admin),
 				loadCanon: (slug) => loadCanon(brain, slug),
 				generate: metered(
-					(model: string, system: string, prompt: string) =>
+					async (model: string, system: string, prompt: string) =>
 						generateDraft(model, system, prompt, {
 							generateText,
 							abortSignal: ctx.abortSignal,
+							providerOptions: await gatewayOptionsFor(caller.tenantId),
 						}),
 					{
 						model: (model) => model,

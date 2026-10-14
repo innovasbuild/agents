@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
-import { readNoul, readScore } from "@/lib/outreach/services/evaluate";
+import { describe, expect, it, vi } from "vitest";
+import {
+	readNoul,
+	readScore,
+	runEvaluation,
+} from "@/lib/outreach/services/evaluate";
+import { gatewayOptions } from "@/lib/workflows/gateway-options";
 
 describe("readScore", () => {
 	it("lee confidence de adentro de la answer", () => {
@@ -65,5 +70,36 @@ describe("readNoul", () => {
 
 	it("una forma inesperada devuelve null en vez de inventar un número", () => {
 		expect(readNoul({ excluir: { type: "boolean" } }, "excluir")).toBeNull();
+	});
+});
+
+describe("runEvaluation — opciones del gateway", () => {
+	const args = { model: "typesafe-ai/jev", state: {}, questions: {} };
+	const stub = () =>
+		vi.fn(async () => ({ answers: {}, usage: {}, providerMetadata: {} }));
+
+	it("suma el tag sin perder zeroDataRetention", async () => {
+		const evaluate = stub();
+		await runEvaluation(args, {
+			evaluate: evaluate as never,
+			providerOptions: gatewayOptions("acme"),
+		});
+		expect(evaluate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				providerOptions: {
+					gateway: { tags: ["tenant:acme"], zeroDataRetention: true },
+				},
+			}),
+		);
+	});
+
+	it("sin opciones, sigue mandando zeroDataRetention", async () => {
+		const evaluate = stub();
+		await runEvaluation(args, { evaluate: evaluate as never });
+		expect(evaluate).toHaveBeenCalledWith(
+			expect.objectContaining({
+				providerOptions: { gateway: { zeroDataRetention: true } },
+			}),
+		);
 	});
 });
