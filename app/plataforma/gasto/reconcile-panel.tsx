@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
+import type { ReconcileLine } from "@/lib/usage/reconcile";
 import { type Period, usd } from "@/lib/usage/report";
 import { type ReconcileResult, reconcileSpend } from "./actions";
 
@@ -14,6 +15,24 @@ const pct = (value: number | null) =>
 	value === null
 		? "—"
 		: `${(value * 100).toLocaleString("es-AR", { maximumFractionDigits: 1 })} %`;
+
+function LineRow({ line }: { line: ReconcileLine }) {
+	return (
+		<tr className={line.flagged ? "text-destructive" : undefined}>
+			<td className="px-4 py-2">
+				{line.label}
+				{line.flagged ? " · revisar" : ""}
+			</td>
+			<td className="px-4 py-2 text-right tabular-nums">{usd(line.ledger)}</td>
+			<td className="px-4 py-2 text-right tabular-nums">{usd(line.gateway)}</td>
+			<td className="px-4 py-2 text-right tabular-nums">{usd(line.diff)}</td>
+			<td className="px-4 py-2 text-right tabular-nums">
+				{/* Sin libro de por medio, el porcentaje siempre sería -100 %. */}
+				{line.kind === "empresa" ? pct(line.diffPct) : "—"}
+			</td>
+		</tr>
+	);
+}
 
 export function ReconcilePanel() {
 	const [result, setResult] = useState<ReconcileResult | null>(null);
@@ -94,28 +113,7 @@ export function ReconcilePanel() {
 							</thead>
 							<tbody className="divide-y">
 								{result.lines.map((line) => (
-									<tr
-										className={line.flagged ? "text-destructive" : undefined}
-										key={line.key}
-									>
-										<td className="px-4 py-2">
-											{line.label}
-											{line.flagged ? " · revisar" : ""}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(line.ledger)}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(line.gateway)}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(line.diff)}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{/* Sin libro de por medio, el porcentaje siempre sería -100 %. */}
-											{line.kind === "empresa" ? pct(line.diffPct) : "—"}
-										</td>
-									</tr>
+									<LineRow key={line.key} line={line} />
 								))}
 							</tbody>
 						</table>

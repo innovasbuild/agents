@@ -2692,10 +2692,7 @@ export function ReconcilePanel() {
 							</thead>
 							<tbody className="divide-y">
 								{result.lines.map((line) => (
-									<tr
-										className={line.flagged ? "text-destructive" : undefined}
-										key={line.key}
-									>
+									<tr className={line.flagged ? "text-destructive" : undefined} key={line.key}>
 										<td className="px-4 py-2">
 											{line.label}
 											{line.flagged ? " · revisar" : ""}
