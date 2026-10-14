@@ -661,6 +661,22 @@ La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominio
 
 ---
 
+## Etapa 26 · Carpetas, reglas y estructura del brain — `[ ]`
+
+**Modelo Claude Code:** Opus 5.5 para spec y planes; Sonnet 5.5 para ejecutar, en sesión nueva por entrega.
+**Modelo runtime:** n/a.
+**Spec:** `docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md` · **Plan:** por entrega, a escribir.
+
+Agregada el 2026-10-14 a pedido de Matías, a partir del brain de O'Keefe: las categorías sin páginas no aparecían, no había forma de renombrarlas ni de crear subcarpetas desde el brain, y las instrucciones del brain y las reglas por carpeta (`operacion/agent`, `operacion/brain`, `talento/personal/00-reglas`) no las lee ni el chat ni el MCP. Tres entregas, cada una depende de la anterior:
+
+- [ ] **26.1 · Carpetas.** Las carpetas pasan a ser filas (`brain_folders`), la categoría es el primer segmento de la ruta, se ven vacías, y un administrador las crea, renombra, mueve y borra (vacías) desde el árbol. Mover y renombrar reescriben los enlaces y dejan alias de las rutas viejas. Reemplaza la lista de categorías de la consola.
+- [ ] **26.2 · Instrucciones y reglas.** `00-reglas` en la raíz y en cada carpeta, en cascada. Llegan solas al chat y al MCP; `brain_rules` nueva; `brain_upsert` exige `rulesRevision` y devuelve la cascada al rechazar.
+- [ ] **26.3 · Estructura obligatoria.** Campos declarados en un bloque `campos` de la `00-reglas`, validados en el `frontmatter` al escribir; plantilla por carpeta en `00-plantilla`; vista de cumplimiento.
+
+**Terminado cuando:** en `okeefe`, se ven las ocho categorías aunque estén vacías y un renombre real deja los enlaces bien; por MCP, una escritura en `talento/personal` sin reglas leídas se rechaza con la cascada y la segunda entra; y una ficha sin `reporta_a` se rechaza (spec §1.2).
+
+---
+
 ## Fuera de etapas · Sync entrante de HubSpot — `[ ]`
 
 Agregada el 2026-09-28. Hasta ahora la relación con HubSpot era solo de salida: si alguien borraba un contacto duplicado a mano en HubSpot, o reasignaba el owner, o dejaba una nota directo ahí, la base local nunca se enteraba — y un `crm_id` apuntando a un contacto borrado rompía el próximo intento de avanzar etapa o mandar un mail. El nodo `outreach/crm-sync` corre dos veces al día: limpia el `crm_id` huérfano, corrige el owner local si cambió en HubSpot, y refleja en el historial las notas agregadas a mano allá. El sync de `stage`/`dealstage` y los webhooks nativos de HubSpot quedaron fuera de esta pasada — ver la spec para el porqué. Implementado y revisado; falta su primera corrida real en producción y correr `npm run db:reset`/`npm run db:types` (necesitan Docker, no disponible en el entorno donde se construyó esto).
