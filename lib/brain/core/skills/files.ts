@@ -29,12 +29,10 @@ import {
 	MAX_PACKAGE_BYTES,
 	MAX_PACKAGE_FILES,
 	type SkillFile,
-	skillName,
 } from "./package.ts";
-import { publishedEntries } from "./package-link.ts";
 import { type SkillActor, type SkillFailure, skillFail } from "./publish.ts";
 import { publishedSnapshot } from "./state.ts";
-import type { SkillOverviewRow, SkillStore } from "./store.ts";
+import type { SkillOverviewRow, SkillSnapshot, SkillStore } from "./store.ts";
 
 export interface BlobStore {
 	put(tenantId: string, sha256: string, bytes: Uint8Array): Promise<void>;
@@ -346,26 +344,34 @@ export async function readSkillFile(
 	return { ok: true, path: file.path, bytes };
 }
 
-// El paquete que se distribuye: siempre la copia publicada vigente, también
-// para quien edita (spec etapa 24.2a M7). Sin ella, no existe.
-export async function exportSkillPackage(
+// La skill que se distribuye: siempre la copia publicada vigente, también
+// para quien edita (spec etapa 24.2a M7). Sin ella, no existe. El zip lo arma
+// y lo firma core/skills/package-link.ts (spec etapa 24.2b §6).
+export async function publishedSkillFor(
 	tenantSlug: string,
 	slug: string,
 	deps: FilesDeps,
 ): Promise<
-	| { ok: true; name: string; version: number; entries: PackageEntry[] }
+	| {
+			ok: true;
+			tenantId: string;
+			userId: string;
+			slug: string;
+			snapshot: SkillSnapshot;
+	  }
 	| SkillFailure
 > {
 	const ctx = await context(tenantSlug, slug, deps);
 	if (!ctx.ok) return skillFail("not_found", NOT_FOUND);
 	const snapshot = publishedSnapshot(ctx.row);
 	if (!snapshot) return skillFail("not_found", NOT_FOUND);
-
-	const name = skillName(slug);
-	const entries = await publishedEntries(name, snapshot, (sha256) =>
-		deps.blobs.get(ctx.actor.tenantId, sha256),
-	);
-	return { ok: true, name, version: snapshot.version, entries };
+	return {
+		ok: true,
+		tenantId: ctx.actor.tenantId,
+		userId: ctx.actor.userId,
+		slug,
+		snapshot,
+	};
 }
 
 export async function importSkillPackage(

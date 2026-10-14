@@ -194,7 +194,7 @@ su propio repo.
   skill visible. `core/skills/skill-md.ts` arma el `SKILL.md` de una copia
   publicada. `zipPackage` (`adapters/skill-zip.ts`) es el espejo de
   `unzipPackage`, y `app/[tenant]/brain/skills/package/route.ts` lo sirve como
-  descarga de la versión vigente (`exportSkillPackage` decide el permiso).
+  descarga de la versión vigente (`publishedSkillFor` decide el permiso y `issuePackageLink` firma el link).
 - Habilitar skills en una empresa es agregar `skill` a las categorías de su
   brain desde la consola de plataforma.
 

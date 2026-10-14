@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { AccessRule } from "@/lib/brain/core/access/types";
 import { BrainConflict, BrainNotFound } from "@/lib/brain/core/errors";
 import {
-	exportSkillPackage,
 	type FilesDeps,
 	importSkillPackage,
 	parseSkillMd,
 	planImport,
+	publishedSkillFor,
 	putSkillFile,
 	readSkillFile,
 	removeSkillFile,
@@ -613,34 +613,22 @@ describe("endurecimiento del import", () => {
 	});
 });
 
-describe("exportSkillPackage", () => {
-	const decode = (data: Uint8Array) => new TextDecoder().decode(data);
-
-	it("un lector recibe la copia publicada dentro de una carpeta con el nombre", async () => {
+describe("publishedSkillFor", () => {
+	it("un lector recibe la copia publicada con su tenant y su persona", async () => {
 		const { deps } = setup(LECTOR);
-		const result = await exportSkillPackage("acme", SLUG, deps);
+		const result = await publishedSkillFor("acme", SLUG, deps);
 		if (!result.ok) throw new Error(result.message);
-		expect(result.name).toBe("facturacion");
-		expect(result.version).toBe(2);
-		expect(result.entries.map((entry) => entry.path)).toEqual([
-			"facturacion/SKILL.md",
-			"facturacion/scripts/calc.py",
-		]);
-		expect(decode(result.entries[1].bytes)).toBe("publicado");
-		expect(parseSkillMd(decode(result.entries[0].bytes))).toMatchObject({
-			description: "d",
-			body: "b",
-		});
+		expect(result.slug).toBe(SLUG);
+		expect(result.tenantId).toBe("t1");
+		expect(result.snapshot.version).toBe(2);
+		expect(result.snapshot.manifest).toEqual(published);
 	});
 
 	it("un editor también recibe la publicada, no el borrador", async () => {
 		const { deps } = setup();
-		const result = await exportSkillPackage("acme", SLUG, deps);
+		const result = await publishedSkillFor("acme", SLUG, deps);
 		if (!result.ok) throw new Error(result.message);
-		expect(decode(result.entries[1].bytes)).toBe("publicado");
-		expect(result.entries.map((entry) => entry.path)).not.toContain(
-			"facturacion/references/nuevo.md",
-		);
+		expect(result.snapshot.manifest).toEqual(published);
 	});
 
 	it("sin publicación vigente, sin lectura o sin ser miembro: not_found", async () => {
@@ -650,26 +638,10 @@ describe("exportSkillPackage", () => {
 			setup(HIDDEN).deps,
 			{ ...noMember, actor: async () => null },
 		]) {
-			expect(await exportSkillPackage("acme", SLUG, deps)).toMatchObject({
+			expect(await publishedSkillFor("acme", SLUG, deps)).toMatchObject({
 				ok: false,
 				code: "not_found",
 			});
 		}
-	});
-
-	it("lo exportado se puede volver a importar", async () => {
-		const { deps } = setup(LECTOR);
-		const result = await exportSkillPackage("acme", SLUG, deps);
-		if (!result.ok) throw new Error(result.message);
-		const plan = planImport(result.entries);
-		if (!plan.ok) throw new Error(plan.problems.join(" "));
-		expect(plan.skill.description).toBe("d");
-		expect(plan.files.map((file) => file.path)).toEqual(["scripts/calc.py"]);
-	});
-
-	it("si falta un blob, lanza: no entrega un paquete incompleto", async () => {
-		const { deps, blobs } = setup(LECTOR);
-		blobs.delete("t1/pub");
-		await expect(exportSkillPackage("acme", SLUG, deps)).rejects.toThrow();
 	});
 });
