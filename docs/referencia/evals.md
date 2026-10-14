@@ -13,6 +13,11 @@ Las evals de `agents/*/evals/`. Se corren con `npm run evals`.
 
 | Eval | Archivo |
 | --- | --- |
+| `asistente/brain-tools` | `agents/asistente/evals/brain-tools.eval.ts` |
+| `asistente/deriva-a-outreach` | `agents/asistente/evals/deriva-a-outreach.eval.ts` |
+| `asistente/sin-dato` | `agents/asistente/evals/sin-dato.eval.ts` |
+| `asistente/sin-otros-agentes` | `agents/asistente/evals/sin-otros-agentes.eval.ts` |
+| `asistente/smoke` | `agents/asistente/evals/smoke.eval.ts` |
 | `outreach/aprobar-sin-gmail` | `agents/outreach/evals/aprobar-sin-gmail.eval.ts` |
 | `outreach/brain-tools` | `agents/outreach/evals/brain-tools.eval.ts` |
 | `outreach/claim-ajeno` | `agents/outreach/evals/claim-ajeno.eval.ts` |

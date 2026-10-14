@@ -1,6 +1,7 @@
 // Entradas del menú del tenant y qué ve cada rol. Vive fuera del layout para
 // poder probarlo sin renderizar la página.
 import type { CatalogAgent } from "../agents/catalog";
+import { hasChatAgent } from "./home";
 import type { TenantRole } from "./resolve";
 
 export type NavLink = {
@@ -9,13 +10,15 @@ export type NavLink = {
 	adminOnly?: boolean;
 	/** Agente que tiene que estar habilitado para que la entrada exista. */
 	agent?: CatalogAgent;
+	/** La entrada existe si hay algún agente de chat habilitado. */
+	chat?: true;
 };
 // Una entrada con `items` es un desplegable: agrupa destinos de un mismo
 // dominio para que la tira no ponga todo al mismo nivel.
 export type NavEntry = NavLink | { label: string; items: NavLink[] };
 
 export const NAV: NavEntry[] = [
-	{ href: "/chat", label: "Chat", agent: "outreach" },
+	{ href: "/chat", label: "Chat", chat: true },
 	{
 		label: "Outreach",
 		items: [
@@ -44,7 +47,8 @@ export function visibleNav(
 		(!link.adminOnly || role !== "tenant_member") &&
 		(!link.agent ||
 			enabledAgents === null ||
-			enabledAgents.includes(link.agent));
+			enabledAgents.includes(link.agent)) &&
+		(!link.chat || enabledAgents === null || hasChatAgent(enabledAgents));
 
 	return NAV.flatMap((entry): NavEntry[] => {
 		if (!("items" in entry)) return show(entry) ? [entry] : [];

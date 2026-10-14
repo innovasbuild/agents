@@ -10,6 +10,7 @@ import { approvableNodes, readPolicy } from "@/lib/tenants/approvals";
 import { suggestExecutorSlug } from "@/lib/tenants/executor-slug";
 import { loadPeople } from "@/lib/tenants/people";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import { settingsSections } from "@/lib/tenants/settings-sections";
 import { ApprovalsSection } from "./config/approvals-section";
 import { ConnectionsSection } from "./config/connections-section";
 import { ExecutorsSection } from "./config/executors-section";
@@ -118,13 +119,6 @@ export default async function SettingsPage({
 	const outreachEnabled = (agentsResult.data ?? []).some(
 		(row) => row.agent === "outreach" && row.enabled === true,
 	);
-	// Sin agentes no hay modelo, ejecutores, aprobaciones ni conectores que
-	// configurar: quedan Ingreso y Usuarios (spec 21.4 §3.4). Si no se pudo leer,
-	// se muestra todo.
-	const hasAgents =
-		Boolean(agentsResult.error) ||
-		(agentsResult.data ?? []).some((row) => row.enabled === true);
-
 	const approvals = (agentsResult.data ?? [])
 		.filter((row) => row.enabled === true)
 		.map((row) => {
@@ -140,6 +134,17 @@ export default async function SettingsPage({
 		})
 		.filter((entry) => entry.nodes.length > 0);
 
+	// Ejecutores y Aprobaciones son de outreach; Modelo y Conectores valen para
+	// cualquier agente (spec 21.4 §3.4, 22.1 §8). Si no se pudo leer, se muestra todo.
+	const sections = settingsSections(
+		agentsResult.error
+			? null
+			: (agentsResult.data ?? [])
+					.filter((row) => row.enabled === true)
+					.map((row) => row.agent as string),
+		approvals.length,
+	);
+
 	const connections = toConnectionRows(connectionsResult.data ?? []);
 
 	return (
@@ -148,7 +153,7 @@ export default async function SettingsPage({
 				Configuración de {tenant.displayName}
 			</h1>
 
-			{hasAgents ? (
+			{sections.model ? (
 				<section>
 					<h2 className="mb-3 text-lg">Modelo default</h2>
 					<ModeloForm
@@ -178,39 +183,41 @@ export default async function SettingsPage({
 				)}
 			</section>
 
-			{hasAgents ? (
-				<>
-					<section>
-						<h2 className="mb-3 text-lg">Ejecutores</h2>
-						{executorsFailed ? (
-							<Unreadable />
-						) : (
-							<ExecutorsSection
-								candidates={candidates}
-								executors={executors}
-								slug={slug}
-							/>
-						)}
-					</section>
+			{sections.executors ? (
+				<section>
+					<h2 className="mb-3 text-lg">Ejecutores</h2>
+					{executorsFailed ? (
+						<Unreadable />
+					) : (
+						<ExecutorsSection
+							candidates={candidates}
+							executors={executors}
+							slug={slug}
+						/>
+					)}
+				</section>
+			) : null}
 
-					<section>
-						<h2 className="mb-3 text-lg">Aprobaciones</h2>
-						{agentsResult.error ? (
-							<Unreadable />
-						) : (
-							<ApprovalsSection agents={approvals} slug={slug} />
-						)}
-					</section>
+			{sections.approvals ? (
+				<section>
+					<h2 className="mb-3 text-lg">Aprobaciones</h2>
+					{agentsResult.error ? (
+						<Unreadable />
+					) : (
+						<ApprovalsSection agents={approvals} slug={slug} />
+					)}
+				</section>
+			) : null}
 
-					<section>
-						<h2 className="mb-3 text-lg">Conectores</h2>
-						{connectionsResult.error ? (
-							<Unreadable />
-						) : (
-							<ConnectionsSection connections={connections} slug={slug} />
-						)}
-					</section>
-				</>
+			{sections.connections ? (
+				<section>
+					<h2 className="mb-3 text-lg">Conectores</h2>
+					{connectionsResult.error ? (
+						<Unreadable />
+					) : (
+						<ConnectionsSection connections={connections} slug={slug} />
+					)}
+				</section>
 			) : null}
 
 			{outreachEnabled ? (

@@ -51,6 +51,18 @@ describe("visibleNav", () => {
 		expect(labels("tenant_admin", [])).not.toContain("Outreach");
 	});
 
+	it("solo con el asistente, un miembro ve Chat, Brain y Conectar", () => {
+		expect(labels("tenant_member", ["asistente"])).toEqual([
+			"Chat",
+			"Brain",
+			"Conectar",
+		]);
+	});
+
+	it("con un agente fuera del catálogo no hay Chat", () => {
+		expect(labels("tenant_member", ["soporte"])).toEqual(["Brain", "Conectar"]);
+	});
+
 	it("Conectar apunta a /conectar", () => {
 		expect(visibleNav("tenant_member", [])).toContainEqual({
 			href: "/conectar",

@@ -1,8 +1,8 @@
 ---
-title: Agentes eve (agente de outreach)
+title: Agentes eve
 category: dominios
 status: activo
-tags: [eve, agente, outreach, tools, mcp, chat, aprobaciones]
+tags: [eve, agente, outreach, asistente, tools, mcp, chat, aprobaciones]
 updated: 2026-10-13
 sources:
   - agents/outreach/agent.ts
@@ -16,6 +16,16 @@ sources:
   - agents/outreach/skills
   - agents/outreach/tools
   - agents/outreach/evals
+  - agents/asistente/agent.ts
+  - agents/asistente/instructions.md
+  - agents/asistente/instructions/tenant.ts
+  - agents/asistente/channels/eve.ts
+  - agents/asistente/hooks
+  - agents/asistente/tools
+  - agents/asistente/evals
+  - lib/agents/eve
+  - lib/agents/assistant-instructions.ts
+  - lib/agents/chat-agents.ts
   - lib/agents/catalog.ts
   - lib/agents/session-store.ts
   - lib/agents/mcp-channel-auth.ts
@@ -30,13 +40,14 @@ sources:
   - docs/superpowers/specs/03-agente-outreach-v1.md
   - docs/superpowers/specs/2026-09-27-etapa-6-canal-mcp-design.md
   - docs/superpowers/specs/2026-09-28-etapa-14-subida-eve-design.md
+  - docs/superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md
 ---
 
-# Agentes eve (agente de outreach)
+# Agentes eve
 
 ## 1. Qué es y para qué
 
-La plataforma corre sus agentes sobre [eve](../../node_modules/eve/docs/README.md), un framework de archivos: el agente es una carpeta con instrucciones, tools, conexiones, canales, schedules, hooks, skills y evals, y eve le da sesiones durables, streaming y aprobaciones. Hoy hay un solo agente, `outreach` (`agents/outreach/`), declarado en `next.config.ts` (`agents: { outreach: "./agents/outreach" }`). Investiga cuentas, redacta mensajes, arma la cola de envíos y manda desde la casilla del ejecutor lo que éste aprueba. El proceso de negocio está en [outreach](outreach.md); esta página es el cómo está armado el agente.
+La plataforma corre sus agentes sobre [eve](../../node_modules/eve/docs/README.md), un framework de archivos: el agente es una carpeta con instrucciones, tools, conexiones, canales, schedules, hooks, skills y evals, y eve le da sesiones durables, streaming y aprobaciones. Hoy hay dos, ambos declarados en `next.config.ts`: `asistente` (`agents/asistente/`), que conversa solo con el brain de la empresa, y `outreach` (`agents/outreach/`), que investiga cuentas, redacta mensajes, arma la cola de envíos y manda desde la casilla del ejecutor lo que éste aprueba. El proceso de negocio de outreach está en [outreach](outreach.md); esta página es el cómo están armados los agentes. Salvo que se diga otra cosa, las secciones de abajo describen a `outreach`, que es el que tiene tools de dominio, canal MCP, schedules y skills.
 
 El agente es de la plataforma, no de un cliente: la diferencia entre empresas es una fila (`tenant_agents`) y su [brain](brain.md). Todo lo que depende del tenant se resuelve al empezar la sesión (ver "Qué se resuelve al empezar la sesión"). Las reglas de nodos, workflows y niveles de efecto están en [orquestación](../arquitectura/orquestacion.md); los workflows que corren desatendidos, en [workflows](workflows.md).
 
@@ -44,6 +55,10 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 
 | Ruta | Qué es |
 |---|---|
+| `agents/asistente/` | El agente Asistente: `agent.ts`, `instructions.md`, `instructions/tenant.ts`, `channels/eve.ts`, `hooks/{bind-session,runs}.ts`, `tools/brain.ts` y cinco evals |
+| `lib/agents/eve/` | Lo que comparten los agentes: `webChannel`, `bindSessionHook`, `runsHook`, `tenantModel`, `brainTools` y `attribute` |
+| `lib/agents/chat-agents.ts` | `availableChatAgents` y `defaultChatAgent`: qué agentes ofrece el chat y cuál queda elegido |
+| `lib/agents/assistant-instructions.ts` | El contexto que se suma a las instrucciones del Asistente |
 | `agents/outreach/agent.ts` | Config del agente. Solo el modelo, resuelto por tenant en `session.started` |
 | `agents/outreach/instructions.md` | Constitución genérica: los cinco frenos, guardrails, claim por persona, piezas trabadas, estilo |
 | `agents/outreach/instructions/tenant.ts` | Instrucciones dinámicas: resumen del día y alertas de workflows del tenant |
@@ -54,7 +69,7 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `agents/outreach/hooks/{bind-session,runs,executors}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado |
 | `agents/outreach/schedules/*.ts` | Los cuatro schedules (cableado; la lógica vive en `lib/`) |
 | `agents/outreach/skills/*/SKILL.md` | `outreach-corrida`, `outreach-redaccion`, `outreach-crm`, `outreach-escucha` |
-| `agents/outreach/evals/` | Las nueve evals y su `support.ts` |
+| `agents/outreach/evals/` | Las nueve evals de outreach y su `support.ts` |
 | `lib/agents/catalog.ts` | `AGENT_CATALOG`: única lista de agentes de la plataforma |
 | `lib/agents/session-store.ts` | `bindSessionToConversation`, `openRun`, `closeRun` |
 | `lib/agents/channel-context.ts` | Resuelve tenant y dueño de un request del canal del chat |
@@ -66,6 +81,29 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `app/[tenant]/chat/` | Pantalla `/[tenant]/chat` (cliente, acciones, adjuntos) |
 
 ## 3. Cómo funciona
+
+### Los agentes
+
+| Agente | Qué hace | Tools | MCP | Schedules | Canon |
+|---|---|---|---|---|---|
+| `asistente` | Conversa con el conocimiento de la empresa: busca, lee y propone páginas del brain. No envía, no toca el CRM, no investiga cuentas | Solo las del brain (`brain_search`, `brain_read` y `brain_upsert` con aprobación de un administrador), según el acceso que la consola le dio | No (`mcp: false`) | Ninguno | No (`canon: false`): habilitarlo no siembra páginas |
+| `outreach` | Investiga cuentas, redacta mensajes, arma la cola y envía lo aprobado | Las 13 de abajo | Sí (`mcp: true`) | Los cuatro de abajo | Sí (`canon: true`): al habilitarlo la consola siembra `comercial/icp` y `comercial/hooks` |
+
+Los valores salen de `AGENT_CATALOG`. Los dos piden brain para trabajar (`requiresBrain`) y se usan desde el chat (`chat: true`). El Asistente no tiene `connections/`, `schedules/`, `skills/`, `channels/mcp.ts` ni `hooks/executors.ts`, y no registra nada en el registro de workflows. Sus instrucciones (`agents/asistente/instructions.md`) lo atan al brain: buscar antes de contestar, nombrar la página de donde sale cada dato, decir "eso no está en el brain" cuando no está, y buscar con una o dos palabras clave porque la búsqueda exige todas las palabras. `instructions/tenant.ts` suma el contexto de la sesión (`lib/agents/assistant-instructions.ts`), que le dice qué otros agentes de chat tiene habilitados la empresa para derivarles lo que él no hace.
+
+### Lo que comparten
+
+`lib/agents/eve/` tiene lo que antes era de outreach: `webChannel(agent)` (el canal del chat), `bindSessionHook()` y `runsHook()` (atan la sesión a la conversación y abren y cierran `runs`), `tenantModel(agent)` (el modelo por tenant) y `brainTools(agent)` (las tools del brain), más `attribute.ts` con el helper que lee los atributos de la auth. Cada agente los monta desde archivos de pocas líneas: `agents/asistente/agent.ts` es `defineAgent({ model: tenantModel("asistente") })`, `channels/eve.ts` es `export default webChannel("asistente")` y `tools/brain.ts` es `export default brainTools("asistente")`. Los de `agents/outreach/` son lo mismo con su nombre.
+
+Quedó el camino directo del spike: eve compila esos archivos con la fábrica importada desde `lib/agents/eve/`, y las evals `brain-tools` de los dos agentes lo prueban contra el agente compilado. Los módulos que importa una carpeta de `agents/` usan imports relativos, nunca `@/`, porque eve no resuelve los paths de `tsconfig`.
+
+### Agregar un agente
+
+1. La carpeta `agents/<nombre>/` con `agent.ts`, `instructions.md`, `channels/eve.ts` (con `webChannel`), `hooks/` (con `bindSessionHook` y `runsHook`) y, si usa el brain, `tools/brain.ts` (con `brainTools`).
+2. La clave en `next.config.ts`, dentro de `agents`.
+3. La entrada en `lib/agents/catalog.ts`. Un test compara las tres listas (carpetas, `next.config.ts` y catálogo) y falla hasta que coincidan.
+4. Una fila en `tenant_agents` por empresa que lo use, desde la consola de plataforma o con una migración (la del Asistente es `20261021120000_asistente_agent`, que lo habilita en toda empresa con brain).
+5. La etiqueta en castellano de cada tool en `TOOL_LABELS`, o su entrada en `TOOLS_SIN_ETIQUETA`.
 
 ### Qué se resuelve al empezar la sesión
 
@@ -110,6 +148,14 @@ Verificado en `agents/outreach/tools/*.ts`: solo `crm_setup_outreach_properties`
 - Rechazar permite escribir un motivo opcional, que viaja como el próximo mensaje del chat; la pieza queda `pending`.
 - Los botones se deshabilitan mientras el store está `submitted`, `streaming` o `resuming`: la tarjeta se va cuando confirma el servidor, no al hacer click (eve 0.67).
 
+### Chat con más de un agente
+
+- Un hilo pertenece a un agente: `conversations.agent` se fija al crearlo (`createConversation(tenantId, slug, model, agent)`) y no cambia. La acción rechaza un agente que no esté en el catálogo, que no sea de chat o que no esté habilitado en la empresa.
+- Cada agente tiene su ruta (`/eve/<agente>/v1/*`) y `resolveChannelContext(request, userId, allowsLogin, agent)` rechaza una conversación cuyo agente no es el de la ruta: de lo contrario se abriría una sesión de un agente colgada del hilo de otro.
+- El selector aparece al abrir un hilo nuevo solo si hay más de un agente de chat habilitado (`chatAgents` en `lib/tenants/home.ts`, `availableChatAgents` en `lib/agents/chat-agents.ts`). Con uno solo no hay nada que elegir ni que rotular. Queda elegido el agente del hilo más reciente (`defaultChatAgent`) o, si no hay hilos, el primero del catálogo; también cae en el primer agente disponible cuando el agente del último hilo ya no está habilitado.
+- Los hilos de un agente deshabilitado no se listan: el canal rechazaría su sesión, así que ni el historial se puede abrir.
+- El indicador de actividad y los adjuntos sirven a cualquier agente; las tarjetas de mail y de cola solo aparecen con las tools de outreach.
+
 ### Chat: adjuntos, mail tal cual sale, indicador de actividad
 
 - **Adjuntos.** El composer tiene un clip: el archivo se lee a `data:` URL y viaja como parte `file` del mensaje, con tope de 15 MB del lado del cliente ([#44](https://github.com/innovasbuild/agents/pull/44)). El caso de uso es pegar un CSV de leads para que lo procese `import_contacts`. La caja es multilínea (Enter envía, Shift+Enter salta de línea, [#64](https://github.com/innovasbuild/agents/pull/64)).
@@ -119,7 +165,7 @@ Verificado en `agents/outreach/tools/*.ts`: solo `crm_setup_outreach_properties`
 
 ### `TOOL_LABELS` y `TOOLS_SIN_ETIQUETA`
 
-`toolName` son identificadores en inglés y la UI va en rioplatense, así que `lib/agents/running-tool.ts` traduce cada tool en `TOOL_LABELS` (por ejemplo `send_email` → "Mandando el mail"). Una tool sin entrada nunca muestra el id crudo: cae en "Trabajando". Toda tool nueva en `agents/outreach/tools/` lleva su etiqueta o entra en `TOOLS_SIN_ETIQUETA` si a propósito no se nombra en pantalla; hoy esa lista está vacía y las 13 tienen etiqueta. `tests/agents/running-tool.test.ts` compara ambas contra el disco y falla hasta que alguien decida. El comentario del archivo dice "doce tools": está desactualizado, son 13.
+`toolName` son identificadores en inglés y la UI va en rioplatense, así que `lib/agents/running-tool.ts` traduce cada tool en `TOOL_LABELS` (por ejemplo `send_email` → "Mandando el mail"). Una tool sin entrada nunca muestra el id crudo: cae en "Trabajando". Toda tool nueva en `agents/<agente>/tools/` lleva su etiqueta o entra en `TOOLS_SIN_ETIQUETA` si a propósito no se nombra en pantalla; hoy esa lista está vacía y las 13 tienen etiqueta. `tests/agents/running-tool.test.ts` compara ambas contra el disco y falla hasta que alguien decida. El comentario del archivo dice "doce tools": está desactualizado, son 13.
 
 Límite conocido: con tools en paralelo en un mismo mensaje, un hermano ya terminado tapa a uno que sigue corriendo; el indicador prefiere quedarse corto.
 
@@ -128,7 +174,7 @@ Límite conocido: con tools en paralelo en un mismo mensaje, un hermano ya termi
 - `hooks/bind-session.ts` (en `session.started`) llama `bindSessionToConversation`: escribe `conversations.eve_session_id`. Última escritura gana, a propósito. Sin try/catch: si falla, el turno tiene que fallar, porque sin esa fila nadie puede continuar la sesión. Las sesiones con `authenticator` `oauth` (canal MCP) no se atan: no crean conversación.
 - `hooks/runs.ts` abre una fila de `runs` en `turn.started` (`trigger` `chat` o `mcp`) y la cierra en `turn.completed`, `turn.failed` o `turn.cancelled`; al cerrar calcula el costo desde el libro de consumo (`set_run_cost`). Es observabilidad: todo va en try/catch, porque un hook que tira termina en `turn.failed`.
 - `lib/agents/channel-context.ts` es la puerta del canal del chat: eve no valida ownership de sesión, así que acá se resuelve el tenant. Al crear la sesión sale de la conversación (header `x-innovas-conversation`); al continuar, se busca por `eve_session_id` y se ignora lo que mande el browser. Exige que la conversación sea del usuario, que sea miembro del tenant, que el agente esté habilitado en `tenant_agents` y que el método de login esté permitido. Hay una escalera de reintentos (hasta ~3 s) por la carrera con `bind-session`, que se corta si la conversación ya no existe.
-- `agents/outreach/channels/eve.ts` usa `supabaseAuth()`; solo fuera de Vercel suma la auth de eval y `localDev()`. `localDev()` nunca puede quedar activo en un deploy.
+- `agents/outreach/channels/eve.ts` (y el del Asistente, que es el mismo `webChannel`) usa `supabaseAuth(agent)`; solo fuera de Vercel suma la auth de eval y `localDev()`. `localDev()` nunca puede quedar activo en un deploy.
 
 ### Canal MCP del agente
 
@@ -165,7 +211,9 @@ La spec 03 fijaba `followups` a `30 10 * * 1-5`; en disco es `0 11 * * 1-5`.
 
 ### Evals
 
-Nueve evals en `agents/outreach/evals/`, con `evals.config.ts` (concurrencia 1, porque comparten el tenant sembrado) y `support.ts`. Se corren contra la Supabase local; guía en [correr evals](../guias/correr-evals.md).
+Cinco evals del Asistente en `agents/asistente/evals/` (con su `evals.config.ts` y `support.ts`; comparten el tenant de eval con las de outreach, así que la concurrencia es 1): `smoke` (responde con la auth de eval), `brain-tools` (`brain_search` y `brain_read` corren en el agente compilado y un juez comprueba que la respuesta nombra la página), `sin-dato` (si el brain no tiene la respuesta, busca, lo dice y no inventa), `sin-otros-agentes` (con outreach apagado, ante un pedido de mail dice que no está disponible y no promete otro agente) y `deriva-a-outreach` (con outreach habilitado nombra a ese agente y no dice haber enviado nada). Se corren con `npm run evals -- --agent asistente [evalId...]`.
+
+Nueve evals de outreach en `agents/outreach/evals/`, con `evals.config.ts` (concurrencia 1, porque comparten el tenant sembrado) y `support.ts`. Se corren contra la Supabase local; guía en [correr evals](../guias/correr-evals.md).
 
 | Eval | Verifica |
 |---|---|
@@ -200,7 +248,8 @@ Nueve evals en `agents/outreach/evals/`, con `evals.config.ts` (concurrencia 1, 
 | Hooks | `tests/hooks/{bind-session,runs,executors}.test.ts` |
 | Tools | `tests/agents/outreach/tools/`, `tests/tools/send-email.test.ts`, `tests/tools/crm-setup-outreach-properties.test.ts` |
 | Acciones del chat (borrar hilo) | `tests/chat/actions.test.ts` |
-| Comportamiento del agente | las nueve evals: `npm run evals` (o `npm run evals -- <evalId>`), contra la Supabase local; se niega si `NEXT_PUBLIC_SUPABASE_URL` no es local |
+| Selector, hilos por agente y puerta del canal | `tests/agents/chat-agents.test.ts`, `tests/agents/channel-context.test.ts`, `tests/chat/actions.test.ts` |
+| Comportamiento del agente | las nueve evals de outreach: `npm run evals` (o `npm run evals -- <evalId>`) y las cinco del Asistente: `npm run evals -- --agent asistente`, contra la Supabase local; se niega si `NEXT_PUBLIC_SUPABASE_URL` no es local |
 
 ```bash
 npm test -- tests/agents tests/chat tests/hooks
@@ -209,6 +258,7 @@ npm run evals -- smoke
 
 ## 5. Decisiones
 
+- Spec [etapa 22.1, chat multiagente](../superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md): el código común de los agentes sale de `agents/outreach/` a `lib/agents/eve/`, el catálogo suma `canon` y `mcp`, el chat guarda un hilo por agente y aparece el Asistente, que solo conversa con el brain.
 - Spec [03-agente-outreach-v1](../superpowers/specs/03-agente-outreach-v1.md): tools granulares con guards en código, `approval: always()` en todo envío, research por tool común (sin subagente, porque `ctx.agent` no corre en agentes anidados).
 - Spec [etapa 6, canal MCP](../superpowers/specs/2026-09-27-etapa-6-canal-mcp-design.md): el tenant sale de `?tenant=`, una sesión MCP no crea conversación. La spec quedó atrás en tres cosas: la ruta (hoy `/eve/outreach/v1/mcp`), los scopes (`openid email`) y el chequeo de agente habilitado, que se sumó después.
 - Spec [etapa 14, subida de eve](../superpowers/specs/2026-09-28-etapa-14-subida-eve-design.md): eve de 0.54.2 a 0.67.2 (hoy 0.67.2), `ask_question` fuera, URL vieja del MCP cortada. Spike: `defineWorkflowTool` con `ctx.ask` no anda en `agents/outreach/`, por eso ninguna tool es una workflow tool.

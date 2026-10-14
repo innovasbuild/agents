@@ -85,8 +85,8 @@ La marca vive en `tenants.brand` (`primary`, `secondary`, `logoUrl`). `brandStyl
 |---|---|
 | Modelo default | Elegir entre los modelos que plataforma permitió (`allowed_models`); solo si la empresa tiene agentes |
 | Ingreso | Abrir o cerrar el ingreso por dominio; los dominios los carga plataforma (ver [invitaciones y usuarios](invitaciones-y-usuarios.md)) |
-| Ejecutores | Alta, edición (slug, firma, puesto, LinkedIn, cupo diario hasta 200) y baja de ejecutores en `executors`; no se quita a quien tiene historial |
-| Aprobaciones | Política de los pasos de nivel 2 por agente: siempre pedir, pedir la primera vez, sin pedir |
+| Ejecutores | Solo si la empresa tiene outreach habilitado. Alta, edición (slug, firma, puesto, LinkedIn, cupo diario hasta 200) y baja de ejecutores en `executors`; no se quita a quien tiene historial |
+| Aprobaciones | Solo con outreach o algún agente con pasos para aprobar. Política de los pasos de nivel 2 por agente: siempre pedir, pedir la primera vez, sin pedir |
 | Conectores | Encender y apagar los que plataforma asoció; sin ver `connector_uid` ni `config` |
 
 Ejecutores, aprobaciones y conectores usan las funciones `set_executor`, `remove_executor`, `set_approval` y `set_connection_enabled`, ejecutables por `authenticated` pero que verifican adentro `tenant_admin` de esa empresa o plataforma. Las server actions resuelven la empresa por `slug` con la sesión y nunca toman un `tenant_id` del navegador. Un `tenant_admin` solo puede escribir `default_model` y `self_signup_by_domain` en `tenants` (trigger `tenants_guard_columns`).

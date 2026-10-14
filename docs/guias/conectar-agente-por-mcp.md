@@ -31,7 +31,7 @@ Cada tenant usa la misma URL del agente, con el tenant como parámetro de conexi
 
 La metadata OAuth del canal se sirve en `/.well-known/oauth-protected-resource/eve/outreach/v1/mcp` y la aprobación en `/oauth/consent`. Entrás con tu cuenta de la plataforma — la misma que usás para el brain o el dashboard.
 
-El agente tiene que estar habilitado para tu empresa. Las instrucciones por cliente, con la URL de tu empresa ya puesta, están en la plataforma: menú **Conectar** (`/[tenant]/conectar`, o sea `/<cliente>/conectar`). Este archivo queda como referencia.
+El agente tiene que estar habilitado para tu empresa. El Asistente no tiene canal MCP (`mcp: false` en el catálogo): la página Conectar solo ofrece el de outreach. Las instrucciones por cliente, con la URL de tu empresa ya puesta, están en la plataforma: menú **Conectar** (`/[tenant]/conectar`, o sea `/<cliente>/conectar`). Este archivo queda como referencia.
 
 ## Claude Code
 

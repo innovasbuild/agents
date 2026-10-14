@@ -117,7 +117,7 @@ Una empresa sin `tenant_agents` es válida (PR [#91](https://github.com/innovasb
 
 - `/[tenant]` aterriza en `/brain` si hay brain, si no en `/conectar`.
 - Las pantallas de outreach dan 404 (`requireAgent` / `requireChatAgent` en `lib/tenants/enabled-agents.ts`; `AGENT_CATALOG` en `lib/agents/catalog.ts` dice qué agente es dueño de cada pantalla) y el menú las oculta.
-- Configuración oculta Modelo, Ejecutores, Aprobaciones y Conectores.
+- Configuración oculta Modelo, Ejecutores, Aprobaciones y Conectores. Con solo el Asistente (sin outreach) se ven Modelo y Conectores; Ejecutores y Aprobaciones son de outreach (`settingsSections` en `lib/tenants/settings-sections.ts`).
 - El brain nace sin canon de outreach: las páginas de canon se siembran al prender un agente que las usa, plantilla por plantilla y sin pisar nada.
 - Si no se pueden leer los agentes habilitados, no se oculta ni se bloquea nada. Una falla de lectura no degrada a una empresa que sí los tiene.
 

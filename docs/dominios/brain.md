@@ -139,7 +139,7 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 
 ### Agentes
 
-`tenant_agents.config.brain` declara el acceso de cada agente (`none`, `read`, `read_write`); sin declaración no hay tools `brain_*`. En eve el agente de outreach las recibe por la tool dinámica `brain` (`agents/outreach/tools/brain.ts`). `brain_upsert` siempre pide aprobación y solo la acepta un `tenant_admin` o `platform_admin` **del mismo tenant** (`core/approval.ts`). Un tenant sin binding `brain` no ve ninguna tool `brain_*`.
+`tenant_agents.config.brain` declara el acceso de cada agente (`none`, `read`, `read_write`); sin declaración no hay tools `brain_*`. En eve los agentes de chat (`outreach` y `asistente`) las reciben por la tool dinámica `brain` (`agents/<agente>/tools/brain.ts`, que monta `brainTools` de `lib/agents/eve/`). `brain_upsert` siempre pide aprobación y solo la acepta un `tenant_admin` o `platform_admin` **del mismo tenant** (`core/approval.ts`). Un tenant sin binding `brain` no ve ninguna tool `brain_*`.
 
 ### Import
 
