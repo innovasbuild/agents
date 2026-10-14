@@ -15,12 +15,14 @@ import {
 	type Principal,
 } from "../core/access/types";
 import { withAccess } from "../core/access/with-access";
+import type { BrainFolder } from "../core/folders";
 import { resolveBrainBinding } from "../core/resolve";
 import { SKILL_CATEGORY } from "../core/skills/package";
 import { skillState } from "../core/skills/state";
 import type { SkillOverviewRow } from "../core/skills/store";
 import { withSkillView } from "../core/skills/view";
 import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
+import { createSupabaseWikiStore } from "../core/wiki-store";
 import { accessRulesStore } from "./access-rules";
 import { getBrainProvider } from "./provider";
 import { skillStore } from "./skills";
@@ -34,6 +36,8 @@ export type EditorContext =
 			access: (path: string) => Level | null;
 			// Resumen de las skills del tenant; vacío si el brain no las habilita.
 			skills: () => Promise<SkillOverviewRow[]>;
+			// Carpetas guardadas del tenant (pueden estar vacías); visibleTree las filtra.
+			folders: () => Promise<BrainFolder[]>;
 	  }
 	| { kind: "no-brain"; tenant: TenantAccess }
 	| { kind: "external"; tenant: TenantAccess };
@@ -69,6 +73,14 @@ export const loadEditorContext = cache(
 				: Promise.resolve([]);
 			return overview;
 		};
+		// Las carpetas se leen sin envolver: visibleTree las filtra con ctx.access.
+		let folderList: Promise<BrainFolder[]> | null = null;
+		const folders = () => {
+			folderList ??= createSupabaseWikiStore(createAdminClient()).listFolders(
+				tenant.id,
+			);
+			return folderList;
+		};
 		const guarded = withAccess(getBrainProvider(binding), principal, rules);
 
 		return {
@@ -81,6 +93,7 @@ export const loadEditorContext = cache(
 				: guarded,
 			access,
 			skills,
+			folders,
 		};
 	},
 );
@@ -128,6 +141,7 @@ export const loadBrainTree = cache(
 					: {}),
 			})),
 			ctx.access,
+			await ctx.folders(),
 		);
 	},
 );

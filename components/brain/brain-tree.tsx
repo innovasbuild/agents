@@ -5,9 +5,15 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { DeletePageDialog } from "@/components/brain/delete-page-dialog";
+import { FolderDeleteDialog } from "@/components/brain/folder-delete-dialog";
+import { FolderDialog } from "@/components/brain/folder-dialog";
 import { ShareDialog } from "@/components/brain/share-dialog";
 import { TreeRowMenu } from "@/components/brain/tree-row-menu";
-import { type TreeNode, withoutArchived } from "@/lib/brain/core/access/tree";
+import {
+	isFolderNode,
+	type TreeNode,
+	withoutArchived,
+} from "@/lib/brain/core/access/tree";
 import { pageHref } from "@/lib/brain/core/editor/slug";
 
 // El plegado vive en localStorage por tenant (§7.1). Puede fallar (ventana
@@ -54,6 +60,12 @@ export function BrainTree({
 		slug: string;
 		title: string;
 	} | null>(null);
+	const [folderDialog, setFolderDialog] = useState<
+		| null
+		| { kind: "create"; parent: string }
+		| { kind: "describe"; path: string; description: string }
+	>(null);
+	const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
 	useEffect(() => {
 		const saved = readOpen(storageKey);
 		if (saved) setOpen(saved);
@@ -81,7 +93,7 @@ export function BrainTree({
 	};
 
 	const renderNode = (node: TreeNode, depth: number) => {
-		const hasChildren = node.children.length > 0;
+		const hasChildren = isFolderNode(node) && node.path !== "";
 		// La carpeta de la página actual se muestra abierta aunque no se haya plegado a mano.
 		const isOpen = isFolderOpen(node.path);
 		const label = node.page?.title ?? node.name;
@@ -111,7 +123,7 @@ export function BrainTree({
 					{node.page ? (
 						<Link
 							href={pageHref(tenantSlug, node.page.slug)}
-							title={node.page.slug}
+							title={node.folder?.description || node.page.slug}
 							className="min-w-0 flex-1 truncate text-sm"
 						>
 							{label}
@@ -128,6 +140,7 @@ export function BrainTree({
 						<button
 							type="button"
 							onClick={() => toggle(node.path)}
+							title={node.folder?.description || undefined}
 							className="min-w-0 flex-1 truncate text-left text-sm"
 						>
 							{label}
@@ -141,10 +154,24 @@ export function BrainTree({
 							node.page &&
 							setDeleting({ slug: node.page.slug, title: node.page.title })
 						}
+						onNewFolder={() =>
+							setFolderDialog({ kind: "create", parent: node.path })
+						}
+						onDescribe={() =>
+							setFolderDialog({
+								kind: "describe",
+								path: node.path,
+								description: node.folder?.description ?? "",
+							})
+						}
+						onDeleteFolder={() => setDeletingFolder(node.path)}
 					/>
 				</div>
-				{hasChildren && isOpen && (
+				{hasChildren && isOpen && node.children.length > 0 && (
 					<ul>{node.children.map((child) => renderNode(child, depth + 1))}</ul>
+				)}
+				{hasChildren && isOpen && node.children.length === 0 && (
+					<p className="pl-11 text-muted-foreground text-xs lg:pl-7">Vacía</p>
 				)}
 			</li>
 		);
@@ -165,6 +192,9 @@ export function BrainTree({
 					label="Brain"
 					onShare={() => setSharing({ path: "", name: "Brain" })}
 					onDelete={() => {}}
+					onNewFolder={() => setFolderDialog({ kind: "create", parent: "" })}
+					onDescribe={() => {}}
+					onDeleteFolder={() => {}}
 				/>
 			</div>
 			{canCreate && (
@@ -176,7 +206,7 @@ export function BrainTree({
 				</Link>
 			)}
 			{tree.children.length === 0 ? (
-				<p className="text-muted-foreground">No hay páginas para mostrar.</p>
+				<p className="text-muted-foreground">Todavía no hay carpetas.</p>
 			) : (
 				<ul>{tree.children.map((node) => renderNode(node, 0))}</ul>
 			)}
@@ -194,6 +224,20 @@ export function BrainTree({
 					path={sharing.path}
 					name={sharing.name}
 					onClose={() => setSharing(null)}
+				/>
+			)}
+			{folderDialog && (
+				<FolderDialog
+					tenantSlug={tenantSlug}
+					mode={folderDialog}
+					onClose={() => setFolderDialog(null)}
+				/>
+			)}
+			{deletingFolder !== null && (
+				<FolderDeleteDialog
+					tenantSlug={tenantSlug}
+					path={deletingFolder}
+					onClose={() => setDeletingFolder(null)}
 				/>
 			)}
 			{deleting && (

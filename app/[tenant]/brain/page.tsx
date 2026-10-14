@@ -11,6 +11,7 @@ import {
 } from "@/lib/brain/adapters/editor";
 import {
 	editableFolders,
+	isFolderNode,
 	type TreeNode,
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
@@ -77,11 +78,23 @@ export default async function BrainIndexPage({
 	// Sin consulta, carpeta ni etiqueta: las carpetas de primer nivel y las páginas
 	// sueltas. Con alguna, la lista plana de resultados.
 	const browsing = !q.trim() && !tag && !folder;
+	const shownTree = status === "archivado" ? tree : withoutArchived(tree);
+	const findNode = (node: TreeNode, path: string): TreeNode | null => {
+		if (node.path === path) return node;
+		for (const child of node.children) {
+			if (path === child.path || path.startsWith(`${child.path}/`)) {
+				return findNode(child, path);
+			}
+		}
+		return null;
+	};
+	// Navegando: las de primer nivel. Con ?carpeta=X sin consulta ni etiqueta:
+	// las subcarpetas directas de X, arriba de la lista de resultados.
 	const folders = browsing
-		? (status === "archivado" ? tree : withoutArchived(tree)).children.filter(
-				(n) => n.children.length > 0,
-			)
-		: [];
+		? shownTree.children.filter(isFolderNode)
+		: folder && !q.trim() && !tag
+			? (findNode(shownTree, folder)?.children.filter(isFolderNode) ?? [])
+			: [];
 	const countPages = (node: TreeNode): number =>
 		(node.page ? 1 : 0) +
 		node.children.reduce((sum, c) => sum + countPages(c), 0);
@@ -187,12 +200,20 @@ export default async function BrainIndexPage({
 								href={href({ carpeta: node.path })}
 								className="flex min-h-11 items-center gap-3 px-4 py-2 hover:bg-muted/50"
 							>
-								<span className="min-w-0 flex-1 truncate font-medium">
-									{node.name}
+								<span className="min-w-0 flex-1">
+									<span className="block truncate font-medium">
+										{node.name}
+									</span>
+									{node.folder?.description && (
+										<span className="block truncate text-muted-foreground text-xs">
+											{node.folder.description}
+										</span>
+									)}
 								</span>
 								<span className="text-muted-foreground text-xs">
-									{countPages(node)}{" "}
-									{countPages(node) === 1 ? "página" : "páginas"}
+									{countPages(node) === 0
+										? "Vacía"
+										: `${countPages(node)} ${countPages(node) === 1 ? "página" : "páginas"}`}
 								</span>
 							</Link>
 						</li>

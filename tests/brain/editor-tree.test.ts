@@ -32,6 +32,7 @@ describe("loadBrainTree", () => {
 			categories: ["comercial"],
 			tenant: {},
 			skills: async () => [],
+			folders: async () => [],
 			access: (path: string) => (path.startsWith("legal") ? null : "lector"),
 			provider: {
 				list: async () => [page("comercial/icp"), page("legal/contrato")],
@@ -48,6 +49,7 @@ describe("loadBrainTree", () => {
 			kind: "ok",
 			categories: ["comercial"],
 			tenant: { slug: "acme" },
+			folders: async () => [],
 			skills: async () => {
 				throw new Error("rpc caído");
 			},
@@ -61,5 +63,20 @@ describe("loadBrainTree", () => {
 			expect.any(Error),
 		);
 		logged.mockRestore();
+	});
+
+	it("una carpeta guardada sin páginas aparece con su descripción", async () => {
+		const ctx = {
+			kind: "ok",
+			categories: ["marketing"],
+			tenant: {},
+			skills: async () => [],
+			folders: async () => [{ path: "marketing", description: "Marca" }],
+			access: () => "administrador",
+			provider: { list: async () => [] },
+		} as never;
+		const tree = await loadBrainTree(ctx);
+		const node = tree.children.find((n) => n.path === "marketing");
+		expect(node?.folder).toEqual({ description: "Marca" });
 	});
 });
