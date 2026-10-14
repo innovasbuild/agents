@@ -55,7 +55,8 @@ export async function reconcileSpend(
 				display_name: string;
 			}[]
 		).map((row) => ({ id: row.id, slug: row.slug, name: row.display_name }));
-		// Postgres devuelve numeric como string: toPlatformRows lo pasa a número.
+		// Una fila por empresa. Postgres devuelve numeric como string:
+		// toPlatformRows lo pasa a número.
 		ledger = toPlatformRows((ledgerResult.data as unknown[] | null) ?? []);
 	} catch (error) {
 		console.error("conciliación: libro:", error);

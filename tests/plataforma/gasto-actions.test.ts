@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = {
 	admin: true,
 	tenants: [{ id: "id-a", slug: "acme", display_name: "Acme" }] as unknown[],
-	ledger: [
-		{ tenant_id: "id-a", day: "2026-10-05", amount: "10.000000" },
-	] as unknown[],
+	ledger: [{ tenant_id: "id-a", amount: "10.000000" }] as unknown[],
 	dbError: null as { message: string } | null,
 	gatewayError: null as Error | null,
 	reports: [] as unknown[],

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import {
+	capitalizeFirst,
 	dayLabel,
 	monthRange,
 	type Period,
@@ -93,7 +94,7 @@ export default async function GastoPage({
 			) : (
 				<>
 					<section>
-						<h2 className="mb-1 text-lg capitalize">{range.label}</h2>
+						<h2 className="mb-1 text-lg">{capitalizeFirst(range.label)}</h2>
 						<p className="text-3xl">{usd(summary.total)}</p>
 					</section>
 
@@ -103,8 +104,15 @@ export default async function GastoPage({
 							<table className="w-full text-sm">
 								<thead className="text-left text-muted-foreground">
 									<tr>
-										<th className="px-4 py-2 font-normal">Origen</th>
-										<th className="px-4 py-2 text-right font-normal">Gasto</th>
+										<th className="px-4 py-2 font-normal" scope="col">
+											Origen
+										</th>
+										<th
+											className="px-4 py-2 text-right font-normal"
+											scope="col"
+										>
+											Gasto
+										</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y">
@@ -127,8 +135,15 @@ export default async function GastoPage({
 							<table className="w-full text-sm">
 								<thead className="text-left text-muted-foreground">
 									<tr>
-										<th className="px-4 py-2 font-normal">Día</th>
-										<th className="px-4 py-2 text-right font-normal">Gasto</th>
+										<th className="px-4 py-2 font-normal" scope="col">
+											Día
+										</th>
+										<th
+											className="px-4 py-2 text-right font-normal"
+											scope="col"
+										>
+											Gasto
+										</th>
 									</tr>
 								</thead>
 								<tbody className="divide-y">

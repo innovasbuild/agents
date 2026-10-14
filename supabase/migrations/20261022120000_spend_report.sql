@@ -11,8 +11,9 @@
 -- corrida sigue sin exponerse (spec G9).
 --
 -- Origen: el workflow si el asiento lo trae; si no, 'chat' cuando tiene
--- corrida y 'sin_corrida' cuando no (el schedule de follow-ups asienta sin
--- workflow y sin corrida, y no es chat).
+-- corrida o es un paso del agente (agent/step: un turno sin corrida sigue
+-- siendo chat) y 'sin_corrida' cuando no (el schedule de follow-ups asienta
+-- sin workflow y sin corrida, y no es chat).
 create or replace function public.tenant_spend_report(
   p_tenant uuid, p_from timestamptz, p_to timestamptz
 ) returns table (day date, origin text, amount numeric)
@@ -25,7 +26,7 @@ begin
   end if;
   return query
     select (u.created_at at time zone 'UTC')::date,
-           coalesce(u.workflow, case when u.run_id is null then 'sin_corrida' else 'chat' end),
+           coalesce(u.workflow, case when u.run_id is not null or u.node = 'agent/step' then 'chat' else 'sin_corrida' end),
            sum(u.amount)
       from public.usage_entries u
      where u.tenant_id = p_tenant
@@ -39,20 +40,29 @@ $$;
 revoke execute on function public.tenant_spend_report(uuid, timestamptz, timestamptz) from public, anon;
 grant execute on function public.tenant_spend_report(uuid, timestamptz, timestamptz) to authenticated;
 
--- El gasto de todas las empresas por día. Solo service_role: la pantalla de
--- plataforma la llama después de comprobar que quien entra es platform_admin.
+-- El gasto de todas las empresas en el rango, una fila por empresa. Solo
+-- service_role: la pantalla de plataforma la llama después de comprobar que
+-- quien entra es platform_admin. Devuelve un agregado y no empresa x día
+-- porque PostgREST corta las respuestas en max_rows (1000) sin avisar: con
+-- una fila por empresa el tope no se alcanza, y el order by deja la salida
+-- determinista.
 create or replace function public.platform_spend_report(
   p_from timestamptz, p_to timestamptz
-) returns table (tenant_id uuid, day date, amount numeric)
-language sql stable set search_path = '' as $$
-  select u.tenant_id,
-         (u.created_at at time zone 'UTC')::date,
-         sum(u.amount)
-    from public.usage_entries u
-   where u.resource = 'model_usd'
-     and u.created_at >= p_from
-     and u.created_at < p_to
-   group by 1, 2;
+) returns table (tenant_id uuid, amount numeric)
+language plpgsql stable set search_path = '' as $$
+begin
+  if p_from is null or p_to is null or p_to <= p_from then
+    raise exception 'período inválido' using errcode = '23514';
+  end if;
+  return query
+    select u.tenant_id, sum(u.amount)
+      from public.usage_entries u
+     where u.resource = 'model_usd'
+       and u.created_at >= p_from
+       and u.created_at < p_to
+     group by u.tenant_id
+     order by u.tenant_id;
+end;
 $$;
 
 revoke execute on function public.platform_spend_report(timestamptz, timestamptz) from public, anon, authenticated;

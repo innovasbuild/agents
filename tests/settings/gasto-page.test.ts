@@ -76,7 +76,7 @@ describe("pantalla de gasto del cliente", () => {
 				},
 			],
 		]);
-		expect(html).toContain("octubre de 2026");
+		expect(html).toContain("Octubre de 2026");
 		expect(html).toContain("US$ 1,50");
 		expect(html).toContain("05/10/2026");
 		expect(html).toContain("Chat");
@@ -90,7 +90,7 @@ describe("pantalla de gasto del cliente", () => {
 			"tenant_spend_report",
 			expect.objectContaining({ p_from: "2026-09-01T00:00:00.000Z" }),
 		]);
-		expect(html).toContain("septiembre de 2026");
+		expect(html).toContain("Septiembre de 2026");
 	});
 
 	it("sin gasto, estado vacío y no una tabla en cero", async () => {

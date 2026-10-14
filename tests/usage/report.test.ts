@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	capitalizeFirst,
 	dayLabel,
 	monthRange,
 	originLabel,
 	parsePeriod,
-	platformTotals,
 	summarize,
 	toPlatformRows,
 	toSpendRows,
@@ -104,18 +104,20 @@ describe("originLabel", () => {
 	});
 });
 
-describe("platformTotals", () => {
-	it("separa hoy, mes en curso y mes anterior por empresa, en UTC", () => {
+describe("toPlatformRows", () => {
+	it("una fila por empresa; el monto que llega como texto pasa a número", () => {
 		const rows = toPlatformRows([
-			{ tenant_id: "a", day: "2026-10-13", amount: "1.5" },
-			{ tenant_id: "a", day: "2026-10-02", amount: 2 },
-			{ tenant_id: "a", day: "2026-09-30", amount: 4 },
-			{ tenant_id: "b", day: "2026-09-10", amount: "0.25" },
-			{ tenant_id: "b", day: "2026-08-31", amount: 100 },
+			{ tenant_id: "a", amount: "1.500000" },
+			{ tenant_id: "b", amount: 2 },
+			{ tenant_id: "c", amount: "no es un número" },
+			{ tenant_id: 7, amount: 1 },
+			null,
 		]);
-		const totals = platformTotals(rows, new Date("2026-10-13T23:00:00Z"));
-		expect(totals.get("a")).toEqual({ today: 1.5, month: 3.5, previous: 4 });
-		expect(totals.get("b")).toEqual({ today: 0, month: 0, previous: 0.25 });
+		expect(rows).toEqual([
+			{ tenantId: "a", amount: 1.5 },
+			{ tenantId: "b", amount: 2 },
+			{ tenantId: "c", amount: 0 },
+		]);
 	});
 });
 
@@ -123,6 +125,11 @@ describe("formato", () => {
 	it("usd con dos decimales en es-AR", () => {
 		expect(usd(1234.5)).toBe("US$ 1.234,50");
 		expect(usd(0)).toBe("US$ 0,00");
+	});
+
+	it("capitalizeFirst sube solo la primera letra del mes", () => {
+		expect(capitalizeFirst("octubre de 2026")).toBe("Octubre de 2026");
+		expect(capitalizeFirst("")).toBe("");
 	});
 
 	it("dayLabel no corre el día por la zona horaria", () => {

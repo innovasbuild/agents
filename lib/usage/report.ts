@@ -104,45 +104,23 @@ export function summarize(rows: readonly SpendRow[]): {
 
 export interface PlatformRow {
 	tenantId: string;
-	day: string;
 	amount: number;
 }
 
+/** Una fila por empresa, como la devuelve platform_spend_report. */
 export function toPlatformRows(raw: readonly unknown[]): PlatformRow[] {
 	return raw.flatMap((entry) => {
 		if (typeof entry !== "object" || entry === null) return [];
 		const row = entry as Record<string, unknown>;
-		return typeof row.tenant_id === "string" &&
-			typeof row.day === "string" &&
-			DAY.test(row.day)
-			? [{ tenantId: row.tenant_id, day: row.day, amount: num(row.amount) }]
+		return typeof row.tenant_id === "string"
+			? [{ tenantId: row.tenant_id, amount: num(row.amount) }]
 			: [];
 	});
 }
 
-export function platformTotals(
-	rows: readonly PlatformRow[],
-	now: Date,
-): Map<string, { today: number; month: number; previous: number }> {
-	const today = now.toISOString().slice(0, 10);
-	const month = today.slice(0, 7);
-	const previous = monthRange("anterior", now).from.toISOString().slice(0, 7);
-	const totals = new Map<
-		string,
-		{ today: number; month: number; previous: number }
-	>();
-	for (const row of rows) {
-		const entry = totals.get(row.tenantId) ?? {
-			today: 0,
-			month: 0,
-			previous: 0,
-		};
-		if (row.day === today) entry.today += row.amount;
-		if (row.day.startsWith(month)) entry.month += row.amount;
-		if (row.day.startsWith(previous)) entry.previous += row.amount;
-		totals.set(row.tenantId, entry);
-	}
-	return totals;
+/** `octubre de 2026` → `Octubre de 2026`: solo la primera letra, no cada palabra. */
+export function capitalizeFirst(text: string): string {
+	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function usd(amount: number): string {

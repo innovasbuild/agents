@@ -1807,7 +1807,6 @@ export type Database = {
 				Args: { p_from: string; p_to: string };
 				Returns: {
 					amount: number;
-					day: string;
 					tenant_id: string;
 				}[];
 			};

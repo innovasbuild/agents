@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const state = {
 	admin: true,
 	tenants: [] as unknown[],
-	ledger: [] as unknown[],
+	ledgers: {} as Record<string, unknown[]>,
 	error: null as { message: string } | null,
 	rpc: [] as unknown[],
 };
@@ -22,7 +22,11 @@ vi.mock("@/lib/supabase/admin", () => ({
 		}),
 		rpc: async (name: string, args: unknown) => {
 			state.rpc.push([name, args]);
-			return { data: state.error ? null : state.ledger, error: state.error };
+			const from = (args as { p_from: string }).p_from;
+			return {
+				data: state.error ? null : (state.ledgers[from] ?? []),
+				error: state.error,
+			};
 		},
 	}),
 }));
@@ -50,11 +54,15 @@ beforeEach(() => {
 		{ id: "id-a", slug: "acme", display_name: "Acme" },
 		{ id: "id-b", slug: "beta", display_name: "Beta" },
 	];
-	state.ledger = [
-		{ tenant_id: "id-a", day: "2026-10-13", amount: "1.500000" },
-		{ tenant_id: "id-a", day: "2026-10-02", amount: "2.000000" },
-		{ tenant_id: "id-a", day: "2026-09-30", amount: "4.000000" },
-	];
+	// Cada rango trae una fila por empresa; el monto llega como texto.
+	state.ledgers = {
+		"2026-10-13T00:00:00.000Z": [{ tenant_id: "id-a", amount: "1.500000" }],
+		"2026-10-01T00:00:00.000Z": [{ tenant_id: "id-a", amount: "3.500000" }],
+		"2026-09-01T00:00:00.000Z": [
+			{ tenant_id: "id-a", amount: "4.000000" },
+			{ tenant_id: "id-b", amount: "0.250000" },
+		],
+	};
 });
 
 describe("gasto por empresa en plataforma", () => {
@@ -64,14 +72,30 @@ describe("gasto por empresa en plataforma", () => {
 		expect(state.rpc).toEqual([]);
 	});
 
-	it("pide desde el 1 del mes anterior y muestra hoy, mes y mes anterior", async () => {
+	it("pide hoy, el mes en curso y el mes anterior, un rango cada uno", async () => {
 		const html = await render();
-		expect(state.rpc[0]).toEqual([
-			"platform_spend_report",
-			{
-				p_from: "2026-09-01T00:00:00.000Z",
-				p_to: "2026-11-01T00:00:00.000Z",
-			},
+		expect(state.rpc).toEqual([
+			[
+				"platform_spend_report",
+				{
+					p_from: "2026-10-13T00:00:00.000Z",
+					p_to: "2026-10-14T00:00:00.000Z",
+				},
+			],
+			[
+				"platform_spend_report",
+				{
+					p_from: "2026-10-01T00:00:00.000Z",
+					p_to: "2026-11-01T00:00:00.000Z",
+				},
+			],
+			[
+				"platform_spend_report",
+				{
+					p_from: "2026-09-01T00:00:00.000Z",
+					p_to: "2026-10-01T00:00:00.000Z",
+				},
+			],
 		]);
 		expect(html).toContain("Acme");
 		expect(html).toContain("US$ 1,50");
@@ -80,14 +104,30 @@ describe("gasto por empresa en plataforma", () => {
 		expect(html).toContain('href="/plataforma/acme"');
 	});
 
+	it("los meses se rotulan con mayúscula solo en la primera letra", async () => {
+		const html = await render();
+		expect(html).toContain("Octubre de 2026");
+		expect(html).toContain("Septiembre de 2026");
+		expect(html).not.toContain("capitalize");
+	});
+
 	it("una empresa sin gasto aparece en cero", async () => {
 		const html = await render();
 		expect(html).toContain("Beta");
 		expect(html).toContain("US$ 0,00");
 	});
 
-	it("muestra la fila de total", async () => {
-		expect(await render()).toContain("Total");
+	it("la fila de total suma las empresas", async () => {
+		const html = await render();
+		const footer = html.match(/<tfoot.*<\/tfoot>/)?.[0] ?? "";
+		expect(footer).toContain(
+			'<th class="px-4 py-2 text-left font-medium" scope="row">',
+		);
+		const text = footer
+			.replace(/<[^>]+>/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+		expect(text).toBe("Total US$ 1,50 US$ 3,50 US$ 4,25");
 	});
 
 	it("si la lectura falla, lo dice y no muestra ceros", async () => {

@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(13);
+select plan(17);
 
 -- Personas: 1 admin de sr-a, 2 miembro de sr-a, 3 admin de sr-b, 4 platform_admin (en sr-p).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -37,6 +37,7 @@ values
   ('d5d5d5d5-0000-0000-0000-00000000000a', 'e5e5e5e5-0000-0000-0000-000000000001', null, 'agent/step', 'model_usd', 0.20, 'usd', '2026-10-05 22:30:00-03'),
   ('d5d5d5d5-0000-0000-0000-00000000000a', null, 'draft-queue', 'outreach/draft', 'model_usd', 0.40, 'usd', '2026-10-06 10:00:00+00'),
   ('d5d5d5d5-0000-0000-0000-00000000000a', null, null, 'outreach/draft', 'model_usd', 0.05, 'usd', '2026-10-06 11:00:00+00'),
+  ('d5d5d5d5-0000-0000-0000-00000000000a', null, null, 'agent/step', 'model_usd', 0.30, 'usd', '2026-10-07 11:00:00+00'),
   ('d5d5d5d5-0000-0000-0000-00000000000a', null, 'target-search', 'outreach/target-search', 'apollo_credits', 7, 'credits', '2026-10-06 11:00:00+00'),
   ('d5d5d5d5-0000-0000-0000-00000000000a', null, null, 'agent/step', 'model_usd', 9.00, 'usd', '2026-09-30 23:59:59+00'),
   ('d5d5d5d5-0000-0000-0000-00000000000b', null, null, 'agent/step', 'model_usd', 3.00, 'usd', '2026-10-05 12:00:00+00');
@@ -92,8 +93,9 @@ select results_eq(
       ('2026-10-05', 'chat', '0.10'),
       ('2026-10-06', 'chat', '0.20'),
       ('2026-10-06', 'draft-queue', '0.40'),
-      ('2026-10-06', 'sin_corrida', '0.05')$$,
-  'gasto del mes por día en UTC y por origen');
+      ('2026-10-06', 'sin_corrida', '0.05'),
+      ('2026-10-07', 'chat', '0.30')$$,
+  'gasto del mes por día en UTC y por origen; un agent/step sin corrida es chat y un asiento sin workflow ni corrida es sin_corrida');
 
 -- 11: sin gasto en el rango, cero filas.
 select is_empty(
@@ -106,18 +108,33 @@ select is(
   (select round(sum(amount), 2)::text from public.tenant_spend_report('d5d5d5d5-0000-0000-0000-00000000000b', '2026-10-01+00', '2026-11-01+00')),
   '3.00', 'el platform_admin ve el gasto de otra empresa');
 
--- 13: la de plataforma agrupa por empresa y día.
+-- 13: la de plataforma agrupa por empresa, ordenada, y solo cuenta model_usd.
 select pg_temp.logout();
 select results_eq(
-  $$select tenant_id::text, day::text, round(amount, 2)::text
+  $$select tenant_id::text, round(amount, 2)::text
       from public.platform_spend_report('2026-10-01+00', '2026-11-01+00')
-     where tenant_id in ('d5d5d5d5-0000-0000-0000-00000000000a', 'd5d5d5d5-0000-0000-0000-00000000000b')
-     order by tenant_id, day$$,
+     where tenant_id in ('d5d5d5d5-0000-0000-0000-00000000000a', 'd5d5d5d5-0000-0000-0000-00000000000b')$$,
   $$values
-      ('d5d5d5d5-0000-0000-0000-00000000000a', '2026-10-05', '0.10'),
-      ('d5d5d5d5-0000-0000-0000-00000000000a', '2026-10-06', '0.65'),
-      ('d5d5d5d5-0000-0000-0000-00000000000b', '2026-10-05', '3.00')$$,
-  'gasto por empresa y día en UTC');
+      ('d5d5d5d5-0000-0000-0000-00000000000a', '1.05'),
+      ('d5d5d5d5-0000-0000-0000-00000000000b', '3.00')$$,
+  'gasto por empresa en el rango, ordenado por empresa');
+
+-- 14: el rango es [desde, hasta): el asiento de las 23:59:59 del 30/9 queda afuera.
+select is(
+  (select round(amount, 2)::text from public.platform_spend_report('2026-09-30+00', '2026-10-01+00')
+    where tenant_id = 'd5d5d5d5-0000-0000-0000-00000000000a'),
+  '9.00', 'el rango de plataforma corta en UTC y es semiabierto');
+
+-- 15-17: límites inválidos.
+select throws_ok(
+  $$select * from public.platform_spend_report(null, '2026-11-01+00')$$,
+  '23514', null, 'plataforma: un rango sin inicio se rechaza');
+select throws_ok(
+  $$select * from public.platform_spend_report('2026-10-01+00', null)$$,
+  '23514', null, 'plataforma: un rango sin fin se rechaza');
+select throws_ok(
+  $$select * from public.platform_spend_report('2026-11-01+00', '2026-10-01+00')$$,
+  '23514', null, 'plataforma: un rango invertido se rechaza');
 
 select * from finish();
 rollback;

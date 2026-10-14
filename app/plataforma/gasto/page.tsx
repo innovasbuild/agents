@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 import {
+	capitalizeFirst,
 	monthRange,
-	platformTotals,
 	toPlatformRows,
 	usd,
 } from "@/lib/usage/report";
@@ -16,7 +16,13 @@ interface TenantRow {
 	display_name: string;
 }
 
-const ZERO = { today: 0, month: 0, previous: 0 };
+const DAY_MS = 86_400_000;
+
+interface Totals {
+	today: Map<string, number>;
+	month: Map<string, number>;
+	previous: Map<string, number>;
+}
 
 export default async function GastoPlataformaPage() {
 	// 404 y no 403: un 403 confirma que la consola existe.
@@ -26,32 +32,55 @@ export default async function GastoPlataformaPage() {
 	const now = new Date();
 	const current = monthRange("actual", now);
 	const previous = monthRange("anterior", now);
+	const todayStart = new Date(
+		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+	);
+	const todayEnd = new Date(todayStart.getTime() + DAY_MS);
 
 	let tenants: TenantRow[] = [];
-	let loaded: ReturnType<typeof platformTotals> | null = null;
+	let loaded: Totals | null = null;
 	try {
 		// platform_spend_report es de service_role: se llama recién después de
-		// comprobar que quien entra es platform_admin.
+		// comprobar que quien entra es platform_admin. Devuelve una fila por
+		// empresa y por rango (no por día): PostgREST corta en 1000 filas sin
+		// avisar.
 		const admin = createAdminClient();
-		const [tenantsResult, ledgerResult] = await Promise.all([
-			admin
-				.from("tenants")
-				.select("id, slug, display_name")
-				.order("display_name"),
+		const report = (from: Date, to: Date) =>
 			admin.rpc("platform_spend_report", {
-				p_from: previous.from.toISOString(),
-				p_to: current.to.toISOString(),
-			} as never),
-		]);
-		const error = tenantsResult.error ?? ledgerResult.error;
+				p_from: from.toISOString(),
+				p_to: to.toISOString(),
+			} as never);
+		const [tenantsResult, todayResult, monthResult, previousResult] =
+			await Promise.all([
+				admin
+					.from("tenants")
+					.select("id, slug, display_name")
+					.order("display_name"),
+				report(todayStart, todayEnd),
+				report(current.from, current.to),
+				report(previous.from, previous.to),
+			]);
+		const error =
+			tenantsResult.error ??
+			todayResult.error ??
+			monthResult.error ??
+			previousResult.error;
 		if (error) {
 			console.error("gasto de plataforma:", error);
 		} else {
+			const byTenant = (data: unknown) =>
+				new Map(
+					toPlatformRows((data as unknown[] | null) ?? []).map((row) => [
+						row.tenantId,
+						row.amount,
+					]),
+				);
 			tenants = (tenantsResult.data ?? []) as TenantRow[];
-			loaded = platformTotals(
-				toPlatformRows((ledgerResult.data as unknown[] | null) ?? []),
-				now,
-			);
+			loaded = {
+				today: byTenant(todayResult.data),
+				month: byTenant(monthResult.data),
+				previous: byTenant(previousResult.data),
+			};
 		}
 	} catch (error) {
 		console.error("gasto de plataforma:", error);
@@ -59,13 +88,12 @@ export default async function GastoPlataformaPage() {
 	// const: el narrowing de un `let` no llega a los callbacks del JSX.
 	const totals = loaded;
 
-	const sum = { ...ZERO };
+	const sum = { today: 0, month: 0, previous: 0 };
 	if (totals) {
 		for (const tenant of tenants) {
-			const row = totals.get(tenant.id) ?? ZERO;
-			sum.today += row.today;
-			sum.month += row.month;
-			sum.previous += row.previous;
+			sum.today += totals.today.get(tenant.id) ?? 0;
+			sum.month += totals.month.get(tenant.id) ?? 0;
+			sum.previous += totals.previous.get(tenant.id) ?? 0;
 		}
 	}
 
@@ -99,23 +127,16 @@ export default async function GastoPlataformaPage() {
 								<th className="px-4 py-2 text-right font-normal" scope="col">
 									Hoy
 								</th>
-								<th
-									className="px-4 py-2 text-right font-normal capitalize"
-									scope="col"
-								>
-									{current.label}
+								<th className="px-4 py-2 text-right font-normal " scope="col">
+									{capitalizeFirst(current.label)}
 								</th>
-								<th
-									className="px-4 py-2 text-right font-normal capitalize"
-									scope="col"
-								>
-									{previous.label}
+								<th className="px-4 py-2 text-right font-normal " scope="col">
+									{capitalizeFirst(previous.label)}
 								</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y">
 							{tenants.map((tenant) => {
-								const row = totals.get(tenant.id) ?? ZERO;
 								return (
 									<tr key={tenant.id}>
 										<td className="px-4 py-2">
@@ -127,13 +148,13 @@ export default async function GastoPlataformaPage() {
 											</Link>
 										</td>
 										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(row.today)}
+											{usd(totals.today.get(tenant.id) ?? 0)}
 										</td>
 										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(row.month)}
+											{usd(totals.month.get(tenant.id) ?? 0)}
 										</td>
 										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(row.previous)}
+											{usd(totals.previous.get(tenant.id) ?? 0)}
 										</td>
 									</tr>
 								);
@@ -141,7 +162,9 @@ export default async function GastoPlataformaPage() {
 						</tbody>
 						<tfoot className="border-t font-medium">
 							<tr>
-								<td className="px-4 py-2">Total</td>
+								<th className="px-4 py-2 text-left font-medium" scope="row">
+									Total
+								</th>
 								<td className="px-4 py-2 text-right tabular-nums">
 									{usd(sum.today)}
 								</td>
