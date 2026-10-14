@@ -2,6 +2,7 @@
 // importaba también el schedule de follow-ups: un nodo escondido en una puerta
 // (spec orquestación §9.4). Imports relativos: lo usan módulos de eve.
 import { type generateText, NoObjectGeneratedError, Output } from "ai";
+import type { GatewayOptions } from "../../workflows/gateway-options";
 import { attachSpend, createStepSpend } from "../../workflows/usage";
 import { draftOutputSchema } from "../prompt";
 
@@ -27,7 +28,11 @@ export async function generateDraft(
 	model: string,
 	system: string,
 	prompt: string,
-	deps: { generateText: typeof generateText; abortSignal?: AbortSignal },
+	deps: {
+		generateText: typeof generateText;
+		abortSignal?: AbortSignal;
+		providerOptions?: GatewayOptions;
+	},
 ): Promise<{ output: unknown; usage: unknown; providerMetadata: unknown }> {
 	const steps = createStepSpend();
 	try {
@@ -38,6 +43,7 @@ export async function generateDraft(
 			maxOutputTokens: 1_200,
 			maxRetries: 1,
 			abortSignal: deps.abortSignal,
+			providerOptions: deps.providerOptions,
 			output: Output.object({ schema: draftOutputSchema }),
 			onStepEnd: steps.onStepEnd,
 		});

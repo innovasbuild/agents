@@ -47,6 +47,7 @@ import {
 	type OutreachStore,
 } from "../../../lib/outreach/store";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import { createGatewayOptions } from "../../../lib/workflows/gateway-options";
 import { createUsageRecorder, metered } from "../../../lib/workflows/usage";
 
 const SCHEDULE = "followups";
@@ -170,14 +171,18 @@ async function draftAndQueue(
 	}
 
 	const brain = await brainForTenant(input.tenantId);
+	const gatewayOptionsFor = createGatewayOptions(admin);
 	const draft = await draftMessage(
 		{ caller, contactKey: input.contactKey, kind: input.kind },
 		{
 			store,
 			loadCanon: (slug) => loadCanon(brain, slug),
 			generate: metered(
-				(model: string, system: string, prompt: string) =>
-					generateDraft(model, system, prompt, { generateText }),
+				async (model: string, system: string, prompt: string) =>
+					generateDraft(model, system, prompt, {
+						generateText,
+						providerOptions: await gatewayOptionsFor(input.tenantId),
+					}),
 				{
 					model: (model) => model,
 					record: createUsageRecorder(admin),

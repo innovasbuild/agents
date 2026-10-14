@@ -12,6 +12,7 @@ import { callerFromSession } from "../../../lib/outreach/session";
 import { createSupabaseOutreachStore } from "../../../lib/outreach/store";
 import { fetchPublicPage, resolveHost } from "../../../lib/outreach/web-page";
 import { createAdminClient } from "../../../lib/supabase/admin";
+import { createGatewayOptions } from "../../../lib/workflows/gateway-options";
 import {
 	createUsageRecorder,
 	metered,
@@ -29,6 +30,7 @@ export default defineTool({
 	async execute(input, ctx) {
 		const caller = callerFromSession(ctx.session);
 		const admin = createAdminClient();
+		const gatewayOptionsFor = createGatewayOptions(admin);
 		try {
 			// `turn.id` es el mismo que hooks/runs.ts guarda en runs.eve_turn_id.
 			const runId = await resolveRunId(
@@ -49,10 +51,11 @@ export default defineTool({
 					readPage: (url) =>
 						fetchPublicPage(url, { fetchImpl: fetch, resolveHost }),
 					generate: metered(
-						(args: Parameters<typeof generateResearch>[0]) =>
+						async (args: Parameters<typeof generateResearch>[0]) =>
 							generateResearch(args, {
 								generateText,
 								abortSignal: ctx.abortSignal,
+								providerOptions: await gatewayOptionsFor(caller.tenantId),
 							}),
 						{
 							model: (args) => args.model,

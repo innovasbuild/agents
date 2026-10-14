@@ -28,4 +28,21 @@ describe("llamadas al modelo", () => {
 
 		expect(sinMedir).toEqual([]);
 	});
+
+	it("todo archivo que importa generateText o experimental_evaluate etiqueta la llamada", () => {
+		// Spec 21.5 §4.4: una llamada sin tag no se nota hasta conciliar contra
+		// el gateway. La puerta arma las opciones con gatewayOptions o con el
+		// resolvedor que devuelve createGatewayOptions.
+		const sinEtiqueta = [...walk("agents"), ...walk("lib"), ...walk("app")]
+			.filter((file) => /\.(ts|tsx|mts)$/.test(file))
+			.filter((file) => IMPORTS_MODEL_CALL.test(readFileSync(file, "utf8")))
+			.filter(
+				(file) =>
+					!/\b(gatewayOptions|createGatewayOptions)\(/.test(
+						readFileSync(file, "utf8"),
+					),
+			);
+
+		expect(sinEtiqueta).toEqual([]);
+	});
 });
