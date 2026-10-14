@@ -16,7 +16,7 @@ Las variables que lee el código propio. Quedan afuera las que pone la plataform
 | `AI_GATEWAY_API_KEY` | `scripts/jev-probe.mts` |
 | `APOLLO_KEY` | `scripts/spike-apollo.mts` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `lib/auth/oauth-principal.ts`, `lib/auth/verify-caller.ts`, `lib/supabase/browser.ts` y 2 más |
-| `NEXT_PUBLIC_SUPABASE_URL` | `agents/outreach/channels/eve.ts`, `agents/outreach/schedules/crm-sync.ts`, `agents/outreach/schedules/followups.ts` y 16 más |
+| `NEXT_PUBLIC_SUPABASE_URL` | `agents/outreach/schedules/crm-sync.ts`, `agents/outreach/schedules/followups.ts`, `agents/outreach/schedules/morning-sweep.ts` y 16 más |
 | `PLATFORM_OWNER_TENANT_SLUG` | `lib/tenants/platform-owner.ts` |
 | `PUBLIC_APP_URL` | `lib/brain/adapters/mcp-production.ts`, `lib/tenants/origin.ts` |
 | `SUPABASE_SERVICE_ROLE_KEY` | `lib/supabase/admin.ts`, `scripts/brain-import.mts` |

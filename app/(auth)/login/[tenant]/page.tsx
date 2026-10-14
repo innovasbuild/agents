@@ -1,9 +1,20 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { loginErrorMessage } from "@/lib/auth/login-error";
 import { brandStyle } from "@/lib/brand/contrast";
+import { tenantMetadata } from "@/lib/tenants/brand-metadata";
 import { domainsPhrase } from "@/lib/tenants/domains-phrase";
 import { loadPublicTenant } from "@/lib/tenants/public";
 import { LoginForm } from "../login-form";
+
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ tenant: string }>;
+}): Promise<Metadata> {
+	const tenant = await loadPublicTenant((await params).tenant);
+	return tenant ? tenantMetadata(tenant) : {};
+}
 
 export default async function TenantLoginPage({
 	params,

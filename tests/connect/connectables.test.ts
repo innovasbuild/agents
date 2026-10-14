@@ -27,6 +27,16 @@ describe("buildConnectables", () => {
 		});
 	});
 
+	it("un agente sin canal MCP no aparece", () => {
+		const list = buildConnectables({
+			...base,
+			enabledAgents: ["asistente", "outreach"],
+		});
+		expect(list.flatMap((c) => (c.kind === "agent" ? [c.agent] : []))).toEqual([
+			"outreach",
+		]);
+	});
+
 	it("sin brain no hay tarjeta de brain", () => {
 		const list = buildConnectables({ ...base, hasBrain: false });
 		expect(list.map((c) => c.kind)).toEqual(["agent", "tools"]);

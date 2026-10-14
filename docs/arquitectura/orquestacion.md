@@ -60,7 +60,7 @@ Tres preguntas para ubicar algo nuevo:
 
 ### Lo que existe hoy
 
-El registro (`lib/workflows/registry.ts`) lista quince nodos y cinco workflows, todos del agente `outreach`.
+El registro (`lib/workflows/registry.ts`) lista quince nodos y cinco workflows, todos del agente `outreach`. El agente `asistente` no tiene nodos ni workflows: conversa con el brain y nada más.
 
 | Workflow | Reclama → deja | Nodos | Recursos | Topes (ítems · USD por pasada) | Entrada |
 |---|---|---|---|---|---|

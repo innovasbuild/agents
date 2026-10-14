@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	agentsNeedCanon,
 	canonState,
 	READINESS_LABELS,
 	tenantReadiness,
@@ -276,4 +277,32 @@ describe("ICP y marco en el brain", () => {
 		expect(canonState({ ok: false, reason: "brain_caido" })).toBe("sin_leer");
 		expect(canonState({ ok: false, reason: "sin_brain" })).toBe("sin_leer");
 	});
+});
+
+describe("agentsNeedCanon", () => {
+	it("el asistente solo no pide canon", () => {
+		expect(agentsNeedCanon([{ agent: "asistente" }])).toBe(false);
+	});
+
+	it("con outreach sí", () => {
+		expect(
+			agentsNeedCanon([{ agent: "asistente" }, { agent: "outreach" }]),
+		).toBe(true);
+	});
+});
+
+it("solo con el asistente y brain, la empresa está lista", () => {
+	expect(
+		tenantReadiness({
+			agents: [{ agent: "asistente", enabled: true }],
+			connections: [
+				{
+					capability: "brain",
+					provider: "wiki",
+					enabled: true,
+					verifiedAt: null,
+				},
+			],
+		}),
+	).toEqual({ ready: true, missing: [] });
 });

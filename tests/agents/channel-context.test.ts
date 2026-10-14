@@ -86,12 +86,14 @@ vi.mock("../../lib/supabase/admin", () => ({
 
 const channelContext = await import("@/lib/agents/channel-context");
 
-// Los tests de antes no hablan del método: entran con uno permitido.
+// Los tests de antes no hablan del método ni del agente: entran con un
+// método permitido y por la ruta del agente de la conversación.
 const resolveChannelContext = (
 	request: Request,
 	userId: string,
 	allowsLogin: (tenantId: string) => Promise<boolean> = async () => true,
-) => channelContext.resolveChannelContext(request, userId, allowsLogin);
+	agent = "outreach",
+) => channelContext.resolveChannelContext(request, userId, allowsLogin, agent);
 
 const CONVERSATION = {
 	id: "cccccccc-0000-0000-0000-000000000001",
@@ -139,6 +141,63 @@ beforeEach(() => {
 });
 
 describe("resolveChannelContext", () => {
+	describe("el agente de la ruta (spec 22.1 §6.5)", () => {
+		it("al crear: una conversación de outreach por la ruta de asistente no entra", async () => {
+			const context = await resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/asistente/v1/session",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+				async () => true,
+				"asistente",
+			);
+
+			expect(context).toBeNull();
+		});
+
+		it("al continuar: la sesión de un hilo de outreach por la ruta de asistente no entra", async () => {
+			const context = await resolveChannelContext(
+				createRequest("https://app.test/eve/asistente/v1/session/wrun_A"),
+				CONVERSATION.user_id,
+				async () => true,
+				"asistente",
+			);
+
+			expect(context).toBeNull();
+		});
+
+		it("no pregunta por el método si el agente no coincide", async () => {
+			const allowsLogin = vi.fn(async () => true);
+
+			await resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/asistente/v1/session",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+				allowsLogin,
+				"asistente",
+			);
+
+			expect(allowsLogin).not.toHaveBeenCalled();
+		});
+
+		it("por la ruta de su agente entra como siempre", async () => {
+			const context = await resolveChannelContext(
+				createRequest(
+					"https://app.test/eve/outreach/v1/session",
+					CONVERSATION.id,
+				),
+				CONVERSATION.user_id,
+				async () => true,
+				"outreach",
+			);
+
+			expect(context?.conversationId).toBe(CONVERSATION.id);
+		});
+	});
+
 	describe("método de la sesión (spec etapa 20, L10)", () => {
 		const create = () =>
 			createRequest(

@@ -88,9 +88,12 @@ describe("webSendDeps", () => {
 	it("ata el token al subject tenant:usuario", async () => {
 		await webSendDeps(caller);
 
+		// El issuer sale del entorno: con la variable cargada (un .env.local) el
+		// subject lo lleva, y sin ella queda undefined, que toEqual ignora.
 		expect(tokenForSubject.mock.calls[0]?.[1]).toEqual({
 			tenantId: "t1",
 			userId: "u1",
+			issuer: process.env.NEXT_PUBLIC_SUPABASE_URL,
 		});
 	});
 

@@ -56,7 +56,7 @@ export class WebBindingMissing extends Error {
 }
 
 /**
- * Mismo subject que agents/outreach/channels/eve.ts: el canal de eve arma el
+ * Mismo subject que lib/agents/eve/web-channel.ts: el canal de eve arma el
  * principal con issuer: process.env.NEXT_PUBLIC_SUPABASE_URL (ver
  * supabaseAuth() ahí), y tenantScopedConnect (que usa el chat) lo propaga al
  * crear el subject de Connect. Sin este issuer acá, tokenForSubject y

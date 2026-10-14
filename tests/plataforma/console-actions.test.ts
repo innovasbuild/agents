@@ -553,6 +553,14 @@ describe("canon según los agentes (spec 21.4 §4.1)", () => {
 		log.mockRestore();
 	});
 
+	it("habilitar el asistente con brain no siembra el canon", async () => {
+		state.agentRows = [];
+		expect(
+			await actions.setAgent("acme", TENANT, "asistente", true, "read_write"),
+		).toEqual({ ok: true });
+		expect(state.seedCalls).toHaveLength(0);
+	});
+
 	it("habilitar outreach con brain siembra el canon después de guardar", async () => {
 		state.agentRows = [];
 		expect(

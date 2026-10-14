@@ -21,6 +21,10 @@ values ('e7a1e7a1-0000-0000-0000-0000000000aa', 'outreach', true,
   '{"outreach": {"timezone": "America/Argentina/Buenos_Aires", "bcc": null, "deal": null}, "brain": "read_write"}')
 on conflict (tenant_id, agent) do update set enabled = true, config = excluded.config;
 
+insert into public.tenant_agents (tenant_id, agent, enabled, config)
+values ('e7a1e7a1-0000-0000-0000-0000000000aa', 'asistente', true, '{"brain": "read_write"}')
+on conflict (tenant_id, agent) do update set enabled = true, config = excluded.config;
+
 insert into public.executors (tenant_id, user_id, slug, daily_quota)
 values
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'e7a1e7a1-0000-0000-0000-000000000001', 'eval', 30),

@@ -16,7 +16,7 @@ export function agentsNeedCanon(
 	enabledAgents: ReadonlyArray<{ agent: string }>,
 ): boolean {
 	return enabledAgents.some(
-		({ agent }) => isCatalogAgent(agent) && AGENT_CATALOG[agent].requiresBrain,
+		({ agent }) => isCatalogAgent(agent) && AGENT_CATALOG[agent].canon,
 	);
 }
 
