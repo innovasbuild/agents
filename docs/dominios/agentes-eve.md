@@ -128,6 +128,7 @@ Límite conocido: con tools en paralelo en un mismo mensaje, un hermano ya termi
 - `hooks/bind-session.ts` (en `session.started`) llama `bindSessionToConversation`: escribe `conversations.eve_session_id`. Última escritura gana, a propósito. Sin try/catch: si falla, el turno tiene que fallar, porque sin esa fila nadie puede continuar la sesión. Las sesiones con `authenticator` `oauth` (canal MCP) no se atan: no crean conversación.
 - `hooks/runs.ts` abre una fila de `runs` en `turn.started` (`trigger` `chat` o `mcp`) y la cierra en `turn.completed`, `turn.failed` o `turn.cancelled`; al cerrar calcula el costo desde el libro de consumo (`set_run_cost`). Es observabilidad: todo va en try/catch, porque un hook que tira termina en `turn.failed`.
 - `lib/agents/channel-context.ts` es la puerta del canal del chat: eve no valida ownership de sesión, así que acá se resuelve el tenant. Al crear la sesión sale de la conversación (header `x-innovas-conversation`); al continuar, se busca por `eve_session_id` y se ignora lo que mande el browser. Exige que la conversación sea del usuario, que sea miembro del tenant, que el agente esté habilitado en `tenant_agents` y que el método de login esté permitido. Hay una escalera de reintentos (hasta ~3 s) por la carrera con `bind-session`, que se corta si la conversación ya no existe.
+- `hooks/usage.ts` (en `step.completed`) asienta cada paso del modelo en `usage_entries` (`node: agent/step`, `resource: model_usd`) con la corrida del turno y, para el respaldo de precio, el modelo que recordó de `step.started`. Como `runs.ts`, es observabilidad: todo va en try/catch y nunca tumba un turno. Un agente nuevo copia este hook; `tests/agents/usage-wiring.test.ts` falla si falta. Detalle en [modelos y costos](../arquitectura/modelos-y-costos.md#los-pasos-del-agente-en-el-chat).
 - `agents/outreach/channels/eve.ts` usa `supabaseAuth()`; solo fuera de Vercel suma la auth de eval y `localDev()`. `localDev()` nunca puede quedar activo en un deploy.
 
 ### Canal MCP del agente
@@ -197,7 +198,7 @@ Nueve evals en `agents/outreach/evals/`, con `evals.config.ts` (concurrencia 1, 
 | Aprobaciones y pedidos de input | `tests/agents/input-requests.test.ts` |
 | Canal del chat y acceso al canal MCP | `tests/agents/channel-context.test.ts`, `tests/agents/mcp-channel-auth.test.ts`, `tests/agents/agent-enabled.test.ts`, `tests/channel/auth.test.ts` |
 | Modelo, catálogo, sesiones, preview de mail, auth de eval | `tests/agents/{model,catalog,session-store,mail-preview,eval-auth}.test.ts` |
-| Hooks | `tests/hooks/{bind-session,runs,executors}.test.ts` |
+| Hooks | `tests/hooks/{bind-session,runs,executors,usage}.test.ts`; `tests/agents/usage-wiring.test.ts` exige que cada agente tenga `usage.ts` y `modelSelection(` |
 | Tools | `tests/agents/outreach/tools/`, `tests/tools/send-email.test.ts`, `tests/tools/crm-setup-outreach-properties.test.ts` |
 | Acciones del chat (borrar hilo) | `tests/chat/actions.test.ts` |
 | Comportamiento del agente | las nueve evals: `npm run evals` (o `npm run evals -- <evalId>`), contra la Supabase local; se niega si `NEXT_PUBLIC_SUPABASE_URL` no es local |

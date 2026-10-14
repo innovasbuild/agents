@@ -103,7 +103,7 @@ Solo `tenant_admin`; para cualquier otro, 404. Link desde `/<slug>/settings`.
 - Una línea que aclara que los días cortan en UTC y que el gasto se registra desde la fecha del deploy.
 - Empresa sin gasto en el período: estado vacío, no una tabla en cero.
 
-El origen es `workflow` cuando el asiento lo trae. Sin workflow, es "Chat" si el asiento tiene corrida y "Procesos programados" si no (el schedule de follow-ups asienta sin workflow y sin corrida).
+El origen es `workflow` cuando el asiento lo trae. Sin workflow, es "Chat" si el asiento tiene corrida o es un paso del agente (`agent/step`) y "Procesos programados" si no (el schedule de follow-ups asienta sin workflow y sin corrida).
 
 ### 5.2 Plataforma: `/plataforma/gasto`
 
@@ -139,8 +139,10 @@ La comparación va en una función pura en `lib/usage/reconcile.ts`: recibe las 
 
 No hay tablas nuevas. Dos funciones de lectura, en una migración. Antes de escribirla se carga `supabase-postgres-best-practices`.
 
-- `tenant_spend_report(p_tenant uuid, p_from timestamptz, p_to timestamptz)` devuelve `(day date, origin text, amount numeric)` de `model_usd`, con el día en UTC y `origin` igual al `workflow`, o `chat` si no hay workflow y hay corrida, o `sin_corrida`. `security definer`, `search_path = ''`, y adentro `perform public.settings_actor(p_tenant)`, igual que `tenant_budget_status`. Rechaza rangos de más de 92 días.
-- `platform_spend_report(p_from timestamptz, p_to timestamptz)` devuelve `(tenant_id uuid, day date, amount numeric)` de `model_usd`. Solo `service_role`; la pantalla la llama después de `requirePlatformAdmin`.
+- `tenant_spend_report(p_tenant uuid, p_from timestamptz, p_to timestamptz)` devuelve `(day date, origin text, amount numeric)` de `model_usd`, con el día en UTC y `origin` igual al `workflow`, o `chat` si no hay workflow y hay corrida o el asiento es un paso del agente (`node = 'agent/step'`: un turno sin corrida sigue siendo chat), o `sin_corrida`. `security definer`, `search_path = ''`, y adentro `perform public.settings_actor(p_tenant)`, igual que `tenant_budget_status`. Rechaza rangos de más de 92 días.
+- `platform_spend_report(p_from timestamptz, p_to timestamptz)` devuelve `(tenant_id uuid, amount numeric)` de `model_usd`: **una fila por empresa** para el rango, ordenada por `tenant_id`. Rechaza límites nulos o un rango invertido (`23514`). Solo `service_role`; la pantalla la llama después de `requirePlatformAdmin`.
+
+  La primera forma devolvía empresa x día. Se cambió antes de producción porque PostgREST corta toda respuesta en `max_rows` (1000) sin avisar: con unas 16 empresas que gastan todos los días, los totales de la pantalla y de la conciliación quedaban truncados sin ningún error. Con una fila por empresa el tope no se alcanza. El costo es que la pantalla pide tres rangos (hoy, mes en curso y mes anterior) en tres consultas en paralelo, y la conciliación pide uno.
 
 `usage_entries` sigue siendo solo de inserción y su RLS no cambia: el cliente no lee filas, lee el agregado.
 

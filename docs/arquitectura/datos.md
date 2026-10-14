@@ -123,7 +123,7 @@ Una fila de `work_items` es la arista del grafo de workflows: `(tenant_id, workf
 ## `runs` y `usage_entries`
 
 - **`runs`** es un turno de chat (`trigger`: `chat`, `schedule`, `mcp`, `webhook`) o una pasada de workflow. Una pasada lleva `workflow` y las cuentas `items_claimed`, `items_ok`, `items_refused` e `items_failed`, que tienen que cerrar. El costo (`cost_usd`) no se puede leer con `select`: tiene grants por columna y solo `platform_admin` lo ve, por `run_cost_usd`. Consecuencia: no se hace `select *` sobre `runs`. `schedule_key` es el lock de los schedules por empresa y día. El estado `budget_exhausted` cierra la pasada que se quedó sin presupuesto.
-- **`usage_entries`** es append-only como `events`: un asiento por recurso gastado (`model_usd`, créditos de Apollo…) con nodo y corrida. `model_usd` es costo interno: lo ve solo `platform_admin`. Lo escribe `metered()` envolviendo `generate`; `set_run_cost` suma el total al cerrar el turno. `tests/workflows/model-calls.test.ts` falla si algún archivo importa `generateText` sin `metered`.
+- **`usage_entries`** es append-only como `events`: un asiento por recurso gastado (`model_usd`, créditos de Apollo…) con nodo y corrida. `model_usd` es costo interno: las filas las ve solo `platform_admin`; el administrador de la empresa lee solo agregados (día x origen) con `tenant_spend_report`. Lo escribe `metered()` envolviendo `generate`; `set_run_cost` suma el total al cerrar el turno. `tests/workflows/model-calls.test.ts` falla si algún archivo importa `generateText` sin `metered`.
 
 ## Realtime
 

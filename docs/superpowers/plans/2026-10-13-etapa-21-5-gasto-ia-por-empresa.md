@@ -1111,7 +1111,7 @@ git commit -m "feat: los pasos del agente en el chat asientan su consumo"
 - Consumes: `public.settings_actor(uuid)`, `public.usage_entries`.
 - Produces:
   - `public.tenant_spend_report(p_tenant uuid, p_from timestamptz, p_to timestamptz) returns table (day date, origin text, amount numeric)`, ejecutable por `authenticated`.
-  - `public.platform_spend_report(p_from timestamptz, p_to timestamptz) returns table (tenant_id uuid, day date, amount numeric)`, ejecutable solo por `service_role`.
+  - `public.platform_spend_report(p_from timestamptz, p_to timestamptz) returns table (tenant_id uuid, amount numeric)`, ejecutable solo por `service_role`. *(Forma final tras la revisión: una fila por empresa y rango, con guarda de límites; la forma empresa x día que muestran los bloques de abajo se cambió porque PostgREST corta en 1000 filas. La página pide tres rangos en paralelo y la acción uno. Vale la migración y el spec §6, no el código de esta tarea.)*
   - En las dos, el rango es `[p_from, p_to)` y el día se corta en UTC. `origin` es el `workflow`, o `chat` si no hay workflow y hay corrida, o `sin_corrida`.
 
 - [ ] **Step 1: Cargar la skill de Postgres**
@@ -2359,6 +2359,8 @@ git commit -m "feat: comparación del libro de consumo contra el gateway"
 ### Task 9: Pantalla de plataforma y acción de conciliar
 
 **Files:**
+> Nota de la revisión final: la página y la acción de abajo se escribieron con `platform_spend_report` por empresa x día. Quedaron con una fila por empresa (tres consultas en paralelo en la página, una en la acción); el código vigente es el del repo.
+
 - Create: `app/plataforma/gasto/page.tsx`
 - Create: `app/plataforma/gasto/actions.ts`
 - Create: `app/plataforma/gasto/reconcile-panel.tsx`
@@ -3134,6 +3136,11 @@ Usar `/ship`. El PR sale de `feat/etapa-21-5-gasto-ia` contra `main` e incluye l
 
 No lo ejecuta un agente por su cuenta: aplicar una migración en producción pide confirmación explícita.
 
+- [ ] **Orden de despliegue con la 22.1.** Si `20261022120000` (21.5) llega a producción antes que `20261021120000_asistente_agent` (22.1), `supabase db push` se niega sin `--include-all`. Anotarlo en los pasos de despliegue de la 22.1.
+- [ ] **Cuando entre la 22.1:** cablear `modelSelection` en `tenantModel` y copiar `hooks/usage.ts` en cada agente nuevo. `tests/agents/usage-wiring.test.ts` lo exige y falla hasta que estén.
+- [ ] Mirar en producción los `agent/step` reales: `meta.model` y `meta.source`, y que el id de modelo tenga el formato esperado con la selección por objeto.
+- [ ] Antes de juzgar "Sin etiqueta", revisar si el team de Vercel tiene otro tráfico por el gateway (evals, scripts, previews): el reporte es de todo el team.
+- [ ] Reemplazar el texto "desde que se activó esta pantalla" de `/<slug>/settings/gasto` por la fecha real del deploy (spec §5.1).
 - [ ] Confirmar en Vercel que el equipo tiene Custom Reporting y cuánto cobra por consulta. Si no lo tiene, seguir igual: solo el botón de conciliar queda sin efecto.
 - [ ] `npx supabase migration list`. `db push` aplica todas las pendientes: confirmar cuáles son ajenas antes de aplicar `20261022120000_spend_report`. La migración va antes que el código.
 - [ ] Desplegar.
