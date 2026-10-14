@@ -5,7 +5,9 @@ import {
 	describeSkills,
 	loadSkillCatalog,
 	MAX_READABLE_BYTES,
+	PACKAGE_FAILED,
 	type SkillCatalogDeps,
+	visibleSkills,
 } from "@/lib/brain/core/skills/catalog";
 import type {
 	SkillOverviewRow,
@@ -57,6 +59,13 @@ function deps(
 		levelOf: (): Level | null => "lector",
 		blob: vi.fn(async (sha: string) => blobs[sha] ?? null),
 		record: vi.fn(async () => {}),
+		issue: vi.fn(async (entry: { slug: string; snapshot: SkillSnapshot }) => ({
+			name: entry.slug.split("/").at(-1) ?? "",
+			version: entry.snapshot.version,
+			filename: "x.zip",
+			url: "https://storage.test/firmado",
+			expiresIn: 600,
+		})),
 		...over,
 	};
 }
@@ -238,7 +247,7 @@ describe("catalog.file", () => {
 			catalog?.file("a", "assets/logo.png") as Promise<unknown>,
 			"validation",
 		);
-		expect(binario).toContain("descarga del paquete");
+		expect(binario).toContain("skill_package");
 		await expectBrainError(
 			catalog?.file("a", "big.csv") as Promise<unknown>,
 			"validation",
@@ -299,5 +308,94 @@ describe("describeSkills", () => {
 		const lines = describeSkills(many).split("\n");
 		expect(lines).toHaveLength(31);
 		expect(lines[30]).toBe("Hay 3 más: se ven con skill_list.");
+	});
+});
+
+describe("visibleSkills", () => {
+	it("deja solo las publicadas vigentes que la persona lee, ordenadas por nombre, con su slug", () => {
+		const rows = [
+			row("skills/ventas/reporte", snapshot()),
+			row("skills/alta", snapshot({ version: 1 })),
+			row("skills/borrador", null),
+			row("skills/retirada", snapshot({ action: "retirar" })),
+			row("skills/rrhh/sueldos", snapshot()),
+		];
+		const visible = visibleSkills(rows, (slug) =>
+			slug.startsWith("skills/rrhh") ? null : "lector",
+		);
+		expect(visible.map((skill) => [skill.name, skill.slug])).toEqual([
+			["alta", "skills/alta"],
+			["reporte", "skills/ventas/reporte"],
+		]);
+		expect(visible[0].snapshot.version).toBe(1);
+	});
+});
+
+describe("package", () => {
+	it("pide el link con el slug y la copia publicada de la skill", async () => {
+		const d = deps([row("skills/ventas/reporte", snapshot())]);
+		const catalog = await loadSkillCatalog(d);
+		const link = await catalog?.package("reporte");
+		expect(link).toMatchObject({
+			url: "https://storage.test/firmado",
+			version: 2,
+		});
+		expect(d.issue).toHaveBeenCalledWith({
+			slug: "skills/ventas/reporte",
+			snapshot: expect.objectContaining({ version: 2, digest: "dg" }),
+		});
+	});
+
+	it("una skill ajena o inexistente responde igual y no pide link", async () => {
+		const d = deps(
+			[
+				row("skills/rrhh/sueldos", snapshot()),
+				row("skills/ventas/reporte", snapshot()),
+			],
+			{
+				levelOf: (slug) => (slug.startsWith("skills/rrhh") ? null : "lector"),
+			},
+		);
+		const catalog = await loadSkillCatalog(d);
+		const ajena = await expectBrainError(
+			catalog?.package("sueldos") as Promise<unknown>,
+			"not_found",
+		);
+		const inventada = await expectBrainError(
+			catalog?.package("nada") as Promise<unknown>,
+			"not_found",
+		);
+		expect(ajena.replace("sueldos", "X")).toBe(inventada.replace("nada", "X"));
+		expect(d.issue).not.toHaveBeenCalled();
+	});
+
+	it("una skill retirada no da link aunque su zip siga guardado", async () => {
+		const d = deps([
+			row("skills/ventas/reporte", snapshot()),
+			row("skills/vieja", snapshot({ action: "retirar" })),
+		]);
+		const catalog = await loadSkillCatalog(d);
+		await expectBrainError(
+			catalog?.package("vieja") as Promise<unknown>,
+			"not_found",
+		);
+		expect(d.issue).not.toHaveBeenCalled();
+	});
+
+	it("si falla el armado o el storage, responde el mensaje genérico sin el detalle", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const d = deps([row("skills/ventas/reporte", snapshot())], {
+			issue: vi.fn(async () => {
+				throw new Error("storage: bucket t1/dg.zip no responde");
+			}),
+		});
+		const catalog = await loadSkillCatalog(d);
+		const message = await expectBrainError(
+			catalog?.package("reporte") as Promise<unknown>,
+			"provider_unavailable",
+		);
+		expect(message).toBe(PACKAGE_FAILED);
+		expect(message).not.toContain("t1/dg");
+		spy.mockRestore();
 	});
 });

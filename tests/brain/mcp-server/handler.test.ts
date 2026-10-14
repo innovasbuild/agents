@@ -79,6 +79,7 @@ function deps(
 			overview: async () => [],
 			blob: async () => null,
 			record: async () => {},
+			issue: vi.fn(),
 		},
 		providerInstance,
 		...overrides,
@@ -603,6 +604,7 @@ describe("handleBrainMcp · skills", () => {
 					overview: async () => [publishedRow("skills/ventas/reporte")],
 					blob,
 					record,
+					issue: vi.fn(),
 				},
 			}),
 		);
@@ -647,6 +649,7 @@ describe("handleBrainMcp · skills", () => {
 					],
 					blob: async () => null,
 					record: async () => {},
+					issue: vi.fn(),
 				},
 			});
 		const member = await connect("ana", d());
@@ -685,6 +688,7 @@ describe("handleBrainMcp · skills", () => {
 					overview: async () => [publishedRow("skills/ventas/reporte")],
 					blob: async () => null,
 					record: async () => {},
+					issue: vi.fn(),
 				},
 			}),
 		);
@@ -707,6 +711,7 @@ describe("handleBrainMcp · skills", () => {
 					},
 					blob: async () => null,
 					record: async () => {},
+					issue: vi.fn(),
 				},
 			}),
 		);
@@ -730,7 +735,12 @@ describe("handleBrainMcp · skills", () => {
 					...store,
 					brainBinding: async () => ({ ...binding, provider: "mcp" }) as never,
 				},
-				skills: { overview, blob: async () => null, record: async () => {} },
+				skills: {
+					overview,
+					blob: async () => null,
+					record: async () => {},
+					issue: vi.fn(),
+				},
 			}),
 		);
 		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(

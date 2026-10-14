@@ -228,6 +228,13 @@ function fakeCatalog(over: Partial<SkillCatalog> = {}): SkillCatalog {
 			size: 4,
 			content: "hola",
 		})),
+		package: vi.fn(async (name: string) => ({
+			name,
+			version: 2,
+			filename: `${name}-v2.zip`,
+			url: "https://storage.test/firmado",
+			expiresIn: 600,
+		})),
 		...over,
 	};
 }

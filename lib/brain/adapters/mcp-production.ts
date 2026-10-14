@@ -62,6 +62,9 @@ function skillsDeps(): McpSkillsDeps {
 				.insert(skillLoadEvent(entry));
 			if (error) throw new Error(error.message);
 		},
+		issue: async () => {
+			throw new Error("skill_package: sin cablear todavía");
+		},
 	};
 }
 

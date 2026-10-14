@@ -6,6 +6,7 @@ import type { Level } from "../access/types.ts";
 import { BrainError } from "../errors.ts";
 import { looksLikeText } from "./http.ts";
 import { skillName } from "./package.ts";
+import type { PackageLink } from "./package-link.ts";
 import { publishedSnapshot } from "./state.ts";
 import type { SkillOverviewRow, SkillSnapshot } from "./store.ts";
 
@@ -47,16 +48,21 @@ export interface SkillCatalogDeps {
 	levelOf(slug: string): Level | null;
 	blob(sha256: string): Promise<Uint8Array | null>;
 	record(entry: SkillLoadRecord): Promise<void>;
+	/** Emite el link al zip publicado; la skill ya está autorizada. */
+	issue(entry: { slug: string; snapshot: SkillSnapshot }): Promise<PackageLink>;
 }
 
 export interface SkillCatalog {
 	list(): SkillSummary[];
 	load(name: string): Promise<LoadedSkill>;
 	file(name: string, path: string): Promise<SkillFileContent>;
+	package(name: string): Promise<PackageLink>;
 }
 
 const IN_PACKAGE =
-	"Está en la descarga del paquete, desde la página de la skill en la plataforma.";
+	"Se obtiene con skill_package, que devuelve el paquete completo de la skill.";
+
+export const PACKAGE_FAILED = "No pude preparar el paquete. Probá de nuevo.";
 
 function notFound(name: string): BrainError {
 	return new BrainError(
@@ -88,15 +94,35 @@ export function describeSkills(skills: SkillSummary[]): string {
 	return lines.join("\n");
 }
 
+export interface VisibleSkill {
+	slug: string;
+	name: string;
+	snapshot: SkillSnapshot;
+}
+
+// Las skills que una persona puede usar: publicación vigente y al menos
+// lectura sobre la ruta. La comparten el catálogo de MCP y /conectar, así las
+// dos listas no pueden diferir.
+export function visibleSkills(
+	rows: SkillOverviewRow[],
+	levelOf: (slug: string) => Level | null,
+): VisibleSkill[] {
+	const visible: VisibleSkill[] = [];
+	for (const row of rows) {
+		const snapshot = publishedSnapshot(row);
+		if (!snapshot || levelOf(row.slug) === null) continue;
+		visible.push({ slug: row.slug, name: skillName(row.slug), snapshot });
+	}
+	return visible.sort((a, b) => (a.name < b.name ? -1 : 1));
+}
+
 export async function loadSkillCatalog(
 	deps: SkillCatalogDeps,
 ): Promise<SkillCatalog | null> {
 	const visible = new Map<string, { slug: string; snapshot: SkillSnapshot }>();
-	for (const row of await deps.overview()) {
-		const snapshot = publishedSnapshot(row);
-		if (!snapshot || deps.levelOf(row.slug) === null) continue;
-		// El nombre es único por empresa entre las publicadas (brain_publish_skill).
-		visible.set(skillName(row.slug), { slug: row.slug, snapshot });
+	// El nombre es único por empresa entre las publicadas (brain_publish_skill).
+	for (const skill of visibleSkills(await deps.overview(), deps.levelOf)) {
+		visible.set(skill.name, { slug: skill.slug, snapshot: skill.snapshot });
 	}
 	if (visible.size === 0) return null;
 
@@ -172,6 +198,16 @@ export async function loadSkillCatalog(
 				size: entry.size,
 				content: new TextDecoder().decode(bytes),
 			};
+		},
+
+		async package(name) {
+			const { slug, snapshot } = find(name);
+			try {
+				return await deps.issue({ slug, snapshot });
+			} catch (error) {
+				console.error("skills: no pude preparar el paquete", error);
+				throw new BrainError("provider_unavailable", PACKAGE_FAILED);
+			}
 		},
 	};
 }

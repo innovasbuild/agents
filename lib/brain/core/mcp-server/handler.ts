@@ -15,6 +15,7 @@ import {
 	type SkillLoadRecord,
 } from "../skills/catalog.ts";
 import { assistantCategories } from "../skills/package.ts";
+import type { PackageLink, PackageRequest } from "../skills/package-link.ts";
 import type { SkillOverviewRow } from "../skills/store.ts";
 import { withoutSkills } from "../skills/view.ts";
 import type { BrainProvider } from "../types.ts";
@@ -43,6 +44,7 @@ export interface McpSkillsDeps {
 	record(
 		entry: SkillLoadRecord & { tenantId: string; userId: string },
 	): Promise<void>;
+	issue(request: Omit<PackageRequest, "channel">): Promise<PackageLink>;
 }
 
 export interface BrainMcpDeps {
@@ -183,6 +185,13 @@ async function handleBrainMcpInner(
 						...entry,
 						tenantId: access.tenantId,
 						userId: access.userId,
+					}),
+				issue: (entry) =>
+					deps.skills.issue({
+						tenantId: access.tenantId,
+						userId: access.userId,
+						slug: entry.slug,
+						snapshot: entry.snapshot,
 					}),
 			});
 		} catch (error) {
