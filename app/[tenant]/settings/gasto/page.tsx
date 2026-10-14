@@ -84,7 +84,7 @@ export default async function GastoPage({
 			</nav>
 
 			{summary === null ? (
-				<p className="text-muted-foreground text-sm">
+				<p className="text-muted-foreground text-sm" role="alert">
 					No pude leer el gasto. Recargá la página.
 				</p>
 			) : summary.byDay.length === 0 ? (
@@ -95,7 +95,7 @@ export default async function GastoPage({
 				<>
 					<section>
 						<h2 className="mb-1 text-lg">{capitalizeFirst(range.label)}</h2>
-						<p className="text-3xl">{usd(summary.total)}</p>
+						<p className="text-3xl tabular-nums">{usd(summary.total)}</p>
 					</section>
 
 					<section>

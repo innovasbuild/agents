@@ -83,7 +83,7 @@ describe("panel de conciliación", () => {
 		const rows = [...host.querySelectorAll("tbody tr")].map((row) =>
 			[...row.querySelectorAll("td")].map((cell) => cell.textContent),
 		);
-		expect(host.textContent).toContain("Del 2026-09-01 al 2026-09-30, en UTC.");
+		expect(host.textContent).toContain("Del 01/09/2026 al 30/09/2026, en UTC.");
 		expect(rows[0]).toEqual([
 			"Acme · revisar",
 			"US$ 10,00",
@@ -93,6 +93,38 @@ describe("panel de conciliación", () => {
 		]);
 		expect(rows[1][0]).toBe("Sin etiqueta · revisar");
 		expect(rows[1][4]).toBe("—");
+	});
+
+	it("si la acción responde ok: false, muestra el mensaje y ninguna tabla", async () => {
+		state.next = async () => ({
+			ok: false,
+			message: "Todavía no hay un día cerrado este mes.",
+		});
+		await consult();
+		expect(host.querySelector('[role="alert"]')?.textContent).toBe(
+			"Todavía no hay un día cerrado este mes.",
+		);
+		expect(host.querySelector("table")).toBeNull();
+	});
+
+	it("mientras consulta, los botones quedan deshabilitados", async () => {
+		let finish: (value: unknown) => void = () => {};
+		state.next = () =>
+			new Promise((resolve) => {
+				finish = resolve;
+			});
+		await consult();
+		const buttons = [...host.querySelectorAll("button")];
+		expect(buttons.length).toBeGreaterThan(0);
+		expect(buttons.every((b) => b.disabled)).toBe(true);
+		expect(host.textContent).toContain("Consultando el gateway");
+
+		await act(async () => {
+			finish({ ok: false, message: "listo" });
+		});
+		expect([...host.querySelectorAll("button")].some((b) => b.disabled)).toBe(
+			false,
+		);
 	});
 
 	it("si la acción tira, lo dice en vez de quedarse muda", async () => {
