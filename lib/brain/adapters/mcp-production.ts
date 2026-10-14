@@ -5,7 +5,11 @@
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import { createAdminClient } from "../../supabase/admin";
 import { agentsNeedCanon } from "../../tenants/readiness";
-import type { BrainMcpDeps } from "../core/mcp-server/handler.ts";
+import type {
+	BrainMcpDeps,
+	McpSkillsDeps,
+} from "../core/mcp-server/handler.ts";
+import { issuePackageLink } from "../core/skills/package-link.ts";
 import { accessRulesStore } from "./access-rules.ts";
 import {
 	supabaseAccessStore,
@@ -13,6 +17,8 @@ import {
 	supabaseHit,
 } from "./mcp-supabase.ts";
 import { getBrainProvider } from "./provider.ts";
+import { packageLinkDeps } from "./skill-packages.ts";
+import { blobStore, skillStore } from "./skill-storage.ts";
 
 let memoized:
 	| Pick<BrainMcpDeps, "verify" | "store" | "hit" | "rules">
@@ -33,6 +39,36 @@ function sharedDeps(): Pick<
 	return memoized;
 }
 
+type SkillLoad = Parameters<McpSkillsDeps["record"]>[0];
+
+export function skillLoadEvent(entry: SkillLoad): Record<string, unknown> {
+	return {
+		tenant_id: entry.tenantId,
+		actor_user_id: entry.userId,
+		channel: "mcp",
+		type: "brain.skill_loaded",
+		summary: entry.slug,
+		payload: { name: entry.name, version: entry.version, digest: entry.digest },
+	};
+}
+
+function skillsDeps(): McpSkillsDeps {
+	return {
+		overview: (tenantId) => skillStore().overview(tenantId),
+		blob: (tenantId, sha256) => blobStore().get(tenantId, sha256),
+		// events es append-only: solo insert. Se tira solo el mensaje de la base,
+		// nunca el objeto de error entero, para no filtrar datos de la conexión.
+		async record(entry) {
+			const { error } = await createAdminClient()
+				.from("events")
+				.insert(skillLoadEvent(entry));
+			if (error) throw new Error(error.message);
+		},
+		issue: (request) =>
+			issuePackageLink({ ...request, channel: "mcp" }, packageLinkDeps()),
+	};
+}
+
 export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
 	// PUBLIC_APP_URL solo está cargada en Production (Etapa 11): en Preview y
 	// Development no tiene sentido un valor fijo, porque cada deploy de Vercel
@@ -42,7 +78,8 @@ export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
 	// función a nivel de módulo tira el build entero de cualquier preview.
 	const explicit = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
 	const publicUrl =
-		explicit ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+		explicit ??
+		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 	if (!publicUrl || !supabaseUrl) {
 		throw new Error(
@@ -57,6 +94,7 @@ export function productionDeps(): BrainMcpDeps {
 		...publicSettings(),
 		...sharedDeps(),
 		provider: getBrainProvider,
+		skills: skillsDeps(),
 		usesCanon: async (tenantId) => {
 			// Si no se puede leer, las descripciones de siempre (con canon): una
 			// empresa con outreach no pierde la guía por una lectura caída.

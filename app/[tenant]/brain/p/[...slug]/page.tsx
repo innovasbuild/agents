@@ -137,7 +137,7 @@ export default async function BrainPageView({
 		);
 	}
 
-	const publishedFiles = publishedSnapshot(skillRow)?.manifest ?? [];
+	const published = publishedSnapshot(skillRow);
 
 	return (
 		<div className="space-y-6">
@@ -156,11 +156,12 @@ export default async function BrainPageView({
 					)
 				}
 			/>
-			{skillRow && (
+			{published && (
 				<PublishedFiles
 					tenantSlug={tenantSlug}
 					slug={slug}
-					files={publishedFiles}
+					version={published.version}
+					files={published.manifest}
 				/>
 			)}
 		</div>

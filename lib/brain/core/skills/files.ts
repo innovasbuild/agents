@@ -32,7 +32,7 @@ import {
 } from "./package.ts";
 import { type SkillActor, type SkillFailure, skillFail } from "./publish.ts";
 import { publishedSnapshot } from "./state.ts";
-import type { SkillOverviewRow, SkillStore } from "./store.ts";
+import type { SkillOverviewRow, SkillSnapshot, SkillStore } from "./store.ts";
 
 export interface BlobStore {
 	put(tenantId: string, sha256: string, bytes: Uint8Array): Promise<void>;
@@ -342,6 +342,36 @@ export async function readSkillFile(
 	const bytes = await deps.blobs.get(actor.tenantId, file.sha256);
 	if (!bytes) return skillFail("not_found", NOT_FOUND);
 	return { ok: true, path: file.path, bytes };
+}
+
+// La skill que se distribuye: siempre la copia publicada vigente, también
+// para quien edita (spec etapa 24.2a M7). Sin ella, no existe. El zip lo arma
+// y lo firma core/skills/package-link.ts (spec etapa 24.2b §6).
+export async function publishedSkillFor(
+	tenantSlug: string,
+	slug: string,
+	deps: FilesDeps,
+): Promise<
+	| {
+			ok: true;
+			tenantId: string;
+			userId: string;
+			slug: string;
+			snapshot: SkillSnapshot;
+	  }
+	| SkillFailure
+> {
+	const ctx = await context(tenantSlug, slug, deps);
+	if (!ctx.ok) return skillFail("not_found", NOT_FOUND);
+	const snapshot = publishedSnapshot(ctx.row);
+	if (!snapshot) return skillFail("not_found", NOT_FOUND);
+	return {
+		ok: true,
+		tenantId: ctx.actor.tenantId,
+		userId: ctx.actor.userId,
+		slug,
+		snapshot,
+	};
 }
 
 export async function importSkillPackage(

@@ -62,4 +62,5 @@ Las migraciones de `supabase/migrations`, en orden.
 | `20261019120000_agentless_tenant` | `supabase/migrations/20261019120000_agentless_tenant.sql` |
 | `20261020120000_brain_skills` | `supabase/migrations/20261020120000_brain_skills.sql` |
 | `20261021120000_asistente_agent` | `supabase/migrations/20261021120000_asistente_agent.sql` |
-| `20261022120000_spend_report` | `supabase/migrations/20261022120000_spend_report.sql` |
+| `20261022120000_skill_packages_bucket` | `supabase/migrations/20261022120000_skill_packages_bucket.sql` |
+| `20261023120000_spend_report` | `supabase/migrations/20261023120000_spend_report.sql` |

@@ -26,7 +26,7 @@ sources:
   - lib/workflows/settings.ts
   - supabase/migrations/20260921090000_usage_entries.sql
   - supabase/migrations/20260921110000_tenant_workflows_budgets.sql
-  - supabase/migrations/20261022120000_spend_report.sql
+  - supabase/migrations/20261023120000_spend_report.sql
 ---
 
 # Modelos y costos
@@ -108,7 +108,7 @@ El acceso a Apollo usa hasta dos llaves por conector, con fallback ante agotamie
 
 ## Reporte por período y conciliación
 
-El libro se lee con dos funciones SQL (`supabase/migrations/20261022120000_spend_report.sql`, sin tablas nuevas: `usage_entries` sigue cerrada). En las dos el rango es `[desde, hasta)`, solo cuenta `model_usd` y **el día se corta en UTC**, que es como reporta el gateway: con otro corte la conciliación no cierra. La lógica de períodos y formato está en `lib/usage/report.ts` (`monthRange`, `summarize`, `toPlatformRows`).
+El libro se lee con dos funciones SQL (`supabase/migrations/20261023120000_spend_report.sql`, sin tablas nuevas: `usage_entries` sigue cerrada). En las dos el rango es `[desde, hasta)`, solo cuenta `model_usd` y **el día se corta en UTC**, que es como reporta el gateway: con otro corte la conciliación no cierra. La lógica de períodos y formato está en `lib/usage/report.ts` (`monthRange`, `summarize`, `toPlatformRows`).
 
 | Función | Quién la llama | Qué devuelve |
 |---|---|---|
@@ -137,7 +137,7 @@ El libro se lee con dos funciones SQL (`supabase/migrations/20261022120000_spend
 - `tests/agents/model.test.ts`: la precedencia de `pickModel`.
 - `tests/agents/usage-wiring.test.ts`: `tenantModel` devuelve el modelo con `modelSelection(`, todo `agents/*/agent.ts` usa `tenantModel(` o `modelSelection(` y todo agente con `hooks/runs.ts` tiene `hooks/usage.ts`; evita que un agente nuevo salga sin etiqueta ni asiento de gasto.
 - `tests/outreach/services/generate-research.test.ts`: con el `generateText` real de `ai@7` y un modelo simulado, el paso 1 cierra, el paso 2 lo corta el `AbortSignal` y el asiento del paso 1 queda.
-- `npm test -- tests/workflows` y `npm run db:test` (`12_usage_entries`, `14_tenant_workflows_budgets`, `35_spend_report`).
+- `npm test -- tests/workflows` y `npm run db:test` (`12_usage_entries`, `14_tenant_workflows_budgets`, `36_spend_report`).
 
 ## Decisiones
 

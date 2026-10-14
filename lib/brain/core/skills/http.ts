@@ -14,7 +14,7 @@ export function isSameOrigin(
 	}
 }
 
-function looksLikeText(bytes: Uint8Array): boolean {
+export function looksLikeText(bytes: Uint8Array): boolean {
 	if (bytes.includes(0)) return false;
 	try {
 		new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -54,4 +54,8 @@ export function skillFileHref(
 	const query = new URLSearchParams({ slug, path });
 	if (version !== undefined) query.set("version", String(version));
 	return `/${tenantSlug}/brain/skills/files?${query}`;
+}
+
+export function skillPackageHref(tenantSlug: string, slug: string): string {
+	return `/${tenantSlug}/brain/skills/package?${new URLSearchParams({ slug })}`;
 }

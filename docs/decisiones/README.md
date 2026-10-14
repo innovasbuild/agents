@@ -3,7 +3,7 @@ title: Decisiones por spec
 category: decisiones
 status: activo
 tags: [decisiones, specs, etapas]
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Decisiones por spec
@@ -45,5 +45,7 @@ Una fila por spec de `docs/superpowers/specs/`. Es el detector de feature nueva:
 | 2026-10-11 | 21.4 · Segundo tenant | [spec](../superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md) | [plan](../superpowers/plans/2026-10-11-etapa-21-4a-empresa-sin-agentes.md) | en curso | [Tenancy](../arquitectura/tenancy.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) · [Alta de una empresa nueva](../guias/alta-de-tenant.md) |
 | 2026-10-13 | 21.5 · Gasto de IA por empresa | [spec](../superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-21-5-gasto-ia-por-empresa.md) | en curso | [Modelos y costos](../arquitectura/modelos-y-costos.md) |
 | 2026-10-11 | 24.1 · Skills de empresa: paquete y publicación | [spec](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) | [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) | en curso | [Brain](../dominios/brain.md) |
+| 2026-10-13 | 24.2a · Skills de empresa por MCP | [spec](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) | en curso | [Brain](../dominios/brain.md) |
+| 2026-10-14 | 24.2b · Paquete completo por MCP y skills en `/conectar` | [spec](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) | [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md) | en curso | [Brain](../dominios/brain.md) |
 | 2026-10-13 | 25 · Wiki y harness | [spec](../superpowers/specs/2026-10-13-etapa-25-wiki-documentacion-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-25-wiki-documentacion.md) | cerrada | [Cómo mantener la wiki](../guias/documentar.md) |
 | 2026-10-13 | 22.1 · Chat multiagente y Asistente | [spec](../superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-22-1-chat-multiagente.md) | en curso | [Agentes eve](../dominios/agentes-eve.md) |

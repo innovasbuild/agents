@@ -3,6 +3,7 @@ import {
 	fileHeaders,
 	isSameOrigin,
 	skillFileHref,
+	skillPackageHref,
 } from "@/lib/brain/core/skills/http";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -53,6 +54,14 @@ describe("skillFileHref", () => {
 		);
 		expect(skillFileHref("acme", "skills/a", "a.txt", 3)).toBe(
 			"/acme/brain/skills/files?slug=skills%2Fa&path=a.txt&version=3",
+		);
+	});
+});
+
+describe("skillPackageHref", () => {
+	it("codifica el slug en la query", () => {
+		expect(skillPackageHref("acme", "skills/ventas/reporte")).toBe(
+			"/acme/brain/skills/package?slug=skills%2Fventas%2Freporte",
 		);
 	});
 });

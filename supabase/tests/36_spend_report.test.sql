@@ -1,4 +1,4 @@
--- supabase/tests/35_spend_report.test.sql
+-- supabase/tests/36_spend_report.test.sql
 begin;
 create extension if not exists pgtap with schema extensions;
 

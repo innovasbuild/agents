@@ -20,7 +20,7 @@ sources:
   - lib/usage/reconcile.ts
   - lib/agents/catalog.ts
   - supabase/migrations/20261015120000_platform_console.sql
-  - supabase/migrations/20261022120000_spend_report.sql
+  - supabase/migrations/20261023120000_spend_report.sql
   - supabase/migrations/20260912195514_brand_bucket.sql
   - docs/superpowers/specs/2026-10-05-consola-plataforma-design.md
   - docs/superpowers/specs/2026-10-05-alta-empresas-landing-design.md
@@ -109,7 +109,7 @@ Ejecutores, aprobaciones y conectores usan las funciones `set_executor`, `remove
 
 ```bash
 npm test -- tests/plataforma tests/tenants tests/brand tests/settings
-npm run db:test   # 29_platform_console, 30_tenant_settings, 35_spend_report, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
+npm run db:test   # 29_platform_console, 30_tenant_settings, 36_spend_report, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
 ```
 
 Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach, gasto), `tests/plataforma/gasto-*.test.ts` (pantalla y conciliación). No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)).

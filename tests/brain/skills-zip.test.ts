@@ -1,6 +1,10 @@
-import { zipSync } from "fflate";
+import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { unzipPackage, ZipRejected } from "@/lib/brain/adapters/skill-zip";
+import {
+	unzipPackage,
+	ZipRejected,
+	zipPackage,
+} from "@/lib/brain/adapters/skill-zip";
 import { MAX_FILE_BYTES } from "@/lib/brain/core/skills/package";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -181,5 +185,44 @@ describe("unzipPackage", () => {
 
 	it("rechaza lo que no es un zip", () => {
 		expect(() => unzipPackage(bytes("no soy un zip"))).toThrow(ZipRejected);
+	});
+});
+
+describe("zipPackage", () => {
+	it("lo que escribe lo lee unzipPackage, con subcarpetas y un archivo vacío", () => {
+		const entries = [
+			{
+				path: "reporte/SKILL.md",
+				bytes: bytes("---\ndescription: x\n---\ncuerpo"),
+			},
+			{
+				path: "reporte/scripts/calc.py",
+				bytes: bytes("print(1)\n".repeat(500)),
+			},
+			{ path: "reporte/vacio.txt", bytes: new Uint8Array(0) },
+			{
+				path: "reporte/assets/ñandú.bin",
+				bytes: new Uint8Array([0, 255, 1, 254]),
+			},
+		];
+		const zip = zipPackage(entries);
+		expect(unzipPackage(zip)).toEqual(entries);
+	});
+
+	it("comprime lo que se deja comprimir", () => {
+		const big = bytes("a".repeat(100_000));
+		expect(zipPackage([{ path: "a.txt", bytes: big }]).length).toBeLessThan(
+			5_000,
+		);
+	});
+
+	it("también lo abre otro lector de zip", () => {
+		const zip = zipPackage([{ path: "r/a.txt", bytes: bytes("hola") }]);
+		expect(new TextDecoder().decode(unzipSync(zip)["r/a.txt"])).toBe("hola");
+	});
+
+	it("el mismo contenido da el mismo zip", () => {
+		const entries = [{ path: "a.txt", bytes: bytes("hola") }];
+		expect(zipPackage(entries)).toEqual(zipPackage(entries));
 	});
 });

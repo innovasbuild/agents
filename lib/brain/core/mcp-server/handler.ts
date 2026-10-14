@@ -1,10 +1,22 @@
 // Request al endpoint del brain (spec etapa 11 §5.1, §5.2). Stateless: un
 // servidor y un transporte por request, con respuesta JSON.
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { type AccessRulesStore, isAdminRole } from "../access/types.ts";
+import { resolveAccess } from "../access/resolve-access.ts";
+import {
+	type AccessRulesStore,
+	isAdminRole,
+	type Principal,
+} from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
 import type { BrainBinding } from "../resolve.ts";
+import {
+	loadSkillCatalog,
+	type SkillCatalog,
+	type SkillLoadRecord,
+} from "../skills/catalog.ts";
 import { assistantCategories } from "../skills/package.ts";
+import type { PackageLink, PackageRequest } from "../skills/package-link.ts";
+import type { SkillOverviewRow } from "../skills/store.ts";
 import { withoutSkills } from "../skills/view.ts";
 import type { BrainProvider } from "../types.ts";
 import {
@@ -26,6 +38,15 @@ export interface UnauthorizedOptions {
 	}[];
 }
 
+export interface McpSkillsDeps {
+	overview(tenantId: string): Promise<SkillOverviewRow[]>;
+	blob(tenantId: string, sha256: string): Promise<Uint8Array | null>;
+	record(
+		entry: SkillLoadRecord & { tenantId: string; userId: string },
+	): Promise<void>;
+	issue(request: Omit<PackageRequest, "channel">): Promise<PackageLink>;
+}
+
 export interface BrainMcpDeps {
 	verify: ClaimsVerifier;
 	store: AccessStore;
@@ -34,6 +55,8 @@ export interface BrainMcpDeps {
 	provider: (binding: BrainBinding) => BrainProvider;
 	/** Si la empresa tiene un agente que usa el canon comercial del brain. */
 	usesCanon: (tenantId: string) => Promise<boolean>;
+	/** Skills publicadas de la empresa (spec 24.2a). */
+	skills: McpSkillsDeps;
 	publicUrl: string;
 	issuer: string;
 	unauthorized: (options: UnauthorizedOptions) => Response;
@@ -137,21 +160,51 @@ async function handleBrainMcpInner(
 	const rules = isAdminRole(access.role)
 		? []
 		: await deps.rules.load(access.tenantId);
+	const principal: Principal = {
+		kind: "user",
+		userId: access.userId,
+		role: access.role,
+	};
 	// withoutSkills por fuera de withAccess: ni un administrador ve skills por
-	// este canal (spec 24.1 S6).
+	// las tools del brain (spec 24.1 S6). Las skills salen por su catálogo.
 	const provider = withoutSkills(
-		withAccess(
-			deps.provider(access.binding),
-			{ kind: "user", userId: access.userId, role: access.role },
-			rules,
-		),
+		withAccess(deps.provider(access.binding), principal, rules),
 	);
+
+	// Solo el brain propio tiene skills (S13). Si no se pueden leer, el
+	// servidor se arma sin ellas: las tools del brain no dependen de las skills.
+	let skills: SkillCatalog | null = null;
+	if (access.binding.provider === "wiki") {
+		try {
+			skills = await loadSkillCatalog({
+				overview: () => deps.skills.overview(access.tenantId),
+				levelOf: (slug) => resolveAccess(rules, principal, slug),
+				blob: (sha256) => deps.skills.blob(access.tenantId, sha256),
+				record: (entry) =>
+					deps.skills.record({
+						...entry,
+						tenantId: access.tenantId,
+						userId: access.userId,
+					}),
+				issue: (entry) =>
+					deps.skills.issue({
+						tenantId: access.tenantId,
+						userId: access.userId,
+						slug: entry.slug,
+						snapshot: entry.snapshot,
+					}),
+			});
+		} catch (error) {
+			console.error("brain mcp: no pude leer las skills", error);
+		}
+	}
 
 	const server = buildBrainMcpServer({
 		userId: access.userId,
 		categories: assistantCategories(access.binding.config.categories),
 		canon: await deps.usesCanon(access.tenantId),
 		provider,
+		skills,
 		limiter: createRateLimiter({
 			tenantId: access.tenantId,
 			userId: access.userId,
