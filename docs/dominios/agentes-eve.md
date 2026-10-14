@@ -3,7 +3,7 @@ title: Agentes eve (agente de outreach)
 category: dominios
 status: activo
 tags: [eve, agente, outreach, tools, mcp, chat, aprobaciones]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - agents/outreach/agent.ts
   - agents/outreach/instructions.md
@@ -51,7 +51,7 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `agents/outreach/connections/tenant.ts` | Conexiones del tenant, un solo resolver dinámico |
 | `agents/outreach/channels/eve.ts` | Canal del chat del dashboard (auth Supabase) |
 | `agents/outreach/channels/mcp.ts` | Canal MCP para Claude Code y claude.ai (OAuth) |
-| `agents/outreach/hooks/{bind-session,runs,executors}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado |
+| `agents/outreach/hooks/{bind-session,runs,executors,usage}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado, asientan cada paso del modelo en `usage_entries` (ver [modelos y costos](../arquitectura/modelos-y-costos.md#los-pasos-del-agente-en-el-chat)) |
 | `agents/outreach/schedules/*.ts` | Los cuatro schedules (cableado; la lógica vive en `lib/`) |
 | `agents/outreach/skills/*/SKILL.md` | `outreach-corrida`, `outreach-redaccion`, `outreach-crm`, `outreach-escucha` |
 | `agents/outreach/evals/` | Las nueve evals y su `support.ts` |
