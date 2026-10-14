@@ -2,6 +2,22 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.2.0] - 2026-10-14
+
+### Added
+
+- El chat de cada empresa (`/<slug>/chat`) ahora sirve para cualquier agente de chat: cada hilo pertenece a un agente y, si la empresa tiene más de uno, un selector deja elegir con cuál abrir el hilo nuevo. La lista de hilos y el encabezado muestran de qué agente es cada uno (etapa 22.1).
+- Agente Asistente: conversa solo con el brain de la empresa. Busca, lee y propone páginas, que siguen pasando por la aprobación de un administrador. Cuando le piden algo que hace otro agente, lo nombra y sugiere abrir un hilo nuevo con él.
+- Una empresa que solo tiene brain ya puede usar el chat: entra directo a conversar con el Asistente, sin selector y sin nada de outreach a la vista.
+- Evals del Asistente y `npm run evals -- --agent <agente>` para elegir de qué agente se corren.
+
+### Changed
+
+- El canal del chat rechaza una conversación que entra por la ruta de otro agente.
+- Configuración muestra Ejecutores y Aprobaciones solo cuando el agente de outreach está habilitado.
+- Conectar lista únicamente los agentes que tienen canal MCP.
+- El alta de una empresa ya no siembra las páginas de canon de outreach si el agente que se habilita no las usa.
+
 ## [0.1.0] - 2026-10-13
 
 ### Added
