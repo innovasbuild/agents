@@ -45,4 +45,28 @@ describe("llamadas al modelo", () => {
 
 		expect(sinEtiqueta).toEqual([]);
 	});
+
+	it("cada llamada medida de las puertas de los schedules lleva las opciones del gateway", () => {
+		// Por sitio de llamada, no por archivo: un `metered(` nuevo sin tag pasaría
+		// el chequeo de arriba mientras otro del mismo archivo lo tenga.
+		const sinOpciones: string[] = [];
+		for (const file of [
+			"agents/outreach/schedules/dispatch.ts",
+			"agents/outreach/schedules/followups.ts",
+		]) {
+			const source = readFileSync(file, "utf8");
+			const starts = [...source.matchAll(/\bmetered\(/g)].map((m) => m.index);
+			expect(starts.length).toBeGreaterThan(0);
+			starts.forEach((start, i) => {
+				const block = source.slice(start, starts[i + 1] ?? source.length);
+				if (!/providerOptions|gatewayOptionsFor\(/.test(block)) {
+					sinOpciones.push(
+						`${file}:${source.slice(0, start).split("\n").length}`,
+					);
+				}
+			});
+		}
+
+		expect(sinOpciones).toEqual([]);
+	});
 });
