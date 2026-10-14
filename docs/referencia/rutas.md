@@ -48,5 +48,6 @@ Las páginas y los endpoints de `app/`.
 | `/oauth/consent` | página | `app/oauth/consent/page.tsx` |
 | `/plataforma` | página | `app/plataforma/page.tsx` |
 | `/plataforma/[slug]` | página | `app/plataforma/[slug]/page.tsx` |
+| `/plataforma/gasto` | página | `app/plataforma/gasto/page.tsx` |
 | `/plataforma/nueva` | página | `app/plataforma/nueva/page.tsx` |
 | `/sin-acceso` | página | `app/sin-acceso/page.tsx` |

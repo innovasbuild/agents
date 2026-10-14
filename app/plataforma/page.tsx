@@ -96,9 +96,17 @@ export default async function PlataformaPage() {
 		<div className="max-w-3xl">
 			<div className="mb-4 flex items-center justify-between gap-3">
 				<h1 className="text-3xl leading-tight">Empresas</h1>
-				<Button asChild size="lg">
-					<Link href="/plataforma/nueva">Nueva empresa</Link>
-				</Button>
+				<div className="flex items-center gap-4">
+					<Link
+						className="text-sm underline underline-offset-4"
+						href="/plataforma/gasto"
+					>
+						Gasto
+					</Link>
+					<Button asChild size="lg">
+						<Link href="/plataforma/nueva">Nueva empresa</Link>
+					</Button>
+				</div>
 			</div>
 			{tenants.length === 0 ? (
 				<p className="text-muted-foreground text-sm">
