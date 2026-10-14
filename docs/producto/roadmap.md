@@ -585,7 +585,7 @@ Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador
 
 **Modelo Claude Code:** Opus 5 para la spec (toca el modelo de permisos); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** el del tenant; el segundo agente define los suyos en su spec.
-**Spec/Plan:** 22.1: `docs/superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md` · plan a escribir. 22.2: a escribir. Alcance en `docs/producto/plan-cierre-gap-2026-10.md` §2.
+**Spec/Plan:** 22.1: `docs/superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md` · `docs/superpowers/plans/2026-10-13-etapa-22-1-chat-multiagente.md`. 22.2: a escribir. Alcance en `docs/producto/plan-cierre-gap-2026-10.md` §2.
 
 Agregada el 2026-10-09 (G5). Partida el 2026-10-13 en dos entregas: **22.1**, un chat para todos los agentes y el agente Asistente (solo brain); **22.2**, permisos de uso por agente y reglas de acceso generalizadas. Más de un agente, catálogo por empresa, selector en el chat, y permisos de quién puede usar cada agente. Decisión central: generalizar las reglas del brain a reglas de acceso a recursos (`brain | agent | connection`), que la Etapa 23 reusa.
 
