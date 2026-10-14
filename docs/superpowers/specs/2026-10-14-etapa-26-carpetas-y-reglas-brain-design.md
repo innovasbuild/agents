@@ -31,7 +31,7 @@ En producción, en el tenant `okeefe`:
 
 | # | Decisión | Por qué |
 |---|---|---|
-| D1 | **Una carpeta de primer nivel es una categoría.** La categoría de una página sale del primer segmento de su ruta; nadie la elige. La columna `category` sigue existiendo y la llena la base | Elimina las dos ideas paralelas que causaron el diagnóstico. Es el patrón que ya tiene `skills/` (categoría `skill` atada a la ruta) |
+| D1 | **Una carpeta de primer nivel es una categoría.** La categoría de una página sale del primer segmento de su ruta; nadie la elige. La columna `category` sigue existiendo y la calcula el servidor (§3.1) | Elimina las dos ideas paralelas que causaron el diagnóstico. Es el patrón que ya tiene `skills/` (categoría `skill` atada a la ruta) |
 | D2 | **Las carpetas son filas** (`brain_folders`), con ruta y descripción. Existen vacías. Una página no puede vivir en una carpeta que no existe | Es lo pedido: que se vean aunque no tengan contenido |
 | D3 | **Los permisos son los de la Etapa 17.** Crear, renombrar, mover, borrar una carpeta vacía o editar sus reglas exige ser administrador del nodo; las carpetas de primer nivel, de la raíz. Sin roles nuevos | La tabla `roles-brain` y la identidad por email de O'Keefe quedan reemplazadas por permisos que el servidor ya aplica |
 | D4 | **Mover y renombrar son una sola operación sobre un prefijo,** con el plan en código puro y la aplicación atómica en SQL. Reescribe los enlaces, mueve permisos y carpetas y deja alias de las rutas viejas | Reusa el patrón del borrado (18.1 D5, D9). Un movimiento a medias deja enlaces rotos |
@@ -65,9 +65,11 @@ Tabla nueva `brain_folders`:
 
 - RLS prendido y sin políticas para `authenticated`, como `brain_pages`: la lee y la escribe el servidor con `service_role`, y lo que ve cada persona lo filtra `withAccess` (Etapa 17).
 - Índice único `(tenant_id, path)`. Una carpeta de más de un segmento exige que exista su carpeta padre (se valida en la función que la crea).
-- `brain_upsert_page` rechaza una página cuya carpeta no existe, con `folder_not_found`. Una página en la raíz (sin `/`) solo se permite si es `00-reglas`, o si ya existía antes de esta etapa (§3.4).
-- `brain_upsert_page` calcula `category` como el primer segmento del slug, salvo para las páginas sueltas de §3.4, que conservan la suya.
-- Las categorías del contrato (`brainContract`) y del filtro de búsqueda salen de las carpetas de primer nivel, ya no de la config del binding. `parseWikiConfig` deja de aceptar `categories` y `requiredFrontmatter` al terminar la migración (§3.4); mientras tanto los acepta y los ignora.
+- Una página nueva en una carpeta que no existe se rechaza con `folder_not_found`. Lo chequea el proveedor `wiki` (`createWikiProvider`) para toda escritura que no sea del import. `brain_upsert_page`, en cambio, **crea las carpetas que falten** del camino de una página nueva. Así el invariante "toda página tiene su carpeta" lo garantiza la base, y el import y los tests SQL existentes siguen andando sin cambios.
+- Una página nueva en la raíz (sin `/`) se rechaza con `folder_required`, salvo `00-reglas` (26.2). Las que ya existían antes de esta etapa siguen editándose (§3.4).
+- La categoría la calcula el proveedor con `categoryForPath(slug)`: el primer segmento, con `skills` → `skill`. Las páginas sueltas de la raíz conservan la suya. La función SQL `brain_category_for(path)` hace lo mismo para lo que escribe la base sola (mover, en la 26.1b).
+- **Ajuste del 2026-10-14, al planificar:** la lista `categories` de la config del binding **se queda**, pero como reflejo de las carpetas de primer nivel. La mantiene sola `brain_sync_categories(tenant)`, que llaman en la misma transacción todas las funciones que crean, borran o mueven una carpeta de primer nivel. Nadie la edita: `platform_set_brain_categories` se borra. Así no cambia ninguno de los llamadores de `resolveBrainBinding`: `brainContract`, las tools del agente, el MCP y el editor siguen leyendo `config.categories`. `requiredFrontmatter` sigue en la config hasta la 26.3.
+- No se puede borrar la última carpeta de primer nivel (`folder_last`): `parseWikiConfig` exige al menos una categoría, y sin ella el brain del tenant dejaría de resolverse.
 
 ### 3.2 Pantallas
 

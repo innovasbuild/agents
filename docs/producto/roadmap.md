@@ -665,7 +665,7 @@ La documentación del repo pasa a ser una wiki en `docs/` (arquitectura, dominio
 
 **Modelo Claude Code:** Opus 5.5 para spec y planes; Sonnet 5.5 para ejecutar, en sesión nueva por entrega.
 **Modelo runtime:** n/a.
-**Spec:** `docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md` · **Plan:** por entrega, a escribir.
+**Spec:** `docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md` · **Plan:** por entrega. 26.1a: `docs/superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md`; 26.1b (mover y renombrar), 26.2 y 26.3, a escribir.
 
 Agregada el 2026-10-14 a pedido de Matías, a partir del brain de O'Keefe: las categorías sin páginas no aparecían, no había forma de renombrarlas ni de crear subcarpetas desde el brain, y las instrucciones del brain y las reglas por carpeta (`operacion/agent`, `operacion/brain`, `talento/personal/00-reglas`) no las lee ni el chat ni el MCP. Tres entregas, cada una depende de la anterior:
 
