@@ -3,7 +3,7 @@ title: Decisiones por PR
 category: decisiones
 status: activo
 tags: [decisiones, pr]
-updated: 2026-10-13
+updated: 2026-10-14
 ---
 
 # Decisiones por PR
@@ -106,3 +106,12 @@ Las specs están en [README.md](README.md).
 | [90](https://github.com/innovasbuild/agents/pull/90) | 2026-10-11 | feat: etapa 21.3, el brain como fuente del ICP y los hooks, pantalla de outreach y presupuestos | [Modelos y costos](../arquitectura/modelos-y-costos.md) · [Outreach](../dominios/outreach.md) · [Brain](../dominios/brain.md) |
 | [91](https://github.com/innovasbuild/agents/pull/91) | 2026-10-11 | feat: etapa 21.4a, una empresa puede usar solo el brain (sin agentes) y entrar con un código por correo | [Tenancy](../arquitectura/tenancy.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) |
 | [92](https://github.com/innovasbuild/agents/pull/92) | 2026-10-13 | docs: spec y plan de la etapa 25, wiki de documentación y harness | [Cómo mantener la wiki](../guias/documentar.md) · [Visión general](../arquitectura/vision-general.md) |
+| [93](https://github.com/innovasbuild/agents/pull/93) | 2026-10-14 | feat: favicon de Central IA | reemplazado por el favicon del PR 95 y movido a `public/` en el 97; sin contrato que documentar |
+| [94](https://github.com/innovasbuild/agents/pull/94) | 2026-10-14 | chore: ignorar .codex/ y docs/.obsidian/ | chore de `.gitignore`, sin código ni contrato |
+| [95](https://github.com/innovasbuild/agents/pull/95) | 2026-10-14 | feat: favicon sobre fondo verde | solo reemplaza imágenes del ícono por defecto; el comportamiento del favicon quedó descrito con el PR 97 en [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [96](https://github.com/innovasbuild/agents/pull/96) | 2026-10-14 | feat: etapa 24.1, skills de empresa: paquete y publicacion | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
+| [97](https://github.com/innovasbuild/agents/pull/97) | 2026-10-14 | feat: favicon y title por tenant | [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [98](https://github.com/innovasbuild/agents/pull/98) | 2026-10-14 | v0.2.0 feat: un chat para todos los agentes y el agente Asistente (etapa 22.1) | [Agentes eve](../dominios/agentes-eve.md) · [Orquestación](../arquitectura/orquestacion.md) · [Tenancy](../arquitectura/tenancy.md) · [Alta de una empresa nueva](../guias/alta-de-tenant.md) · [Correr las evals del agente](../guias/correr-evals.md) |
+| [99](https://github.com/innovasbuild/agents/pull/99) | 2026-10-14 | feat: etapas 24.2a y 24.2b, skills por MCP y paquete completo | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
+| [100](https://github.com/innovasbuild/agents/pull/100) | 2026-10-14 | v0.3.0 feat: gasto de IA por empresa con tags del AI Gateway (etapa 21.5) | [Modelos y costos](../arquitectura/modelos-y-costos.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) · [Agentes eve](../dominios/agentes-eve.md) · [Agregar una tool al agente](../guias/agregar-una-tool.md) |
+| [101](https://github.com/innovasbuild/agents/pull/101) | 2026-10-14 | docs: estado del cierre en producción de la 21.5 | solo actualiza el estado del cierre en `docs/producto/roadmap.md`, que no es página de la wiki |

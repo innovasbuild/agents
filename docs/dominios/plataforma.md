@@ -16,6 +16,7 @@ sources:
   - lib/tenants/tenant-form.ts
   - lib/tenants/auth-methods.ts
   - lib/brand/contrast.ts
+  - lib/tenants/brand-metadata.ts
   - lib/usage/report.ts
   - lib/usage/reconcile.ts
   - lib/agents/catalog.ts
@@ -71,6 +72,8 @@ La consola es solo para quien tenga el rol `platform_admin` **en el tenant dueñ
 ### Marca por empresa y landing
 
 La marca vive en `tenants.brand` (`primary`, `secondary`, `logoUrl`). `brandStyle` la traduce a variables CSS y **calcula el color del texto por contraste** (WCAG): el cliente carga el color, el texto encima no se elige a mano. El logo (PNG, SVG o WebP, hasta 1 MB) va al bucket público `brand` de Supabase Storage, en `brand/<slug>/logo-<timestamp>.<ext>`: la primera carpeta es el slug y las policies de escritura dejan subir solo a un `tenant_admin` de esa empresa o a plataforma. Cada subida usa un nombre nuevo, sin sobrescribir.
+
+El title y el favicon también salen de la marca: `tenantMetadata` (`lib/tenants/brand-metadata.ts`) devuelve `<empresa> - Central IA` como title y el logo como `icons.icon`, y lo usan `app/[tenant]/layout.tsx` y `/login/[tenant]`. Sin logo no pisa nada y queda el ícono de INNOV.AS que declara el `metadata.icons` del root (`app/layout.tsx`, archivos en `public/`; con archivos de convención en `app/` un layout hijo no los reemplazaba y el navegador veía dos `<link rel="icon">`). Una empresa con logo no tiene `apple-touch-icon`, porque iOS no lee SVG y el logo puede serlo.
 
 `/login/[tenant]` es pública: con el cliente admin (`loadPublicTenant`) lee solo lo que la landing muestra (logo o nombre, colores, métodos permitidos y dominios abiertos). Un slug inexistente o una empresa inactiva da 404. Los métodos posibles son `email`, `google` y `microsoft` (`AUTH_METHODS`); `/login` general ofrece solo los que alguna empresa activa tiene habilitados.
 
