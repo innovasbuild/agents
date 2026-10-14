@@ -1,4 +1,4 @@
--- supabase/migrations/20261021120000_spend_report.sql
+-- supabase/migrations/20261022120000_spend_report.sql
 -- Etapa 21.5: lectura del gasto en modelos por período (spec §6). No hay
 -- tablas nuevas: usage_entries sigue cerrada y esto solo agrega.
 --

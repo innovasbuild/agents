@@ -68,7 +68,7 @@ Dos detalles que la spec no resolvía y este plan fija:
 | `lib/agents/model.ts`, `agents/outreach/agent.ts` | Selección de modelo con tags para el chat |
 | `lib/agents/step-usage.ts` (nuevo) | Convierte un `step.completed` en un asiento |
 | `agents/outreach/hooks/usage.ts` (nuevo) | Hook que asienta los pasos del agente |
-| `supabase/migrations/20261021120000_spend_report.sql` (nuevo) | Dos funciones de lectura |
+| `supabase/migrations/20261022120000_spend_report.sql` (nuevo) | Dos funciones de lectura |
 | `supabase/tests/35_spend_report.test.sql` (nuevo) | pgTAP de las funciones |
 | `lib/usage/report.ts` (nuevo) | Rangos de mes en UTC y armado de tablas |
 | `lib/usage/reconcile.ts` (nuevo) | Comparación libro contra gateway |
@@ -101,7 +101,7 @@ Expected: typecheck sin errores y la suite en verde. Si algo falla antes de toca
 ls supabase/migrations | tail -3
 ```
 
-Expected: la última es `20261020120000_brain_skills.sql`. Si hay una posterior, usar el siguiente timestamp en Task 5 y en todo lugar donde este plan nombra el archivo.
+Expected: la última es `20261020120000_brain_skills.sql`. Si hay una posterior, usar el siguiente timestamp en Task 5 y en todo lugar donde este plan nombra el archivo. (La etapa 22.1 ocupa `20261021120000_asistente_agent.sql`, por eso la nuestra es `20261022120000`.)
 
 ---
 
@@ -1103,7 +1103,7 @@ git commit -m "feat: los pasos del agente en el chat asientan su consumo"
 ### Task 5: Funciones de lectura en la base
 
 **Files:**
-- Create: `supabase/migrations/20261021120000_spend_report.sql`
+- Create: `supabase/migrations/20261022120000_spend_report.sql`
 - Create: `supabase/tests/35_spend_report.test.sql`
 - Modify: `lib/supabase/database.types.ts` (regenerado, no a mano)
 
@@ -1254,7 +1254,7 @@ Expected: FAIL en `35_spend_report.test.sql`, las funciones no existen. Si falla
 - [ ] **Step 4: Escribir la migración**
 
 ```sql
--- supabase/migrations/20261021120000_spend_report.sql
+-- supabase/migrations/20261022120000_spend_report.sql
 -- Etapa 21.5: lectura del gasto en modelos por período (spec §6). No hay
 -- tablas nuevas: usage_entries sigue cerrada y esto solo agrega.
 --
@@ -1339,7 +1339,7 @@ Expected: `lib/supabase/database.types.ts` suma `tenant_spend_report` y `platfor
 
 ```bash
 npm run typecheck
-git add supabase/migrations/20261021120000_spend_report.sql supabase/tests/35_spend_report.test.sql lib/supabase/database.types.ts
+git add supabase/migrations/20261022120000_spend_report.sql supabase/tests/35_spend_report.test.sql lib/supabase/database.types.ts
 git commit -m "feat: funciones de lectura del gasto en modelos por período"
 ```
 
@@ -3059,7 +3059,7 @@ En `docs/arquitectura/modelos-y-costos.md`:
 - En "El libro de consumo: `usage_entries`": los pasos del agente en el chat asientan con `node: agent/step` desde `agents/outreach/hooks/usage.ts`; cuentan contra el mismo límite diario de `model_usd`; el chat no se corta por presupuesto.
 - Sección nueva "Reporte por período y conciliación": las dos funciones de lectura, el corte en UTC, la ruta `/[tenant]/settings/gasto`, la ruta `/plataforma/gasto`, la tolerancia y las causas conocidas de diferencia.
 - En "Decisiones": link a la spec de la 21.5 y por qué tags y no una clave por empresa.
-- Sumar a `sources` del frontmatter: la spec de la 21.5, `lib/workflows/gateway-options.ts`, `lib/agents/step-usage.ts`, `agents/outreach/hooks/usage.ts`, `lib/usage/report.ts`, `lib/usage/reconcile.ts` y la migración `20261021120000_spend_report.sql`. Actualizar `updated`.
+- Sumar a `sources` del frontmatter: la spec de la 21.5, `lib/workflows/gateway-options.ts`, `lib/agents/step-usage.ts`, `agents/outreach/hooks/usage.ts`, `lib/usage/report.ts`, `lib/usage/reconcile.ts` y la migración `20261022120000_spend_report.sql`. Actualizar `updated`.
 
 En `docs/dominios/plataforma.md`:
 - En "Dónde vive en el código" y "Cómo funciona": la pantalla `/plataforma/gasto`, que lee con `service_role` después de `requirePlatformAdmin`, y el botón de conciliar. Actualizar `updated` y `sources`.
@@ -3069,7 +3069,7 @@ En `docs/dominios/plataforma.md`:
 La fila de `docs/decisiones/README.md` y la línea "Spec/Plan" de la Etapa 21 ya apuntan a este plan. En `docs/producto/roadmap.md`, en la línea de la 21.5, reemplazar `Spec y plan escritos; falta implementar.` por:
 
 ```markdown
-Código terminado; falta el cierre en producción. **Antes de desplegar:** `npx supabase migration list` y aplicar `20261021120000_spend_report` antes que el código; confirmar en Vercel que el equipo tiene Custom Reporting. **Después del deploy:** mandar un mensaje por el chat de `innovas` y comprobar los asientos `agent/step`; revisar el límite diario de `model_usd` de cada empresa, porque el chat ahora suma contra él; al día siguiente, conciliar.
+Código terminado; falta el cierre en producción. **Antes de desplegar:** `npx supabase migration list` y aplicar `20261022120000_spend_report` antes que el código; confirmar en Vercel que el equipo tiene Custom Reporting. **Después del deploy:** mandar un mensaje por el chat de `innovas` y comprobar los asientos `agent/step`; revisar el límite diario de `model_usd` de cada empresa, porque el chat ahora suma contra él; al día siguiente, conciliar.
 ```
 
 - [ ] **Step 4: Verificación completa**
@@ -3135,7 +3135,7 @@ Usar `/ship`. El PR sale de `feat/etapa-21-5-gasto-ia` contra `main` e incluye l
 No lo ejecuta un agente por su cuenta: aplicar una migración en producción pide confirmación explícita.
 
 - [ ] Confirmar en Vercel que el equipo tiene Custom Reporting y cuánto cobra por consulta. Si no lo tiene, seguir igual: solo el botón de conciliar queda sin efecto.
-- [ ] `npx supabase migration list`. `db push` aplica todas las pendientes: confirmar cuáles son ajenas antes de aplicar `20261021120000_spend_report`. La migración va antes que el código.
+- [ ] `npx supabase migration list`. `db push` aplica todas las pendientes: confirmar cuáles son ajenas antes de aplicar `20261022120000_spend_report`. La migración va antes que el código.
 - [ ] Desplegar.
 - [ ] Mandar un mensaje real por el chat de `innovas`. Comprobar en la base que hay asientos con `node = 'agent/step'` para ese turno y que `runs.cost_usd` de la corrida los incluye.
 - [ ] En los logs del AI Gateway, comprobar que esa llamada tiene el tag `tenant:innovas` y conserva su `sessionId`.
