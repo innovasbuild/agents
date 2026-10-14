@@ -127,6 +127,43 @@ describe("settings del cliente", () => {
 		};
 	});
 
+	describe("dominio propio (solo lectura)", () => {
+		it("sin dominios no muestra la sección", async () => {
+			expect(await render()).not.toContain("Tu dominio");
+		});
+
+		it("muestra el dominio y su estado, sin acciones", async () => {
+			state.tables.tenant_domains = {
+				data: [
+					{ hostname: "ai.acme.com", is_primary: true, status: "active" },
+					{
+						hostname: "nuevo.acme.com",
+						is_primary: false,
+						status: "verifying",
+					},
+				],
+				error: null,
+			};
+			const html = await render();
+			expect(html).toContain("Tu dominio");
+			expect(html).toContain("ai.acme.com");
+			expect(html).toContain("Activo");
+			expect(html).toContain("nuevo.acme.com");
+			expect(html).toContain("Esperando el DNS");
+			expect(html).not.toContain("Agregar dominio");
+			expect(html).not.toContain("Verificar ahora");
+		});
+
+		it("si no se puede leer, la pantalla sigue sin esa sección", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			state.tables.tenant_domains = { data: null, error: { message: "roto" } };
+			const html = await render();
+			expect(html).not.toContain("Tu dominio");
+			expect(html).toContain("Agregar ejecutor");
+			error.mockRestore();
+		});
+	});
+
 	it("un miembro recibe 404", async () => {
 		state.role = "tenant_member";
 		await expect(render()).rejects.toThrow("NEXT_NOT_FOUND");

@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { DomainRow, DomainStatus } from "@/lib/domains/service";
+import { supabaseAuthRedirectsFromEnv } from "@/lib/domains/supabase-auth";
+import { vercelDomainsFromEnv } from "@/lib/domains/vercel";
+import { loadDnsInstructions } from "@/lib/domains/view";
 import { brainForTenant, loadIcpLevels, loadMarco } from "@/lib/outreach/canon";
 import { isAuthMethod } from "@/lib/tenants/auth-methods";
 import { knownWarnings } from "@/lib/tenants/create-warnings";
@@ -24,6 +28,7 @@ import { BindForm } from "./console/bind-form";
 import { BrainSection } from "./console/brain-section";
 import { BudgetsSection } from "./console/budgets-section";
 import { ConnectionsSection } from "./console/connections-section";
+import { DomainSection, type DomainView } from "./console/domain-section";
 import { TenantForm } from "./tenant-form";
 
 interface TenantDetailRow {
@@ -176,6 +181,40 @@ export default async function TenantDetailPage({
 		console.error("consola:", budgetsError.code, budgetsError.message);
 	}
 
+	// Los dominios se leen con la sesión de plataforma (la RLS deja leer a
+	// plataforma y a los miembros). Las instrucciones de DNS salen de Vercel y, si
+	// Vercel falla o demora, ese dominio queda sin ellas: la página sigue.
+	const vercelApi = vercelDomainsFromEnv(process.env);
+	const { data: domainRows, error: domainsError } = await admin.supabase
+		.from("tenant_domains")
+		.select(
+			"id, tenant_id, hostname, is_primary, status, last_error, verified_at, created_at",
+		)
+		.eq("tenant_id", tenant.id)
+		.order("created_at");
+	if (domainsError) {
+		console.error("consola:", domainsError.code, domainsError.message);
+	}
+	const domainList: DomainRow[] = (domainRows ?? []).map((row) => ({
+		id: row.id,
+		tenantId: row.tenant_id,
+		hostname: row.hostname,
+		isPrimary: row.is_primary,
+		status: row.status as DomainStatus,
+		lastError: row.last_error,
+		verifiedAt: row.verified_at,
+		createdAt: row.created_at,
+	}));
+	const dnsById = await loadDnsInstructions(domainList, vercelApi);
+	const domains: DomainView[] = domainList.map((row) => ({
+		id: row.id,
+		hostname: row.hostname,
+		isPrimary: row.isPrimary,
+		status: row.status,
+		lastError: row.lastError,
+		dns: dnsById.get(row.id) ?? null,
+	}));
+
 	const brand = brandFromRow(tenant);
 	const logoSrc = brand.logoUrl
 		? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${brand.logoUrl}`
@@ -283,6 +322,20 @@ export default async function TenantDetailPage({
 								}
 							: null
 					}
+					slug={tenant.slug}
+					tenantId={tenant.id}
+				/>
+			</section>
+
+			<section className="space-y-3">
+				<h2 className="text-lg">Dominio</h2>
+				<DomainSection
+					apiReady={{
+						vercel: vercelApi !== null,
+						supabase: supabaseAuthRedirectsFromEnv(process.env) !== null,
+					}}
+					domains={domains}
+					readError={domainsError !== null}
 					slug={tenant.slug}
 					tenantId={tenant.id}
 				/>
