@@ -24,7 +24,7 @@ sources:
   - lib/brain/core/skills/package-link.ts
   - lib/brain/adapters/skill-packages.ts
   - app/[tenant]/conectar/skills-section.tsx
-  - supabase/migrations/20261021120000_skill_packages_bucket.sql
+  - supabase/migrations/20261022120000_skill_packages_bucket.sql
   - supabase/migrations/20261020120000_brain_skills.sql
   - docs/superpowers/specs/2026-09-13-brain-design.md
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -198,7 +198,7 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 ### Paquete completo por MCP (etapa 24.2b)
 
 - **Tool `skill_package`:** recibe el nombre de una skill visible y devuelve `{ name, version, filename, url, expiresIn }`: un link firmado de 600 segundos al zip de la versión publicada vigente, con nombre `<name>-v<n>.zip`. Se registra junto con las otras tres y cuenta como lectura. Su descripción le dice al asistente que lo baje a una carpeta temporal, lo descomprima y corra los scripts desde ahí, que no lo instale en su carpeta de skills (esa copia queda vieja al republicar), que pida otro link si venció y que, si su entorno no baja archivos, siga con `skill_load` y `skill_file` y avise de lo que no pudo correr. Las instrucciones del servidor y el mensaje de `skill_file` para archivos binarios o grandes apuntan a esta tool.
-- **Bucket `skill-packages`** (migración `20261021120000_skill_packages_bucket`): privado, objeto `<tenant_id>/<digest>.zip`, con un tope por objeto de 26 MB (27262976 bytes). El zip se arma la primera vez que alguien lo pide y se reutiliza: dos versiones con el mismo contenido comparten objeto. `issuePackageLink` (`core/skills/package-link.ts`, puro) decide si hay que armarlo, lo sube y firma el link; `adapters/skill-packages.ts` pone el bucket (`packageObjects`), el cableado (`packageLinkDeps`) y el evento. Si falta un blob, falla: nunca se guarda un paquete incompleto.
+- **Bucket `skill-packages`** (migración `20261022120000_skill_packages_bucket`): privado, objeto `<tenant_id>/<digest>.zip`, con un tope por objeto de 26 MB (27262976 bytes). El zip se arma la primera vez que alguien lo pide y se reutiliza: dos versiones con el mismo contenido comparten objeto. `issuePackageLink` (`core/skills/package-link.ts`, puro) decide si hay que armarlo, lo sube y firma el link; `adapters/skill-packages.ts` pone el bucket (`packageObjects`), el cableado (`packageLinkDeps`) y el evento. Si falta un blob, falla: nunca se guarda un paquete incompleto.
 - **Evento `brain.skill_package_issued`:** cada link emitido inserta una fila en `events` (`channel` `mcp` o `web`, `summary` = slug, `payload` con `name`, `version` y `digest`). Si la inserción falla, se registra en consola y el link se entrega igual.
 - **Sección "Tus skills" de `/conectar`** (`app/[tenant]/conectar/skills-section.tsx`): lista las skills que la persona puede usar (`memberSkills`, que aplica `visibleSkills` con sus niveles) con descripción y botón de descarga, y explica la diferencia entre Claude Code, Codex y Cursor (usan siempre la última) y claude.ai y ChatGPT (hay que subir el zip de nuevo en cada versión). Si no se pudieron leer, lo dice en vez de mostrar una lista vacía; si la persona no ve ninguna, la sección no aparece.
 - **Límite aceptado (P7):** claude.ai y ChatGPT web no corren scripts siempre al día; su entorno no sale a internet por defecto. Queda como etapa 24.4.

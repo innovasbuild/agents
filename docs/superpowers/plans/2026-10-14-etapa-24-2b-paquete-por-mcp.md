@@ -41,7 +41,7 @@
 ### Task 1: Bucket `skill-packages`
 
 **Files:**
-- Create: `supabase/migrations/20261021120000_skill_packages_bucket.sql`
+- Create: `supabase/migrations/20261022120000_skill_packages_bucket.sql`
 - Create: `supabase/tests/35_skill_packages.test.sql`
 
 **Interfaces:**
@@ -81,7 +81,7 @@ Expected: FAIL en `35_skill_packages.test.sql` (el bucket no existe: el primer `
 
 - [ ] **Step 3: Escribir la migración**
 
-`supabase/migrations/20261021120000_skill_packages_bucket.sql`:
+`supabase/migrations/20261022120000_skill_packages_bucket.sql`:
 
 ```sql
 -- Zips publicados de las skills (spec etapa 24.2b §5). Privado y sin
@@ -101,7 +101,7 @@ Expected: PASS, todos los archivos de `supabase/tests/`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase/migrations/20261021120000_skill_packages_bucket.sql supabase/tests/35_skill_packages.test.sql
+git add supabase/migrations/20261022120000_skill_packages_bucket.sql supabase/tests/35_skill_packages.test.sql
 git commit -m "feat: bucket privado para los zips publicados de las skills"
 ```
 
@@ -1717,7 +1717,7 @@ Leer antes `docs/guias/documentar.md`. Toda la prosa en español rioplatense.
 
 - [ ] **Step 1: `docs/dominios/brain.md`**
 
-- Frontmatter: `updated: <fecha del día>`; sumar a `sources` `lib/brain/core/skills/package-link.ts`, `lib/brain/adapters/skill-packages.ts`, `app/[tenant]/conectar/skills-section.tsx`, `supabase/migrations/20261021120000_skill_packages_bucket.sql` y `docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md`.
+- Frontmatter: `updated: <fecha del día>`; sumar a `sources` `lib/brain/core/skills/package-link.ts`, `lib/brain/adapters/skill-packages.ts`, `app/[tenant]/conectar/skills-section.tsx`, `supabase/migrations/20261022120000_skill_packages_bucket.sql` y `docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md`.
 - Nueva subsección "Paquete completo por MCP (etapa 24.2b)" después de "Skills por MCP (etapa 24.2a)": la tool `skill_package` (link firmado de 600 s, nombre `<name>-v<n>.zip`, qué dice su descripción), el bucket `skill-packages` con objeto `<tenant_id>/<digest>.zip` armado la primera vez, la redirección de la descarga web con link de 60 s, el evento `brain.skill_package_issued` (canal `mcp` o `web`), y la sección "Tus skills" de `/conectar` que usa `visibleSkills`.
 - En la tabla de "Qué ve cada uno" de la 24.2a, la columna "Zip" pasa a decir que es el mismo para web y `skill_package`.
 - En las decisiones, sumar P1 a P8 de la spec en una línea cada una. Reemplazar la nota pendiente sobre el límite de respuesta de Vercel (cerca de la línea 250) por: la descarga ya no pasa por la función; queda verificar en preview que un paquete de más de 5 MB baja bien.
