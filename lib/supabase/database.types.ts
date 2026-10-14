@@ -124,6 +124,45 @@ export type Database = {
 					},
 				];
 			};
+			brain_folders: {
+				Row: {
+					created_at: string;
+					created_by: string | null;
+					description: string;
+					id: string;
+					path: string;
+					tenant_id: string;
+					updated_at: string;
+				};
+				ComputedFields: never;
+				Insert: {
+					created_at?: string;
+					created_by?: string | null;
+					description?: string;
+					id?: string;
+					path: string;
+					tenant_id: string;
+					updated_at?: string;
+				};
+				Update: {
+					created_at?: string;
+					created_by?: string | null;
+					description?: string;
+					id?: string;
+					path?: string;
+					tenant_id?: string;
+					updated_at?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "brain_folders_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			brain_mcp_usage: {
 				Row: {
 					reads: number;
@@ -1520,9 +1559,23 @@ export type Database = {
 				Args: { p_tenant: string; p_user: string };
 				Returns: undefined;
 			};
+			brain_category_for: { Args: { p_path: string }; Returns: string };
 			brain_cleanup_orphan_access_rules: {
 				Args: Record<PropertyKey, never>;
 				Returns: number;
+			};
+			brain_create_folder: {
+				Args: {
+					p_actor: string;
+					p_description: string;
+					p_path: string;
+					p_tenant: string;
+				};
+				Returns: undefined;
+			};
+			brain_delete_folder: {
+				Args: { p_actor: string; p_path: string; p_tenant: string };
+				Returns: undefined;
 			};
 			brain_delete_page: {
 				Args: {
@@ -1538,6 +1591,14 @@ export type Database = {
 					deleted_revisions: number;
 					rules_removed: number;
 				}[];
+			};
+			brain_ensure_folders: {
+				Args: { p_actor: string; p_path: string; p_tenant: string };
+				Returns: number;
+			};
+			brain_folders_from_config: {
+				Args: { p_tenant: string };
+				Returns: number;
 			};
 			brain_mcp_hit: {
 				Args: {
@@ -1606,6 +1667,15 @@ export type Database = {
 				};
 				Returns: undefined;
 			};
+			brain_set_folder_description: {
+				Args: {
+					p_actor: string;
+					p_description: string;
+					p_path: string;
+					p_tenant: string;
+				};
+				Returns: undefined;
+			};
 			brain_skill_files_digest: {
 				Args: { p_page_id: string };
 				Returns: string;
@@ -1650,6 +1720,7 @@ export type Database = {
 				};
 				Returns: string;
 			};
+			brain_sync_categories: { Args: { p_tenant: string }; Returns: undefined };
 			brain_upsert_page: {
 				Args: {
 					p_author_kind: Database["public"]["Enums"]["brain_author_kind"];
@@ -1784,10 +1855,6 @@ export type Database = {
 					p_enabled: boolean;
 					p_tenant: string;
 				};
-				Returns: undefined;
-			};
-			platform_set_brain_categories: {
-				Args: { p_actor: string; p_categories: string[]; p_tenant: string };
 				Returns: undefined;
 			};
 			platform_set_budget: {
