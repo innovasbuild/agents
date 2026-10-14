@@ -16,6 +16,8 @@ sources:
   - lib/tenants/tenant-form.ts
   - lib/tenants/auth-methods.ts
   - lib/brand/contrast.ts
+  - lib/domains
+  - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
   - lib/tenants/brand-metadata.ts
   - lib/usage/report.ts
   - lib/usage/reconcile.ts
@@ -79,12 +81,25 @@ El title y el favicon también salen de la marca: `tenantMetadata` (`lib/tenants
 
 ### Detalle de una empresa en la consola
 
-`/plataforma/[slug]` muestra, en orden: el formulario de la empresa, **Qué falta** (`tenantReadiness`: sin agentes, sin brain, faltan conectores, conectores sin verificar, falta el ICP o los hooks en el brain), **Agentes**, **Brain**, **Conectores**, **Presupuestos** y **Usuarios**.
+`/plataforma/[slug]` muestra, en orden: el formulario de la empresa, **Qué falta** (`tenantReadiness`: sin agentes, sin brain, faltan conectores, conectores sin verificar, falta el ICP o los hooks en el brain), **Agentes**, **Brain**, **Conectores**, **Dominio**, **Presupuestos** y **Usuarios**.
 
 - **Agentes** (`setAgent`): habilita o deshabilita un agente del catálogo y fija su acceso al brain (`none`, `read`, `read_write`) con `platform_set_agent` (evento `agent.updated`). Un agente que requiere brain no se habilita hasta que exista uno; al prenderse por primera vez se siembran las páginas del canon.
 - **Brain** (`createBrain`, `setBrainCategories`): crea el binding `brain/wiki` con la configuración por defecto (categorías `empresa`, `producto`, `comercial`, `operacion` y el frontmatter requerido) y edita las categorías. El contenido del brain se explica en [brain](brain.md).
 - **Conectores**: ver [conectores](conectores.md).
+- **Dominio** (`addTenantDomain`, `verifyTenantDomain`, `makeTenantDomainPrimary`, `removeTenantDomain`, en `domain-actions.ts`): el dominio propio de la empresa (por ejemplo `ai.okeefe.com.ar`). Cada acción repite `requirePlatformAdmin` y comprueba que el dominio sea de la empresa de la página; el administrador de la empresa solo lo ve, en su `/settings`. El detalle está abajo.
 - **Presupuestos** (`setBudget`): límite diario por recurso en `tenant_budgets`, vía `platform_set_budget`. Los recursos salen del registro en código (`budgetResources`), no de la base. Con límite en 0 los procesos que usan ese recurso no corren. El día se corta en UTC.
+
+### Dominio propio de una empresa
+
+`lib/domains/` hace el trabajo y no importa `next/*`, porque lo usa también un schedule de eve. `service.ts` es la máquina de estados (`pending`, `verifying`, `active`, `failed`) con todo lo externo inyectado; `vercel.ts` y `supabase-auth.ts` son los adaptadores de las dos APIs; `store.ts` lee y escribe `tenant_domains` con la service role; `hostname.ts` valida; `view.ts` arma lo que muestra la consola; `origin.ts` decide con qué dominio sale un link de invitación.
+
+- **Agregar** valida el hostname (subdominio completo; no hosts de la plataforma, `*.vercel.app`, IPs ni `localhost`), inserta la fila, lo agrega al proyecto de Vercel y hace un primer intento de activar.
+- **Activar** (`refreshDomain`) pide a Vercel que verifique la propiedad y mira que el DNS apunte a la plataforma y se pueda emitir el certificado; recién después lo suma a las Redirect URLs de Supabase Auth, lo marca `active` y, si es el primero de la empresa, principal. Si falla Supabase no se activa. Un error definitivo de Vercel (dominio en otro proyecto, inválido) lo deja `failed`; uno transitorio, en el estado que tenía.
+- **Quitar** lo saca de Vercel (si Vercel falla no borra la fila), de la base y de las Redirect URLs, y promueve otro dominio activo a principal.
+- **Barrido**: el schedule `domain-sweep` (cada 10 minutos) activa los que esperan DNS.
+- **Links de invitación** salen con el dominio principal activo de la empresa (`invitationOrigin`), también cuando quien invita está en el host raíz. El link mágico del login no: vuelve al host donde se pidió, porque el verificador PKCE vive en sus cookies.
+
+Las instrucciones de DNS que muestra la consola salen de Vercel en cada carga (con un tope de 4 segundos por dominio). Paso a paso para una empresa: [dominio de un cliente](../guias/dominio-de-un-cliente.md).
 
 ### Gasto en modelos: `/plataforma/gasto`
 
@@ -111,11 +126,11 @@ Ejecutores, aprobaciones y conectores usan las funciones `set_executor`, `remove
 ## 4. Cómo se prueba
 
 ```bash
-npm test -- tests/plataforma tests/tenants tests/brand tests/settings
-npm run db:test   # 29_platform_console, 30_tenant_settings, 36_spend_report, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
+npm test -- tests/plataforma tests/tenants tests/brand tests/settings tests/domains
+npm run db:test   # 29_platform_console, 30_tenant_settings, 36_spend_report, 37_tenant_domains, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
 ```
 
-Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach, gasto), `tests/plataforma/gasto-*.test.ts` (pantalla y conciliación). No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)).
+Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach, gasto), `tests/plataforma/gasto-*.test.ts` (pantalla y conciliación). `tests/domains/*` cubre las dos APIs con `fetch` simulado contra los contratos documentados, la máquina de estados y la vista. No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)), ni los adaptadores de dominios contra la API real de Vercel y de Supabase.
 
 ## 5. Decisiones
 
@@ -126,4 +141,5 @@ Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tes
 - [#87](https://github.com/innovasbuild/agents/pull/87): agentes, brain y conectores por empresa; `tenant_agents` cerrado a escritura desde la sesión.
 - [#89](https://github.com/innovasbuild/agents/pull/89): settings del cliente (ejecutores, aprobaciones, conectores).
 - #71 dice que los métodos de login se restringen solo en pantalla; desde la Etapa 20.1 se imponen también en el servidor ([#85](https://github.com/innovasbuild/agents/pull/85), ver [identidad y acceso](../arquitectura/identidad-y-acceso.md)).
+- [Etapa 21.6](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md): dominio propio por empresa. Corte b: la sección Dominio de la consola, las APIs de Vercel y de Supabase, el barrido y los links de invitación.
 - [Etapa 21.5](../superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md): gasto de IA por empresa; las dos pantallas de gasto y la conciliación. El detalle de costos está en [modelos y costos](../arquitectura/modelos-y-costos.md).

@@ -210,7 +210,7 @@ publicOriginForTenant(tenantId: string, deps: TenantOriginDeps): Promise<string>
 - `publicOriginForRequest` solo devuelve `https://<host>` cuando `resolveHost` dio `root` o `tenant`. Con `unknown` o sin header devuelve `PUBLIC_APP_URL` (o `https://$VERCEL_URL` como hoy). **Nunca** refleja un host sin validar (H8).
 - `publicOriginForTenant` lee el primario de `tenant_domains` (con la misma caché).
 - `publicSettings()` pasa a recibir el origen: `publicSettings(origin?: string)`. Sin argumento se comporta exactamente como hoy (lo usa el canal de eve al compilar y las pruebas existentes). Con argumento, `publicUrl = origin`. `issuer` no cambia (§4.7).
-- `originFrom(headers)` se mantiene para el caso "link para quien opera" (por ejemplo, la landing que ve una persona de plataforma). Los **links por correo** (invitaciones en `settings/usuarios/actions.ts:249`, `plataforma/nueva/actions.ts:112`, `api/invitations/route.ts:65`, link mágico en `(auth)/login/actions.ts:71`) pasan a `publicOriginForTenant(tenantId)`. Cada uno es un cambio de una línea más su test.
+- `originFrom(headers)` se mantiene para el caso "link para quien opera" (por ejemplo, la landing que ve una persona de plataforma). Los **links de invitación** (`settings/usuarios/actions.ts` y `api/invitations/route.ts`) pasan a `invitationOrigin(tenantId, fallback)` (`lib/domains/origin.ts`), que devuelve el dominio principal activo de la empresa y, si no tiene o no se puede leer, el origen de siempre. `plataforma/nueva/actions.ts` queda como está: una empresa recién creada no tiene dominio. **El link mágico del login (`(auth)/login/actions.ts`) NO cambia** (corrección a la versión anterior de esta spec): lo pide la persona desde el host donde está y tiene que volver a ese mismo host, porque el verificador PKCE vive en sus cookies; ahí el origen es el del request y lo que hace falta es que ese host esté en las Redirect URLs (§4.9).
 
 ### 4.5 URLs de MCP bajo el dominio de la empresa (corte a)
 
@@ -341,7 +341,7 @@ Sin decisiones pendientes (A1 a A3 resueltas, §3.1).
 1. Adaptadores de Vercel y de Supabase Auth (§4.8, §4.9) con interfaces inyectables y dobles de prueba.
 2. Sección "Dominio" en la consola y línea de solo lectura en settings (§4.10).
 3. Verificación a pedido y barrido periódico.
-4. Links por correo con `publicOriginForTenant` (H9).
+4. Links por correo con el dominio de la empresa (H9), solo en las invitaciones.
 
 ### 21.6c · Cierre en producción
 
@@ -352,8 +352,8 @@ Operación, no código (§7): variables, primer dominio real, verificación de p
 **Spikes (se hacen antes de escribir el código que depende de cada uno; el resultado se anota en un párrafo al pie de este apartado, con fecha):**
 
 - **S1 · `resource` del canal de eve.** ¿`oauthResource` sin `resource` deriva la URL del request, detrás del reverse proxy de Vercel, con el host público? Probar con `eve build` + una request con `X-Forwarded-Host`. Decide si §4.5 punto 4 es "omitir `resource`" o un `AuthFn` propio. **Resultado (2026-10-14, desarrollo): no sirve omitirlo.** Sin `resource`, eve deriva el origen y la ruta del request interno (`http://127.0.0.1:63104/eve/v1/mcp`), no del público; el 401 apuntaba a una metadata inexistente. Al canal solo le llega `x-forwarded-host` con el host público (sin `x-forwarded-proto`). Se resolvió armando el desafío en `mcpChallenge` y dejando `resource` fijo. **Pendiente de verificar en un deploy de Vercel**: que `x-forwarded-host` llegue también ahí al canal.
-- **S2 · API de dominios de Vercel.** Endpoints vigentes, forma de la respuesta de verificación, qué valor de CNAME devuelve, límites de dominios por proyecto y si el plan actual del equipo permite el volumen esperado. Confirmar contra la doc oficial, no contra memoria.
-- **S3 · Management API de Supabase Auth.** Confirmar el campo de la lista de redirects, que el `PATCH` reemplaza la lista completa y que el token requerido es el de cuenta (no el service role).
+- **S2 · API de dominios de Vercel.** Endpoints vigentes, forma de la respuesta de verificación, qué valor de CNAME devuelve, límites de dominios por proyecto y si el plan actual del equipo permite el volumen esperado. Confirmar contra la doc oficial, no contra memoria. **Resultado (2026-10-14, documentación oficial vigente):** agregar es `POST /v10/projects/{id}/domains` (`{name}`; devuelve `verified` y, si falta, `verification[]` con el desafío TXT; un dominio ya presente en el proyecto devuelve 400 y uno de otro proyecto 409); consultar, `GET /v9/projects/{id}/domains/{domain}`; verificar, `POST /v9/.../verify` (400 si todavía no hay TXT); quitar, `DELETE /v9/.../{domain}`; y la configuración de DNS, `GET /v6/domains/{domain}/config?projectIdOrName=`, que devuelve `recommendedCNAME[]` (rank 1 es el preferido), `configuredBy` (null si no resuelve a Vercel) y `misconfigured` (falso solo si está configurado **y** se puede emitir el certificado). Todos aceptan `teamId`. Un dominio está listo cuando `verified` y `configuredBy != null` y `!misconfigured`. Sin verificar: el límite de dominios por proyecto del plan del equipo.
+- **S3 · Management API de Supabase Auth.** Confirmar el campo de la lista de redirects, que el `PATCH` reemplaza la lista completa y que el token requerido es el de cuenta (no el service role). **Resultado (2026-10-14):** `GET` y `PATCH /v1/projects/{ref}/config/auth`, campo `uri_allow_list` (string), con el scope `auth_config_write` y bearer de cuenta. La doc **no dice** si el `PATCH` reemplaza el valor entero ni cómo se separan las entradas: se asume reemplazo y coma (como GoTrue), y por eso el adaptador lee, conserva lo ajeno, escribe y **vuelve a leer para confirmar**; si Supabase no guardó lo pedido falla y el dominio no se activa. **Pendiente de confirmar con un `PATCH` real** en un proyecto que no sea el de producción.
 - **S4 · PKCE en un host propio.** Con un dominio de prueba real, completar un login con link mágico y con Google, y confirmar que `exchangeCodeForSession` encuentra el verificador. Es el riesgo funcional más grande de la entrega.
 - **S5 · Redirección a la URL limpia.** En un host de empresa, probar que un `Link` a `/okeefe/chat`, un `router.push` y el `redirect()` de una server action terminan en `/chat` sin recarga completa, que un `POST` de server action sobre una URL con slug conserva método y cuerpo, y cuánto cuesta el salto extra. Si la navegación del cliente no lo maneja bien, el plan B es el helper de links que está en §8 y pasa a ser parte del corte a. **Resultado (2026-10-14, navegador contra `okeefe.localhost`): anda.** Un clic en un link a `/okeefe/conectar` termina en `/conectar` con la página sin recargar (un marcador en `window` sobrevive), una entrada directa a `/okeefe/conectar` termina en `/conectar`, y el login por código aterriza en `/chat`. Sin verificar: el `POST` de una server action sobre una URL con slug y el costo medido del salto.
 
@@ -366,7 +366,7 @@ Operación, no código (§7): variables, primer dominio real, verificación de p
 - `assertHostServesTenant`: host de empresa + slug propio pasa; + slug ajeno da 404 indistinguible de "no existe"; host raíz no valida.
 - `buildConnectables`: con `tenantHost`, la URL del brain es `<origen>/brain/mcp` y la del agente no lleva `?tenant=`; sin él, las de hoy.
 - `resolveMcpChannelAuth`: `?tenant=` ausente en un host de empresa se toma del host; ausente en el raíz sigue dando el error actual.
-- Que cada link de correo use `publicOriginForTenant`: un test por cada uno de los cuatro puntos (§4.4).
+- Que cada link de invitación use el dominio de la empresa (`invitationOrigin`): la ruta `/api/invitations` y el reenvío desde `/settings/usuarios`. El link mágico del login **no** (§4.4).
 - `proxy.ts`: la tabla de §4.3, fila por fila (incluye las dos redirecciones 308 con query, `/plataforma` y `/brain/okeefe/mcp` dando 404, y que en el host raíz `/brain/<slug>/mcp` sale temprano sin tocar Supabase).
 - Que no exista una página del brain llamada `mcp` (lista los directorios de `app/[tenant]/brain/`): `/brain/mcp` quedaría ambiguo.
 
@@ -451,5 +451,5 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 | `lib/domains/vercel.ts`, `lib/domains/supabase-auth.ts` (nuevos) | Adaptadores con interfaz inyectable | b |
 | `app/plataforma/[slug]/page.tsx` y sus actions | Sección "Dominio" | b |
 | `app/[tenant]/settings/` | Línea de solo lectura | b |
-| `app/[tenant]/settings/usuarios/actions.ts:249`, `app/plataforma/nueva/actions.ts:112`, `app/api/invitations/route.ts:65`, `app/(auth)/login/actions.ts:71` | `publicOriginForTenant` en los links por correo | b |
+| `app/[tenant]/settings/usuarios/actions.ts`, `app/api/invitations/route.ts` | `invitationOrigin` (`lib/domains/origin.ts`) en los links de invitación | b |
 | `docs/dominios/plataforma.md`, `docs/arquitectura/entornos-y-deploy.md`, `docs/arquitectura/identidad-y-acceso.md`, `docs/guias/dominio-de-un-cliente.md` | Documentación | c |

@@ -9,6 +9,7 @@ sources:
   - lib/tenants/host.ts
   - lib/tenants/host-store.ts
   - lib/tenants/public-url.ts
+  - lib/domains/supabase-auth.ts
   - app/.well-known/oauth-protected-resource/brain/mcp
   - docs/superpowers/specs/2026-10-09-etapa-20-login-design.md
   - docs/superpowers/specs/2026-10-09-ingreso-por-dominio-design.md
@@ -143,6 +144,10 @@ El `resource` que publica la metadata tiene que ser exactamente la URL a la que 
 | Agente | `https://ai.okeefe.com.ar/eve/outreach/v1/mcp` (sin `?tenant=`) | `https://agentes.innov.as/eve/outreach/v1/mcp?tenant=okeefe` |
 
 El proxy reescribe `/brain/mcp` a `/brain/okeefe/mcp`, así que el endpoint es la misma ruta de siempre. El canal del agente conserva `resource` fijo (eve lo derivaría del request interno, no del público), pero su desafío 401 lo arma `mcpChallenge` con `x-forwarded-host`, así que apunta a la metadata del dominio por el que llegó la persona. Un host de empresa solo sirve a su empresa (`assertHostServesTenant`; en el canal del agente, `?tenant=` pasa a ser opcional y uno distinto del host se trata como sin acceso). Un `Host` que no resuelve a nada nunca se refleja en la metadata: se usa el origen fijo. `/conectar` muestra estas URLs según el host por el que entró la persona.
+
+### Redirect URLs de cada dominio
+
+Para que el link mágico y Google vuelvan al dominio de la empresa, cada dominio activo tiene que estar en las Redirect URLs de Supabase Auth: si el `redirectTo` no está permitido, Supabase cae a la Site URL, el `code` PKCE llega a otro host y el login falla (el código de 6 dígitos no usa redirect y anda igual). `syncAuthRedirectUrls` (`lib/domains/supabase-auth.ts`) lo mantiene por la Management API: lee la lista, suma `https://<dominio>/auth/callback**` de los activos, saca la de los que se quitan, **conserva todo lo que no es suyo** (lo cargado a mano en el panel) y vuelve a leer para confirmar que Supabase guardó lo pedido. Un dominio no pasa a `active` si ese paso falla. La Site URL no cambia. Cómo se opera: [dominio de un cliente](../guias/dominio-de-un-cliente.md).
 
 Lo que no se puede ocultar: Supabase arma la URL del consentimiento con una sola Site URL, así que `/oauth/consent` siempre se muestra en el host raíz, y el emisor sigue siendo el de Supabase.
 

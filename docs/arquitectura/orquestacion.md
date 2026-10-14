@@ -100,8 +100,9 @@ Un nodo con modelo fijo declara `model` en `NodeInfo` y no elige entre los tiers
 | `morning-sweep` | `0 10 * * 1-5` | Barre Gmail y confirma envíos inciertos (`outreach/sweep` y `outreach/reconcile`, vía `lib/outreach/services/sweep.ts`) |
 | `followups` | `0 11 * * 1-5` | Redacta follow-ups y deja la pieza `pending` (nodo `outreach/followups`) |
 | `crm-sync` | `0 12,21 * * *` | Sincroniza HubSpot hacia la base propia (nodo `outreach/crm-sync`) |
+| `domain-sweep` | `*/10 * * * *` | Activa los dominios propios de empresa que esperan DNS (`lib/domains/service.ts`, ver [dominio de un cliente](../guias/dominio-de-un-cliente.md)). Es de plataforma, no de outreach: vive en este agente porque es el único con schedules desplegados. No hace nada sin las APIs de Vercel y de Supabase |
 
-Ninguno manda mail: la garantía es estructural, no hay una dependencia de envío debajo.
+Ninguno manda mail: la garantía es estructural, no hay una dependencia de envío debajo (`domain-sweep` tampoco: no toca Gmail).
 
 ## 2. Contrato del nodo
 
