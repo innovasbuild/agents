@@ -55,8 +55,8 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 
 | Ruta | Qué es |
 |---|---|
-| `agents/asistente/` | El agente Asistente: `agent.ts`, `instructions.md`, `instructions/tenant.ts`, `channels/eve.ts`, `hooks/{bind-session,runs}.ts`, `tools/brain.ts` y cinco evals |
-| `lib/agents/eve/` | Lo que comparten los agentes: `webChannel`, `bindSessionHook`, `runsHook`, `tenantModel`, `brainTools` y `attribute` |
+| `agents/asistente/` | El agente Asistente: `agent.ts`, `instructions.md`, `instructions/tenant.ts`, `channels/eve.ts`, `hooks/{bind-session,runs,usage}.ts`, `tools/brain.ts` y cinco evals |
+| `lib/agents/eve/` | Lo que comparten los agentes: `webChannel`, `bindSessionHook`, `runsHook`, `usageHook`, `tenantModel`, `brainTools` y `attribute` |
 | `lib/agents/chat-agents.ts` | `availableChatAgents` y `defaultChatAgent`: qué agentes ofrece el chat y cuál queda elegido |
 | `lib/agents/assistant-instructions.ts` | El contexto que se suma a las instrucciones del Asistente |
 | `agents/outreach/agent.ts` | Config del agente. Solo el modelo, resuelto por tenant en `session.started` |
@@ -93,7 +93,7 @@ Los valores salen de `AGENT_CATALOG`. Los dos piden brain para trabajar (`requir
 
 ### Lo que comparten
 
-`lib/agents/eve/` tiene lo que antes era de outreach: `webChannel(agent)` (el canal del chat), `bindSessionHook()` y `runsHook()` (atan la sesión a la conversación y abren y cierran `runs`), `tenantModel(agent)` (el modelo por tenant) y `brainTools(agent)` (las tools del brain), más `attribute.ts` con el helper que lee los atributos de la auth. Cada agente los monta desde archivos de pocas líneas: `agents/asistente/agent.ts` es `defineAgent({ model: tenantModel("asistente") })`, `channels/eve.ts` es `export default webChannel("asistente")` y `tools/brain.ts` es `export default brainTools("asistente")`. Los de `agents/outreach/` son lo mismo con su nombre.
+`lib/agents/eve/` tiene lo que antes era de outreach: `webChannel(agent)` (el canal del chat), `bindSessionHook()`, `runsHook()` y `usageHook()` (atan la sesión a la conversación, abren y cierran `runs` y asientan cada paso del modelo), `tenantModel(agent)` (el modelo por tenant, con la etiqueta `tenant:<slug>` del gateway) y `brainTools(agent)` (las tools del brain), más `attribute.ts` con el helper que lee los atributos de la auth. Cada agente los monta desde archivos de pocas líneas: `agents/asistente/agent.ts` es `defineAgent({ model: tenantModel("asistente") })`, `channels/eve.ts` es `export default webChannel("asistente")` y `tools/brain.ts` es `export default brainTools("asistente")`. Los de `agents/outreach/` son lo mismo con su nombre.
 
 Quedó el camino directo del spike: eve compila esos archivos con la fábrica importada desde `lib/agents/eve/`, y las evals `brain-tools` de los dos agentes lo prueban contra el agente compilado. Los módulos que importa una carpeta de `agents/` usan imports relativos, nunca `@/`, porque eve no resuelve los paths de `tsconfig`.
 
@@ -111,7 +111,7 @@ Todo lo que cambia por cliente se resuelve con `defineDynamic` en el evento `ses
 
 | Slot | Qué resuelve |
 |---|---|
-| `model` (`agent.ts`) | `resolveModelForTenant`: override del agente en `tenant_agents.model`, después lo elegido en el hilo (`conversations.model`), después `tenants.default_model`. Un modelo solo vale si está en `tenants.allowed_models` |
+| `model` (`agent.ts`) | `resolveModelForTenant`: override del agente en `tenant_agents.model`, después lo elegido en el hilo (`conversations.model`), después `tenants.default_model`. Un modelo solo vale si está en `tenants.allowed_models`. Con el slug del tenant en la auth, `modelSelection` lo devuelve junto con el tag `tenant:<slug>` del AI Gateway |
 | `instructions/tenant.ts` | Resumen de sesión (`sessionSummary`) para un usuario; si la base falla, la sesión arranca igual con una línea mínima. Suma las alertas de workflows de las últimas horas |
 | `connections/tenant.ts` | `resolveTenantConnections` con los bindings del tenant. Un tenant sin binding de una capacidad no tiene esa clave |
 | `tools/brain.ts` | Tools del brain (`brain_search`, `brain_read`, y `brain_upsert` con aprobación de un administrador) solo si el agente tiene acceso declarado y el tenant tiene binding. Los schemas van inline: un schema en una variable es una captura no serializable y eve descarta todo el resolver en silencio (causa de [#57](https://github.com/innovasbuild/agents/pull/57) y de la regla de la 0.59) |

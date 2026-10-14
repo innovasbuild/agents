@@ -3,11 +3,12 @@ title: Agregar un nodo o un workflow
 category: guias
 status: activo
 tags: [nodos, workflows, orquestacion, registry]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - lib/workflows/registry.ts
   - lib/workflows/types.ts
   - lib/workflows/usage.ts
+  - lib/workflows/gateway-options.ts
   - lib/workflows/runner.ts
   - lib/workflows/enqueue.ts
   - lib/outreach/workflows/refresh-fichas.ts
@@ -34,7 +35,7 @@ Los contratos (qué es un nodo, qué puede hacer un workflow, la escala de efect
 
    Un nodo con modelo fijo suma `model` (como `outreach/icp-score`). Si el archivo no es un nodo por sí mismo (un helper, o la llamada al modelo de otro nodo), va a `SERVICES_EXCLUIDOS` con un motivo de diez caracteres o más.
 
-3. En cada puerta que lo use (una tool del chat, un schedule, una server action), envolvé la función `generate` con `metered(...)` de `lib/workflows/usage.ts`, pasando `node`, `tenantId`, `runId` y `workflow`. Así cada llamada deja su asiento en `usage_entries` con el costo que informa el AI Gateway. Si el nodo gasta otra cosa (créditos de un proveedor), el asiento lo escribe la puerta con el `RecordUsage` que arma `createUsageRecorder`.
+3. En cada puerta que lo use (una tool del chat, un schedule, una server action), envolvé la función `generate` con `metered(...)` de `lib/workflows/usage.ts`, pasando `node`, `tenantId`, `runId` y `workflow`. Así cada llamada deja su asiento en `usage_entries` con el costo que informa el AI Gateway. Si el nodo gasta otra cosa (créditos de un proveedor), el asiento lo escribe la puerta con el `RecordUsage` que arma `createUsageRecorder`. Si llama al modelo, el servicio recibe `providerOptions` como dependencia y la puerta le pasa el tag de la empresa con `createGatewayOptions(admin)` de `lib/workflows/gateway-options.ts` (`await gatewayOptionsFor(tenantId)`): así el AI Gateway agrupa el gasto por empresa. Ver [modelos y costos](../arquitectura/modelos-y-costos.md).
 
 4. Escribí los tests del servicio con dependencias falsas: éxito, rechazo y excepción (`tests/outreach/fake-store.ts` trae el store falso de outreach).
 
@@ -91,6 +92,7 @@ El workflow está terminado cuando su primera corrida real aparece en `runs` en 
 | Que un `upstream` tenga quién produzca lo que reclama | "todo claims tiene quién lo produzca…" | `tests/workflows/registry.test.ts` |
 | `model_usd` en `resources` cuando hay tope en USD | "un workflow con tope de costo por pasada mide model_usd…" | `tests/workflows/registry.test.ts` |
 | `metered(` en un archivo que importa `generateText` | "todo archivo que importa generateText o experimental_evaluate usa metered" | `tests/workflows/model-calls.test.ts` |
+| `gatewayOptions(` o `createGatewayOptions(` en un archivo que importa `generateText` | "todo archivo que importa generateText o experimental_evaluate etiqueta la llamada" | `tests/workflows/model-calls.test.ts` |
 | Regenerar la referencia | "docs/referencia coincide con lo que genera docs:sync" | `tests/docs/wiki.test.ts` |
 | Nombrar el nodo o el workflow en la wiki | "toda superficie está mencionada en arquitectura/, dominios/ o guias/…" | `tests/docs/cobertura.test.ts` |
 
