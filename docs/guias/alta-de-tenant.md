@@ -57,6 +57,8 @@ En los ejemplos la empresa es `acme`, con dominio `acme.test`. Reemplazalos por 
 
 11. **Comprobar.** Entrá con la persona administradora y verificá: aterriza donde corresponde (el chat con un agente de chat, `/acme/brain` solo con brain, `/acme/conectar` en otro caso), el menú muestra solo lo de sus agentes y las pantallas de un agente apagado dan 404. En `/plataforma` la empresa figura "Listo".
 
+12. **Dominio propio (opcional).** Si el cliente quiere entrar por su dominio, seguí [dominio de un cliente](dominio-de-un-cliente.md).
+
 ## Qué va a fallar si te olvidás de algo
 
 | Te olvidaste de | Qué pasa |

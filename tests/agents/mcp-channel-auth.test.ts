@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type McpChannelAuthDeps,
+	mcpChallenge,
 	resolveMcpChannelAuth,
 } from "@/lib/agents/mcp-channel-auth";
 
@@ -371,5 +372,172 @@ describe("resolveMcpChannelAuth", () => {
 			expect(JSON.stringify(result)).not.toContain("postgres");
 			error.mockRestore();
 		});
+	});
+});
+
+describe("resolveMcpChannelAuth en el dominio de una empresa", () => {
+	beforeEach(() => {
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://proyecto.supabase.co");
+	});
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	const tenantHost = async () => ({ kind: "tenant", slug: "a" }) as const;
+
+	it("sin ?tenant= toma la empresa del host", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", null),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			sessionAuth: { attributes: { tenantSlug: "a" } },
+		});
+	});
+
+	it("con ?tenant= igual al del host sigue andando", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("con ?tenant= de otra empresa responde como si no tuviera acceso", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("admin", "inactivo"),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toEqual({
+			ok: false,
+			kind: "forbidden",
+			message: "No tenés acceso a ese cliente.",
+		});
+	});
+
+	it("un host desconocido no sirve a nadie", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({ host: async () => ({ kind: "unknown" }) }),
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			kind: "forbidden",
+			message: "No tenés acceso a ese cliente.",
+		});
+	});
+
+	it("en el host raíz sigue pidiendo ?tenant=", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", null),
+			deps({ host: async () => ({ kind: "root" }) }),
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			kind: "forbidden",
+			message: "Falta el tenant en la URL de conexión: agregá ?tenant=<slug>.",
+		});
+	});
+
+	it("si el host no se puede resolver, no deja pasar ni filtra el motivo", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({
+				host: async () => {
+					throw new Error("conexión a postgres perdida");
+				},
+			}),
+		);
+		expect(result).toEqual({
+			ok: false,
+			kind: "forbidden",
+			message: "No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+		});
+		error.mockRestore();
+	});
+
+	it("un token inválido sigue siendo 401 antes de mirar el host", async () => {
+		const host = vi.fn(tenantHost);
+		const result = await resolveMcpChannelAuth(
+			request("vencido", "a"),
+			deps({ host }),
+		);
+		expect(result).toMatchObject({ ok: false, kind: "unauthenticated" });
+		expect(host).not.toHaveBeenCalled();
+	});
+});
+
+describe("mcpChallenge", () => {
+	const FALLBACK = "https://agentes.innov.as";
+	const META = "/.well-known/oauth-protected-resource/eve/outreach/v1/mcp";
+	// Dentro de eve el request.url es interno: lo único público es el header.
+	const internal = (headers: Record<string, string>) =>
+		new Request("http://127.0.0.1:63104/eve/v1/mcp", { headers });
+
+	it("en el dominio de una empresa apunta a la metadata de ese dominio", async () => {
+		const challenges = await mcpChallenge(
+			internal({ "x-forwarded-host": "ai.okeefe.com.ar" }),
+			"outreach",
+			async () => ({ kind: "tenant", slug: "okeefe" }),
+			FALLBACK,
+		);
+		expect(challenges).toEqual([
+			{
+				scheme: "Bearer",
+				parameters: {
+					resource_metadata: `https://ai.okeefe.com.ar${META}`,
+					scope: "openid email",
+				},
+			},
+		]);
+	});
+
+	it("en el host raíz, el origen fijo", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "agentes.innov.as" }),
+			"outreach",
+			async () => ({ kind: "root" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+	});
+
+	it("un host inventado nunca se refleja", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "evil.com" }),
+			"outreach",
+			async () => ({ kind: "unknown" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+	});
+
+	it("si el host no se puede resolver, el origen fijo", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "ai.okeefe.com.ar" }),
+			"outreach",
+			async () => {
+				throw new Error("base caída");
+			},
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+		error.mockRestore();
+	});
+
+	it("con un token presente pero inválido suma error=invalid_token", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({
+				"x-forwarded-host": "ai.okeefe.com.ar",
+				authorization: "Bearer vencido",
+			}),
+			"outreach",
+			async () => ({ kind: "tenant", slug: "okeefe" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.error).toBe("invalid_token");
 	});
 });

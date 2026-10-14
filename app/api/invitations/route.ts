@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { invitationOrigin } from "@/lib/domains/origin";
 import { inviteToTenant } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -62,7 +63,8 @@ export async function POST(request: Request) {
 		role,
 		invitedBy: auth.user.id,
 		allowExternal: allowExternal ?? false,
-		origin: new URL(request.url).origin,
+		// Con el dominio propio de la empresa, si lo tiene (spec 21.6 H9).
+		origin: await invitationOrigin(tenantId, new URL(request.url).origin),
 	});
 
 	// Mismos códigos que antes del refactor: el InviteForm del tenant depende

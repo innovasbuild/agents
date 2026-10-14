@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
+import type { DomainStatus } from "@/lib/domains/service";
+import { STATUS_LABELS } from "@/lib/domains/view";
 import {
 	toConnectionRows,
 	toExecutorRows,
@@ -43,6 +45,7 @@ export default async function SettingsPage({
 		signupResult,
 		membershipsResult,
 		agentsResult,
+		domainsResult,
 	] = await Promise.all([
 		supabase
 			.from("executors")
@@ -66,6 +69,12 @@ export default async function SettingsPage({
 			.from("tenant_agents")
 			.select("agent, enabled, config")
 			.eq("tenant_id", tenant.id),
+		// Solo lectura: el dominio lo carga plataforma (spec 21.6 H10).
+		supabase
+			.from("tenant_domains")
+			.select("hostname, is_primary, status")
+			.eq("tenant_id", tenant.id)
+			.order("created_at"),
 	]);
 
 	for (const [name, result] of [
@@ -73,6 +82,7 @@ export default async function SettingsPage({
 		["memberships", membershipsResult],
 		["tenant_agents", agentsResult],
 		["tenant_connections", connectionsResult],
+		["tenant_domains", domainsResult],
 	] as const) {
 		if (result.error)
 			console.error(`settings: no pude leer ${name}:`, result.error);
@@ -182,6 +192,26 @@ export default async function SettingsPage({
 					/>
 				)}
 			</section>
+
+			{domainsResult.error || (domainsResult.data ?? []).length === 0 ? null : (
+				<section>
+					<h2 className="mb-3 text-lg">Tu dominio</h2>
+					<ul className="space-y-1 text-sm">
+						{(domainsResult.data ?? []).map((row) => (
+							<li key={row.hostname as string}>
+								<span className="font-medium">{row.hostname as string}</span>{" "}
+								<span className="text-muted-foreground">
+									({STATUS_LABELS[row.status as DomainStatus]}
+									{row.is_primary ? ", principal" : ""})
+								</span>
+							</li>
+						))}
+					</ul>
+					<p className="mt-2 text-muted-foreground text-xs">
+						Lo administra INNOV.AS. Si necesitás cambiarlo, escribinos.
+					</p>
+				</section>
+			)}
 
 			{sections.executors ? (
 				<section>

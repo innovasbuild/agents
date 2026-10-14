@@ -58,24 +58,35 @@ export interface BrainMcpDeps {
 	/** Skills publicadas de la empresa (spec 24.2a). */
 	skills: McpSkillsDeps;
 	publicUrl: string;
+	/**
+	 * El pedido llegó por el dominio de una empresa: el recurso es /brain/mcp,
+	 * sin slug (spec 21.6 H14). Sin esto, la forma con slug de siempre.
+	 */
+	tenantHost?: boolean;
+	/** ¿Este host puede servir a esa empresa? Sin esto no se valida (host raíz). */
+	hostServes?: (slug: string) => boolean;
 	issuer: string;
 	unauthorized: (options: UnauthorizedOptions) => Response;
 }
 
-function resourceUrl(publicUrl: string, slug: string): string {
-	return `${publicUrl}/brain/${slug}/mcp`;
+function resourceUrl(publicUrl: string, slug: string, tenantHost?: boolean) {
+	return tenantHost
+		? `${publicUrl}/brain/mcp`
+		: `${publicUrl}/brain/${slug}/mcp`;
 }
 
-function metadataUrl(publicUrl: string, slug: string): string {
-	return `${publicUrl}/.well-known/oauth-protected-resource/brain/${slug}/mcp`;
+function metadataUrl(publicUrl: string, slug: string, tenantHost?: boolean) {
+	return tenantHost
+		? `${publicUrl}/.well-known/oauth-protected-resource/brain/mcp`
+		: `${publicUrl}/.well-known/oauth-protected-resource/brain/${slug}/mcp`;
 }
 
 export function protectedResourceMetadata(
 	slug: string,
-	deps: Pick<BrainMcpDeps, "publicUrl" | "issuer">,
+	deps: Pick<BrainMcpDeps, "publicUrl" | "issuer" | "tenantHost">,
 ) {
 	return {
-		resource: resourceUrl(deps.publicUrl, slug),
+		resource: resourceUrl(deps.publicUrl, slug, deps.tenantHost),
 		authorization_servers: [deps.issuer],
 		bearer_methods_supported: ["header"],
 	};
@@ -111,6 +122,15 @@ async function handleBrainMcpInner(
 	slug: string,
 	deps: BrainMcpDeps,
 ): Promise<Response> {
+	// Antes que nada: el dominio de una empresa solo sirve a esa empresa. El
+	// cuerpo es el mismo que "no existe ese cliente", para que no se distinga.
+	if (deps.hostServes && !deps.hostServes(slug)) {
+		return Response.json(
+			{ ok: false, code: "tenant_not_found", error: "No existe ese cliente." },
+			{ status: 404 },
+		);
+	}
+
 	const declared = Number(request.headers.get("content-length") ?? "0");
 	if (declared > MCP_MAX_REQUEST_BYTES) return tooLarge();
 
@@ -127,7 +147,11 @@ async function handleBrainMcpInner(
 					{
 						scheme: "Bearer",
 						parameters: {
-							resource_metadata: metadataUrl(deps.publicUrl, slug),
+							resource_metadata: metadataUrl(
+								deps.publicUrl,
+								slug,
+								deps.tenantHost,
+							),
 							...(access.code === "invalid_token"
 								? { error: "invalid_token" }
 								: {}),

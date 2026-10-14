@@ -40,7 +40,7 @@
 | Archivo | Responsabilidad |
 |---|---|
 | `lib/brain/core/folders.ts` (nuevo) | Funciones puras: `categoryForPath`, `parentPath`, `nearestFolder`, `validateFolderPath`, constantes |
-| `supabase/migrations/20261024120000_brain_folders.sql` (nuevo) | Tabla, funciones SQL, backfill, cambios a `brain_upsert_page` y `brain_delete_page`, borrado de `platform_set_brain_categories` |
+| `supabase/migrations/20261025120000_brain_folders.sql` (nuevo) | Tabla, funciones SQL, backfill, cambios a `brain_upsert_page` y `brain_delete_page`, borrado de `platform_set_brain_categories` |
 | `supabase/tests/37_brain_folders.test.sql` (nuevo) | pgTAP de todo lo anterior |
 | `lib/brain/core/wiki-store.ts` | `WikiStore.listFolders` |
 | `lib/brain/core/wiki.ts` | La categoría se calcula y se chequea la carpeta |
@@ -219,7 +219,7 @@ git commit -m "feat: funciones puras de carpetas del brain (26.1a)"
 ### Task 2: Migración de carpetas
 
 **Files:**
-- Create: `supabase/migrations/20261024120000_brain_folders.sql`
+- Create: `supabase/migrations/20261025120000_brain_folders.sql`
 - Create: `supabase/tests/37_brain_folders.test.sql`
 - Modify: `lib/supabase/database.types.ts` (regenerado con `npm run db:types`)
 
@@ -365,7 +365,7 @@ Expected: FAIL en `37_brain_folders.test.sql`: no existe `brain_folders`.
 - [ ] **Step 4: Escribir la migración**
 
 ```sql
--- supabase/migrations/20261024120000_brain_folders.sql
+-- supabase/migrations/20261025120000_brain_folders.sql
 -- Etapa 26.1a: las carpetas del brain pasan a ser filas (spec etapa 26 §3.1).
 -- config.categories del binding queda como reflejo de las de primer nivel, y lo
 -- mantiene brain_sync_categories en la misma transacción que la cambia.
@@ -627,7 +627,7 @@ Expected: `lib/supabase/database.types.ts` gana `brain_folders` y las funciones 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20261024120000_brain_folders.sql supabase/tests/37_brain_folders.test.sql lib/supabase/database.types.ts
+git add supabase/migrations/20261025120000_brain_folders.sql supabase/tests/37_brain_folders.test.sql lib/supabase/database.types.ts
 git commit -m "feat: tabla brain_folders y funciones de carpetas (26.1a)"
 ```
 
@@ -2083,7 +2083,7 @@ En `docs/arquitectura/datos.md`, sumar `brain_folders` donde están las demás t
 
 En `docs/decisiones/README.md`, la fila de la Etapa 26 ya enlaza este plan: dejarla en `en curso`, porque faltan la 26.1b, la 26.2 y la 26.3.
 
-En `docs/producto/roadmap.md`, debajo de la entrega 26.1, anotar el plan y el orden de despliegue: **aplicar la migración `20261024120000_brain_folders` antes que el código** (corriendo `npx supabase migration list` antes, porque `db push` aplica todas las pendientes). Al revés, la consola llamaría a una función que no existe y el árbol leería una tabla que no existe. Correr `npm run brain:folders-report -- --tenant okeefe` contra producción antes de aplicar.
+En `docs/producto/roadmap.md`, debajo de la entrega 26.1, anotar el plan y el orden de despliegue: **aplicar la migración `20261025120000_brain_folders` antes que el código** (corriendo `npx supabase migration list` antes, porque `db push` aplica todas las pendientes). Al revés, la consola llamaría a una función que no existe y el árbol leería una tabla que no existe. Correr `npm run brain:folders-report -- --tenant okeefe` contra producción antes de aplicar.
 
 - [ ] **Step 3: Verificar todo**
 

@@ -1,4 +1,4 @@
--- supabase/migrations/20261024120000_brain_folders.sql
+-- supabase/migrations/20261025120000_brain_folders.sql
 -- Etapa 26.1a: las carpetas del brain pasan a ser filas (spec etapa 26 §3.1).
 -- config.categories del binding queda como reflejo de las de primer nivel, y lo
 -- mantiene brain_sync_categories en la misma transacción que la cambia.

@@ -42,6 +42,8 @@ function uniqueId(base: string, used: Set<string>): string {
 export function buildConnectables(input: {
 	slug: string;
 	publicUrl: string;
+	/** El pedido llegó por el dominio de la empresa: URLs sin slug (spec 21.6). */
+	tenantHost?: boolean;
 	hasBrain: boolean;
 	enabledAgents: string[];
 }): Connectable[] {
@@ -57,7 +59,9 @@ export function buildConnectables(input: {
 			name: "Brain",
 			description:
 				"El conocimiento de tu empresa: buscar, leer y escribir páginas según tus permisos.",
-			url: `${origin}/brain/${slug}/mcp`,
+			url: input.tenantHost
+				? `${origin}/brain/mcp`
+				: `${origin}/brain/${slug}/mcp`,
 		});
 	}
 
@@ -79,7 +83,9 @@ export function buildConnectables(input: {
 			),
 			name: copy.name,
 			description: copy.description,
-			url: `${origin}/eve/${encodeURIComponent(agent)}/v1/mcp?tenant=${slug}`,
+			url: input.tenantHost
+				? `${origin}/eve/${encodeURIComponent(agent)}/v1/mcp`
+				: `${origin}/eve/${encodeURIComponent(agent)}/v1/mcp?tenant=${slug}`,
 		});
 	}
 

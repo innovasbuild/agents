@@ -20,6 +20,7 @@ const state = {
 	memberships: [] as unknown[],
 	agents: [] as unknown[],
 	connections: [] as unknown[],
+	domains: [] as unknown[],
 	failing: null as string | null,
 };
 
@@ -54,7 +55,9 @@ vi.mock("@/lib/tenants/platform", () => ({
 											? state.memberships
 											: table === "tenant_agents"
 												? state.agents
-												: state.connections,
+												: table === "tenant_domains"
+													? state.domains
+													: state.connections,
 								error:
 									table === state.failing
 										? { code: "XX000", message: "roto" }
@@ -81,6 +84,12 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/app/plataforma/[slug]/tenant-form", () => ({
 	TenantForm: () => null,
+}));
+vi.mock("@/app/plataforma/[slug]/domain-actions", () => ({
+	addTenantDomain: async () => ({ ok: true, message: "" }),
+	verifyTenantDomain: async () => ({ ok: true, message: "" }),
+	makeTenantDomainPrimary: async () => ({ ok: true, message: "" }),
+	removeTenantDomain: async () => ({ ok: true, message: "" }),
 }));
 vi.mock("@/app/plataforma/[slug]/console-actions", () => ({
 	setAgent: async () => ({ ok: true }),
@@ -111,7 +120,84 @@ describe("detalle de la empresa", () => {
 			{ agent: "outreach", enabled: true, config: { brain: "read_write" } },
 		];
 		state.connections = [];
+		state.domains = [];
 		state.failing = null;
+		vi.unstubAllEnvs();
+	});
+
+	describe("sección Dominio", () => {
+		const row = (over: Record<string, unknown>) => ({
+			id: "d1",
+			tenant_id: "t1",
+			hostname: "ai.acme.com",
+			is_primary: false,
+			status: "verifying",
+			last_error: null,
+			verified_at: null,
+			created_at: "2026-10-14T00:00:00Z",
+			...over,
+		});
+
+		it("sin dominios dice que sigue por la dirección de la plataforma", async () => {
+			const html = await render();
+			expect(html).toContain("Dominio");
+			expect(html).toContain("Todavía no tiene un dominio propio");
+			expect(html).toContain("Agregar dominio");
+		});
+
+		it("lista cada dominio con su estado y marca el principal", async () => {
+			state.domains = [
+				row({
+					id: "d1",
+					hostname: "ai.acme.com",
+					status: "active",
+					is_primary: true,
+				}),
+				row({
+					id: "d2",
+					hostname: "viejo.acme.com",
+					status: "failed",
+					last_error: "Ese dominio ya está en otro proyecto de Vercel.",
+				}),
+			];
+			const html = await render();
+			expect(html).toContain("ai.acme.com");
+			expect(html).toContain("Activo");
+			expect(html).toContain("Principal");
+			expect(html).toContain("Con error");
+			expect(html).toContain("Ese dominio ya está en otro proyecto de Vercel.");
+			expect(html).toContain("Verificar ahora");
+			expect(html).toContain("Quitar");
+		});
+
+		it("un dominio activo no ofrece verificar y el principal no ofrece hacerlo principal", async () => {
+			state.domains = [row({ status: "active", is_primary: true })];
+			const html = await render();
+			expect(html).not.toContain("Verificar ahora");
+			expect(html).not.toContain("Hacer principal");
+		});
+
+		it("un activo que no es principal ofrece hacerlo principal", async () => {
+			state.domains = [row({ status: "active", is_primary: false })];
+			expect(await render()).toContain("Hacer principal");
+		});
+
+		it("avisa si faltan las variables de Vercel y de Supabase", async () => {
+			vi.stubEnv("VERCEL_API_TOKEN", "");
+			vi.stubEnv("SUPABASE_ACCESS_TOKEN", "");
+			const html = await render();
+			expect(html).toContain("VERCEL_API_TOKEN");
+			expect(html).toContain("SUPABASE_ACCESS_TOKEN");
+		});
+
+		it("si no se pueden leer los dominios lo dice sin romper la página", async () => {
+			const error = vi.spyOn(console, "error").mockImplementation(() => {});
+			state.failing = "tenant_domains";
+			const html = await render();
+			expect(html).toContain("No se pudieron leer los dominios");
+			expect(html).toContain("Conectores");
+			error.mockRestore();
+		});
 	});
 
 	it("sin plataforma da 404", async () => {

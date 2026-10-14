@@ -15,6 +15,13 @@ const { publicUrl, issuer } = publicSettings();
 // La reescritura de Vercel solo reenvía ese prefijo, nada de /.well-known/:
 // la metadata OAuth la sirve Next.js a mano (app/.well-known/...).
 const resource = `${publicUrl}/eve/outreach/v1/mcp`;
+//
+// `resource` queda fijo al origen de la plataforma (spec 21.6, spike S1). No se
+// puede omitir para que eve lo derive: dentro de eve el request.url es el
+// interno (127.0.0.1:<puerto>/eve/v1/mcp) y armaría una metadata inexistente.
+// Lo que depende del dominio de la empresa es el desafío 401, que arma
+// verifyMcpChannelToken con x-forwarded-host (mcpChallenge) y eve respeta, y la
+// metadata que sirve Next (app/.well-known/.../eve/outreach/v1/mcp).
 
 // El agente de este canal es el de esta carpeta. Función con nombre a nivel
 // de módulo, igual que el `verifyToken` de la guía de eve (channels/mcp.mdx).

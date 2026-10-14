@@ -41,6 +41,7 @@ Cómo se mantiene todo esto (y qué verifica el harness) está en [Cómo mantene
 ## Guías
 
 - [Alta de una empresa nueva](guias/alta-de-tenant.md): dar de alta una empresa nueva desde la consola.
+- [Dominio propio de un cliente](guias/dominio-de-un-cliente.md): servir a una empresa desde su dominio, con el DNS, la consola y las URLs de MCP.
 - [Migraciones a producción](guias/migraciones-a-produccion.md): aplicar migraciones en local y en producción sin sorpresas.
 - [Agregar una tool al agente](guias/agregar-una-tool.md): una tool nueva del agente, con su etiqueta y su aprobación.
 - [Agregar un nodo o un workflow](guias/agregar-un-nodo-o-workflow.md): un nodo o workflow nuevo, registrado y medido.

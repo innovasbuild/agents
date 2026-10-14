@@ -3,8 +3,14 @@ title: Identidad y acceso
 category: arquitectura
 status: activo
 tags: [auth, supabase, oauth, mcp, login, memberships]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
+  - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
+  - lib/tenants/host.ts
+  - lib/tenants/host-store.ts
+  - lib/tenants/public-url.ts
+  - lib/domains/supabase-auth.ts
+  - app/.well-known/oauth-protected-resource/brain/mcp
   - docs/superpowers/specs/2026-10-09-etapa-20-login-design.md
   - docs/superpowers/specs/2026-10-09-ingreso-por-dominio-design.md
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -110,7 +116,7 @@ Al sacar a alguien también se van sus reglas de acceso al brain: el trigger `me
 
 ## `proxy.ts`
 
-Refresca el access token de Supabase (`getUser()` con `createServerClient` y cookies) en cada navegación del servidor. Sin esto el token vence a la hora y la persona tiene que volver a entrar. Su `matcher` deja afuera lo que no es sesión de navegador: `_next/static`, `_next/image`, imágenes, `eve/`, `brain/` y `.well-known/`, que se autentican por bearer o son públicas. No decide acceso: eso lo hace cada ruta con `resolveTenantAccess`.
+Refresca el access token de Supabase (`getUser()` con `createServerClient` y cookies) en cada navegación del servidor. Sin esto el token vence a la hora y la persona tiene que volver a entrar. Su `matcher` deja afuera lo que no es sesión de navegador: `_next/static`, `_next/image`, imágenes, `eve/` y `.well-known/`, que se autentican por bearer o son públicas. `brain/` ya no está afuera (21.6): en el dominio de una empresa las páginas del brain tienen que pasar por el proxy, y en el host raíz el endpoint MCP (`/brain/<slug>/mcp`) sale enseguida sin tocar Supabase. Además resuelve el host de cada request para servir el dominio propio de una empresa (ver [tenancy](tenancy.md)). Fuera de eso no decide acceso: eso lo hace cada ruta con `resolveTenantAccess`.
 
 ## Supabase como servidor OAuth 2.1 (canal MCP)
 
@@ -126,6 +132,24 @@ Dos recursos protegidos usan ese emisor. Cada uno publica su metadata RFC 9728 c
 |---|---|---|
 | Brain por MCP, `/brain/[tenant]/mcp` | `/.well-known/oauth-protected-resource/brain/[tenant]/mcp` | `resolveMcpAccess` (`lib/brain/core/mcp-server/access.ts`) |
 | Agente por MCP, `/eve/outreach/v1/mcp` | `/.well-known/oauth-protected-resource/eve/outreach/v1/mcp` | `verifyMcpChannelToken` → `resolveMcpChannelAuth` (`lib/agents/mcp-channel-auth.ts`) |
+
+### URLs de MCP en el dominio de una empresa
+
+El `resource` que publica la metadata tiene que ser exactamente la URL a la que se conectó el cliente MCP, así que las URLs salen del host del request, no de `PUBLIC_APP_URL`. Para la empresa `okeefe` en `ai.okeefe.com.ar`:
+
+| | En su dominio | En el host raíz |
+|---|---|---|
+| Brain | `https://ai.okeefe.com.ar/brain/mcp` (sin slug) | `https://agentes.innov.as/brain/okeefe/mcp` |
+| Metadata del brain | `/.well-known/oauth-protected-resource/brain/mcp` | `.../brain/okeefe/mcp` |
+| Agente | `https://ai.okeefe.com.ar/eve/outreach/v1/mcp` (sin `?tenant=`) | `https://agentes.innov.as/eve/outreach/v1/mcp?tenant=okeefe` |
+
+El proxy reescribe `/brain/mcp` a `/brain/okeefe/mcp`, así que el endpoint es la misma ruta de siempre. El canal del agente conserva `resource` fijo (eve lo derivaría del request interno, no del público), pero su desafío 401 lo arma `mcpChallenge` con `x-forwarded-host`, así que apunta a la metadata del dominio por el que llegó la persona. Un host de empresa solo sirve a su empresa (`assertHostServesTenant`; en el canal del agente, `?tenant=` pasa a ser opcional y uno distinto del host se trata como sin acceso). Un `Host` que no resuelve a nada nunca se refleja en la metadata: se usa el origen fijo. `/conectar` muestra estas URLs según el host por el que entró la persona.
+
+### Redirect URLs de cada dominio
+
+Para que el link mágico y Google vuelvan al dominio de la empresa, cada dominio activo tiene que estar en las Redirect URLs de Supabase Auth: si el `redirectTo` no está permitido, Supabase cae a la Site URL, el `code` PKCE llega a otro host y el login falla (el código de 6 dígitos no usa redirect y anda igual). `syncAuthRedirectUrls` (`lib/domains/supabase-auth.ts`) lo mantiene por la Management API: lee la lista, suma `https://<dominio>/auth/callback**` de los activos, saca la de los que se quitan, **conserva todo lo que no es suyo** (lo cargado a mano en el panel) y vuelve a leer para confirmar que Supabase guardó lo pedido. Un dominio no pasa a `active` si ese paso falla. La Site URL no cambia. Cómo se opera: [dominio de un cliente](../guias/dominio-de-un-cliente.md).
+
+Lo que no se puede ocultar: Supabase arma la URL del consentimiento con una sola Site URL, así que `/oauth/consent` siempre se muestra en el host raíz, y el emisor sigue siendo el de Supabase.
 
 Reglas comunes de los dos:
 
