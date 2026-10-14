@@ -14,6 +14,10 @@ sources:
   - app/brain/[tenant]/mcp/route.ts
   - lib/outreach/canon.ts
   - lib/outreach/marco-reflect.ts
+  - lib/brain/core/skills
+  - lib/brain/adapters/skill-zip.ts
+  - lib/brain/adapters/skills.ts
+  - supabase/migrations/20261020120000_brain_skills.sql
   - docs/superpowers/specs/2026-09-13-brain-design.md
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
   - docs/superpowers/specs/2026-09-27-editor-brain-design.md
@@ -22,6 +26,8 @@ sources:
   - docs/superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md
   - docs/superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md
   - docs/superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md
+  - docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md
+  - docs/superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md
 ---
 
 # Brain
@@ -53,6 +59,8 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `lib/brain/core/editor/` | Lógica del editor: guardado, slug, entrada por permiso, borrado, autocompletado de `[[` |
 | `lib/brain/core/mcp-server/` | Endpoint MCP: acceso, handler, servidor, límites por minuto |
 | `lib/brain/core/import/` | Núcleo puro del import de una bóveda de markdown |
+| `lib/brain/core/skills/` | Skills de empresa: reglas del paquete, estados, qué ve cada uno (`withoutSkills`, `withSkillView`), publicar, archivos e importación |
+| `lib/brain/adapters/skill-zip.ts`, `skills.ts` | Lector de zip con topes, Storage de archivos y armado de dependencias de las skills |
 | `lib/brain/core/categories.ts`, `config.ts` | Lectura y validación de las categorías del tenant |
 | `lib/brain/adapters/` | Lo que toca la plataforma: Supabase admin, sesión, eve, Next, reflejo del canon |
 | `app/[tenant]/brain/` | Pantallas y server actions del brain |
@@ -72,6 +80,7 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `/[tenant]/brain/historial/[...slug]` | Revisiones con autor, diff y restaurar |
 | `/[tenant]/brain/mapa` | Páginas más enlazadas, huérfanas y links rotos |
 | `/[tenant]/brain/raw/[...slug]` | Cuerpo vigente en texto plano, para el diff del aviso de conflicto |
+| `/[tenant]/brain/skills/files` | Archivos de una skill: `GET` los sirve (texto plano o descarga), `POST` sube un archivo o importa un zip |
 | `/brain/[tenant]/mcp` | Endpoint MCP del brain |
 | `/.well-known/oauth-protected-resource/brain/[tenant]/mcp` | Metadata OAuth del recurso (RFC 9728) |
 
@@ -148,6 +157,14 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 - El brain nace con `comercial/icp` y `comercial/hooks` en borrador. El outreach no se habilita sin brain.
 - La pantalla `/<slug>/settings/outreach` muestra ICP, hooks y vectores solo en lectura, con "Releer del brain".
 
+### Skills de empresa (etapa 24.1)
+
+- Una skill es una página de categoría `skill` bajo `skills/`; las dos cosas van juntas y lo exige `validateWrite` (`skillPlacementOk`). El borrador es la página más sus archivos (tabla `brain_skill_files`); el contenido de cada archivo va a un bucket privado, por hash (`<tenant_id>/<sha256>`), que calcula el servidor.
+- Edita quien es `editor` de la página; **publica** solo `tenant_admin` o `platform_admin` (`core/skills/publish.ts`). Publicar copia el borrador a `brain_skill_versions`, tabla solo de inserción: la función SQL arma la copia desde la fila bloqueada y la publicación va atada a la revisión y al hash de archivos que mostró la pantalla (si algo cambió, responde conflicto). Retirar y republicar son filas nuevas; una publicada no se borra sin retirarla antes.
+- `withoutSkills` va en las tools del agente, en el endpoint MCP y en el lector del canon de outreach: ningún asistente ve ni escribe nada bajo `skills/`. `withSkillView` va en el contexto del editor web: el editor de la skill ve el borrador y quien solo lee ve la copia publicada (revisión publicada, estado `activo`, sin etiquetas); sin versión vigente la skill no existe para esa persona.
+- Los archivos se sirven siempre por `/[tenant]/brain/skills/files`, como texto plano o descarga con `nosniff`. El `POST` verifica el origen a mano. El zip se lee con un parser propio (`adapters/skill-zip.ts`) que mira los tamaños declarados antes de descomprimir e infla cada entrada acotada a su tamaño.
+- El detalle y las garantías están en [lib/brain/README.md](../../lib/brain/README.md) (sección Skills). Falta el cierre en producción; ver la spec §12.
+
 ### Frontera core/adapters
 
 `lib/brain/core` no importa nada de afuera: solo `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo, `@supabase/supabase-js`. Los imports relativos llevan extensión `.ts` porque scripts con Node directo los recorren. Lo que el host tiene que proveer (`WikiStore`, `AccessStore`, `AccessRulesStore`, `unauthorized`, `SaveDeps`) está en la tabla del README del módulo.
@@ -161,9 +178,10 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 | Permisos | `tests/brain/access-*.test.ts`, `editor-access*.test.ts`, `agent-access.test.ts`, `acting-provider.test.ts` |
 | Borrado | `tests/brain/editor-delete.test.ts`, `delete-store.test.ts`, `delete-actions.test.ts`, `links-cleanup.test.ts`, `wikilinks-remove.test.ts` |
 | Editor: ida y vuelta del markdown | `npx vitest run tests/brain/editor-roundtrip.test.ts` (entorno `happy-dom`). Suma las páginas reales de `tests/fixtures/brain-real/`, que no se versiona porque el repo es público |
+| Skills | `tests/brain/skills-*.test.ts` (paquete, estados, vistas, publicar, archivos, zip, ruta) y pgTAP `34_brain_skills` |
 | Endpoint MCP | `tests/brain/mcp-server/` (acceso, handler, límites, producción) |
 | Canon como fuente | `tests/brain/canon-reflection.test.ts` y `tests/outreach/canon.test.ts` |
-| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`. Corren con `npm run db:test` (necesita Docker) |
+| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`. Corren con `npm run db:test` (necesita Docker) |
 
 ## 5. Decisiones
 
@@ -174,7 +192,8 @@ Specs y planes en `docs/superpowers/`:
 [etapa 17, permisos](../superpowers/specs/2026-10-05-etapa-17-permisos-brain-design.md) ·
 [etapa 18.1, borrado](../superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md) ·
 [etapa 18.2, editor visual](../superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md) ·
-[etapa 21.3, config de outreach](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) y [plan 21.3a](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md).
+[etapa 21.3, config de outreach](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) y [plan 21.3a](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md) ·
+[etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md).
 
 Pull requests:
 
