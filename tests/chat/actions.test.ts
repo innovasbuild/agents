@@ -37,6 +37,14 @@ vi.mock("@/lib/tenants/login-check-server", () => ({
 	},
 }));
 
+// Qué agentes devuelve la lectura de habilitados; null = no se pudo leer.
+const agents = vi.hoisted(() => ({
+	enabled: ["asistente", "outreach"] as string[] | null,
+}));
+vi.mock("@/lib/tenants/enabled-agents", () => ({
+	loadEnabledAgents: async () => agents.enabled,
+}));
+
 vi.mock("next/cache", () => ({
 	revalidatePath: (path: string) => {
 		state.revalidated.push(path);
@@ -120,6 +128,7 @@ beforeEach(() => {
 	state.updates = [];
 	gate.allows = true;
 	gate.calls = [];
+	agents.enabled = ["asistente", "outreach"];
 });
 
 describe("deleteConversation", () => {
@@ -198,8 +207,13 @@ describe("deleteConversation", () => {
 
 describe("el método de la sesión en las actions del chat", () => {
 	describe("createConversation", () => {
-		it("con el método permitido chequea contra el tenant de la acción y crea el hilo", async () => {
-			const id = await createConversation(TENANT_ID, "acme", "modelo");
+		it("con el método permitido chequea contra el tenant de la acción y crea el hilo del agente pedido", async () => {
+			const id = await createConversation(
+				TENANT_ID,
+				"acme",
+				"modelo",
+				"asistente",
+			);
 
 			expect(id).toBe("nuevo");
 			expect(gate.calls).toEqual([{ userId: "user-1", tenantId: TENANT_ID }]);
@@ -207,7 +221,7 @@ describe("el método de la sesión en las actions del chat", () => {
 				{
 					tenant_id: TENANT_ID,
 					user_id: "user-1",
-					agent: "outreach",
+					agent: "asistente",
 					model: "modelo",
 				},
 			]);
@@ -216,9 +230,38 @@ describe("el método de la sesión en las actions del chat", () => {
 		it("no crea nada si la empresa no permite el método", async () => {
 			gate.allows = false;
 
-			expect(await createConversation(TENANT_ID, "acme", "modelo")).toBeNull();
+			expect(
+				await createConversation(TENANT_ID, "acme", "modelo", "outreach"),
+			).toBeNull();
 			expect(state.inserts).toHaveLength(0);
 			expect(state.revalidated).toEqual([]);
+		});
+
+		it.each(["soporte", "toString", "constructor", ""])(
+			"rechaza un agente fuera del catálogo: %s",
+			async (agent) => {
+				expect(
+					await createConversation(TENANT_ID, "acme", "modelo", agent),
+				).toBeNull();
+				expect(state.inserts).toHaveLength(0);
+			},
+		);
+
+		it("rechaza un agente del catálogo que la empresa no tiene habilitado", async () => {
+			agents.enabled = ["asistente"];
+
+			expect(
+				await createConversation(TENANT_ID, "acme", "modelo", "outreach"),
+			).toBeNull();
+			expect(state.inserts).toHaveLength(0);
+		});
+
+		it("si no se pudo leer la lista de agentes, deja pasar: el canal es la puerta", async () => {
+			agents.enabled = null;
+
+			expect(
+				await createConversation(TENANT_ID, "acme", "modelo", "outreach"),
+			).toBe("nuevo");
 		});
 	});
 

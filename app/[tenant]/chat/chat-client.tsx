@@ -52,8 +52,14 @@ interface Thread {
 	id: string;
 	title: string | null;
 	model: string | null;
+	agent: string;
 	eve_session_id: string | null;
 	last_message_at: string;
+}
+
+interface AgentOption {
+	id: string;
+	name: string;
 }
 
 // Firma del ejecutor (la que pega composeMail al enviar) para todas las
@@ -63,7 +69,9 @@ const SignatureContext = createContext<string | null>(null);
 
 export function ChatClient({
 	active,
+	agents,
 	allowedModels,
+	defaultAgent,
 	defaultModel,
 	signature,
 	slug,
@@ -71,7 +79,9 @@ export function ChatClient({
 	threads,
 }: {
 	active: Thread | null;
+	agents: AgentOption[];
 	allowedModels: string[];
+	defaultAgent: string;
 	defaultModel: string;
 	signature: string | null;
 	slug: string;
@@ -80,6 +90,11 @@ export function ChatClient({
 }) {
 	const router = useRouter();
 	const [model, setModel] = useState(defaultModel);
+	const [agent, setAgent] = useState(defaultAgent);
+	// Con un solo agente no hay nada que elegir ni que rotular (spec 22.1 C5).
+	const showAgents = agents.length > 1;
+	const agentName = (id: string) =>
+		agents.find((option) => option.id === id)?.name ?? null;
 
 	return (
 		<SignatureContext value={signature}>
@@ -90,6 +105,28 @@ export function ChatClient({
 			    empujaba el ⋯ fuera de la pantalla. */}
 				<aside className="min-w-0 space-y-4">
 					<div className="space-y-2">
+						{showAgents ? (
+							<>
+								<label
+									className="block text-muted-foreground text-sm"
+									htmlFor="agente"
+								>
+									Agente del hilo nuevo
+								</label>
+								<select
+									className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+									id="agente"
+									onChange={(event) => setAgent(event.target.value)}
+									value={agent}
+								>
+									{agents.map((option) => (
+										<option key={option.id} value={option.id}>
+											{option.name}
+										</option>
+									))}
+								</select>
+							</>
+						) : null}
 						<label
 							className="block text-muted-foreground text-sm"
 							htmlFor="modelo"
@@ -111,7 +148,12 @@ export function ChatClient({
 						<Button
 							className="w-full"
 							onClick={async () => {
-								const id = await createConversation(tenantId, slug, model);
+								const id = await createConversation(
+									tenantId,
+									slug,
+									model,
+									agent,
+								);
 								if (id) router.push(`/${slug}/chat?hilo=${id}`);
 							}}
 							type="button"
@@ -137,6 +179,11 @@ export function ChatClient({
 										href={`/${slug}/chat?hilo=${thread.id}`}
 									>
 										{threadTitle(thread)}
+										{showAgents && agentName(thread.agent) ? (
+											<span className="block truncate font-normal text-muted-foreground text-xs">
+												{agentName(thread.agent)}
+											</span>
+										) : null}
 									</a>
 									<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
 								</li>
@@ -146,11 +193,16 @@ export function ChatClient({
 				</aside>
 
 				{active ? (
-					<Thread key={active.id} slug={slug} thread={active} />
+					<Thread
+						agentName={showAgents ? agentName(active.agent) : null}
+						key={active.id}
+						slug={slug}
+						thread={active}
+					/>
 				) : (
 					<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
 						<p className="text-muted-foreground">
-							Elegí un hilo o abrí uno nuevo para hablar con el agente.
+							Elegí un hilo o abrí uno nuevo.
 						</p>
 					</div>
 				)}
@@ -284,7 +336,15 @@ function fileToDataUrl(file: File): Promise<string> {
 	});
 }
 
-function Thread({ slug, thread }: { slug: string; thread: Thread }) {
+function Thread({
+	agentName,
+	slug,
+	thread,
+}: {
+	agentName: string | null;
+	slug: string;
+	thread: Thread;
+}) {
 	const [text, setText] = useState("");
 	const [file, setFile] = useState<File | null>(null);
 	const [fileError, setFileError] = useState<string | null>(null);
@@ -316,7 +376,10 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	// funcional: el turno se completa igual y queda en `runs`, y la próxima
 	// vez que se abra el hilo el eve_session_id ya va a estar escrito.
 	const agent = useEveAgent({
-		agent: "outreach",
+		// Cada agente tiene su ruta (/eve/<agente>/v1/*). El componente se
+		// remonta por key al cambiar de hilo, que es lo que pide eve al cambiar
+		// de agente (guides/frontend/nextjs.mdx).
+		agent: thread.agent,
 		headers: { "x-innovas-conversation": thread.id },
 		...(thread.eve_session_id
 			? {
@@ -400,6 +463,11 @@ function Thread({ slug, thread }: { slug: string; thread: Thread }) {
 	return (
 		<section className="min-w-0 space-y-6">
 			<p className="text-muted-foreground text-sm">
+				{agentName ? (
+					<>
+						Agente: <span className="text-foreground">{agentName}</span>.{" "}
+					</>
+				) : null}
 				Modelo del hilo: <code>{thread.model ?? "el default del cliente"}</code>
 				. eve fija el modelo al abrir la sesión: para usar otro, abrí un hilo
 				nuevo.
