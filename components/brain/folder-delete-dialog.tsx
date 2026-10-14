@@ -47,6 +47,8 @@ export function FolderDeleteDialog({
 						disabled={pending}
 						onClick={(event) => {
 							event.preventDefault();
+							// Fuera de la transición: adentro no se pinta hasta que termina.
+							setError(null);
 							start(async () => {
 								try {
 									const result = await deleteBrainFolder({ tenantSlug, path });

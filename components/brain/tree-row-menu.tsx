@@ -9,17 +9,24 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { isFolderNode, type TreeNode } from "@/lib/brain/core/access/tree";
-import { atLeast } from "@/lib/brain/core/access/types";
+import { atLeast, type Level } from "@/lib/brain/core/access/types";
 import { historyHref } from "@/lib/brain/core/editor/slug";
 
 export type FolderMenuItem = "new-subfolder" | "describe" | "delete-folder";
 
 // Acciones de carpeta: solo para quien administra. Una carpeta implícita (sin
-// fila en brain_folders) no se describe ni se borra.
-export function folderMenuItems(node: TreeNode): FolderMenuItem[] {
+// fila en brain_folders) no ofrece ninguna: la base pide la fila del padre para
+// crear adentro. Borrar una de primer nivel pide administrar la raíz.
+export function folderMenuItems(
+	node: TreeNode,
+	rootLevel: Level | null,
+): FolderMenuItem[] {
 	if (node.level !== "administrador" || !isFolderNode(node)) return [];
-	const items: FolderMenuItem[] = ["new-subfolder"];
-	if (node.folder !== null) items.push("describe", "delete-folder");
+	if (node.path === "") return ["new-subfolder"];
+	if (node.folder === null) return [];
+	const items: FolderMenuItem[] = ["new-subfolder", "describe"];
+	if (node.path.includes("/") || rootLevel === "administrador")
+		items.push("delete-folder");
 	return items;
 }
 
@@ -27,6 +34,7 @@ export function folderMenuItems(node: TreeNode): FolderMenuItem[] {
 export function TreeRowMenu({
 	tenantSlug,
 	node,
+	rootLevel,
 	onShare,
 	onDelete,
 	onNewFolder,
@@ -36,6 +44,7 @@ export function TreeRowMenu({
 }: {
 	tenantSlug: string;
 	node: TreeNode;
+	rootLevel: Level | null;
 	onShare: () => void;
 	onDelete: () => void;
 	onNewFolder: () => void;
@@ -85,7 +94,7 @@ export function TreeRowMenu({
 			</DropdownMenuItem>,
 		);
 	}
-	const folderItems = folderMenuItems(node);
+	const folderItems = folderMenuItems(node, rootLevel);
 	if (folderItems.includes("new-subfolder")) {
 		items.push(
 			<DropdownMenuItem

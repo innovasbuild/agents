@@ -149,6 +149,7 @@ export function BrainTree({
 					<TreeRowMenu
 						tenantSlug={tenantSlug}
 						node={node}
+						rootLevel={root.level}
 						onShare={() => setSharing({ path: node.path, name: label })}
 						onDelete={() =>
 							node.page &&
@@ -189,6 +190,7 @@ export function BrainTree({
 				<TreeRowMenu
 					tenantSlug={tenantSlug}
 					node={root}
+					rootLevel={root.level}
 					label="Brain"
 					onShare={() => setSharing({ path: "", name: "Brain" })}
 					onDelete={() => {}}

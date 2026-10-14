@@ -13,26 +13,48 @@ const node = (over: Partial<TreeNode>): TreeNode => ({
 });
 
 describe("folderMenuItems", () => {
-	it("un administrador ve las acciones de carpeta", () => {
-		expect(folderMenuItems(node({}))).toEqual([
+	it("un administrador de la raíz ve las acciones de carpeta", () => {
+		expect(folderMenuItems(node({}), "administrador")).toEqual([
 			"new-subfolder",
 			"describe",
 			"delete-folder",
 		]);
 	});
 	it("un editor no ve ninguna", () => {
-		expect(folderMenuItems(node({ level: "editor" }))).toEqual([]);
+		expect(folderMenuItems(node({ level: "editor" }), "administrador")).toEqual(
+			[],
+		);
 	});
-	it("una carpeta implícita (sin fila) no se describe ni se borra", () => {
+	// Antes ofrecía "Nueva subcarpeta" acá: brain_create_folder pide la fila del
+	// padre y respondía siempre no encontrado.
+	it("una carpeta implícita (sin fila) no ofrece nada", () => {
 		expect(
 			folderMenuItems(
 				node({ folder: null, children: [node({ path: "comercial/x" })] }),
+				"administrador",
+			),
+		).toEqual([]);
+	});
+	it("la raíz ofrece nueva carpeta", () => {
+		expect(
+			folderMenuItems(
+				node({ path: "", name: "", folder: null }),
+				"administrador",
 			),
 		).toEqual(["new-subfolder"]);
 	});
-	it("la raíz ofrece nueva carpeta", () => {
-		expect(folderMenuItems(node({ path: "", name: "", folder: null }))).toEqual(
-			["new-subfolder"],
-		);
+	it("una de primer nivel no se borra si no administra la raíz", () => {
+		expect(folderMenuItems(node({}), "editor")).toEqual([
+			"new-subfolder",
+			"describe",
+		]);
+	});
+	it("una subcarpeta se borra administrando solo esa carpeta", () => {
+		expect(
+			folderMenuItems(
+				node({ path: "comercial/sucursales", name: "sucursales" }),
+				"lector",
+			),
+		).toEqual(["new-subfolder", "describe", "delete-folder"]);
 	});
 });

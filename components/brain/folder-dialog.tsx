@@ -44,7 +44,9 @@ export function FolderDialog({
 	const creating = mode.kind === "create";
 	const prefix = creating && mode.parent ? `${mode.parent}/` : "";
 
-	const submit = () =>
+	const submit = () => {
+		// Fuera de la transición: adentro no se pinta hasta que termina.
+		setError(null);
 		start(async () => {
 			try {
 				const result = creating
@@ -68,6 +70,7 @@ export function FolderDialog({
 				setError("No se pudo guardar. Probá de nuevo.");
 			}
 		});
+	};
 
 	return (
 		<Dialog open onOpenChange={(open) => !open && onClose()}>
