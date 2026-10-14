@@ -26,3 +26,10 @@ values
   ('99999999-0000-0000-0000-000000000001', 'outreach', '{"brain": "read_write"}'),
   ('99999999-0000-0000-0000-000000000002', 'outreach', '{"brain": "read_write"}')
 on conflict (tenant_id, agent) do nothing;
+
+-- El asistente conversa con el brain: habilitado en las dos empresas locales.
+insert into public.tenant_agents (tenant_id, agent, config)
+values
+  ('99999999-0000-0000-0000-000000000001', 'asistente', '{"brain": "read_write"}'),
+  ('99999999-0000-0000-0000-000000000002', 'asistente', '{"brain": "read_write"}')
+on conflict (tenant_id, agent) do nothing;

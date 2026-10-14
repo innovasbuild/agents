@@ -89,6 +89,7 @@ export async function resolveChannelContext(
 	request: Request,
 	userId: string,
 	allowsLogin: (tenantId: string) => Promise<boolean>,
+	agent: string,
 ): Promise<ChannelContext | null> {
 	const admin = createAdminClient();
 	const sessionId = new URL(request.url).pathname.match(SESSION_PATH)?.[1];
@@ -125,6 +126,10 @@ export async function resolveChannelContext(
 	}
 
 	if (!conversation) return null;
+	// Cada agente tiene su ruta (/eve/<agente>/v1/*). Una conversación de otro
+	// agente por esta ruta abriría una sesión de este agente colgada de un hilo
+	// ajeno (spec 22.1 §6.5).
+	if (conversation.agent !== agent) return null;
 	if (conversation.user_id !== userId) return null;
 
 	const { data: membership } = await admin

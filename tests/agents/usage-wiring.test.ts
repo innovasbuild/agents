@@ -15,14 +15,28 @@ describe("el gasto del chat queda etiquetado y asentado", () => {
 		expect(agentDirs.length).toBeGreaterThan(0);
 	});
 
-	it("todo agent.ts elige el modelo con modelSelection(", () => {
+	it("tenantModel devuelve el modelo con modelSelection(", () => {
+		const source = readFileSync("lib/agents/eve/model.ts", "utf8");
+		expect(
+			source.includes("modelSelection("),
+			"lib/agents/eve/model.ts no llama a modelSelection(: las llamadas del chat saldrían sin la etiqueta tenant:<slug> y el reporte de gasto no las atribuye.",
+		).toBe(true);
+	});
+
+	it("todo agent.ts elige el modelo con tenantModel( o modelSelection(", () => {
 		const sinEtiqueta = agentDirs
 			.map((dir) => join(dir, "agent.ts"))
 			.filter((file) => existsSync(file))
-			.filter((file) => !readFileSync(file, "utf8").includes("modelSelection("))
+			.filter((file) => {
+				const source = readFileSync(file, "utf8");
+				return (
+					!source.includes("tenantModel(") &&
+					!source.includes("modelSelection(")
+				);
+			})
 			.map(
 				(file) =>
-					`${file}: no llama a modelSelection(. Sin eso las llamadas del chat salen sin la etiqueta tenant:<slug> y el reporte de gasto no las atribuye. Devolvé modelSelection(...) de lib/agents/model.ts desde el resolver de modelo.`,
+					`${file}: no usa tenantModel( ni modelSelection(. Sin eso las llamadas del chat salen sin la etiqueta tenant:<slug> y el reporte de gasto no las atribuye. Usá tenantModel("<agente>") de lib/agents/eve/model.ts.`,
 			);
 		expect(sinEtiqueta, sinEtiqueta.join("\n")).toEqual([]);
 	});
@@ -33,7 +47,7 @@ describe("el gasto del chat queda etiquetado y asentado", () => {
 			.filter((dir) => !existsSync(join(dir, "hooks", "usage.ts")))
 			.map(
 				(dir) =>
-					`${join(dir, "hooks")}: tiene runs.ts pero no usage.ts. Sin ese hook los pasos del agente no se asientan en usage_entries y el gasto del chat no aparece. Copiá agents/outreach/hooks/usage.ts.`,
+					`${join(dir, "hooks")}: tiene runs.ts pero no usage.ts. Sin ese hook los pasos del agente no se asientan en usage_entries y el gasto del chat no aparece. Creá hooks/usage.ts con: export default usageHook(); (de lib/agents/eve/hooks.ts).`,
 			);
 		expect(sinAsiento, sinAsiento.join("\n")).toEqual([]);
 	});

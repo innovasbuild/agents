@@ -1,4 +1,4 @@
-// Import relativo: lo importa agents/outreach/agent.ts (ver Global Constraints).
+// Import relativo: lo importa lib/agents/eve/model.ts, que montan los agent.ts de agents/ (ver Global Constraints).
 import { createAdminClient } from "../supabase/admin";
 import {
 	type GatewayOptions,

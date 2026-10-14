@@ -13,6 +13,7 @@ Las tools de `agents/*/tools/` y su etiqueta en castellano (`TOOL_LABELS`, lo qu
 
 | Tool | Etiqueta | Archivo |
 | --- | --- | --- |
+| `asistente/brain` | Leyendo el brain | `agents/asistente/tools/brain.ts` |
 | `outreach/brain` | Leyendo el brain | `agents/outreach/tools/brain.ts` |
 | `outreach/crm_setup_outreach_properties` | Preparando el CRM | `agents/outreach/tools/crm_setup_outreach_properties.ts` |
 | `outreach/crm_upsert_contact` | Escribiendo en el CRM | `agents/outreach/tools/crm_upsert_contact.ts` |

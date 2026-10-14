@@ -40,7 +40,6 @@ describe("catálogo de agentes", () => {
 		for (const [agent, entry] of Object.entries(AGENT_CATALOG)) {
 			expect(entry.name.trim().length, agent).toBeGreaterThan(0);
 			expect(entry.description.trim().length, agent).toBeGreaterThan(0);
-			expect(entry.capabilities.length, agent).toBeGreaterThan(0);
 		}
 	});
 
@@ -52,5 +51,26 @@ describe("catálogo de agentes", () => {
 
 	it("el outreach requiere brain", () => {
 		expect(AGENT_CATALOG.outreach.requiresBrain).toBe(true);
+	});
+
+	it("el asistente tiene chat, requiere brain, no pide canon y no tiene MCP", () => {
+		expect(AGENT_CATALOG.asistente).toMatchObject({
+			name: "Asistente",
+			chat: true,
+			brain: true,
+			requiresBrain: true,
+			canon: false,
+			mcp: false,
+			capabilities: [],
+		});
+	});
+
+	it("el outreach pide canon y tiene MCP", () => {
+		expect(AGENT_CATALOG.outreach.canon).toBe(true);
+		expect(AGENT_CATALOG.outreach.mcp).toBe(true);
+	});
+
+	it("el asistente va primero: es el orden del alta, la consola y el selector", () => {
+		expect(catalogAgents()).toEqual(["asistente", "outreach"]);
 	});
 });

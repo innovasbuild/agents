@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import type { EveMessage, EveMessagePart } from "eve/client";
 import { describe, expect, it } from "vitest";
 import {
@@ -145,10 +145,13 @@ describe("runningToolLabel", () => {
 		},
 	);
 
-	it("todo tool de outreach tiene etiqueta, salvo los excluidos a propósito", () => {
+	it("todo tool de cualquier agente tiene etiqueta, salvo los excluidos a propósito", () => {
 		// La tabla es a mano: sin esto, un tool nuevo degradaba en silencio a
 		// "Trabajando…" y nadie se enteraba hasta verlo en pantalla.
-		const sinEtiqueta = readdirSync("agents/outreach/tools")
+		const sinEtiqueta = readdirSync("agents", { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.filter((entry) => existsSync(`agents/${entry.name}/tools`))
+			.flatMap((entry) => readdirSync(`agents/${entry.name}/tools`))
 			.filter((file) => file.endsWith(".ts"))
 			.map((file) => file.replace(/\.ts$/, ""))
 			.filter((name) => !TOOLS_SIN_ETIQUETA.has(name))

@@ -3137,7 +3137,7 @@ Usar `/ship`. El PR sale de `feat/etapa-21-5-gasto-ia` contra `main` e incluye l
 No lo ejecuta un agente por su cuenta: aplicar una migración en producción pide confirmación explícita.
 
 - [ ] **Orden de despliegue con la 22.1.** Si `20261022120000` (21.5) llega a producción antes que `20261021120000_asistente_agent` (22.1), `supabase db push` se niega sin `--include-all`. Anotarlo en los pasos de despliegue de la 22.1.
-- [ ] **Cuando entre la 22.1:** cablear `modelSelection` en `tenantModel` y copiar `hooks/usage.ts` en cada agente nuevo. `tests/agents/usage-wiring.test.ts` lo exige y falla hasta que estén.
+- [x] **Cuando entre la 22.1:** cablear `modelSelection` en `tenantModel` y exportar `usageHook()` en cada agente (`agents/<agente>/hooks/usage.ts`). Hecho al integrar `main` (la 22.1 entró por el PR 98); `tests/agents/usage-wiring.test.ts` lo exige.
 - [ ] Mirar en producción los `agent/step` reales: `meta.model` y `meta.source`, y que el id de modelo tenga el formato esperado con la selección por objeto.
 - [ ] Antes de juzgar "Sin etiqueta", revisar si el team de Vercel tiene otro tráfico por el gateway (evals, scripts, previews): el reporte es de todo el team.
 - [ ] Reemplazar el texto "desde que se activó esta pantalla" de `/<slug>/settings/gasto` por la fecha real del deploy (spec §5.1).

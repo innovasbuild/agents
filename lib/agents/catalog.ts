@@ -16,11 +16,28 @@ export interface AgentCatalogEntry {
 	/** Si el agente no puede trabajar sin el brain de la empresa: la consola no
 	 * lo deja habilitar hasta que haya uno (spec 21.3 §3.7). */
 	requiresBrain: boolean;
+	/** Si el agente necesita las páginas de canon de outreach en el brain. La
+	 * consola las siembra al habilitarlo (spec 22.1 C10). */
+	canon: boolean;
 	/** Si el agente se usa desde la pantalla de chat de la empresa. */
 	chat: boolean;
+	/** Si el agente se puede conectar por MCP desde Conectar. */
+	mcp: boolean;
 }
 
+// El orden es el que muestran el alta, la consola y el selector del chat.
 export const AGENT_CATALOG = {
+	asistente: {
+		name: "Asistente",
+		description:
+			"Conversa con el conocimiento de tu empresa: busca, lee y propone páginas del brain.",
+		capabilities: [],
+		brain: true,
+		requiresBrain: true,
+		canon: false,
+		chat: true,
+		mcp: false,
+	},
 	outreach: {
 		name: "Agente de outreach",
 		description:
@@ -28,7 +45,9 @@ export const AGENT_CATALOG = {
 		capabilities: ["crm", "leads", "mail"],
 		brain: true,
 		requiresBrain: true,
+		canon: true,
 		chat: true,
+		mcp: true,
 	},
 } as const satisfies Record<string, AgentCatalogEntry>;
 

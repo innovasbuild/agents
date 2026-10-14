@@ -2,7 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
@@ -34,6 +36,7 @@ export async function createConversation(
 	tenantId: string,
 	slug: string,
 	model: string,
+	agent: string,
 ): Promise<string | null> {
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
@@ -43,6 +46,13 @@ export async function createConversation(
 	// invocar directo, así que lo chequea ella (spec etapa 20, L10 a L12).
 	if (!(await actionAllowsLogin(supabase, auth.user.id, tenantId))) return null;
 
+	// El selector solo ofrece agentes de chat habilitados, pero el argumento
+	// llega de afuera (spec 22.1 §6.4). Si la lista no se pudo leer se deja
+	// pasar: el canal valida tenant_agents.enabled antes de abrir la sesión.
+	if (!isCatalogAgent(agent) || !AGENT_CATALOG[agent].chat) return null;
+	const enabled = await loadEnabledAgents(tenantId);
+	if (enabled && !enabled.includes(agent)) return null;
+
 	// La fila se crea ANTES de send(): el canal valida contra ella y el hook
 	// bind-session le escribe después el eve_session_id.
 	const { data, error } = await supabase
@@ -50,7 +60,7 @@ export async function createConversation(
 		.insert({
 			tenant_id: tenantId,
 			user_id: auth.user.id,
-			agent: "outreach",
+			agent,
 			model,
 		})
 		.select("id")
