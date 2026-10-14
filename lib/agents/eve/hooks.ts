@@ -2,7 +2,11 @@ import { defineHook } from "eve/hooks";
 import { createAdminClient } from "../../supabase/admin";
 import { createUsageRecorder, resolveRunId } from "../../workflows/usage";
 import { resolveModelForTenant } from "../model";
-import { bindSessionToConversation, closeRun, openRun } from "../session-store";
+import {
+	bindSessionToConversation,
+	closeRun,
+	openRun,
+} from "../session-store";
 import { stepUsageEntry } from "../step-usage";
 import { attribute } from "./attribute";
 
@@ -43,7 +47,8 @@ export function runsHook() {
 
 					await openRun({
 						tenantId,
-						conversationId: attribute(auth?.attributes?.conversationId) || null,
+						conversationId:
+							attribute(auth?.attributes?.conversationId) || null,
 						agent: ctx.agent.name,
 						sessionId: ctx.session.id,
 						turnId: event.data.turnId,
