@@ -31,8 +31,8 @@ import {
 	type SkillFile,
 	skillName,
 } from "./package.ts";
+import { publishedEntries } from "./package-link.ts";
 import { type SkillActor, type SkillFailure, skillFail } from "./publish.ts";
-import { renderSkillMd } from "./skill-md.ts";
 import { publishedSnapshot } from "./state.ts";
 import type { SkillOverviewRow, SkillStore } from "./store.ts";
 
@@ -362,24 +362,9 @@ export async function exportSkillPackage(
 	if (!snapshot) return skillFail("not_found", NOT_FOUND);
 
 	const name = skillName(slug);
-	const entries: PackageEntry[] = [
-		{
-			path: `${name}/SKILL.md`,
-			bytes: new TextEncoder().encode(
-				renderSkillMd({
-					name,
-					description: snapshot.description,
-					frontmatter: snapshot.frontmatter,
-					body: snapshot.body,
-				}),
-			),
-		},
-	];
-	for (const file of snapshot.manifest) {
-		const bytes = await deps.blobs.get(ctx.actor.tenantId, file.sha256);
-		if (!bytes) throw new Error(`skills: falta el contenido de ${file.path}`);
-		entries.push({ path: `${name}/${file.path}`, bytes });
-	}
+	const entries = await publishedEntries(name, snapshot, (sha256) =>
+		deps.blobs.get(ctx.actor.tenantId, sha256),
+	);
 	return { ok: true, name, version: snapshot.version, entries };
 }
 
