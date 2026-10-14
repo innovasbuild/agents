@@ -62,6 +62,9 @@ export function buildConnectables(input: {
 	}
 
 	for (const agent of input.enabledAgents) {
+		// Un agente del catálogo sin canal MCP no se ofrece (spec 22.1 C13). Uno
+		// fuera del catálogo se sigue mostrando con su texto genérico.
+		if (isCatalogAgent(agent) && !AGENT_CATALOG[agent].mcp) continue;
 		const copy = isCatalogAgent(agent)
 			? AGENT_CATALOG[agent]
 			: { name: agent, description: "Agente de tu empresa." };

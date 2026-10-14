@@ -10,5 +10,8 @@ const nextConfig: NextConfig = {
 };
 
 export default withEve(nextConfig, {
-	agents: { outreach: "./agents/outreach" },
+	agents: {
+		asistente: "./agents/asistente",
+		outreach: "./agents/outreach",
+	},
 });
