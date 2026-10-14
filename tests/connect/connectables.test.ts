@@ -27,6 +27,26 @@ describe("buildConnectables", () => {
 		});
 	});
 
+	it("en el dominio de la empresa: brain en /brain/mcp y agente sin ?tenant=", () => {
+		const list = buildConnectables({
+			...base,
+			slug: "okeefe",
+			publicUrl: "https://ai.okeefe.com.ar",
+			tenantHost: true,
+		});
+
+		expect(list[0]).toMatchObject({
+			kind: "brain",
+			id: "brain-okeefe",
+			url: "https://ai.okeefe.com.ar/brain/mcp",
+		});
+		expect(list[1]).toMatchObject({
+			kind: "agent",
+			id: "outreach-okeefe",
+			url: "https://ai.okeefe.com.ar/eve/outreach/v1/mcp",
+		});
+	});
+
 	it("un agente sin canal MCP no aparece", () => {
 		const list = buildConnectables({
 			...base,

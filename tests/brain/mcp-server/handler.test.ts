@@ -547,6 +547,69 @@ describe("handleBrainMcp", () => {
 	});
 });
 
+describe("brain por MCP en el dominio de una empresa", () => {
+	const OKEEFE = "https://ai.okeefe.com.ar";
+
+	it("la metadata anuncia /brain/mcp, sin slug", () => {
+		expect(
+			protectedResourceMetadata("okeefe", {
+				publicUrl: OKEEFE,
+				tenantHost: true,
+				issuer: "https://ref.supabase.co/auth/v1",
+			}),
+		).toEqual({
+			resource: `${OKEEFE}/brain/mcp`,
+			authorization_servers: ["https://ref.supabase.co/auth/v1"],
+			bearer_methods_supported: ["header"],
+		});
+	});
+
+	it("el 401 apunta a la metadata de /brain/mcp", async () => {
+		const response = await handleBrainMcp(
+			new Request(`${OKEEFE}/brain/okeefe/mcp`, {
+				method: "POST",
+				body: "{}",
+			}),
+			"a",
+			deps({ publicUrl: OKEEFE, tenantHost: true }),
+		);
+		expect(response.status).toBe(401);
+		expect(response.headers.get("www-authenticate")).toContain(
+			`resource_metadata="${OKEEFE}/.well-known/oauth-protected-resource/brain/mcp"`,
+		);
+	});
+
+	it("un slug que no es el del host responde 404 como si no existiera", async () => {
+		const response = await handleBrainMcp(
+			new Request(`${OKEEFE}/brain/otra/mcp`, {
+				method: "POST",
+				headers: { authorization: "Bearer ana" },
+				body: "{}",
+			}),
+			"b",
+			deps({ publicUrl: OKEEFE, tenantHost: true, hostServes: () => false }),
+		);
+		expect(response.status).toBe(404);
+		expect(await response.json()).toEqual({
+			ok: false,
+			code: "tenant_not_found",
+			error: "No existe ese cliente.",
+		});
+	});
+
+	it("sin hostServes (host raíz) no valida nada", async () => {
+		const response = await handleBrainMcp(
+			new Request("https://agents.test/brain/a/mcp", {
+				method: "POST",
+				body: "{}",
+			}),
+			"a",
+			deps(),
+		);
+		expect(response.status).toBe(401);
+	});
+});
+
 describe("protectedResourceMetadata", () => {
 	it("usa la URL pública configurada y el emisor", () => {
 		expect(

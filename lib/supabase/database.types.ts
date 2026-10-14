@@ -1303,6 +1303,51 @@ export type Database = {
 					},
 				];
 			};
+			tenant_domains: {
+				Row: {
+					created_at: string;
+					created_by: string | null;
+					hostname: string;
+					id: string;
+					is_primary: boolean;
+					last_error: string | null;
+					status: string;
+					tenant_id: string;
+					verified_at: string | null;
+				};
+				ComputedFields: never;
+				Insert: {
+					created_at?: string;
+					created_by?: string | null;
+					hostname: string;
+					id?: string;
+					is_primary?: boolean;
+					last_error?: string | null;
+					status?: string;
+					tenant_id: string;
+					verified_at?: string | null;
+				};
+				Update: {
+					created_at?: string;
+					created_by?: string | null;
+					hostname?: string;
+					id?: string;
+					is_primary?: boolean;
+					last_error?: string | null;
+					status?: string;
+					tenant_id?: string;
+					verified_at?: string | null;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "tenant_domains_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: false;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			tenant_workflows: {
 				Row: {
 					config: NonNullable<Json>;
@@ -1824,6 +1869,7 @@ export type Database = {
 				Args: { p_tenant: string; p_user: string };
 				Returns: undefined;
 			};
+			resolve_tenant_by_host: { Args: { p_host: string }; Returns: string };
 			run_cost_usd: { Args: { p_run: string }; Returns: number };
 			set_approval: {
 				Args: {

@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { publicSettings } from "@/lib/brain/adapters/mcp-production";
 import { type MemberSkill, memberSkills } from "@/lib/brain/adapters/skills";
@@ -6,6 +7,7 @@ import {
 	type Connectable,
 } from "@/lib/connect/connectables";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { requestHostContext } from "@/lib/tenants/host-store";
 import { resolveTenantAccess, type TenantAccess } from "@/lib/tenants/resolve";
 import { ConnectCard } from "./connect-card";
 import { SkillsSection } from "./skills-section";
@@ -37,9 +39,18 @@ async function loadConnectables(
 		]);
 		if (agents.error || brain.error) return null;
 
+		// Por el dominio de la empresa las URLs salen con ese dominio y sin slug.
+		// Si el host no se puede resolver, las de siempre: mejor eso que no
+		// mostrar nada.
+		const host = await requestHostContext(await headers()).catch((error) => {
+			console.error("conectar: no pude resolver el host", error);
+			return { publicUrl: "", tenantHost: false };
+		});
+
 		return buildConnectables({
 			slug,
-			publicUrl: publicSettings().publicUrl,
+			publicUrl: host.tenantHost ? host.publicUrl : publicSettings().publicUrl,
+			tenantHost: host.tenantHost,
 			hasBrain: (brain.data ?? []).length > 0,
 			enabledAgents: (agents.data ?? []).map((row) => row.agent as string),
 		});

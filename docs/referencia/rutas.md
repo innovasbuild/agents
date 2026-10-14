@@ -15,6 +15,7 @@ Las páginas y los endpoints de `app/`.
 | --- | --- | --- |
 | `/` | página | `app/page.tsx` |
 | `/.well-known/oauth-protected-resource/brain/[tenant]/mcp` | endpoint | `app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts` |
+| `/.well-known/oauth-protected-resource/brain/mcp` | endpoint | `app/.well-known/oauth-protected-resource/brain/mcp/route.ts` |
 | `/.well-known/oauth-protected-resource/eve/outreach/v1/mcp` | endpoint | `app/.well-known/oauth-protected-resource/eve/outreach/v1/mcp/route.ts` |
 | `/[tenant]` | página | `app/[tenant]/page.tsx` |
 | `/[tenant]/brain` | página | `app/[tenant]/brain/page.tsx` |

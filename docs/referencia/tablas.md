@@ -35,6 +35,7 @@ Las tablas de `public` y la migración que cada una crea.
 | `tenant_agents` | `supabase/migrations/20260912193318_conversations_tenant_agents.sql` |
 | `tenant_budgets` | `supabase/migrations/20260921110000_tenant_workflows_budgets.sql` |
 | `tenant_connections` | `supabase/migrations/20260913221734_tenant_connections_executors.sql` |
+| `tenant_domains` | `supabase/migrations/20261024120000_tenant_domains.sql` |
 | `tenant_workflows` | `supabase/migrations/20260921110000_tenant_workflows_budgets.sql` |
 | `tenants` | `supabase/migrations/20260912192239_tenants_memberships.sql` |
 | `usage_entries` | `supabase/migrations/20260921090000_usage_entries.sql` |

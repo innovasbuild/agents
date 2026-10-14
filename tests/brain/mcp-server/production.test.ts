@@ -52,6 +52,24 @@ describe("publicSettings", () => {
 		expect(publicSettings().publicUrl).toBe("https://agents-abc123.vercel.app");
 	});
 
+	it("con un origen por request lo usa en vez del fijo", () => {
+		vi.stubEnv("PUBLIC_APP_URL", "https://agentes.innov.as");
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+		expect(publicSettings("https://ai.okeefe.com.ar")).toEqual({
+			publicUrl: "https://ai.okeefe.com.ar",
+			issuer: "https://ref.supabase.co/auth/v1",
+		});
+	});
+
+	it("con un origen por request no exige PUBLIC_APP_URL", () => {
+		vi.stubEnv("PUBLIC_APP_URL", undefined);
+		vi.stubEnv("VERCEL_URL", undefined);
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+		expect(publicSettings("https://ai.okeefe.com.ar").publicUrl).toBe(
+			"https://ai.okeefe.com.ar",
+		);
+	});
+
 	it("sin ninguna de las dos, tira", () => {
 		vi.stubEnv("PUBLIC_APP_URL", undefined);
 		vi.stubEnv("VERCEL_URL", undefined);
