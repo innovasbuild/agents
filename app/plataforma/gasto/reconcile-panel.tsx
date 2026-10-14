@@ -124,9 +124,13 @@ export function ReconcilePanel() {
 						Se marca una diferencia mayor a US$ 1 o al 5 %, la que sea más
 						grande. Causas conocidas: pasos abortados o fallidos que el gateway
 						cobra y nadie informa, asientos con precio de tabla, la compactación
-						de contexto y la demora de ingesta del gateway. "Sin etiqueta" es lo
-						que el gateway cobró sin tag de empresa: si no es cero, alguna
-						llamada salió sin etiquetar.
+						de contexto y la demora de ingesta del gateway. El reporte del
+						gateway es de todo el team de Vercel: "Sin etiqueta" es lo que se
+						cobró sin tag de empresa, y si no es cero puede ser una llamada que
+						salió sin etiquetar, pero también evals, scripts o tráfico local y
+						de previews. Al revés, lo etiquetado de chats locales o de previews
+						cae en el mismo tag de la empresa y suma en la columna Gateway sin
+						estar en el libro de producción.
 					</p>
 				</>
 			) : null}
