@@ -7,6 +7,7 @@
 // Sale con código 2 si algún slug abortaría la migración.
 import { createClient } from "@supabase/supabase-js";
 import {
+	fetchAllRows,
 	renderFolderReport,
 	type TenantPages,
 } from "../lib/brain/core/folders-report.ts";
@@ -25,10 +26,15 @@ if (!url || !key) {
 }
 const db = createClient(url, key, { auth: { persistSession: false } });
 
+function fail(what: string, error: { message?: string } | null): never {
+	console.error(`No pude ${what}: ${error?.message ?? "error desconocido"}.`);
+	process.exit(1);
+}
+
 let query = db.from("tenants").select("id, slug").order("slug");
 if (only) query = query.eq("slug", only);
 const { data: tenants, error: tenantsError } = await query;
-if (tenantsError) throw tenantsError;
+if (tenantsError) fail("leer los tenants", tenantsError);
 if (!tenants || tenants.length === 0) {
 	console.error(only ? `No existe el tenant ${only}.` : "No hay tenants.");
 	process.exit(1);
@@ -43,19 +49,36 @@ for (const tenant of tenants) {
 		.eq("capability", "brain")
 		.eq("provider", "wiki")
 		.maybeSingle();
-	if (bindingError) throw bindingError;
+	if (bindingError) fail(`leer el brain de ${tenant.slug}`, bindingError);
 	// Un tenant sin brain no entra en el backfill.
 	if (!binding) continue;
-	const { data: pages, error } = await db
+	// PostgREST corta en 1000 filas: se pagina y se compara con el conteo exacto.
+	const pages = await fetchAllRows(async (from, to) => {
+		const { data, error } = await db
+			.from("brain_pages")
+			.select("slug, category")
+			.eq("tenant_id", tenant.id)
+			.order("slug")
+			.range(from, to);
+		if (error) fail(`leer las páginas de ${tenant.slug}`, error);
+		return data ?? [];
+	});
+	const { count, error: countError } = await db
 		.from("brain_pages")
-		.select("slug, category")
+		.select("slug", { count: "exact", head: true })
 		.eq("tenant_id", tenant.id);
-	if (error) throw error;
+	if (countError) fail(`contar las páginas de ${tenant.slug}`, countError);
+	if (count !== pages.length) {
+		console.error(
+			`Leí ${pages.length} páginas de ${tenant.slug} pero hay ${count}. El reporte no es confiable; no lo uses.`,
+		);
+		process.exit(1);
+	}
 	loaded.push({
 		tenant: tenant.slug,
 		categories:
 			(binding.config as { categories?: string[] } | null)?.categories ?? [],
-		pages: pages ?? [],
+		pages,
 	});
 }
 

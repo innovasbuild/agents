@@ -12,9 +12,14 @@ export function folderReport(
 	pages: Array<{ slug: string; category: string }>,
 ) {
 	const nested = pages.filter((p) => p.slug.includes("/"));
-	const blockers = nested
-		.filter((p) => !CATEGORY.test(top(p.slug)))
-		.map((p) => p.slug);
+	// La migración inserta cada categoría de la config como carpeta (skill → skills).
+	const badConfig = categories
+		.filter((c) => !CATEGORY.test(c === "skill" ? "skills" : c))
+		.map((c) => `config:${c}`);
+	const blockers = [
+		...badConfig,
+		...nested.filter((p) => !CATEGORY.test(top(p.slug))).map((p) => p.slug),
+	];
 	const valid = nested.filter((p) => CATEGORY.test(top(p.slug)));
 
 	const folders = new Set(
@@ -56,6 +61,19 @@ export function folderReport(
 			? []
 			: valid.filter((p) => top(p.slug) === "skills").map((p) => p.slug),
 	};
+}
+
+// Lee de a páginas de `size` (PostgREST corta en 1000) hasta que una viene corta.
+export async function fetchAllRows<T>(
+	load: (from: number, to: number) => Promise<T[]>,
+	size = 1000,
+): Promise<T[]> {
+	const all: T[] = [];
+	for (let from = 0; ; from += size) {
+		const rows = await load(from, from + size - 1);
+		all.push(...rows);
+		if (rows.length < size) return all;
+	}
 }
 
 export interface TenantPages {

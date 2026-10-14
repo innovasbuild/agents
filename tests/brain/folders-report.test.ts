@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	fetchAllRows,
 	folderReport,
 	renderFolderReport,
 } from "@/lib/brain/core/folders-report";
@@ -104,5 +105,33 @@ describe("renderFolderReport", () => {
 			{ tenant: "innovas", categories: ["empresa"], pages: [] },
 		]);
 		expect(text.blocked).toBe(false);
+	});
+});
+
+describe("config.categories inválidas", () => {
+	it("son bloqueantes, con el prefijo config:", () => {
+		const report = folderReport(["empresa", "skill", "2024", "Ventas"], []);
+		expect(report.blockers).toEqual(["config:2024", "config:Ventas"]);
+	});
+});
+
+describe("fetchAllRows", () => {
+	const make = (n: number) => async (from: number, to: number) =>
+		Array.from({ length: n }, (_, i) => i).slice(from, to + 1);
+
+	it("junta 2500 filas en tres páginas", async () => {
+		const rows = await fetchAllRows(make(2500));
+		expect(rows).toHaveLength(2500);
+	});
+
+	it("en el borde exacto de 1000 pide una página más y termina", async () => {
+		const calls: number[] = [];
+		const load = make(1000);
+		const rows = await fetchAllRows(async (from, to) => {
+			calls.push(from);
+			return load(from, to);
+		});
+		expect(rows).toHaveLength(1000);
+		expect(calls).toEqual([0, 1000]);
 	});
 });
