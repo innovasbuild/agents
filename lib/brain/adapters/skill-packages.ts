@@ -1,14 +1,14 @@
 // Zips publicados de las skills en Storage (spec etapa 24.2b §5): bucket
 // privado skill-packages, objeto <tenant_id>/<digest>.zip, links firmados.
 // La ruta del objeto sale siempre del tenant del pedido.
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient } from "../../supabase/admin.ts";
 import type {
 	PackageIssueRecord,
 	PackageLinkDeps,
 	PackageObjects,
-} from "../core/skills/package-link";
-import { zipPackage } from "./skill-zip";
-import { blobStore } from "./skills";
+} from "../core/skills/package-link.ts";
+import { blobStore } from "./skill-storage.ts";
+import { zipPackage } from "./skill-zip.ts";
 
 const BUCKET = "skill-packages";
 

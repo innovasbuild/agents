@@ -2,7 +2,6 @@
 // reglas, cliente admin y Storage. Los permisos los deciden core/skills/
 // publish.ts y files.ts.
 import { loadTenantBindings } from "@/lib/connectors/bindings";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
 import { isAdminRole, type Principal } from "../core/access/types";
@@ -20,37 +19,9 @@ import { accessRulesStore } from "./access-rules";
 import { resolveActingProvider } from "./acting-provider";
 import { getBrainProvider } from "./provider";
 
-const BUCKET = "skills";
+import { blobStore, skillStore } from "./skill-storage.ts";
 
-export function skillStore(): SkillStore {
-	return createSupabaseSkillStore(createAdminClient());
-}
-
-export function blobStore(): BlobStore {
-	const bucket = () => createAdminClient().storage.from(BUCKET);
-	return {
-		async put(tenantId, sha256, bytes) {
-			// El objeto se llama como su contenido: subirlo dos veces es inocuo.
-			const { error } = await bucket().upload(`${tenantId}/${sha256}`, bytes, {
-				contentType: "application/octet-stream",
-				upsert: true,
-			});
-			if (error) {
-				throw new Error(`skills: no pude guardar el archivo: ${error.message}`);
-			}
-		},
-		async get(tenantId, sha256) {
-			const { data, error } = await bucket().download(`${tenantId}/${sha256}`);
-			if (error || !data) {
-				console.error(
-					`skills: no pude leer ${tenantId}/${sha256}: ${error?.message ?? "sin datos"}`,
-				);
-				return null;
-			}
-			return new Uint8Array(await data.arrayBuffer());
-		},
-	};
-}
+export { blobStore, skillStore };
 
 async function wikiBinding(tenantId: string) {
 	const binding = await resolveBrainBinding(tenantId, loadTenantBindings);

@@ -8,12 +8,12 @@
 // un encabezado que miente se rechaza, no se trunca, y el trabajo está acotado
 // por los topes aunque el zip sea una bomba.
 import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
-import type { PackageEntry } from "../core/skills/files";
+import type { PackageEntry } from "../core/skills/files.ts";
 import {
 	MAX_FILE_BYTES,
 	MAX_PACKAGE_BYTES,
 	MAX_PACKAGE_FILES,
-} from "../core/skills/package";
+} from "../core/skills/package.ts";
 
 export class ZipRejected extends Error {
 	constructor(message: string) {

@@ -23,7 +23,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 		from: () => ({ insert: storage.insert }),
 	}),
 }));
-vi.mock("@/lib/brain/adapters/skills", () => ({
+vi.mock("@/lib/brain/adapters/skill-storage", () => ({
 	blobStore: () => ({ get: vi.fn(async () => null), put: vi.fn() }),
 }));
 

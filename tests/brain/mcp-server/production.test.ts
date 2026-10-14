@@ -17,7 +17,7 @@ vi.mock("@/lib/brain/adapters/mcp-supabase", () => ({
 vi.mock("@/lib/brain/adapters/access-rules", () => ({
 	accessRulesStore: vi.fn(),
 }));
-vi.mock("@/lib/brain/adapters/skills", () => ({
+vi.mock("@/lib/brain/adapters/skill-storage", () => ({
 	skillStore: vi.fn(),
 	blobStore: vi.fn(),
 }));

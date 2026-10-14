@@ -18,7 +18,7 @@ import {
 } from "./mcp-supabase.ts";
 import { getBrainProvider } from "./provider.ts";
 import { packageLinkDeps } from "./skill-packages.ts";
-import { blobStore, skillStore } from "./skills.ts";
+import { blobStore, skillStore } from "./skill-storage.ts";
 
 let memoized:
 	| Pick<BrainMcpDeps, "verify" | "store" | "hit" | "rules">
