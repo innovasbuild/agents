@@ -155,7 +155,7 @@ export async function resolveMcpChannelAuth(
 		ok: true,
 		sessionAuth: {
 			authenticator: "oauth",
-			// Mismo issuer que el canal del dashboard (agents/outreach/channels/eve.ts):
+			// Mismo issuer que el canal del dashboard (lib/agents/eve/web-channel.ts):
 			// Connect arma su subject con este campo, así que un issuer distinto
 			// sería otra identidad y pediría autorizar Gmail/HubSpot de nuevo.
 			issuer: process.env.NEXT_PUBLIC_SUPABASE_URL!,

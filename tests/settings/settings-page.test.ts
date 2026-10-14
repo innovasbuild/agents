@@ -162,12 +162,26 @@ describe("settings del cliente", () => {
 	it("un agente deshabilitado no ofrece aprobaciones", async () => {
 		state.tables.tenant_agents = {
 			data: [
-				{ agent: "outreach", enabled: false, config: {} },
-				{ agent: "otro", enabled: true, config: {} },
+				{ agent: "outreach", enabled: true, config: {} },
+				{ agent: "otro", enabled: false, config: {} },
 			],
 			error: null,
 		};
-		expect(await render()).toContain("No hay pasos que requieran una política");
+		const html = await render();
+		expect(html).toContain("Aprobaciones");
+		expect(html).not.toContain("otro");
+	});
+
+	it("solo con el Asistente no muestra Ejecutores ni Aprobaciones", async () => {
+		state.tables.tenant_agents = {
+			data: [{ agent: "asistente", enabled: true, config: {} }],
+			error: null,
+		};
+		const html = await render();
+		expect(html).toContain("Modelo default");
+		expect(html).toContain("Conectores");
+		expect(html).not.toContain("Ejecutores");
+		expect(html).not.toContain("Aprobaciones");
 	});
 
 	it("sin agentes habilitados quedan Ingreso y Usuarios", async () => {

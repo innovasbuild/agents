@@ -55,10 +55,11 @@ describe("webChannel", () => {
 		async (agent) => {
 			webChannel(agent);
 
-			await state.config?.auth[0](
+			const result = await state.config?.auth[0](
 				new Request("http://localhost/eve/x/v1/info"),
 			);
 
+			expect(result).toBeNull();
 			expect(state.resolve).toHaveBeenCalledWith(
 				expect.any(Request),
 				"u1",

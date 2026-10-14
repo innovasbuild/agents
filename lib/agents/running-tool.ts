@@ -3,7 +3,7 @@ import type { EveMessage } from "eve/client";
 /**
  * Identificador interno del último tool despachado que todavía no devolvió
  * resultado, o `null` si el turno no está esperando a ninguno. NO es texto
- * para mostrar: son los nombres en inglés de `agents/outreach/tools/`, así
+ * para mostrar: son los nombres en inglés de `agents/<agente>/tools/`, así
  * que quien lo consuma tiene que pasarlo por una etiqueta en castellano.
  *
  * El scan va de atrás para adelante y corta en el último `dynamic-tool` en

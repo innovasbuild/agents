@@ -1,5 +1,5 @@
 // Quién puede aprobar un brain_upsert (spec brain §3). El rol y el tenant los
-// estampa el canal (agents/outreach/channels/eve.ts) desde memberships.
+// estampa el canal (lib/agents/eve/web-channel.ts) desde memberships.
 
 export type BrainApprovalDecision =
 	| { status: "allowed" }
