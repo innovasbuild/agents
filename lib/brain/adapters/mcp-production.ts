@@ -4,6 +4,8 @@
 // entre requests en vez de reconstruirse en cada llamada.
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import { createAdminClient } from "../../supabase/admin";
+import type { RequestHostContext } from "../../tenants/host-store";
+import { fallbackPublicUrl } from "../../tenants/public-url";
 import { agentsNeedCanon } from "../../tenants/readiness";
 import type {
 	BrainMcpDeps,
@@ -69,17 +71,18 @@ function skillsDeps(): McpSkillsDeps {
 	};
 }
 
-export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
+export function publicSettings(
+	origin?: string,
+): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
 	// PUBLIC_APP_URL solo está cargada en Production (Etapa 11): en Preview y
 	// Development no tiene sentido un valor fijo, porque cada deploy de Vercel
 	// tiene su propia URL. VERCEL_URL la pone Vercel solo, en todo ambiente
 	// (incluidos los que evalúa eve al buildear un canal, antes de servir
 	// ningún request) — sin este fallback, un canal de eve que llama a esta
 	// función a nivel de módulo tira el build entero de cualquier preview.
-	const explicit = process.env.PUBLIC_APP_URL?.replace(/\/$/, "");
-	const publicUrl =
-		explicit ??
-		(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
+	// Con un origen por request (el dominio de una empresa, spec 21.6) se usa ese;
+	// sin él, el fijo del proceso, como siempre.
+	const publicUrl = origin || fallbackPublicUrl(process.env);
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
 	if (!publicUrl || !supabaseUrl) {
 		throw new Error(
@@ -89,9 +92,13 @@ export function publicSettings(): Pick<BrainMcpDeps, "publicUrl" | "issuer"> {
 	return { publicUrl, issuer: `${supabaseUrl}/auth/v1` };
 }
 
-export function productionDeps(): BrainMcpDeps {
+export function productionDeps(
+	host?: Pick<RequestHostContext, "publicUrl" | "tenantHost" | "serves">,
+): BrainMcpDeps {
 	return {
-		...publicSettings(),
+		...publicSettings(host?.tenantHost ? host.publicUrl : undefined),
+		// El host raíz no valida (como hoy); cualquier otro solo sirve a su empresa.
+		...(host && { tenantHost: host.tenantHost, hostServes: host.serves }),
 		...sharedDeps(),
 		provider: getBrainProvider,
 		skills: skillsDeps(),

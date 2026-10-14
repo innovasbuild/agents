@@ -6,6 +6,7 @@
 // endpoint del brain (app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts),
 // con la misma forma de respuesta.
 import { publicSettings } from "@/lib/brain/adapters/mcp-production";
+import { hostContextOrResponse } from "@/lib/tenants/host-store";
 
 const CORS = {
 	"access-control-allow-origin": "*",
@@ -13,8 +14,14 @@ const CORS = {
 	"access-control-allow-headers": "*",
 };
 
-export async function GET(): Promise<Response> {
-	const { publicUrl, issuer } = publicSettings();
+export async function GET(request: Request): Promise<Response> {
+	// El recurso tiene que ser la URL a la que se conectó el cliente: en el
+	// dominio de una empresa, ese dominio (spec 21.6 §4.5).
+	const host = await hostContextOrResponse(request.headers);
+	if (host instanceof Response) return host;
+	const { publicUrl, issuer } = publicSettings(
+		host.tenantHost ? host.publicUrl : undefined,
+	);
 	const resource = `${publicUrl}/eve/outreach/v1/mcp`;
 	return Response.json(
 		{

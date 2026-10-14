@@ -9,6 +9,7 @@ const state: {
 	brain: Result;
 	settings: () => { publicUrl: string; issuer: string };
 	skills: unknown;
+	host: { publicUrl: string; tenantHost: boolean };
 } = {
 	tenant: null,
 	agents: { data: [], error: null },
@@ -18,6 +19,7 @@ const state: {
 		issuer: "https://x/auth/v1",
 	}),
 	skills: [],
+	host: { publicUrl: "", tenantHost: false },
 };
 
 // Consulta encadenable que resuelve al hacer await, como la de supabase-js.
@@ -52,6 +54,10 @@ vi.mock("@/lib/brain/adapters/skills", () => ({
 		return state.skills;
 	},
 }));
+vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
+vi.mock("@/lib/tenants/host-store", () => ({
+	requestHostContext: async () => state.host,
+}));
 vi.mock("next/navigation", () => ({
 	notFound: () => {
 		throw new Error("NEXT_NOT_FOUND");
@@ -84,6 +90,7 @@ describe("página Conectar", () => {
 		state.agents = { data: [{ agent: "outreach" }], error: null };
 		state.brain = { data: [{ id: "c1" }], error: null };
 		state.skills = [];
+		state.host = { publicUrl: "", tenantHost: false };
 		state.settings = () => ({
 			publicUrl: "https://app.test",
 			issuer: "https://x/auth/v1",
@@ -125,6 +132,28 @@ describe("página Conectar", () => {
 			"No se pudieron leer tus skills. Recargá la página.",
 		);
 		expect(html).not.toContain("rpc caída");
+		expect(html).toContain("https://app.test/brain/acme/mcp");
+		error.mockRestore();
+	});
+
+	it("por el dominio de la empresa muestra las URLs sin slug", async () => {
+		state.host = { publicUrl: "https://ai.okeefe.com.ar", tenantHost: true };
+		const html = await render();
+
+		expect(html).toContain("https://ai.okeefe.com.ar/brain/mcp");
+		expect(html).toContain("https://ai.okeefe.com.ar/eve/outreach/v1/mcp");
+		expect(html).not.toContain("?tenant=");
+		expect(html).not.toContain("https://app.test");
+	});
+
+	it("si no se puede resolver el host usa las URLs de siempre", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		state.host = new Proxy(state.host, {
+			get() {
+				throw new Error("base caída");
+			},
+		});
+		const html = await render();
 		expect(html).toContain("https://app.test/brain/acme/mcp");
 		error.mockRestore();
 	});

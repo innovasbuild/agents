@@ -373,3 +373,97 @@ describe("resolveMcpChannelAuth", () => {
 		});
 	});
 });
+
+describe("resolveMcpChannelAuth en el dominio de una empresa", () => {
+	beforeEach(() => {
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://proyecto.supabase.co");
+	});
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	const tenantHost = async () => ({ kind: "tenant", slug: "a" }) as const;
+
+	it("sin ?tenant= toma la empresa del host", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", null),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			sessionAuth: { attributes: { tenantSlug: "a" } },
+		});
+	});
+
+	it("con ?tenant= igual al del host sigue andando", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toMatchObject({ ok: true });
+	});
+
+	it("con ?tenant= de otra empresa responde como si no tuviera acceso", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("admin", "inactivo"),
+			deps({ host: tenantHost }),
+		);
+		expect(result).toEqual({
+			ok: false,
+			kind: "forbidden",
+			message: "No tenés acceso a ese cliente.",
+		});
+	});
+
+	it("un host desconocido no sirve a nadie", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({ host: async () => ({ kind: "unknown" }) }),
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			kind: "forbidden",
+			message: "No tenés acceso a ese cliente.",
+		});
+	});
+
+	it("en el host raíz sigue pidiendo ?tenant=", async () => {
+		const result = await resolveMcpChannelAuth(
+			request("ana", null),
+			deps({ host: async () => ({ kind: "root" }) }),
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			kind: "forbidden",
+			message: "Falta el tenant en la URL de conexión: agregá ?tenant=<slug>.",
+		});
+	});
+
+	it("si el host no se puede resolver, no deja pasar ni filtra el motivo", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const result = await resolveMcpChannelAuth(
+			request("ana", "a"),
+			deps({
+				host: async () => {
+					throw new Error("conexión a postgres perdida");
+				},
+			}),
+		);
+		expect(result).toEqual({
+			ok: false,
+			kind: "forbidden",
+			message: "No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+		});
+		error.mockRestore();
+	});
+
+	it("un token inválido sigue siendo 401 antes de mirar el host", async () => {
+		const host = vi.fn(tenantHost);
+		const result = await resolveMcpChannelAuth(
+			request("vencido", "a"),
+			deps({ host }),
+		);
+		expect(result).toMatchObject({ ok: false, kind: "unauthenticated" });
+		expect(host).not.toHaveBeenCalled();
+	});
+});

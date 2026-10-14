@@ -16,6 +16,8 @@ import {
 	loadTenantBySlug,
 } from "../auth/oauth-principal";
 import { tenantSubjectId } from "../connectors/auth";
+import type { HostBinding } from "../tenants/host";
+import { resolveHostBinding } from "../tenants/host-store";
 import { loadAgentEnabled } from "./agent-enabled";
 
 type SessionAuthContext = Exclude<
@@ -38,6 +40,9 @@ export interface McpChannelAuthDeps {
 	// ¿El agente de este canal está habilitado para ese tenant? Se pregunta
 	// recién cuando la persona ya probó que pertenece al tenant.
 	agentEnabled: (tenantId: string) => Promise<boolean>;
+	// A qué empresa sirve el host del request (spec 21.6). Sin esto, o en el
+	// host raíz, el tenant sale solo de ?tenant= como siempre.
+	host?: (request: Request) => Promise<HostBinding>;
 }
 
 export type McpChannelAuth =
@@ -72,7 +77,29 @@ export async function resolveMcpChannelAuth(
 	}
 	const userId = claims.sub;
 
-	const slug = new URL(request.url).searchParams.get("tenant");
+	let slug = new URL(request.url).searchParams.get("tenant");
+	if (deps.host) {
+		let binding: HostBinding;
+		try {
+			binding = await deps.host(request);
+		} catch (error) {
+			console.error("canal mcp: no pude resolver el host", error);
+			return deny(
+				"forbidden",
+				"No pude verificar tu acceso a ese cliente. Probá de nuevo.",
+			);
+		}
+		// En el dominio de una empresa el tenant es el del host y ?tenant= es
+		// opcional; uno distinto se trata como una empresa sin acceso. Un host
+		// que no es de nadie no sirve a nadie.
+		if (
+			binding.kind === "unknown" ||
+			(binding.kind === "tenant" && slug && slug !== binding.slug)
+		) {
+			return deny("forbidden", "No tenés acceso a ese cliente.");
+		}
+		if (binding.kind === "tenant") slug = binding.slug;
+	}
 	if (!slug) {
 		return deny(
 			"forbidden",
@@ -190,6 +217,7 @@ export async function verifyMcpChannelToken(
 		membershipsOf: loadMemberships,
 		platformOwnerTenantId: loadPlatformOwnerTenantId,
 		agentEnabled: (tenantId) => loadAgentEnabled(tenantId, agent),
+		host: (req) => resolveHostBinding(req.headers),
 	});
 	if (result.ok) return result.sessionAuth;
 	if (result.kind === "unauthenticated") {
