@@ -9,7 +9,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/plataforma/[slug]/console-actions", () => ({
 	setAgent: async () => ({ ok: true }),
 	createBrain: async () => ({ ok: true }),
-	setBrainCategories: async () => ({ ok: true }),
 	bindConnection: async () => ({ ok: true }),
 	setConnectionEnabled: async () => ({ ok: true }),
 	removeConnection: async () => ({ ok: true }),
@@ -80,14 +79,17 @@ describe("BrainSection", () => {
 				tenantId: TENANT,
 				brain: {
 					provider: "wiki",
-					categories: ["empresa", "producto"],
+					categories: ["empresa", "comercial"],
 					createdAt: "2026-10-10T00:00:00Z",
 				},
 			}),
 		);
 		expect(html).toContain("wiki");
-		expect(html).toContain('value="empresa, producto"');
-		expect(html).toContain("Guardar");
+		expect(html).toContain("empresa");
+		expect(html).toContain("comercial");
+		expect(html).toContain("Editar en el brain");
+		expect(html).toMatch(/<a[^>]*href="\/acme\/brain"[^>]*>Editar en el brain/);
+		expect(html).not.toContain("<input");
 		expect(html).toContain('href="/acme/brain"');
 		expect(html).not.toContain("Crear brain");
 	});
