@@ -99,10 +99,24 @@ export function runsHook() {
 // `step.completed` no trae el modelo; `step.started` sí. Se recuerda en
 // memoria entre los dos: si el proceso cambió en el medio se pierde, y solo
 // importa cuando además falta el costo (ahí se resuelve de nuevo).
+// Al llegar al tope se descarta el más viejo (orden de inserción del Map), no
+// todo: así no se pierden los pasos que están en vuelo.
 const MAX_REMEMBERED = 500;
 const models = new Map<string, string>();
+// Corrida de cada turno: la consulta se hace una vez por turno y no por paso.
+// Solo se guardan los hallazgos; un null se vuelve a buscar en el paso siguiente.
+const runs = new Map<string, string>();
 const stepKey = (sessionId: string, turnId: string, stepIndex: number) =>
 	`${sessionId}:${turnId}:${stepIndex}`;
+
+function remember(map: Map<string, string>, key: string, value: string) {
+	map.delete(key);
+	if (map.size >= MAX_REMEMBERED) {
+		const oldest = map.keys().next();
+		if (!oldest.done) map.delete(oldest.value);
+	}
+	map.set(key, value);
+}
 
 /**
  * Asienta en usage_entries cada llamada al modelo del propio agente (spec
@@ -115,8 +129,8 @@ export function usageHook() {
 		events: {
 			async "step.started"(event, ctx) {
 				try {
-					if (models.size >= MAX_REMEMBERED) models.clear();
-					models.set(
+					remember(
+						models,
 						stepKey(ctx.session.id, event.data.turnId, event.data.stepIndex),
 						event.data.modelId,
 					);
@@ -124,9 +138,18 @@ export function usageHook() {
 					console.error("usage hook (step.started):", error);
 				}
 			},
+			async "step.failed"(event, ctx) {
+				try {
+					models.delete(
+						stepKey(ctx.session.id, event.data.turnId, event.data.stepIndex),
+					);
+				} catch (error) {
+					console.error("usage hook (step.failed):", error);
+				}
+			},
 			async "step.completed"(event, ctx) {
 				try {
-					const { turnId, stepIndex, usage } = event.data;
+					const { turnId, stepIndex, usage, providerMetadata } = event.data;
 					const key = stepKey(ctx.session.id, turnId, stepIndex);
 					let modelId = models.get(key) ?? null;
 					models.delete(key);
@@ -144,13 +167,20 @@ export function usageHook() {
 					}
 
 					const admin = createAdminClient();
+					const runKey = `${ctx.session.id}:${turnId}`;
+					let runId = runs.get(runKey) ?? null;
+					if (runId === null) {
+						runId = await resolveRunId(admin, ctx.session.id, turnId);
+						if (runId !== null) remember(runs, runKey, runId);
+					}
 					const entry = stepUsageEntry({
 						tenantId,
-						runId: await resolveRunId(admin, ctx.session.id, turnId),
+						runId,
 						agent: ctx.agent.name,
 						modelId,
 						stepIndex,
 						usage,
+						generationId: providerMetadata?.gateway?.generationId ?? null,
 					});
 					if (entry) await createUsageRecorder(admin)(entry);
 				} catch (error) {
