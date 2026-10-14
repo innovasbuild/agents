@@ -3,7 +3,7 @@ title: Conectar el brain por MCP
 category: guias
 status: activo
 tags: [brain, mcp]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - lib/brain/README.md
   - app/brain/[tenant]/mcp/route.ts
@@ -65,26 +65,28 @@ La pantalla **Conectar** también trae los pasos para ChatGPT (Configuración �
 - `brain_read`: leer una página completa con su revisión.
 - `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
 
-Las tres tools aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
+Las tres tools del brain aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
 
 Por defecto hay un límite de 60 lecturas y 10 escrituras por minuto por persona (cada brain puede tener otros valores, entre 1 y 1000, en su configuración). Si lo pasás, la respuesta dice cuántos segundos esperar. Un pedido de más de 1 MiB se rechaza con 413.
 
 ## Skills de la empresa
 
-Las skills (todo lo que está bajo `skills/`) no salen por `brain_search`, `brain_read` ni `brain_upsert`: esas tres responden "no encontrada" sobre `skills/`. Salen por tres tools propias, que aparecen **solo si vos ves alguna skill publicada**:
+Las skills (todo lo que está bajo `skills/`) no salen por `brain_search`, `brain_read` ni `brain_upsert`: esas tres responden "no encontrada" sobre `skills/`. Salen por cuatro tools propias, que aparecen **solo si vos ves alguna skill publicada**:
 
 - `skill_list`: las skills que podés usar, con descripción y versión publicada.
 - `skill_load`: carga una skill por nombre y devuelve sus instrucciones y la lista de sus archivos. Su descripción trae, además, la lista de tus skills, para que el asistente la use sin que se lo pidas.
 - `skill_file`: lee un archivo de texto de una skill ya cargada, por la ruta que figura en la lista de `skill_load`.
+- `skill_package`: devuelve un link de 10 minutos al zip completo de la skill, binarios incluidos. Tu asistente lo baja a una carpeta temporal y no lo instala.
 
 Cosas a saber:
 
 - Siempre recibís la **última versión publicada**, también si sos quien edita la skill: el borrador se ve solo en la plataforma. Ves una skill si tenés al menos lectura sobre su ruta y tiene una publicación vigente; una que no ves responde igual que una que no existe.
 - La descripción de `skill_load` lista hasta 30 skills, con 300 caracteres de descripción cada una. Una skill recién publicada aparece ahí cuando el cliente vuelve a pedir las tools (reconectando, por ejemplo); en `skill_list` aparece siempre.
-- Por MCP viajan archivos de texto de hasta 256 KB. Los binarios y lo más pesado están en **Descargar paquete**, en la página de la skill: baja un zip de la versión publicada.
-- Los scripts de una skill no se ejecutan desde el servidor todavía (etapa 24.2b); se pueden leer como texto.
+- Por MCP se leen archivos de texto de hasta 256 KB; el paquete completo, con binarios, sale con `skill_package` o con **Descargar paquete** en la página de la skill o en **Conectar**.
+- Los scripts los corre tu asistente en su propio entorno. Claude Code, Codex y Cursor bajan el paquete solos y usan siempre la última versión. En claude.ai y ChatGPT el entorno no sale a internet por defecto: descargá el zip y subilo como skill, y volvé a subirlo cuando haya una versión nueva.
 - Cada `skill_load` deja un evento `brain.skill_loaded` con la persona, la skill, la versión y el canal. Listar y leer archivos no.
-- Las tres cuentan como lecturas en el límite por minuto.
+- Cada `skill_package` deja un evento `brain.skill_package_issued`.
+- Las cuatro cuentan como lecturas en el límite por minuto.
 
 Las skills se arman y se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
 

@@ -193,8 +193,15 @@ su propio repo.
   registra las tools `skill_list`, `skill_load` y `skill_file` solo si hay alguna
   skill visible. `core/skills/skill-md.ts` arma el `SKILL.md` de una copia
   publicada. `zipPackage` (`adapters/skill-zip.ts`) es el espejo de
-  `unzipPackage`, y `app/[tenant]/brain/skills/package/route.ts` lo sirve como
-  descarga de la versión vigente (`publishedSkillFor` decide el permiso y `issuePackageLink` firma el link).
+  `unzipPackage`.
+- **Paquete completo (24.2b).** `core/skills/package-link.ts` (puro) tiene
+  `issuePackageLink`: si el zip de ese digest no está, lo arma y lo sube; firma
+  el link (600 s por MCP, 60 s por web) y deja el evento
+  `brain.skill_package_issued`. `adapters/skill-packages.ts` pone el bucket
+  privado `skill-packages` (`<tenant_id>/<digest>.zip`). La tool `skill_package`
+  devuelve ese link, y `app/[tenant]/brain/skills/package/route.ts` ya no sirve
+  el zip: redirige (302) al link de 60 s, con `publishedSkillFor` decidiendo el
+  permiso.
 - Habilitar skills en una empresa es agregar `skill` a las categorías de su
   brain desde la consola de plataforma.
 

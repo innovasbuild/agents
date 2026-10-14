@@ -3,7 +3,7 @@ title: Brain
 category: dominios
 status: activo
 tags: [brain, wiki, mcp, permisos, editor, canon]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - lib/brain/README.md
   - lib/brain/core
@@ -21,6 +21,10 @@ sources:
   - lib/brain/adapters/mcp-production.ts
   - lib/brain/adapters/skill-zip.ts
   - lib/brain/adapters/skills.ts
+  - lib/brain/core/skills/package-link.ts
+  - lib/brain/adapters/skill-packages.ts
+  - app/[tenant]/conectar/skills-section.tsx
+  - supabase/migrations/20261021120000_skill_packages_bucket.sql
   - supabase/migrations/20261020120000_brain_skills.sql
   - docs/superpowers/specs/2026-09-13-brain-design.md
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -34,6 +38,7 @@ sources:
   - docs/superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md
   - docs/superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md
   - docs/superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md
+  - docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md
 ---
 
 # Brain
@@ -177,7 +182,7 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 
 El endpoint MCP suma tres tools, `skill_list`, `skill_load` y `skill_file`, que sirven **solo la copia publicada** de cada skill (nunca el borrador ni `brain_skill_files`). Se registran únicamente si el brain es `wiki` y la persona ve al menos una skill; con otro proveedor o sin skills visibles, el servidor es el de siempre. Además, en ese caso el servidor lleva `instructions` que explican cuándo cargar una skill.
 
-| Situación | Lista y descripción | `skill_load` / `skill_file` | Zip |
+| Situación | Lista y descripción | `skill_load` / `skill_file` | Zip (web y `skill_package`, el mismo) |
 |---|---|---|---|
 | Lector o más sobre la ruta, publicación vigente | Aparece | Copia publicada | Copia publicada |
 | Sin publicar o retirada (cualquier nivel) | No aparece | "No existe" | 404 |
@@ -188,7 +193,16 @@ El endpoint MCP suma tres tools, `skill_list`, `skill_load` y `skill_file`, que 
 - Las tools identifican la skill por **nombre** (único entre las publicadas). Una skill inexistente y una que la persona no ve dan el mismo mensaje. `skill_file` busca la ruta en el manifiesto de la versión publicada y lee el blob por su `sha256`; más de 256 KB o no texto (`looksLikeText`) devuelve un error que apunta a la descarga del paquete. La versión se resuelve en cada llamada, sin estado entre tools.
 - La descripción de `skill_load` lista hasta 30 skills (`describeSkills`), con descripciones de hasta 300 caracteres, normalizadas a una línea; si hay más, una línea final dice cuántas faltan. Una skill nueva aparece cuando el cliente vuelve a pedir las tools, porque el endpoint es sin estado y no avisa `tools/list_changed`.
 - `skill_load` exitoso inserta en `events` un `brain.skill_loaded` (`channel: mcp`, `summary` = slug, `payload` con `name`, `version` y `digest`) desde `adapters/mcp-production.ts` (`skillLoadEvent`). Si la inserción falla, se registra en consola y la carga responde igual. Listar y leer archivos no dejan evento.
-- **Descarga:** `GET /[tenant]/brain/skills/package?slug=skills/...` arma un zip con una carpeta raíz `<name>/`: el `SKILL.md` (`core/skills/skill-md.ts`: `name`, `description` y, si están, `license` y `compatibility`, más el cuerpo) y los archivos del manifiesto, binarios incluidos. Lo escribe `zipPackage` (`adapters/skill-zip.ts`, `node:zlib`, sin zip64), espejo de `unzipPackage`. Lo permite `publishedSkillFor` (`core/skills/files.ts`): miembro, lectura sobre el slug y publicación vigente; cualquier falla es 404. La respuesta sale por partes de 64 KB, con `attachment`, `nosniff` y `no-store`. El botón "Descargar paquete (v<n>)" está en la página de la skill.
+- **Descarga:** `GET /[tenant]/brain/skills/package?slug=skills/...` ya no arma ni transmite el zip: responde 302 a un link firmado de 60 segundos sobre el zip guardado (bucket `skill-packages`, objeto `<tenant_id>/<digest>.zip`), con `cache-control: no-store`. Lo permite `publishedSkillFor` (`core/skills/files.ts`): miembro, lectura sobre el slug y publicación vigente; cualquier falla de permiso es 404 y un error interno es 500. El zip lo escribe `zipPackage` (`adapters/skill-zip.ts`, `node:zlib`, sin zip64), espejo de `unzipPackage`, con una carpeta raíz `<name>/`: el `SKILL.md` (`core/skills/skill-md.ts`) y los archivos del manifiesto, binarios incluidos. El botón "Descargar paquete (v<n>)" está en la página de la skill y en `/conectar`.
+
+### Paquete completo por MCP (etapa 24.2b)
+
+- **Tool `skill_package`:** recibe el nombre de una skill visible y devuelve `{ name, version, filename, url, expiresIn }`: un link firmado de 600 segundos al zip de la versión publicada vigente, con nombre `<name>-v<n>.zip`. Se registra junto con las otras tres y cuenta como lectura. Su descripción le dice al asistente que lo baje a una carpeta temporal, lo descomprima y corra los scripts desde ahí, que no lo instale en su carpeta de skills (esa copia queda vieja al republicar), que pida otro link si venció y que, si su entorno no baja archivos, siga con `skill_load` y `skill_file` y avise de lo que no pudo correr. Las instrucciones del servidor y el mensaje de `skill_file` para archivos binarios o grandes apuntan a esta tool.
+- **Bucket `skill-packages`** (migración `20261021120000_skill_packages_bucket`): privado, objeto `<tenant_id>/<digest>.zip`. El zip se arma la primera vez que alguien lo pide y se reutiliza: dos versiones con el mismo contenido comparten objeto. `issuePackageLink` (`core/skills/package-link.ts`, puro) decide si hay que armarlo, lo sube y firma el link; `adapters/skill-packages.ts` pone el bucket (`packageObjects`), el cableado (`packageLinkDeps`) y el evento. Si falta un blob, falla: nunca se guarda un paquete incompleto.
+- **Evento `brain.skill_package_issued`:** cada link emitido inserta una fila en `events` (`channel` `mcp` o `web`, `summary` = slug, `payload` con `name`, `version` y `digest`). Si la inserción falla, se registra en consola y el link se entrega igual.
+- **Sección "Tus skills" de `/conectar`** (`app/[tenant]/conectar/skills-section.tsx`): lista las skills que la persona puede usar (`memberSkills`, que aplica `visibleSkills` con sus niveles) con descripción y botón de descarga, y explica la diferencia entre Claude Code, Codex y Cursor (usan siempre la última) y claude.ai y ChatGPT (hay que subir el zip de nuevo en cada versión). Si no se pudieron leer, lo dice en vez de mostrar una lista vacía; si la persona no ve ninguna, la sección no aparece.
+- **Límite aceptado (P7):** claude.ai y ChatGPT web no corren scripts siempre al día; su entorno no sale a internet por defecto. Queda como etapa 24.4.
+- **Pendientes:** limpiar los zips huérfanos de versiones retiradas o reemplazadas (P8); dependencias entre skills (24.2c); skills en el chat interno (24.3); ejecutar del lado de la plataforma (24.4). El cierre en producción está en la spec §13.
 
 ### Frontera core/adapters
 
@@ -219,7 +233,8 @@ Specs y planes en `docs/superpowers/`:
 [etapa 18.2, editor visual](../superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md) ·
 [etapa 21.3, config de outreach](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) y [plan 21.3a](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md) ·
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
-[etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md).
+[etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
+[etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md).
 
 Pull requests:
 
@@ -247,7 +262,18 @@ Decisiones de la 24.2a (M1 a M9 de la spec):
 - M7: el zip es siempre el de la versión publicada vigente, para cualquier nivel.
 - M8: cada carga deja un evento; listar y leer archivos no.
 - M9: sin migración; `events.type` es texto libre.
-- Pendiente de verificar en un deploy de preview: el límite de respuesta de Vercel para el zip. La ruta responde en streaming por partes y todavía no corta con 413; si un paquete de más de 5 MB falla, se agrega el 413 por encima de 4 MiB y se anota acá.
+- Pendiente de la 24.2a, cerrado por la 24.2b: la descarga ya no pasa por la función, así que el tope de respuesta de Vercel no aplica. Queda verificar en un preview que un paquete de más de 5 MB baja bien.
+
+Decisiones de la 24.2b (P1 a P8 de la spec; P2 reemplaza a M6):
+
+- P1: por MCP ejecuta el cliente, no la plataforma; no hay `skill_run`.
+- P2: el paquete completo sale por un link firmado de 10 minutos que devuelve `skill_package`.
+- P3: el zip se guarda por digest en un bucket privado y se arma la primera vez que se pide.
+- P4: la descarga web redirige a un link firmado de 60 segundos.
+- P5: el asistente descomprime en una carpeta temporal y no instala la skill.
+- P6: cada link emitido deja un evento, por MCP y por web.
+- P7: límite aceptado: claude.ai y ChatGPT web no corren scripts siempre al día; la persona sube el zip a mano.
+- P8: no se limpian los zips de versiones retiradas o reemplazadas.
 
 Discrepancias spec-versus-código:
 
