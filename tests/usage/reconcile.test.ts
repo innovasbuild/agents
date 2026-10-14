@@ -77,6 +77,62 @@ describe("reconcile", () => {
 		expect(small[0].flagged).toBe(false);
 	});
 
+	it("marca cuando el gateway cobró más que el libro (diferencia negativa)", () => {
+		const [line] = reconcile({
+			tenants,
+			ledger: [{ tenantId: "id-a", amount: 90 }],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 100 }],
+			gatewayTotal: 100,
+		});
+		expect(line).toMatchObject({ kind: "empresa", diff: -10, flagged: true });
+		expect(line.diffPct).toBeCloseTo(-0.1, 6);
+	});
+
+	it("la diferencia exactamente igual a la tolerancia no se marca (es estricto)", () => {
+		// Gateway 100: tolerancia max(US$ 1, 5 %) = US$ 5.
+		const [atLimit] = reconcile({
+			tenants,
+			ledger: [{ tenantId: "id-a", amount: 105 }],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 100 }],
+			gatewayTotal: 100,
+		});
+		expect(atLimit.diff).toBe(5);
+		expect(atLimit.flagged).toBe(false);
+
+		const [over] = reconcile({
+			tenants,
+			ledger: [{ tenantId: "id-a", amount: 105.01 }],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 100 }],
+			gatewayTotal: 100,
+		});
+		expect(over.flagged).toBe(true);
+
+		// Gateway 10: manda el piso de US$ 1.
+		const [floor] = reconcile({
+			tenants,
+			ledger: [{ tenantId: "id-a", amount: 11 }],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 10 }],
+			gatewayTotal: 10,
+		});
+		expect(floor.diff).toBe(1);
+		expect(floor.flagged).toBe(false);
+	});
+
+	it("una fila del gateway sin tag cuenta como sin etiquetar", () => {
+		const lines = reconcile({
+			tenants,
+			ledger: [],
+			gatewayByTag: [{ totalCost: 4 }],
+			gatewayTotal: 4,
+		});
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).toMatchObject({
+			kind: "sin_etiqueta",
+			gateway: 4,
+			flagged: true,
+		});
+	});
+
 	it("empresa en el libro sin tag en el gateway: gateway cero y sin porcentaje", () => {
 		const lines = reconcile({
 			tenants,
