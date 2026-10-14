@@ -18,6 +18,8 @@ Las tablas de `public` y la migración que cada una crea.
 | `brain_mcp_usage` | `supabase/migrations/20260924100200_brain_mcp_usage.sql` |
 | `brain_pages` | `supabase/migrations/20260913233557_brain_tables.sql` |
 | `brain_revisions` | `supabase/migrations/20260913233557_brain_tables.sql` |
+| `brain_skill_files` | `supabase/migrations/20261020120000_brain_skills.sql` |
+| `brain_skill_versions` | `supabase/migrations/20261020120000_brain_skills.sql` |
 | `config_values` | `supabase/migrations/20260914224230_outreach_core.sql` |
 | `connector_claims` | `supabase/migrations/20261015120000_platform_console.sql` |
 | `contacts` | `supabase/migrations/20260914224230_outreach_core.sql` |

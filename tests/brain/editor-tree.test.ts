@@ -31,6 +31,7 @@ describe("loadBrainTree", () => {
 			kind: "ok",
 			categories: ["comercial"],
 			tenant: {},
+			skills: async () => [],
 			access: (path: string) => (path.startsWith("legal") ? null : "lector"),
 			provider: {
 				list: async () => [page("comercial/icp"), page("legal/contrato")],
@@ -39,5 +40,26 @@ describe("loadBrainTree", () => {
 		const tree = await loadBrainTree(ctx);
 		expect(tree.children.map((n) => n.path)).toEqual(["comercial"]);
 		expect(JSON.stringify(tree)).not.toContain("secreto");
+	});
+
+	it("si no puede leer las skills, el árbol sale igual y lo deja en el log", async () => {
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		const ctx = {
+			kind: "ok",
+			categories: ["comercial"],
+			tenant: { slug: "acme" },
+			skills: async () => {
+				throw new Error("rpc caído");
+			},
+			access: () => "editor",
+			provider: { list: async () => [page("comercial/icp")] },
+		} as never;
+		const tree = await loadBrainTree(ctx);
+		expect(tree.children.map((n) => n.path)).toEqual(["comercial"]);
+		expect(logged).toHaveBeenCalledWith(
+			expect.stringContaining("acme"),
+			expect.any(Error),
+		);
+		logged.mockRestore();
 	});
 });

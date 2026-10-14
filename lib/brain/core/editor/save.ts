@@ -11,6 +11,7 @@ import {
 	BrainValidation,
 } from "../errors";
 import type { BrainBinding } from "../resolve";
+import { SKILL_CATEGORY, skillPlacementOk } from "../skills/package";
 import type {
 	BrainProvider,
 	BrainRole,
@@ -83,7 +84,8 @@ export async function savePage(
 		slug: input.slug,
 		title: input.title,
 		category: input.category,
-		status: input.status,
+		// Una skill siempre va activa: su ciclo de vida es publicar/retirar, no el status.
+		status: input.category === SKILL_CATEGORY ? "activo" : input.status,
 		tags: input.tags,
 		frontmatter: input.frontmatter,
 		body: input.body,
@@ -131,7 +133,9 @@ export async function savePage(
 				ok: false,
 				code: "validation",
 				fields: error.fields,
-				message: error.message,
+				message: skillPlacementOk(input.slug, input.category)
+					? error.message
+					: "Las skills van bajo skills/ con categoría skill, y nada más va ahí.",
 			};
 		const id = crypto.randomUUID();
 		console.error(`brain editor: error al guardar (${id})`, error);

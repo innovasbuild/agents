@@ -66,6 +66,27 @@ describe("visibleTree", () => {
 		expect(direccion.children[0].level).toBe("editor");
 	});
 
+	it("lleva la marca de pendiente de una skill hasta el nodo", () => {
+		const root = visibleTree(
+			[
+				{
+					slug: "skills/facturacion",
+					title: "Facturación",
+					status: "activo",
+					pending: true,
+				},
+				{ slug: "skills/marca", title: "Marca", status: "activo" },
+			],
+			() => "editor",
+		);
+		const skills = root.children.find((node) => node.path === "skills");
+		const byName = new Map(
+			(skills?.children ?? []).map((node) => [node.name, node.page]),
+		);
+		expect(byName.get("facturacion")?.pending).toBe(true);
+		expect(byName.get("marca")?.pending).toBeUndefined();
+	});
+
 	it("una página y una carpeta con el mismo nombre son un solo nodo", () => {
 		const tree = visibleTree(
 			[page("comercial/icp"), page("comercial/icp/objeciones")],

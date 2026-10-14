@@ -62,6 +62,8 @@ La pantalla **Conectar** también trae los pasos para ChatGPT (Configuración �
 - `brain_read`: leer una página completa con su revisión.
 - `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
 
+Las skills de la empresa (todo lo que está bajo `skills/`) no salen por estas tres tools: se arman y se publican desde la plataforma.
+
 Las tres tools aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
 
 Por defecto hay un límite de 60 lecturas y 10 escrituras por minuto por persona (cada brain puede tener otros valores, entre 1 y 1000, en su configuración). Si lo pasás, la respuesta dice cuántos segundos esperar. Un pedido de más de 1 MiB se rechaza con 413.

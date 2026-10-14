@@ -253,6 +253,18 @@ describe("previewDelete", () => {
 });
 
 describe("deletePage", () => {
+	it("una skill con versión vigente no se borra: pide retirarla", async () => {
+		const { deps } = setup({
+			deleterError: new WikiStoreError(
+				"BR409",
+				"BRAIN_CONFLICT",
+				"skill_published",
+			),
+		});
+		const result = await deletePage("acme", "suelta", 3, deps);
+		expect(result).toMatchObject({ ok: false, code: "conflict" });
+		expect(result.ok === false && result.message).toMatch(/Retirala/);
+	});
 	it("arma el plan en el servidor y llama al escritor con la revisión esperada", async () => {
 		const { deps, del } = setup();
 		const result = await deletePage("i", "comercial/icp", 3, deps);

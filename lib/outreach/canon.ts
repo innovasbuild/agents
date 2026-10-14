@@ -3,6 +3,7 @@
 // cargado, no se redacta ni se encola ni se envía (ver loadCanonOrMissing).
 import { getBrainProvider } from "../brain/adapters/provider";
 import { resolveBrainBinding } from "../brain/core/resolve";
+import { withoutSkills } from "../brain/core/skills/view";
 import type { BrainPage, BrainProvider } from "../brain/core/types";
 import { loadTenantBindings } from "../connectors/bindings";
 import {
@@ -246,5 +247,6 @@ export async function brainForTenant(
 	tenantId: string,
 ): Promise<BrainProvider | null> {
 	const binding = await resolveBrainBinding(tenantId, loadTenantBindings);
-	return binding ? getBrainProvider(binding) : null;
+	// Lo que sale de acá alimenta al modelo: nunca ve skills/ (spec 24.1 S6).
+	return binding ? withoutSkills(getBrainProvider(binding)) : null;
 }

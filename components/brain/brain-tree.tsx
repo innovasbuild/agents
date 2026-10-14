@@ -115,6 +115,14 @@ export function BrainTree({
 							className="min-w-0 flex-1 truncate text-sm"
 						>
 							{label}
+							{node.page.pending && (
+								<span
+									className="ml-1 inline-block size-1.5 shrink-0 rounded-full bg-amber-500"
+									role="img"
+									aria-label="Pendiente de publicar"
+									title="Pendiente de publicar"
+								/>
+							)}
 						</Link>
 					) : (
 						<button

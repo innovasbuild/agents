@@ -4,6 +4,8 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { type AccessRulesStore, isAdminRole } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
 import type { BrainBinding } from "../resolve.ts";
+import { assistantCategories } from "../skills/package.ts";
+import { withoutSkills } from "../skills/view.ts";
 import type { BrainProvider } from "../types.ts";
 import {
 	type AccessStore,
@@ -135,15 +137,19 @@ async function handleBrainMcpInner(
 	const rules = isAdminRole(access.role)
 		? []
 		: await deps.rules.load(access.tenantId);
-	const provider = withAccess(
-		deps.provider(access.binding),
-		{ kind: "user", userId: access.userId, role: access.role },
-		rules,
+	// withoutSkills por fuera de withAccess: ni un administrador ve skills por
+	// este canal (spec 24.1 S6).
+	const provider = withoutSkills(
+		withAccess(
+			deps.provider(access.binding),
+			{ kind: "user", userId: access.userId, role: access.role },
+			rules,
+		),
 	);
 
 	const server = buildBrainMcpServer({
 		userId: access.userId,
-		categories: access.binding.config.categories,
+		categories: assistantCategories(access.binding.config.categories),
 		canon: await deps.usesCanon(access.tenantId),
 		provider,
 		limiter: createRateLimiter({

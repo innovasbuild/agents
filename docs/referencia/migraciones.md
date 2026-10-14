@@ -60,3 +60,4 @@ Las migraciones de `supabase/migrations`, en orden.
 | `20261017120000_outreach_marco_reflect` | `supabase/migrations/20261017120000_outreach_marco_reflect.sql` |
 | `20261018120000_outreach_settings` | `supabase/migrations/20261018120000_outreach_settings.sql` |
 | `20261019120000_agentless_tenant` | `supabase/migrations/20261019120000_agentless_tenant.sql` |
+| `20261020120000_brain_skills` | `supabase/migrations/20261020120000_brain_skills.sql` |

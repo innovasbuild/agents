@@ -20,8 +20,11 @@ function call(slug: string[]) {
 	});
 }
 
-function okCtx(read: (slug: string) => Promise<unknown>) {
-	return { kind: "ok", provider: { read: vi.fn(read) } };
+function okCtx(
+	read: (slug: string) => Promise<unknown>,
+	level: string | null = "editor",
+) {
+	return { kind: "ok", provider: { read: vi.fn(read) }, access: () => level };
 }
 
 beforeEach(() => {
@@ -79,5 +82,27 @@ describe("GET /[tenant]/brain/raw/[...slug]", () => {
 		expect(ctx.provider.read).toHaveBeenCalledWith("comercial/icp", {
 			suggestions: false,
 		});
+	});
+
+	it.each(["lector", "ninguno", null])(
+		"404 sin leer el borrador de una skill con nivel %s",
+		async (level) => {
+			const ctx = okCtx(async () => ({ body: "borrador" }), level);
+			state.ctx = ctx;
+			expect((await call(["skills", "ventas", "reporte"])).status).toBe(404);
+			expect(ctx.provider.read).not.toHaveBeenCalled();
+		},
+	);
+
+	it("un editor lee el borrador de una skill", async () => {
+		state.ctx = okCtx(async () => ({ body: "borrador" }), "editor");
+		const res = await call(["skills", "ventas", "reporte"]);
+		expect(res.status).toBe(200);
+		expect(await res.text()).toBe("borrador");
+	});
+
+	it("una página común sigue legible con nivel lector", async () => {
+		state.ctx = okCtx(async () => ({ body: "texto" }), "lector");
+		expect((await call(["comercial", "icp"])).status).toBe(200);
 	});
 });
