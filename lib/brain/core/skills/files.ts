@@ -29,8 +29,10 @@ import {
 	MAX_PACKAGE_BYTES,
 	MAX_PACKAGE_FILES,
 	type SkillFile,
+	skillName,
 } from "./package.ts";
 import { type SkillActor, type SkillFailure, skillFail } from "./publish.ts";
+import { renderSkillMd } from "./skill-md.ts";
 import { publishedSnapshot } from "./state.ts";
 import type { SkillOverviewRow, SkillStore } from "./store.ts";
 
@@ -342,6 +344,43 @@ export async function readSkillFile(
 	const bytes = await deps.blobs.get(actor.tenantId, file.sha256);
 	if (!bytes) return skillFail("not_found", NOT_FOUND);
 	return { ok: true, path: file.path, bytes };
+}
+
+// El paquete que se distribuye: siempre la copia publicada vigente, también
+// para quien edita (spec etapa 24.2a M7). Sin ella, no existe.
+export async function exportSkillPackage(
+	tenantSlug: string,
+	slug: string,
+	deps: FilesDeps,
+): Promise<
+	| { ok: true; name: string; version: number; entries: PackageEntry[] }
+	| SkillFailure
+> {
+	const ctx = await context(tenantSlug, slug, deps);
+	if (!ctx.ok) return skillFail("not_found", NOT_FOUND);
+	const snapshot = publishedSnapshot(ctx.row);
+	if (!snapshot) return skillFail("not_found", NOT_FOUND);
+
+	const name = skillName(slug);
+	const entries: PackageEntry[] = [
+		{
+			path: `${name}/SKILL.md`,
+			bytes: new TextEncoder().encode(
+				renderSkillMd({
+					name,
+					description: snapshot.description,
+					frontmatter: snapshot.frontmatter,
+					body: snapshot.body,
+				}),
+			),
+		},
+	];
+	for (const file of snapshot.manifest) {
+		const bytes = await deps.blobs.get(ctx.actor.tenantId, file.sha256);
+		if (!bytes) throw new Error(`skills: falta el contenido de ${file.path}`);
+		entries.push({ path: `${name}/${file.path}`, bytes });
+	}
+	return { ok: true, name, version: snapshot.version, entries };
 }
 
 export async function importSkillPackage(

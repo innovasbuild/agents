@@ -1,4 +1,4 @@
-// Lectura del zip de un paquete (spec etapa 24.1 §6). Vive en adapters porque
+// Lectura y escritura del zip de un paquete (spec etapa 24.1 §6). Vive en adapters porque
 // el núcleo no toca node:zlib. Sin imports de la plataforma: se prueba solo.
 //
 // El directorio central se lee a mano para decidir ANTES de descomprimir nada:
@@ -7,7 +7,7 @@
 // tamaño declarado y tiene que salir exactamente de ese tamaño y con su CRC:
 // un encabezado que miente se rechaza, no se trunca, y el trabajo está acotado
 // por los topes aunque el zip sea una bomba.
-import { crc32, inflateRawSync } from "node:zlib";
+import { crc32, deflateRawSync, inflateRawSync } from "node:zlib";
 import type { PackageEntry } from "../core/skills/files";
 import {
 	MAX_FILE_BYTES,
@@ -179,4 +179,74 @@ export function unzipPackage(zip: Uint8Array): PackageEntry[] {
 		path: member.name,
 		bytes: extract(zip, member),
 	}));
+}
+
+const UTF8_NAMES = 0x0800;
+const DOS_DATE = 0x0021; // 1980-01-01: sin fecha real, el zip es reproducible.
+
+// Espejo de unzipPackage (spec etapa 24.2a §5): métodos 0 y 8, sin zip64. Los
+// topes del paquete (20 MB, 50 archivos) quedan muy por debajo de sus límites.
+export function zipPackage(entries: PackageEntry[]): Uint8Array {
+	const encoder = new TextEncoder();
+	const parts: Uint8Array[] = [];
+	const central: Uint8Array[] = [];
+	let offset = 0;
+
+	for (const entry of entries) {
+		const name = encoder.encode(entry.path);
+		const deflated = deflateRawSync(entry.bytes);
+		const stored = deflated.length >= entry.bytes.length;
+		const data = stored ? entry.bytes : deflated;
+		const method = stored ? 0 : 8;
+		const crc = crc32(entry.bytes);
+
+		const local = new Uint8Array(30 + name.length);
+		const lv = new DataView(local.buffer);
+		lv.setUint32(0, LOCAL_SIG, true);
+		lv.setUint16(4, 20, true);
+		lv.setUint16(6, UTF8_NAMES, true);
+		lv.setUint16(8, method, true);
+		lv.setUint16(12, DOS_DATE, true);
+		lv.setUint32(14, crc, true);
+		lv.setUint32(18, data.length, true);
+		lv.setUint32(22, entry.bytes.length, true);
+		lv.setUint16(26, name.length, true);
+		local.set(name, 30);
+
+		const header = new Uint8Array(46 + name.length);
+		const cv = new DataView(header.buffer);
+		cv.setUint32(0, CENTRAL_SIG, true);
+		cv.setUint16(4, 20, true);
+		cv.setUint16(6, 20, true);
+		cv.setUint16(8, UTF8_NAMES, true);
+		cv.setUint16(10, method, true);
+		cv.setUint16(14, DOS_DATE, true);
+		cv.setUint32(16, crc, true);
+		cv.setUint32(20, data.length, true);
+		cv.setUint32(24, entry.bytes.length, true);
+		cv.setUint16(28, name.length, true);
+		cv.setUint32(42, offset, true);
+		header.set(name, 46);
+
+		parts.push(local, data);
+		central.push(header);
+		offset += local.length + data.length;
+	}
+
+	const centralSize = central.reduce((total, part) => total + part.length, 0);
+	const end = new Uint8Array(EOCD_MIN);
+	const ev = new DataView(end.buffer);
+	ev.setUint32(0, EOCD_SIG, true);
+	ev.setUint16(8, entries.length, true);
+	ev.setUint16(10, entries.length, true);
+	ev.setUint32(12, centralSize, true);
+	ev.setUint32(16, offset, true);
+
+	const out = new Uint8Array(offset + centralSize + EOCD_MIN);
+	let at = 0;
+	for (const part of [...parts, ...central, end]) {
+		out.set(part, at);
+		at += part.length;
+	}
+	return out;
 }
