@@ -125,7 +125,7 @@ Al apretarlo, una server action:
 4. Atribuye a la empresa tanto el tag con su slug como el tag con su id. Un tag `tenant:*` que no corresponde a ninguna empresa va en su propia fila, siempre marcada.
 5. Agrega una fila "Sin etiqueta": total del gateway menos la suma de los tags `tenant:*`. Si es mayor que cero, alguna llamada salió sin tag.
 
-Una diferencia se marca solo si supera el mayor entre US$ 1 y el 5 % del gateway. Por debajo se muestra sin marca. Causas conocidas de diferencia, listadas en la pantalla:
+Una diferencia se marca solo si supera el mayor entre US$ 1 y el 5 % del gateway, o si una empresa tiene el libro en cero y el gateway cobró más de medio centavo (el síntoma de que el hook no asienta, que el piso de US$ 1 esconde). Por debajo se muestra sin marca. Causas conocidas de diferencia, listadas en la pantalla:
 
 - Pasos abortados o fallidos, que el gateway cobra y nadie informa al libro.
 - Asientos con precio de tabla (`source: tabla`), que sobreestiman.

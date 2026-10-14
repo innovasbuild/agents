@@ -77,6 +77,30 @@ describe("reconcile", () => {
 		expect(small[0].flagged).toBe(false);
 	});
 
+	it("marca una empresa con el libro en cero y gasto en el gateway, aunque no llegue al piso de US$ 1", () => {
+		const [flagged] = reconcile({
+			tenants,
+			ledger: [],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 0.95 }],
+			gatewayTotal: 0.95,
+		});
+		expect(flagged).toMatchObject({
+			kind: "empresa",
+			ledger: 0,
+			gateway: 0.95,
+			flagged: true,
+		});
+
+		// Por debajo del medio centavo es redondeo del reporte, no un hook caído.
+		const [rounding] = reconcile({
+			tenants,
+			ledger: [],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 0.004 }],
+			gatewayTotal: 0.004,
+		});
+		expect(rounding.flagged).toBe(false);
+	});
+
 	it("marca cuando el gateway cobró más que el libro (diferencia negativa)", () => {
 		const [line] = reconcile({
 			tenants,

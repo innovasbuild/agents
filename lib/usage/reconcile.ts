@@ -55,7 +55,11 @@ function line(
 		gateway,
 		diff,
 		diffPct: gateway > 0 ? diff / gateway : null,
-		flagged: Math.abs(diff) > Math.max(TOLERANCE_USD, TOLERANCE_PCT * gateway),
+		// Libro en cero con gasto en el gateway: el síntoma típico de "el hook no
+		// asienta", que en una empresa de poco gasto el piso de US$ 1 esconde.
+		flagged:
+			Math.abs(diff) > Math.max(TOLERANCE_USD, TOLERANCE_PCT * gateway) ||
+			(base.kind === "empresa" && ledger === 0 && gateway > ROUNDING_USD),
 	};
 }
 

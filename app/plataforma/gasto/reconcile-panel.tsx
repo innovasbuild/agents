@@ -125,16 +125,17 @@ export function ReconcilePanel() {
 					</div>
 					<p className="mt-2 text-muted-foreground text-xs">
 						Se marca una diferencia mayor a US$ {TOLERANCE_USD} o al{" "}
-						{Math.round(TOLERANCE_PCT * 100)} %, la que sea más grande. Causas
-						conocidas: pasos abortados o fallidos que el gateway cobra y nadie
-						informa, asientos con precio de tabla, la compactación de contexto y
-						la demora de ingesta del gateway. El reporte del gateway es de todo
-						el team de Vercel: "Sin etiqueta" es lo que se cobró sin tag de
-						empresa, y si no es cero puede ser una llamada que salió sin
-						etiquetar, pero también evals, scripts o tráfico local y de
-						previews. Al revés, lo etiquetado de chats locales o de previews cae
-						en el mismo tag de la empresa y suma en la columna Gateway sin estar
-						en el libro de producción.
+						{Math.round(TOLERANCE_PCT * 100)} %, la que sea más grande, o un
+						libro en cero con gasto en el gateway. Causas conocidas: pasos
+						abortados o fallidos que el gateway cobra y nadie informa, asientos
+						con precio de tabla, la compactación de contexto y la demora de
+						ingesta del gateway. El reporte del gateway es de todo el team de
+						Vercel: "Sin etiqueta" es lo que se cobró sin tag de empresa, y si
+						no es cero puede ser una llamada que salió sin etiquetar, pero
+						también evals, scripts o tráfico local y de previews. Al revés, lo
+						etiquetado de chats locales o de previews cae en el mismo tag de la
+						empresa y suma en la columna Gateway sin estar en el libro de
+						producción.
 					</p>
 				</>
 			) : null}
