@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveAccess } from "@/lib/brain/core/access/resolve-access";
 import {
 	editableFolders,
+	isFolderNode,
 	visibleTree,
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
@@ -177,5 +178,60 @@ describe("editableFolders", () => {
 	it("incluye la raíz si es editor de ella", () => {
 		const tree = visibleTree([page("a/b")], accessFor([members("", "editor")]));
 		expect(editableFolders(tree)).toEqual(["", "a"]);
+	});
+});
+
+describe("carpetas guardadas", () => {
+	const all = () => "lector" as const;
+
+	it("muestra una carpeta vacía con su descripción", () => {
+		const root = visibleTree([], all, [
+			{ path: "comercial", description: "Embudo" },
+		]);
+		expect(root.children).toEqual([
+			expect.objectContaining({
+				path: "comercial",
+				page: null,
+				children: [],
+				folder: { description: "Embudo" },
+			}),
+		]);
+		expect(isFolderNode(root.children[0])).toBe(true);
+	});
+
+	it("cuelga las subcarpetas vacías de su padre", () => {
+		const root = visibleTree([], all, [
+			{ path: "comercial", description: "" },
+			{ path: "comercial/sucursales", description: "" },
+		]);
+		expect(root.children[0].children[0].path).toBe("comercial/sucursales");
+	});
+
+	it("no muestra una carpeta vacía que la persona no ve", () => {
+		const access = (path: string) =>
+			path.startsWith("talento") ? null : "lector";
+		const root = visibleTree([], access as never, [
+			{ path: "comercial", description: "" },
+			{ path: "talento", description: "" },
+		]);
+		expect(root.children.map((n) => n.path)).toEqual(["comercial"]);
+	});
+
+	it("withoutArchived no poda carpetas guardadas vacías", () => {
+		const root = visibleTree(
+			[{ slug: "comercial/viejo", title: "Viejo", status: "archivado" }],
+			all,
+			[{ path: "comercial", description: "" }],
+		);
+		expect(withoutArchived(root).children.map((n) => n.path)).toEqual([
+			"comercial",
+		]);
+	});
+
+	it("editableFolders incluye las vacías", () => {
+		const root = visibleTree([], () => "editor", [
+			{ path: "comercial", description: "" },
+		]);
+		expect(editableFolders(root)).toEqual(["", "comercial"]);
 	});
 });

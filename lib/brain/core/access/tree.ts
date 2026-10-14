@@ -3,6 +3,7 @@
 // conoce reglas ni principales. Una carpeta es el prefijo de las páginas que
 // tiene debajo (A5); una página y una carpeta con el mismo nombre comparten
 // nodo (A6).
+import type { BrainFolder } from "../folders.ts";
 import type { BrainStatus } from "../types.ts";
 import { ancestorChain } from "./resolve-access.ts";
 import { atLeast, type Level, ROOT_PATH } from "./types.ts";
@@ -20,6 +21,9 @@ export interface TreeNode {
 	path: string; // "" para la raíz
 	name: string; // último segmento de la ruta
 	page: TreePage | null; // hay una página con exactamente este slug
+	// Carpeta guardada en brain_folders (puede estar vacía). null si el nodo
+	// solo existe por las páginas que cuelgan de él.
+	folder: { description: string } | null;
 	// Permiso sobre el nodo. null cuando la persona solo ve algo más abajo: la
 	// carpeta se muestra pero no ofrece acciones propias.
 	level: Level | null;
@@ -30,11 +34,16 @@ function lastSegment(path: string): string {
 	return path.slice(path.lastIndexOf("/") + 1);
 }
 
-// Primero lo que tiene hijos (las carpetas), después por nombre.
+export function isFolderNode(node: TreeNode): boolean {
+	return (
+		node.path === ROOT_PATH || node.folder !== null || node.children.length > 0
+	);
+}
+
+// Primero las carpetas, después por nombre.
 function sortNodes(nodes: TreeNode[]): void {
 	nodes.sort((a, b) => {
-		const folders =
-			Number(b.children.length > 0) - Number(a.children.length > 0);
+		const folders = Number(isFolderNode(b)) - Number(isFolderNode(a));
 		return folders !== 0 ? folders : a.name.localeCompare(b.name, "es");
 	});
 	for (const node of nodes) sortNodes(node.children);
@@ -43,36 +52,50 @@ function sortNodes(nodes: TreeNode[]): void {
 export function visibleTree(
 	pages: readonly TreePage[],
 	access: (path: string) => Level | null,
+	folders: readonly BrainFolder[] = [],
 ): TreeNode {
 	const root: TreeNode = {
 		path: ROOT_PATH,
 		name: "",
 		page: null,
+		folder: null,
 		level: access(ROOT_PATH),
 		children: [],
 	};
 	const byPath = new Map<string, TreeNode>([[ROOT_PATH, root]]);
 
-	for (const page of pages) {
-		if (access(page.slug) === null) continue;
+	const ensure = (path: string): TreeNode => {
 		let parent = root;
-		for (const path of ancestorChain(page.slug).slice(1)) {
-			let node = byPath.get(path);
+		for (const step of ancestorChain(path).slice(1)) {
+			let node = byPath.get(step);
 			if (!node) {
 				node = {
-					path,
-					name: lastSegment(path),
+					path: step,
+					name: lastSegment(step),
 					page: null,
-					level: access(path),
+					folder: null,
+					level: access(step),
 					children: [],
 				};
-				byPath.set(path, node);
+				byPath.set(step, node);
 				parent.children.push(node);
 			}
 			parent = node;
 		}
+		return parent;
+	};
+
+	for (const folder of [...folders].sort((a, b) =>
+		a.path.localeCompare(b.path),
+	)) {
+		if (access(folder.path) === null) continue;
+		ensure(folder.path).folder = { description: folder.description };
+	}
+
+	for (const page of pages) {
+		if (access(page.slug) === null) continue;
 		// Solo estos campos viajan al navegador: nunca el cuerpo.
-		parent.page = {
+		ensure(page.slug).page = {
 			slug: page.slug,
 			title: page.title,
 			status: page.status,
@@ -91,7 +114,12 @@ export function withoutArchived(root: TreeNode): TreeNode {
 			.map(prune)
 			.filter((child): child is TreeNode => child !== null);
 		const page = node.page?.status === "archivado" ? null : node.page;
-		if (node.path !== ROOT_PATH && page === null && children.length === 0) {
+		if (
+			node.path !== ROOT_PATH &&
+			page === null &&
+			children.length === 0 &&
+			node.folder === null
+		) {
 			return null;
 		}
 		return { ...node, page, children };
@@ -104,7 +132,7 @@ export function withoutArchived(root: TreeNode): TreeNode {
 export function editableFolders(root: TreeNode): string[] {
 	const found: string[] = [];
 	const walk = (node: TreeNode) => {
-		const isFolder = node.path === ROOT_PATH || node.children.length > 0;
+		const isFolder = isFolderNode(node);
 		if (isFolder && atLeast(node.level, "editor")) found.push(node.path);
 		for (const child of node.children) walk(child);
 	};
