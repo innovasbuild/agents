@@ -50,8 +50,8 @@ export class BrainConflict extends BrainError {
 export class BrainValidation extends BrainError {
 	readonly fields: string[];
 
-	constructor(fields: string[]) {
-		super("validation", `Datos inválidos en: ${fields.join(", ")}.`);
+	constructor(fields: string[], message?: string) {
+		super("validation", message ?? `Datos inválidos en: ${fields.join(", ")}.`);
 		this.fields = fields;
 	}
 }

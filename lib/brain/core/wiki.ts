@@ -3,6 +3,7 @@
 // del binding, que viene de la sesión.
 import type { WikiConfig } from "./config.ts";
 import { BrainConflict, BrainNotFound, BrainValidation } from "./errors.ts";
+import { categoryForPath, nearestFolder, parentPath } from "./folders.ts";
 import { skillPlacementOk } from "./skills/package.ts";
 import {
 	BRAIN_STATUSES,
@@ -151,7 +152,35 @@ export function createWikiProvider(
 			return store.listRevisions(tenantId, slug);
 		},
 
-		async upsert(write, author) {
+		async upsert(input, author) {
+			const isNew = input.baseRevision === undefined;
+			const nested = input.slug.includes("/");
+			// La categoría sale de la ruta (spec etapa 26 D1). Una página suelta que
+			// ya existía conserva la suya.
+			const write = nested
+				? { ...input, category: categoryForPath(input.slug) }
+				: input;
+			if (isNew && !nested) {
+				throw new BrainValidation(
+					["slug"],
+					"Una página nueva va dentro de una carpeta: usá una ruta como categoria/nombre.",
+				);
+			}
+			// La de primer nivel la valida la categoría. Las subcarpetas, acá; el
+			// import no, porque la base crea las que falten.
+			const parent = parentPath(write.slug);
+			if (isNew && author.kind !== "import" && parent?.includes("/")) {
+				const folders = new Set(
+					(await store.listFolders(tenantId)).map((f) => f.path),
+				);
+				if (!folders.has(parent)) {
+					const near = nearestFolder(parent, folders);
+					throw new BrainValidation(
+						["folder"],
+						`No existe la carpeta ${parent}.${near ? ` La más cercana es ${near}.` : ""} Pedile a un administrador que la cree.`,
+					);
+				}
+			}
 			const frontmatter = validateWrite(write, config, today());
 			try {
 				return await store.upsert({
