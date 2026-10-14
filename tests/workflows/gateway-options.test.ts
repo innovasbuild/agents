@@ -51,6 +51,24 @@ describe("createGatewayOptions", () => {
 		spy.mockRestore();
 	});
 
+	// Value: protects=un tenant sin fila o con slug vacío se etiqueta con el id y no queda en caché; fails_when=se acepta un slug vacío (tag "tenant:") o se cachea el fallback
+	// Value: why_new=las filas anteriores cubren error de base y excepción, no una respuesta sin error y sin slug utilizable; seam=none; no_claim=lectura real de tenants (admin simulado)
+	it.each([
+		["sin fila", null],
+		["slug vacío", { slug: "" }],
+		["slug que no es texto", { slug: 7 }],
+	])("tenant %s: etiqueta con el id y no lo guarda", async (_name, data) => {
+		const { admin, maybeSingle } = fakeAdmin({ data, error: null });
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const optionsFor = createGatewayOptions(admin as never);
+		expect(await optionsFor("t1")).toEqual({
+			gateway: { tags: ["tenant:t1"] },
+		});
+		await optionsFor("t1");
+		expect(maybeSingle).toHaveBeenCalledTimes(2);
+		spy.mockRestore();
+	});
+
 	it("si la consulta tira, etiqueta con el id y no tira", async () => {
 		const admin = {
 			from: () => {

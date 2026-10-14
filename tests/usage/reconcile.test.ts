@@ -154,6 +154,22 @@ describe("reconcile", () => {
 		});
 	});
 
+	// Value: protects=la fila sin etiqueta nunca es negativa ni se marca cuando los tags suman más que el total del reporte; fails_when=se saca el Math.max o el margen de 0,005
+	// Value: why_new=las filas anteriores solo cubren total mayor o igual que lo etiquetado por un margen claro; seam=none; no_claim=redondeo real del reporte del gateway (entradas armadas a mano)
+	it("si lo etiquetado supera al total por redondeo, sin etiqueta queda en cero y sin marcar", () => {
+		const lines = reconcile({
+			tenants,
+			ledger: [{ tenantId: "id-a", amount: 10 }],
+			gatewayByTag: [{ tag: "tenant:acme", totalCost: 10.004 }],
+			gatewayTotal: 10,
+		});
+		expect(lines.at(-1)).toMatchObject({
+			kind: "sin_etiqueta",
+			gateway: 0,
+			flagged: false,
+		});
+	});
+
 	it("una empresa sin gasto en ningún lado no aparece", () => {
 		const lines = reconcile({
 			tenants,
