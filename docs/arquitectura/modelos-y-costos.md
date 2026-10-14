@@ -113,7 +113,7 @@ El libro se lee con dos funciones SQL (`supabase/migrations/20261022120000_spend
 | Función | Quién la llama | Qué devuelve |
 |---|---|---|
 | `tenant_spend_report(tenant, desde, hasta)` | El administrador de esa empresa o plataforma (`settings_actor` lo verifica adentro); rango máximo de 92 días | Gasto por día y por origen: el workflow del asiento, o `chat` si tiene corrida o es un paso del agente (`agent/step`, aunque no tenga corrida), o `sin_corrida` si no (el schedule de follow-ups asienta sin workflow ni corrida) |
-| `platform_spend_report(desde, hasta)` | Solo `service_role`, después de comprobar `platform_admin` | Una fila por empresa con su gasto en el rango (no por día: PostgREST corta las respuestas en 1000 filas sin avisar, así que la pantalla pide hoy, mes en curso y mes anterior en tres consultas y la conciliación pide una) |
+| `platform_spend_report(desde, hasta)` | Solo `service_role`, después de comprobar `platform_admin` | Una fila por empresa con su gasto en el rango (no por día: PostgREST corta las respuestas en 1000 filas sin avisar, así que la pantalla pide hoy, mes en curso y mes anterior en tres consultas y la conciliación pide una; usa el índice parcial `usage_entries_model_usd_created_idx`, porque el de tenant no le sirve al no filtrar por empresa) |
 
 **Para el cliente: `/[tenant]/settings/gasto`.** Mes en curso o mes anterior (`?periodo=anterior`), total, tabla por día y tabla por origen. Es de administrador: un `tenant_member` recibe 404. Se llega desde el link "Gasto →" de `/[tenant]/settings`. El costo por corrida sigue sin exponerse al cliente.
 
