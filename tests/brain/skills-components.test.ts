@@ -22,6 +22,7 @@ describe("PublishedFiles", () => {
 			createElement(PublishedFiles, {
 				tenantSlug: "acme",
 				slug: "skills/facturacion",
+				version: 3,
 				files: [
 					{ path: "scripts/calc.py", sha256: "a", size: 2048 },
 					{ path: "assets/logo.png", sha256: "b", size: 10 },
@@ -35,16 +36,19 @@ describe("PublishedFiles", () => {
 		);
 	});
 
-	it("sin archivos no muestra nada", () => {
-		expect(
-			renderToStaticMarkup(
-				createElement(PublishedFiles, {
-					tenantSlug: "acme",
-					slug: "skills/x",
-					files: [],
-				}),
-			),
-		).toBe("");
+	it("ofrece la descarga del paquete publicado, aunque no tenga archivos", () => {
+		const html = renderToStaticMarkup(
+			createElement(PublishedFiles, {
+				tenantSlug: "acme",
+				slug: "skills/facturacion",
+				version: 3,
+				files: [],
+			}),
+		);
+		expect(html).toContain("Descargar paquete (v3)");
+		expect(html).toContain(
+			'href="/acme/brain/skills/package?slug=skills%2Ffacturacion"',
+		);
 	});
 });
 
@@ -93,6 +97,17 @@ describe("SkillPanel", () => {
 		});
 		expect(html).not.toContain("Revisar y publicar");
 		expect(html).toContain(">Retirar<");
+	});
+
+	it("publicada ofrece descargar el paquete; sin publicar, no", () => {
+		const html = render({});
+		expect(html).toContain("Descargar paquete (v2)");
+		expect(html).toContain(
+			'href="/acme/brain/skills/package?slug=skills%2Ffacturacion"',
+		);
+		expect(render({ state: { kind: "sin_publicar" } })).not.toContain(
+			"Descargar paquete",
+		);
 	});
 
 	it("retirada se puede volver a publicar y no se retira", () => {

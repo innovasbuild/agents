@@ -8,6 +8,7 @@ const state: {
 	agents: Result;
 	brain: Result;
 	settings: () => { publicUrl: string; issuer: string };
+	skills: unknown;
 } = {
 	tenant: null,
 	agents: { data: [], error: null },
@@ -16,6 +17,7 @@ const state: {
 		publicUrl: "https://app.test",
 		issuer: "https://x/auth/v1",
 	}),
+	skills: [],
 };
 
 // Consulta encadenable que resuelve al hacer await, como la de supabase-js.
@@ -43,6 +45,12 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/brain/adapters/mcp-production", () => ({
 	publicSettings: () => state.settings(),
+}));
+vi.mock("@/lib/brain/adapters/skills", () => ({
+	memberSkills: async () => {
+		if (state.skills instanceof Error) throw state.skills;
+		return state.skills;
+	},
 }));
 vi.mock("next/navigation", () => ({
 	notFound: () => {
@@ -75,10 +83,50 @@ describe("página Conectar", () => {
 		state.tenant = tenant("tenant_member");
 		state.agents = { data: [{ agent: "outreach" }], error: null };
 		state.brain = { data: [{ id: "c1" }], error: null };
+		state.skills = [];
 		state.settings = () => ({
 			publicUrl: "https://app.test",
 			issuer: "https://x/auth/v1",
 		});
+	});
+
+	it("con brain y skills visibles muestra la sección de skills", async () => {
+		state.skills = [
+			{
+				slug: "skills/ventas/propuesta",
+				name: "propuesta",
+				description: "Arma la propuesta.",
+				version: 3,
+			},
+		];
+		const html = await render();
+		expect(html).toContain("Tus skills");
+		expect(html).toContain("Descargar paquete (v3)");
+	});
+
+	it("sin skills visibles no hay sección de skills", async () => {
+		const html = await render();
+		expect(html).not.toContain("Tus skills");
+	});
+
+	it("sin brain no hay sección de skills aunque la lectura devuelva alguna", async () => {
+		state.brain = { data: [], error: null };
+		state.skills = [
+			{ slug: "skills/a", name: "a", description: "d", version: 1 },
+		];
+		expect(await render()).not.toContain("Tus skills");
+	});
+
+	it("si falla la lectura de skills avisa sin mostrar el error", async () => {
+		state.skills = new Error("rpc caída");
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const html = await render();
+		expect(html).toContain(
+			"No se pudieron leer tus skills. Recargá la página.",
+		);
+		expect(html).not.toContain("rpc caída");
+		expect(html).toContain("https://app.test/brain/acme/mcp");
+		error.mockRestore();
 	});
 
 	it("sin acceso al tenant da 404", async () => {

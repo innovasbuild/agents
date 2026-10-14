@@ -6,6 +6,7 @@ import {
 	importSkillPackage,
 	parseSkillMd,
 	planImport,
+	publishedSkillFor,
 	putSkillFile,
 	readSkillFile,
 	removeSkillFile,
@@ -609,5 +610,38 @@ describe("endurecimiento del import", () => {
 			"put:grande.bin",
 			"put:chico.bin",
 		]);
+	});
+});
+
+describe("publishedSkillFor", () => {
+	it("un lector recibe la copia publicada con su tenant y su persona", async () => {
+		const { deps } = setup(LECTOR);
+		const result = await publishedSkillFor("acme", SLUG, deps);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.slug).toBe(SLUG);
+		expect(result.tenantId).toBe("t1");
+		expect(result.snapshot.version).toBe(2);
+		expect(result.snapshot.manifest).toEqual(published);
+	});
+
+	it("un editor también recibe la publicada, no el borrador", async () => {
+		const { deps } = setup();
+		const result = await publishedSkillFor("acme", SLUG, deps);
+		if (!result.ok) throw new Error(result.message);
+		expect(result.snapshot.manifest).toEqual(published);
+	});
+
+	it("sin publicación vigente, sin lectura o sin ser miembro: not_found", async () => {
+		const noMember = setup().deps;
+		for (const deps of [
+			setup({ current: null }).deps,
+			setup(HIDDEN).deps,
+			{ ...noMember, actor: async () => null },
+		]) {
+			expect(await publishedSkillFor("acme", SLUG, deps)).toMatchObject({
+				ok: false,
+				code: "not_found",
+			});
+		}
 	});
 });

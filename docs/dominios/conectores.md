@@ -3,7 +3,7 @@ title: Conectores
 category: dominios
 status: activo
 tags: [conectores, vercel-connect, oauth, api-key, consola]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - lib/connectors/providers.ts
   - lib/connectors/auth.ts
@@ -100,7 +100,7 @@ Cuando plataforma deshabilita un conector queda `locked_by_platform`: el cliente
 
 ### Página Conectar: `/[tenant]/conectar`
 
-Visible para todos los roles. `buildConnectables` arma una tarjeta por brain (si hay un binding `brain` habilitado) y una por agente habilitado en `tenant_agents`, con su URL de MCP (`/brain/<slug>/mcp`, `/eve/<agente>/v1/mcp?tenant=<slug>`) y pestañas con los pasos para Claude Code, claude.ai, ChatGPT, Codex y Cursor. Lo que no se probó contra la plataforma lleva la etiqueta "Sin probar" (`tested` en `instructions.ts`). Una tarjeta "próximamente" reserva el lugar de las herramientas de la empresa. Si falla la lectura devuelve "No se pudieron leer tus conexiones" en vez de una lista vacía, que parecería "no tenés nada". El canal MCP del agente rechaza a un agente deshabilitado ([#84](https://github.com/innovasbuild/agents/pull/84)).
+Visible para todos los roles. `buildConnectables` arma una tarjeta por brain (si hay un binding `brain` habilitado) y una por agente habilitado en `tenant_agents`, con su URL de MCP (`/brain/<slug>/mcp`, `/eve/<agente>/v1/mcp?tenant=<slug>`) y pestañas con los pasos para Claude Code, claude.ai, ChatGPT, Codex y Cursor. Lo que no se probó contra la plataforma lleva la etiqueta "Sin probar" (`tested` en `instructions.ts`). Una tarjeta "próximamente" reserva el lugar de las herramientas de la empresa. Si la empresa tiene brain, la página suma la sección "Tus skills" (`skills-section.tsx`): lista las skills publicadas que la persona puede usar, con el mismo filtro que `skill_list` (`memberSkills`, que aplica `visibleSkills`), cada una con su link de descarga del paquete. Las skills se leen aparte de las conexiones: si falla la lectura muestra "No se pudieron leer tus skills. Recargá la página." y las conexiones se ven igual; si la persona no ve ninguna, la sección no aparece. Si falla la lectura devuelve "No se pudieron leer tus conexiones" en vez de una lista vacía, que parecería "no tenés nada". El canal MCP del agente rechaza a un agente deshabilitado ([#84](https://github.com/innovasbuild/agents/pull/84)).
 
 ### Mis cuentas: `/[tenant]/mis-cuentas`
 
