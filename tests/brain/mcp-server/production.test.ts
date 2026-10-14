@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { publicSettings } from "@/lib/brain/adapters/mcp-production";
+import {
+	publicSettings,
+	skillLoadEvent,
+} from "@/lib/brain/adapters/mcp-production";
 
 afterEach(() => {
 	vi.unstubAllEnvs();
@@ -34,5 +37,27 @@ describe("publicSettings", () => {
 		vi.stubEnv("PUBLIC_APP_URL", "https://agentes.innov.as");
 		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", undefined);
 		expect(() => publicSettings()).toThrow("NEXT_PUBLIC_SUPABASE_URL");
+	});
+});
+
+describe("skillLoadEvent", () => {
+	it("arma la fila de events de una carga por MCP", () => {
+		expect(
+			skillLoadEvent({
+				tenantId: "t1",
+				userId: "u1",
+				slug: "skills/ventas/reporte",
+				name: "reporte",
+				version: 2,
+				digest: "dg",
+			}),
+		).toEqual({
+			tenant_id: "t1",
+			actor_user_id: "u1",
+			channel: "mcp",
+			type: "brain.skill_loaded",
+			summary: "skills/ventas/reporte",
+			payload: { name: "reporte", version: 2, digest: "dg" },
+		});
 	});
 });

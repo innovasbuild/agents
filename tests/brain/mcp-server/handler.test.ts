@@ -10,6 +10,7 @@ import {
 	protectedResourceMetadata,
 } from "@/lib/brain/core/mcp-server/handler";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
+import type { SkillOverviewRow } from "@/lib/brain/core/skills/store";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
@@ -74,6 +75,11 @@ function deps(
 		publicUrl: "https://agents.test",
 		issuer: "https://ref.supabase.co/auth/v1",
 		unauthorized: createUnauthorizedResponse,
+		skills: {
+			overview: async () => [],
+			blob: async () => null,
+			record: async () => {},
+		},
 		providerInstance,
 		...overrides,
 	};
@@ -552,5 +558,184 @@ describe("protectedResourceMetadata", () => {
 			authorization_servers: ["https://ref.supabase.co/auth/v1"],
 			bearer_methods_supported: ["header"],
 		});
+	});
+});
+
+function publishedRow(slug: string): SkillOverviewRow {
+	return {
+		pageId: `page-${slug}`,
+		slug,
+		revision: 9,
+		draftFilesDigest: "draft",
+		current: {
+			action: "publicar",
+			version: 2,
+			pageRevision: 5,
+			filesDigest: "fd",
+			title: "T",
+			description: "Describe la skill.",
+			body: "# Pasos",
+			frontmatter: {},
+			manifest: [{ path: "a.md", sha256: "sha-a", size: 4 }],
+			digest: "dg",
+			publishedAt: "2026-10-13T12:00:00Z",
+		},
+	};
+}
+
+const BRAIN_TOOLS = ["brain_read", "brain_search", "brain_upsert"];
+
+describe("handleBrainMcp · skills", () => {
+	it("sin skills publicadas el servidor queda como antes", async () => {
+		const client = await connect("ana", deps());
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(
+			BRAIN_TOOLS,
+		);
+	});
+
+	it("un miembro carga una skill que puede leer; queda registrado con tenant y persona", async () => {
+		const record = vi.fn(async () => {});
+		const blob = vi.fn(async () => new TextEncoder().encode("hola"));
+		const client = await connect(
+			"ana",
+			deps({
+				skills: {
+					overview: async () => [publishedRow("skills/ventas/reporte")],
+					blob,
+					record,
+				},
+			}),
+		);
+		const loaded = await client.callTool({
+			name: "skill_load",
+			arguments: { name: "reporte" },
+		});
+		expect(loaded.structuredContent).toMatchObject({ ok: true, version: 2 });
+		expect(record).toHaveBeenCalledWith({
+			tenantId: "tenant-a",
+			userId: "ana",
+			slug: "skills/ventas/reporte",
+			name: "reporte",
+			version: 2,
+			digest: "dg",
+		});
+		const file = await client.callTool({
+			name: "skill_file",
+			arguments: { name: "reporte", path: "a.md" },
+		});
+		expect(file.structuredContent).toMatchObject({ ok: true, content: "hola" });
+		expect(blob).toHaveBeenCalledWith("tenant-a", "sha-a");
+	});
+
+	it("las reglas del brain deciden qué skills ve un miembro; un administrador ve todas", async () => {
+		const d = () =>
+			deps({
+				rules: {
+					load: async () => [
+						{
+							path: "skills/rrhh",
+							principal: "members" as const,
+							userId: null,
+							level: "ninguno" as const,
+						},
+					],
+				},
+				skills: {
+					overview: async () => [
+						publishedRow("skills/rrhh/sueldos"),
+						publishedRow("skills/ventas/reporte"),
+					],
+					blob: async () => null,
+					record: async () => {},
+				},
+			});
+		const member = await connect("ana", d());
+		const memberList = await member.callTool({
+			name: "skill_list",
+			arguments: {},
+		});
+		expect(
+			(
+				memberList.structuredContent as { skills: { name: string }[] }
+			).skills.map((s) => s.name),
+		).toEqual(["reporte"]);
+		const hidden = await member.callTool({
+			name: "skill_load",
+			arguments: { name: "sueldos" },
+		});
+		expect(hidden.isError).toBe(true);
+
+		const admin = await connect("admin", d());
+		const adminList = await admin.callTool({
+			name: "skill_list",
+			arguments: {},
+		});
+		expect(
+			(
+				adminList.structuredContent as { skills: { name: string }[] }
+			).skills.map((s) => s.name),
+		).toEqual(["reporte", "sueldos"]);
+	});
+
+	it("brain_read sobre skills/ sigue sin existir aunque la skill se pueda cargar", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				skills: {
+					overview: async () => [publishedRow("skills/ventas/reporte")],
+					blob: async () => null,
+					record: async () => {},
+				},
+			}),
+		);
+		const read = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "skills/ventas/reporte" },
+		});
+		expect(read.isError).toBe(true);
+		expect(read.structuredContent).toMatchObject({ error: "not_found" });
+	});
+
+	it("si la lectura de skills falla, las tools del brain siguen andando", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const client = await connect(
+			"ana",
+			deps({
+				skills: {
+					overview: async () => {
+						throw new Error("rpc caída");
+					},
+					blob: async () => null,
+					record: async () => {},
+				},
+			}),
+		);
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(
+			BRAIN_TOOLS,
+		);
+		const read = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "comercial/icp" },
+		});
+		expect(read.structuredContent).toMatchObject({ ok: true });
+		spy.mockRestore();
+	});
+
+	it("con un brain externo no hay tools de skills ni se consulta el overview", async () => {
+		const overview = vi.fn(async () => [publishedRow("skills/a")]);
+		const client = await connect(
+			"ana",
+			deps({
+				store: {
+					...store,
+					brainBinding: async () => ({ ...binding, provider: "mcp" }) as never,
+				},
+				skills: { overview, blob: async () => null, record: async () => {} },
+			}),
+		);
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(
+			BRAIN_TOOLS,
+		);
+		expect(overview).not.toHaveBeenCalled();
 	});
 });
