@@ -35,7 +35,7 @@ La plataforma es un solo deploy de Next.js que sirve el dashboard de cada client
   │ sesión Supabase              │ (Supabase Auth)      │
   ▼                              ▼                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ Next.js 16 en Vercel  ·  withEve({ agents: { outreach } })                   │
+│ Next.js 16 en Vercel  ·  withEve({ agents: { outreach, asistente } })        │
 │                                                                              │
 │  app/[tenant]/…      chat · cola · pipeline · contactos · cuentas · focos    │
 │                      metricas · brain · conectar · settings                  │
@@ -95,7 +95,7 @@ Qué cambió respecto del kickoff:
 
 ## Principios
 
-1. **Un agente sirve a N tenants.** `agents/outreach` es uno solo. Lo que cambia por empresa se resuelve en `session.started` desde la base: modelo, conexiones, brain. Un tenant nuevo es una fila y su brain, no una carpeta de código.
+1. **Un agente sirve a N tenants.** `agents/outreach` es uno solo para todas las empresas, y lo mismo vale para cada agente. Lo que cambia por empresa se resuelve en `session.started` desde la base: modelo, conexiones, brain. Un tenant nuevo es una fila y su brain, no una carpeta de código.
 2. **Por capacidad, nunca por cliente.** Los agentes, workflows y nodos se nombran por lo que hacen (`outreach`, `draft-queue`). Lo específico de un cliente vive en `tenants/<slug>/` o en la base, no en el código.
 3. **`events` es append-only.** Nadie hace `UPDATE` ni `DELETE`: se revocan los grants y escribe solo el servidor. Ver [datos](datos.md).
 4. **El modelo nunca ve una credencial.** Toda llave pasa por Vercel Connect; `lib/connectors/auth.ts` es el único archivo que importa `@vercel/connect` (lo hace cumplir `tests/connectors/import-rule.test.ts`). En la base solo hay identificadores.
@@ -107,11 +107,11 @@ Qué cambió respecto del kickoff:
 
 | Carpeta | Qué hay |
 |---|---|
-| `agents/` | Los agentes de eve, uno por capacidad. Hoy solo `outreach/` (tools, skills, hooks, schedules, canales, evals, `connections/tenant.ts`) |
+| `agents/` | Los agentes de eve, uno por capacidad. Hoy `outreach/` (tools, skills, hooks, schedules, canales, evals, `connections/tenant.ts`) y `asistente/` (solo brain: `agent.ts`, instrucciones, canal, hooks, `tools/brain.ts` y evals) |
 | `app/` | Next.js App Router: `[tenant]/` (pantallas del cliente), `plataforma/` (consola), `(auth)/` y `auth/` (login), `brain/[tenant]/mcp` (brain por MCP), `oauth/consent`, `sin-acceso/`, `api/invitations` |
 | `components/` | Componentes compartidos: `ui/` (shadcn) y `brain/` (lector, editor visual, permisos) |
 | `lib/accounts/` | Estado de las cuentas (`status.ts`) |
-| `lib/agents/` | Catálogo de agentes, resolución de modelo por tenant, contexto de canal, auth del canal MCP, sesiones y runs |
+| `lib/agents/` | Catálogo de agentes, resolución de modelo por tenant, contexto de canal, auth del canal MCP, sesiones y runs; `eve/` tiene lo que comparten los agentes (canal web, hooks, modelo y tools del brain) |
 | `lib/auth/` | Login (link y código), `login_gate`, principal OAuth, consentimiento |
 | `lib/brain/` | Módulo del brain: `core/` (wiki, acceso, MCP, editor) y `adapters/` hacia esta plataforma |
 | `lib/brand/` | Contraste de colores para la marca por tenant |
@@ -129,12 +129,12 @@ Qué cambió respecto del kickoff:
 | `tests/` | Vitest, un directorio por dominio, más `tests/docs` que vigila la wiki |
 | `docs/` | La wiki: ver el [índice](../README.md) |
 
-Los demás archivos de la raíz: `proxy.ts` refresca la sesión de Supabase en cada navegación (las rutas `eve/`, `brain/` y `.well-known/` quedan afuera porque se autentican por bearer), `next.config.ts` registra el agente con `withEve`.
+Los demás archivos de la raíz: `proxy.ts` refresca la sesión de Supabase en cada navegación (las rutas `eve/`, `brain/` y `.well-known/` quedan afuera porque se autentican por bearer), `next.config.ts` registra los agentes con `withEve`.
 
 ## Cómo viaja un pedido
 
 1. La persona entra a `/<slug>/chat`. `resolveTenantAccess` traduce el slug a tenant y rol; sin membresía, 404.
-2. El chat habla con `/eve/outreach/v1/*`. El `AuthFn` de `agents/outreach/channels/eve.ts` verifica la sesión, valida que la sesión de eve sea de quien pregunta (los hooks de eve son observe-only) y arma el principal con `tenantId`, `tenantSlug` y `role`.
+2. El chat habla con `/eve/<agente>/v1/*`, con el agente del hilo (`outreach` o `asistente`). El `AuthFn` del canal (`agents/<agente>/channels/eve.ts`, que es `webChannel` de `lib/agents/eve/`) verifica la sesión, valida que la sesión de eve sea de quien pregunta (los hooks de eve son observe-only) y arma el principal con `tenantId`, `tenantSlug` y `role`.
 3. En `session.started`, `agent.ts` resuelve el modelo del tenant y `connections/tenant.ts` arma las conexiones según los bindings de `tenant_connections`.
 4. Las tools escriben con el cliente admin (`service_role`), nunca con la sesión del usuario, y dejan sus hechos en `events`.
 5. Las pantallas leen con la sesión del usuario: la RLS es la que filtra. `queue_items` y `contacts` avisan por Realtime.
