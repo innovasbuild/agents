@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
 	config: null as null | { auth: Array<(r: Request) => Promise<unknown>> },
@@ -23,6 +23,26 @@ vi.mock("@/lib/agents/channel-context", () => ({
 }));
 
 import { webChannel } from "@/lib/agents/eve/web-channel";
+
+describe("webChannel autenticadores", () => {
+	const original = process.env.VERCEL_ENV;
+	afterEach(() => {
+		if (original === undefined) delete process.env.VERCEL_ENV;
+		else process.env.VERCEL_ENV = original;
+	});
+
+	it("con VERCEL_ENV arma un solo autenticador (sin evalAuth ni localDev)", () => {
+		process.env.VERCEL_ENV = "production";
+		webChannel("asistente");
+		expect(state.config?.auth).toHaveLength(1);
+	});
+
+	it("sin VERCEL_ENV arma tres: app, evalAuth y localDev", () => {
+		delete process.env.VERCEL_ENV;
+		webChannel("asistente");
+		expect(state.config?.auth).toHaveLength(3);
+	});
+});
 
 describe("webChannel", () => {
 	beforeEach(() => {

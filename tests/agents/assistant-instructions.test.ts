@@ -40,6 +40,14 @@ describe("assistantSessionInstructions", () => {
 		expect(text).not.toContain("abran un hilo nuevo");
 	});
 
+	it("sin saber qué agentes hay (otherAgents null), no afirma nada sobre otros agentes", () => {
+		const text = assistantSessionInstructions({ ...base, otherAgents: null });
+
+		expect(text).toContain("Trabajás para Acme");
+		expect(text).not.toContain("No hay otros agentes habilitados");
+		expect(text).not.toContain("abran un hilo nuevo");
+	});
+
 	it("sin brain conectado, lo dice y no manda a buscar", () => {
 		const text = assistantSessionInstructions({
 			...base,

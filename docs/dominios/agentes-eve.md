@@ -69,7 +69,7 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `agents/outreach/hooks/{bind-session,runs,executors}.ts` | Atan la sesión a la conversación, abren y cierran `runs`, marcan Gmail autorizado |
 | `agents/outreach/schedules/*.ts` | Los cuatro schedules (cableado; la lógica vive en `lib/`) |
 | `agents/outreach/skills/*/SKILL.md` | `outreach-corrida`, `outreach-redaccion`, `outreach-crm`, `outreach-escucha` |
-| `agents/outreach/evals/` | Las nueve evals y su `support.ts` |
+| `agents/outreach/evals/` | Las nueve evals de outreach y su `support.ts` |
 | `lib/agents/catalog.ts` | `AGENT_CATALOG`: única lista de agentes de la plataforma |
 | `lib/agents/session-store.ts` | `bindSessionToConversation`, `openRun`, `closeRun` |
 | `lib/agents/channel-context.ts` | Resuelve tenant y dueño de un request del canal del chat |
@@ -152,7 +152,7 @@ Verificado en `agents/outreach/tools/*.ts`: solo `crm_setup_outreach_properties`
 
 - Un hilo pertenece a un agente: `conversations.agent` se fija al crearlo (`createConversation(tenantId, slug, model, agent)`) y no cambia. La acción rechaza un agente que no esté en el catálogo, que no sea de chat o que no esté habilitado en la empresa.
 - Cada agente tiene su ruta (`/eve/<agente>/v1/*`) y `resolveChannelContext(request, userId, allowsLogin, agent)` rechaza una conversación cuyo agente no es el de la ruta: de lo contrario se abriría una sesión de un agente colgada del hilo de otro.
-- El selector aparece al abrir un hilo nuevo solo si hay más de un agente de chat habilitado (`chatAgents` en `lib/tenants/home.ts`, `availableChatAgents` en `lib/agents/chat-agents.ts`). Con uno solo no hay nada que elegir ni que rotular. Queda elegido el agente del hilo más reciente (`defaultChatAgent`) o, si no hay hilos, el primero del catálogo.
+- El selector aparece al abrir un hilo nuevo solo si hay más de un agente de chat habilitado (`chatAgents` en `lib/tenants/home.ts`, `availableChatAgents` en `lib/agents/chat-agents.ts`). Con uno solo no hay nada que elegir ni que rotular. Queda elegido el agente del hilo más reciente (`defaultChatAgent`) o, si no hay hilos, el primero del catálogo; también cae en el primer agente disponible cuando el agente del último hilo ya no está habilitado.
 - Los hilos de un agente deshabilitado no se listan: el canal rechazaría su sesión, así que ni el historial se puede abrir.
 - El indicador de actividad y los adjuntos sirven a cualquier agente; las tarjetas de mail y de cola solo aparecen con las tools de outreach.
 
@@ -211,7 +211,7 @@ La spec 03 fijaba `followups` a `30 10 * * 1-5`; en disco es `0 11 * * 1-5`.
 
 ### Evals
 
-Cinco evals del Asistente en `agents/asistente/evals/` (con su `evals.config.ts` y `support.ts`; comparten el tenant de eval con las de outreach, así que la concurrencia es 1): `smoke` (responde con la auth de eval), `brain-tools` (`brain_search`, `brain_read` y `brain_upsert` existen en el agente compilado), `sin-dato` (si el brain no tiene la respuesta, busca, lo dice y no inventa), `sin-otros-agentes` (con outreach apagado, ante un pedido de mail dice que no está disponible y no promete otro agente) y `deriva-a-outreach` (con outreach habilitado nombra a ese agente y no dice haber enviado nada). Se corren con `npm run evals -- --agent asistente [evalId...]`.
+Cinco evals del Asistente en `agents/asistente/evals/` (con su `evals.config.ts` y `support.ts`; comparten el tenant de eval con las de outreach, así que la concurrencia es 1): `smoke` (responde con la auth de eval), `brain-tools` (`brain_search` y `brain_read` corren en el agente compilado y un juez comprueba que la respuesta nombra la página), `sin-dato` (si el brain no tiene la respuesta, busca, lo dice y no inventa), `sin-otros-agentes` (con outreach apagado, ante un pedido de mail dice que no está disponible y no promete otro agente) y `deriva-a-outreach` (con outreach habilitado nombra a ese agente y no dice haber enviado nada). Se corren con `npm run evals -- --agent asistente [evalId...]`.
 
 Nueve evals de outreach en `agents/outreach/evals/`, con `evals.config.ts` (concurrencia 1, porque comparten el tenant sembrado) y `support.ts`. Se corren contra la Supabase local; guía en [correr evals](../guias/correr-evals.md).
 

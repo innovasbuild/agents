@@ -54,13 +54,13 @@ export default defineDynamic({
 				});
 			} catch (error) {
 				// El contexto es ayuda: si la base falla, la sesión arranca igual,
-				// con la versión que no promete ningún otro agente.
+				// solo con la línea de la empresa, sin afirmar nada de otros agentes.
 				console.error("asistente instructions/tenant:", error);
 				return defineInstructions({
 					content: assistantSessionInstructions({
 						...base,
 						brainConnected: true,
-						otherAgents: [],
+						otherAgents: null,
 					}),
 				});
 			}

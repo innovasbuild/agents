@@ -34,7 +34,7 @@ sources:
 
 # Correr las evals del agente
 
-Las evals le hacen preguntas reales a un agente (`outreach` por defecto; `asistente` con `--agent asistente`) (eve levanta un servidor local y conversa con él) y chequean lo que hizo: qué tools llamó, qué quedó en la base y, en algunos casos, qué dijo (un juez con modelo, `typesafe-ai/jev` por defecto). Son la red de seguridad de los guardrails: que nada salga sin aprobación, que el claim ajeno se respete, que el freno frene. Corren **solo contra la Supabase local** y llaman a un modelo de verdad, así que tardan y gastan tokens.
+Las evals le hacen preguntas reales a un agente (`outreach` por defecto; `asistente` con `--agent asistente`; eve levanta un servidor local y conversa con él) y chequean lo que hizo: qué tools llamó, qué quedó en la base y, en algunos casos, qué dijo (un juez con modelo, `typesafe-ai/jev` por defecto). Son la red de seguridad de los guardrails: que nada salga sin aprobación, que el claim ajeno se respete, que el freno frene. Corren **solo contra la Supabase local** y llaman a un modelo de verdad, así que tardan y gastan tokens.
 
 ## Pasos
 
@@ -107,12 +107,12 @@ npm run evals -- --agent asistente
 npm run evals -- --agent asistente smoke
 ```
 
-Sin `--agent` el script corre las de `outreach`. Comparten con ellas el tenant de evals (`eval-outreach`), por eso la concurrencia es 1 también acá, y dos de las del Asistente prenden y apagan el agente de outreach de ese tenant (`setOutreachEnabled` en su `support.ts`) y lo dejan prendido al terminar.
+Sin `--agent` el script corre las de `outreach`. Comparten con ellas el tenant de evals (`eval-outreach`), por eso la concurrencia es 1 también acá, y dos de las del Asistente tocan el agente de outreach de ese tenant (`setOutreachEnabled` en su `support.ts`): `sin-otros-agentes` lo apaga y lo restaura al final, y `deriva-a-outreach` lo prende.
 
 | Eval | Qué comprueba |
 |---|---|
 | `smoke` | El asistente responde con la auth de eval |
-| `brain-tools` | `brain_search`, `brain_read` y `brain_upsert` existen en el agente compilado |
+| `brain-tools` | `brain_search` y `brain_read` corren en el agente compilado, y un juez comprueba que la respuesta nombra la página |
 | `sin-dato` | Si el brain no tiene la respuesta, busca, lo dice y no inventa |
 | `sin-otros-agentes` | Con outreach apagado, ante un pedido de mail dice que no está disponible y no promete otro agente |
 | `deriva-a-outreach` | Con outreach habilitado, ante un pedido de mail nombra a ese agente y no dice haber enviado nada |

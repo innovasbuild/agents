@@ -199,7 +199,9 @@ Una migración, `supabase/migrations/<fecha>_asistente_agent.sql`. Sin tablas ni
 
 `platform_create_tenant` y `platform_set_agent` no validan nombres de agente en la base (el catálogo vive en código), así que no cambian.
 
-**Orden de despliegue.** Cualquiera de los dos funciona. Con la migración primero, el código viejo ignora la fila `asistente` porque no está en su catálogo. Con el código primero, Asistente existe y nadie lo tiene habilitado. Se sigue la costumbre: `npx supabase migration list`, migración, código.
+**Orden de despliegue.** Primero el código, después la migración. Con el código nuevo y sin la fila, el Asistente existe y nadie lo tiene habilitado. Con la migración primero, el código viejo (`lib/connect/connectables.ts`, `app/[tenant]/settings/page.tsx`) muestra cualquier agente habilitado fuera de su catálogo, con una URL MCP que no existe. Antes: `npx supabase migration list` (`db push` aplica todas las pendientes).
+
+> Nota 2026-10-13: el orden se corrigió en la revisión final de la etapa; la versión anterior decía que cualquiera de los dos funcionaba y que se seguía la costumbre de migración antes que código, y era falso por lo que hace el código viejo.
 
 ## 8. Lo que cambia para cada empresa
 

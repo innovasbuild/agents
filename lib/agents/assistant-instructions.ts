@@ -4,8 +4,8 @@ export interface AssistantSessionInput {
 	tenantName: string;
 	tenantSlug: string;
 	brainConnected: boolean;
-	/** Los demás agentes de chat habilitados en la empresa. */
-	otherAgents: ReadonlyArray<{ name: string; description: string }>;
+	/** Los demás agentes de chat habilitados en la empresa; null si no se pudo saber. */
+	otherAgents: ReadonlyArray<{ name: string; description: string }> | null;
 }
 
 export function assistantSessionInstructions(
@@ -21,7 +21,9 @@ export function assistantSessionInstructions(
 		);
 	}
 
-	if (input.otherAgents.length > 0) {
+	if (input.otherAgents === null) {
+		// No se sabe qué agentes hay: no se afirma nada.
+	} else if (input.otherAgents.length > 0) {
 		lines.push(
 			"En esta empresa hay otros agentes habilitados:",
 			...input.otherAgents.map(

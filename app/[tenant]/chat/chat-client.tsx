@@ -91,6 +91,9 @@ export function ChatClient({
 	const router = useRouter();
 	const [model, setModel] = useState(defaultModel);
 	const [agent, setAgent] = useState(defaultAgent);
+	const [openError, setOpenError] = useState<string | null>(null);
+	// Si el agente elegido se deshabilitó con la página abierta, vale el default.
+	const selected = agents.some((a) => a.id === agent) ? agent : defaultAgent;
 	// Con un solo agente no hay nada que elegir ni que rotular (spec 22.1 C5).
 	const showAgents = agents.length > 1;
 	const agentName = (id: string) =>
@@ -117,7 +120,7 @@ export function ChatClient({
 									className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
 									id="agente"
 									onChange={(event) => setAgent(event.target.value)}
-									value={agent}
+									value={selected}
 								>
 									{agents.map((option) => (
 										<option key={option.id} value={option.id}>
@@ -148,18 +151,34 @@ export function ChatClient({
 						<Button
 							className="w-full"
 							onClick={async () => {
-								const id = await createConversation(
-									tenantId,
-									slug,
-									model,
-									agent,
-								);
-								if (id) router.push(`/${slug}/chat?hilo=${id}`);
+								try {
+									const id = await createConversation(
+										tenantId,
+										slug,
+										model,
+										selected,
+									);
+									if (id) {
+										setOpenError(null);
+										router.push(`/${slug}/chat?hilo=${id}`);
+									} else {
+										setOpenError(
+											"No se pudo abrir el hilo. Recargá la página.",
+										);
+									}
+								} catch {
+									setOpenError("No se pudo abrir el hilo. Recargá la página.");
+								}
 							}}
 							type="button"
 						>
 							Hilo nuevo
 						</Button>
+						{openError ? (
+							<p className="text-destructive text-sm" role="alert">
+								{openError}
+							</p>
+						) : null}
 					</div>
 
 					<ul className="space-y-0.5">
