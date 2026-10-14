@@ -3,12 +3,13 @@ title: Tenancy
 category: arquitectura
 status: activo
 tags: [tenancy, rls, roles, plataforma]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - docs/superpowers/specs/01-multi-tenant.md
   - docs/superpowers/specs/2026-10-05-consola-plataforma-design.md
   - docs/superpowers/specs/2026-10-05-alta-empresas-landing-design.md
   - docs/superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md
+  - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
   - supabase/migrations/20260912192239_tenants_memberships.sql
   - supabase/migrations/20260912193318_conversations_tenant_agents.sql
   - supabase/migrations/20261011120000_memberships_lock_columns.sql
@@ -16,6 +17,13 @@ sources:
   - supabase/migrations/20261014120000_member_blocks.sql
   - supabase/migrations/20261015120000_platform_console.sql
   - supabase/migrations/20261019120000_agentless_tenant.sql
+  - supabase/migrations/20261024120000_tenant_domains.sql
+  - supabase/tests/37_tenant_domains.test.sql
+  - lib/tenants/host.ts
+  - lib/tenants/host-store.ts
+  - lib/tenants/host-routing.ts
+  - lib/tenants/public-url.ts
+  - proxy.ts
   - lib/tenants/platform-owner.ts
   - lib/tenants/platform.ts
   - lib/tenants/resolve.ts
@@ -95,6 +103,23 @@ El modo abierto exige al menos un dominio (`tenants_self_signup_needs_domain`). 
 
 `block_member` y `unblock_member` (solo administradores) sacan y reponen a una persona. Un bloqueado no vuelve por dominio abierto ni se le ofrece la landing; aceptar una invitación levanta el bloqueo, porque es una decisión explícita y más nueva. Nadie se bloquea a sí mismo y solo plataforma bloquea a un `platform_admin`.
 
+## Dominio propio por empresa
+
+Una empresa puede servirse desde su propio dominio (por ejemplo `ai.okeefe.com.ar`, un `CNAME` a la plataforma) además de `agentes.innov.as/<slug>`. El host decide la empresa; las rutas de `app/[tenant]` no cambian (Etapa 21.6, [spec](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md)).
+
+La tabla `tenant_domains` guarda una fila por hostname: `tenant_id`, `hostname` (único, en minúsculas, sin puerto ni comodín), `is_primary` (uno por empresa), `status` (`pending`, `verifying`, `active`, `failed`) y `last_error`. La RLS deja leer a los miembros de la empresa y a plataforma; **nadie con rol `authenticated` escribe**: hasta el corte b de la 21.6 las filas se cargan por SQL con la service role. Un trigger deja un evento por cada alta, activación, falla y baja (`tenant_domain.*`). La función `resolve_tenant_by_host(host)` devuelve el slug solo de un dominio `active` de una empresa activa, y solo la ejecuta la service role: un dominio cargado pero sin verificar no sirve nada.
+
+`proxy.ts` resuelve el host de cada request (`lib/tenants/host.ts`, con una caché en memoria de 60 segundos que no guarda errores):
+
+| Host | Qué pasa |
+|---|---|
+| Raíz (`PUBLIC_APP_URL`, cualquier `*.vercel.app`, `localhost` fuera de producción) | Como siempre. No consulta la base |
+| De una empresa | URLs limpias, sin el slug. `/chat` se reescribe a `/okeefe/chat`, `/login` a `/login/okeefe`, `/brain/mcp` al endpoint MCP del brain. Una URL con slug (`/okeefe/chat`) redirige (308) a la limpia. Otra empresa, `/plataforma` y `/oauth` dan 404 |
+| Desconocido | 404 |
+| La base no responde | 503; el error no se cachea |
+
+La tabla completa de reescrituras está en `lib/tenants/host-routing.ts`. Un host de empresa solo sirve a su empresa, y la sesión es por host: una persona que pertenece a dos empresas con dominio propio inicia sesión en cada una. Para localhost, `okeefe.localhost:3000` resuelve a `127.0.0.1` sin tocar `/etc/hosts` y se prueba con una fila en `tenant_domains`. Cómo salen las URLs de MCP en ese dominio: [identidad y acceso](identidad-y-acceso.md).
+
 ## Slugs reservados
 
 El slug de un tenant es la primera palabra de la URL, así que no puede coincidir con una ruta de primer nivel de `app/`. La constraint `tenants_slug_not_reserved` reserva `api`, `auth`, `brain`, `eve`, `login`, `oauth`, `plataforma` y `sin-acceso`. Agregar una ruta de primer nivel a `app/` exige sumar su palabra a esa constraint (hay una migración por palabra nueva) y a su test, `supabase/tests/17_reserved_tenant_slugs.test.sql`. El formato del slug es `^[a-z][a-z0-9-]{1,38}$`.
@@ -125,7 +150,7 @@ Una empresa sin `tenant_agents` es válida (PR [#91](https://github.com/innovasb
 
 ## Cómo se prueba
 
-- **pgTAP** (`npm run db:test`, necesita Docker): `01_tenants_memberships` (aislamiento entre tenants y escalada de rol), `02_invitations`, `17_reserved_tenant_slugs`, `25_memberships_lock_columns`, `26_join_by_domain`, `28_member_blocks`, `29_platform_console`, `33_agentless_tenant`. Además `06_anon_grants` barre todas las tablas de `public` y falla si `anon` tiene algún privilegio; `07_authenticated_grants` hace lo mismo con los privilegios que `authenticated` no usa (`TRUNCATE`, `TRIGGER`, `REFERENCES`). Una tabla nueva no hace falta agregarla a mano.
+- **pgTAP** (`npm run db:test`, necesita Docker): `01_tenants_memberships` (aislamiento entre tenants y escalada de rol), `02_invitations`, `17_reserved_tenant_slugs`, `25_memberships_lock_columns`, `37_tenant_domains`, `26_join_by_domain`, `28_member_blocks`, `29_platform_console`, `33_agentless_tenant`. Además `06_anon_grants` barre todas las tablas de `public` y falla si `anon` tiene algún privilegio; `07_authenticated_grants` hace lo mismo con los privilegios que `authenticated` no usa (`TRUNCATE`, `TRIGGER`, `REFERENCES`). Una tabla nueva no hace falta agregarla a mano.
 - **Vitest** (`npm test`): `tests/tenants/` (resolución, tenant dueño, aterrizaje, agentes habilitados), `tests/plataforma/` (acciones y secciones de la consola), `tests/invitations/`, `tests/agents/mcp-channel-auth.test.ts`.
 - Navegador: `/qa` contra el dev server, como `platform_admin` y como `tenant_admin` (este último recibe 404 en `/plataforma`).
 
@@ -134,6 +159,7 @@ Una empresa sin `tenant_agents` es válida (PR [#91](https://github.com/innovasb
 - [Multi-tenant](../superpowers/specs/01-multi-tenant.md): modelo de datos y RLS. Quedó atrás en que el `tenant_admin` puede insertar membresías y actualizar `brand` o `allowed_models` de su fila (hoy no, PR [#80](https://github.com/innovasbuild/agents/pull/80) y `tenants_guard_columns`).
 - [Consola de plataforma](../superpowers/specs/2026-10-05-consola-plataforma-design.md), PR [#70](https://github.com/innovasbuild/agents/pull/70): la consola, `PLATFORM_OWNER_TENANT_SLUG` y el slug `plataforma`. Su límite sobre `mcp-channel-auth` lo cerró el PR [#82](https://github.com/innovasbuild/agents/pull/82), y "no crear tenants" (P8) lo superó el PR 71.
 - [Alta de empresas y landing](../superpowers/specs/2026-10-05-alta-empresas-landing-design.md), PR [#71](https://github.com/innovasbuild/agents/pull/71): `/plataforma/nueva` y `/login/<slug>`. La función `create_tenant` que cita fue reemplazada por `platform_create_tenant` en la 21.1 (PR [#87](https://github.com/innovasbuild/agents/pull/87)).
+- [Etapa 21.6](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md): dominio propio por empresa. Corte a: tabla, resolución de host, proxy y URLs de MCP.
 - [Etapa 21.4](../superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md), PR [#91](https://github.com/innovasbuild/agents/pull/91): empresa sin agentes e ingreso por código.
 - Ingreso por dominio y bloqueos: PR [#80](https://github.com/innovasbuild/agents/pull/80) cerró el hueco de `memberships`.
 - Ver también: [vision-general](vision-general.md), [datos](datos.md), [plataforma](../dominios/plataforma.md), [invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md), [alta de tenant](../guias/alta-de-tenant.md).
