@@ -1,6 +1,7 @@
 -- supabase/migrations/20261022120000_spend_report.sql
 -- Etapa 21.5: lectura del gasto en modelos por período (spec §6). No hay
--- tablas nuevas: usage_entries sigue cerrada y esto solo agrega.
+-- tablas nuevas: usage_entries sigue cerrada y esto solo agrega dos
+-- funciones de lectura y un índice parcial.
 --
 -- En las dos funciones el rango es [p_from, p_to) y el día se corta en UTC
 -- (spec G7): es como reporta el AI Gateway, y con otro corte la conciliación
@@ -39,6 +40,14 @@ $$;
 
 revoke execute on function public.tenant_spend_report(uuid, timestamptz, timestamptz) from public, anon;
 grant execute on function public.tenant_spend_report(uuid, timestamptz, timestamptz) to authenticated;
+
+-- platform_spend_report filtra por recurso y fecha, sin empresa: el único
+-- índice de la tabla arranca por tenant_id y no le sirve. Parcial (solo
+-- model_usd) para que el chat, que ahora asienta una fila por paso, no lo
+-- engorde con otros recursos.
+create index if not exists usage_entries_model_usd_created_idx
+  on public.usage_entries (created_at) include (tenant_id, amount)
+  where resource = 'model_usd';
 
 -- El gasto de todas las empresas en el rango, una fila por empresa. Solo
 -- service_role: la pantalla de plataforma la llama después de comprobar que

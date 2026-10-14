@@ -3146,5 +3146,5 @@ No lo ejecuta un agente por su cuenta: aplicar una migración en producción pid
 - [ ] Provocar una compactación en una conversación larga, o esperar a que ocurra, y mirar si deja asiento. Si no deja, queda confirmado como causa conocida de diferencia (ya figura en la pantalla).
 - [ ] Revisar en `/plataforma/<slug>` el límite diario de `model_usd` de cada empresa. El chat ahora suma contra ese límite: mirar tres días de libro y ajustar para que los procesos automáticos no corten antes de tiempo.
 - [ ] Al día siguiente, en `/plataforma/gasto`, conciliar el mes en curso. Terminado cuando cierra dentro de la tolerancia y "Sin etiqueta" está en cero. Si "Sin etiqueta" no es cero, buscar en los logs del gateway las llamadas sin tag: es una puerta que no pasó por `gatewayOptions`.
-- [ ] Correr `explain` de `platform_spend_report` contra producción. Si hace un seq scan costoso, agregar en una migración aparte un índice por `(resource, created_at)`.
+- [ ] Correr `explain` de `platform_spend_report` contra producción y confirmar que usa `usage_entries_model_usd_created_idx` (índice parcial que la migración ya crea, agregado en la revisión previa al PR).
 - [ ] Tildar la 21.5 en el roadmap y pasar su fila de `docs/decisiones/README.md` a `cerrada`.

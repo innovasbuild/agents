@@ -146,7 +146,7 @@ No hay tablas nuevas. Dos funciones de lectura, en una migración. Antes de escr
 
 `usage_entries` sigue siendo solo de inserción y su RLS no cambia: el cliente no lee filas, lee el agregado.
 
-El índice `(tenant_id, resource, created_at desc)` cubre la consulta del cliente. La de plataforma cruza empresas: se mira el plan con `explain` sobre datos reales y se agrega un índice por `(resource, created_at)` solo si hace falta.
+El índice `(tenant_id, resource, created_at desc)` cubre la consulta del cliente. La de plataforma cruza empresas y filtra solo por recurso y fecha, así que no lo usa: la migración agrega un índice parcial `(created_at) include (tenant_id, amount) where resource = 'model_usd'` (el chat asienta una fila por paso y la tabla crece rápido). En producción se confirma con `explain` que lo usa.
 
 ## 7. Aplicación
 
