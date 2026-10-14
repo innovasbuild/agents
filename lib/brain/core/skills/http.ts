@@ -14,7 +14,7 @@ export function isSameOrigin(
 	}
 }
 
-function looksLikeText(bytes: Uint8Array): boolean {
+export function looksLikeText(bytes: Uint8Array): boolean {
 	if (bytes.includes(0)) return false;
 	try {
 		new TextDecoder("utf-8", { fatal: true }).decode(bytes);
