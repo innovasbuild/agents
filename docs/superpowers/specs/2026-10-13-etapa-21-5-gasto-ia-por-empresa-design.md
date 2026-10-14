@@ -69,13 +69,14 @@ El trabajo de asentar va en una función pura en `lib/agents/` que recibe el eve
 `lib/workflows/gateway-options.ts`:
 
 - `tenantTag(slug)` devuelve `tenant:<slug>`.
-- `gatewayOptions(slug, extra?)` devuelve `{ gateway: { tags: [tenantTag(slug)], ...extra } }`, listo para `providerOptions`.
+- `gatewayOptions(slug)` devuelve `{ gateway: { tags: [tenantTag(slug)] } }`, listo para `providerOptions`.
+- `createGatewayOptions(admin)` devuelve un resolvedor por id de tenant, con caché, para las puertas que no conocen el slug (schedules). Si no puede leer el slug etiqueta con el id y no tira.
 
 Imports relativos, porque lo usan tools y schedules de eve.
 
 ### 4.2 Servicios y workflows
 
-Los servicios que llaman al modelo (`generate-draft`, `generate-research`, `evaluate`) reciben las opciones del gateway como argumento y las pasan a `providerOptions`. La puerta (tool, schedule, runner), que ya conoce al tenant, las arma con `gatewayOptions`. `evaluate` conserva `zeroDataRetention` pasándolo como `extra`.
+Los servicios que llaman al modelo (`generate-draft`, `generate-research`, `evaluate`) reciben las opciones del gateway como argumento y las pasan a `providerOptions`. La puerta (tool, schedule, runner), que ya conoce al tenant, las arma con el helper. `evaluate` conserva `zeroDataRetention`: lo combina con los tags que recibe.
 
 Los servicios siguen sin conocer al tenant: reciben un objeto de opciones, no un slug.
 
@@ -102,7 +103,7 @@ Solo `tenant_admin`; para cualquier otro, 404. Link desde `/<slug>/settings`.
 - Una línea que aclara que los días cortan en UTC y que el gasto se registra desde la fecha del deploy.
 - Empresa sin gasto en el período: estado vacío, no una tabla en cero.
 
-El origen es `workflow` cuando el asiento lo trae; si no, "Chat".
+El origen es `workflow` cuando el asiento lo trae. Sin workflow, es "Chat" si el asiento tiene corrida y "Procesos programados" si no (el schedule de follow-ups asienta sin workflow y sin corrida).
 
 ### 5.2 Plataforma: `/plataforma/gasto`
 
@@ -121,7 +122,8 @@ Al apretarlo, una server action:
 1. Pide al gateway el gasto por tag del período (`getSpendReport` con `groupBy: 'tag'`) y el total sin filtrar.
 2. Lee del libro el `model_usd` por empresa del mismo período, en UTC.
 3. Muestra por empresa: libro, gateway, diferencia en USD y en porcentaje.
-4. Agrega una fila "Sin etiqueta": total del gateway menos la suma de los tags `tenant:*`. Si es mayor que cero, alguna llamada salió sin tag.
+4. Atribuye a la empresa tanto el tag con su slug como el tag con su id. Un tag `tenant:*` que no corresponde a ninguna empresa va en su propia fila, siempre marcada.
+5. Agrega una fila "Sin etiqueta": total del gateway menos la suma de los tags `tenant:*`. Si es mayor que cero, alguna llamada salió sin tag.
 
 Una diferencia se marca solo si supera el mayor entre US$ 1 y el 5 % del gateway. Por debajo se muestra sin marca. Causas conocidas de diferencia, listadas en la pantalla:
 
@@ -137,7 +139,7 @@ La comparación va en una función pura en `lib/usage/reconcile.ts`: recibe las 
 
 No hay tablas nuevas. Dos funciones de lectura, en una migración. Antes de escribirla se carga `supabase-postgres-best-practices`.
 
-- `tenant_spend_report(p_tenant uuid, p_from timestamptz, p_to timestamptz)` devuelve `(day date, origin text, amount numeric)` de `model_usd`, con el día en UTC y `origin = coalesce(workflow, 'chat')`. `security definer`, `search_path = ''`, y adentro `perform public.settings_actor(p_tenant)`, igual que `tenant_budget_status`. Rechaza rangos de más de 92 días.
+- `tenant_spend_report(p_tenant uuid, p_from timestamptz, p_to timestamptz)` devuelve `(day date, origin text, amount numeric)` de `model_usd`, con el día en UTC y `origin` igual al `workflow`, o `chat` si no hay workflow y hay corrida, o `sin_corrida`. `security definer`, `search_path = ''`, y adentro `perform public.settings_actor(p_tenant)`, igual que `tenant_budget_status`. Rechaza rangos de más de 92 días.
 - `platform_spend_report(p_from timestamptz, p_to timestamptz)` devuelve `(tenant_id uuid, day date, amount numeric)` de `model_usd`. Solo `service_role`; la pantalla la llama después de `requirePlatformAdmin`.
 
 `usage_entries` sigue siendo solo de inserción y su RLS no cambia: el cliente no lee filas, lee el agregado.
