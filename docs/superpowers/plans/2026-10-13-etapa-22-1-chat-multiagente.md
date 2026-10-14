@@ -53,7 +53,7 @@
 | `agents/asistente/**` (nuevo) | El agente |
 | `agents/outreach/{agent.ts,channels/eve.ts,hooks/bind-session.ts,hooks/runs.ts,tools/brain.ts}` | Quedan como reexport de `lib/agents/eve/` |
 | `app/[tenant]/chat/{page.tsx,actions.ts,chat-client.tsx}` | Hilos por agente y selector |
-| `supabase/migrations/20261020120000_asistente_agent.sql` (nuevo) | Backfill de la fila `asistente` |
+| `supabase/migrations/20261021120000_asistente_agent.sql` (nuevo) | Backfill de la fila `asistente` |
 
 ---
 
@@ -1202,9 +1202,9 @@ git commit -m "feat: agente Asistente, que conversa solo con el brain, y catálo
 ### Task 5: Migración: habilitar Asistente donde hay brain
 
 **Files:**
-- Create: `supabase/migrations/20261020120000_asistente_agent.sql`
+- Create: `supabase/migrations/20261021120000_asistente_agent.sql`
 
-Antes de escribir: cargar `supabase-postgres-best-practices` y correr `ls supabase/migrations | tail -3`. Si `main` ya tiene una migración con fecha igual o posterior a `20261020120000`, usar la fecha siguiente y actualizar el nombre en este plan y en la Task 9.
+Antes de escribir: cargar `supabase-postgres-best-practices` y correr `ls supabase/migrations | tail -3`. Si `main` ya tiene una migración con fecha igual o posterior a `20261021120000`, usar la fecha siguiente y actualizar el nombre en este plan y en la Task 9.
 
 - [ ] **Step 1: Escribir la migración**
 
@@ -1227,7 +1227,7 @@ on conflict (tenant_id, agent) do nothing;
 ```bash
 npm run db:reset
 psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "delete from public.tenant_agents where agent = 'asistente';"
-psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -f supabase/migrations/20261020120000_asistente_agent.sql
+psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -f supabase/migrations/20261021120000_asistente_agent.sql
 psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -c "select t.slug, a.enabled, a.config from public.tenant_agents a join public.tenants t on t.id = a.tenant_id where a.agent = 'asistente' order by t.slug;"
 ```
 
@@ -1244,7 +1244,7 @@ Expected: PASS, igual que antes (la migración no cambia esquema, grants ni pol�
 - [ ] **Step 4: Commit**
 
 ```bash
-git add supabase/migrations/20261020120000_asistente_agent.sql
+git add supabase/migrations/20261021120000_asistente_agent.sql
 git commit -m "feat: migración que habilita el asistente en las empresas con brain"
 ```
 
@@ -2028,7 +2028,7 @@ Correr la skill `/docs-wiki` y dejarla en verde.
 
 Este párrafo va al roadmap (Step 2) y al cuerpo del PR:
 
-> **Antes de desplegar:** `npx supabase migration list` (`db push` aplica todas las pendientes: confirmar las ajenas), aplicar `20261020120000_asistente_agent` y recién después el código. Con la migración primero, el código viejo ignora la fila `asistente`. **Después del deploy:** en `innovas`, abrir un hilo con Asistente, pedirle que liste sus herramientas (tienen que ser `brain_search`, `brain_read` y `brain_upsert`) y confirmar el `run` con `agent = 'asistente'`; abrir un hilo de outreach y confirmar que la firma aparece en la tarjeta del mail; en una empresa solo con brain, confirmar que `/<slug>` cae en el chat sin selector y que su brain no recibió páginas de canon. El chat no tiene tope de presupuesto: el gasto de modelos de una empresa solo con brain lo paga INNOV.AS hasta la 21.5; se apaga desde `/plataforma/<slug>`.
+> **Antes de desplegar:** `npx supabase migration list` (`db push` aplica todas las pendientes: confirmar las ajenas), aplicar `20261021120000_asistente_agent` y recién después el código. Con la migración primero, el código viejo ignora la fila `asistente`. **Después del deploy:** en `innovas`, abrir un hilo con Asistente, pedirle que liste sus herramientas (tienen que ser `brain_search`, `brain_read` y `brain_upsert`) y confirmar el `run` con `agent = 'asistente'`; abrir un hilo de outreach y confirmar que la firma aparece en la tarjeta del mail; en una empresa solo con brain, confirmar que `/<slug>` cae en el chat sin selector y que su brain no recibió páginas de canon. El chat no tiene tope de presupuesto: el gasto de modelos de una empresa solo con brain lo paga INNOV.AS hasta la 21.5; se apaga desde `/plataforma/<slug>`.
 
 - [ ] **Step 6: Verificación final y commit**
 
