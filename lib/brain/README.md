@@ -184,6 +184,17 @@ su propio repo.
   y se suben como cualquier otro, con el hash de cero bytes.
 - Los archivos que ninguna fila referencia quedan en el bucket: no hay limpieza
   todavía.
+- **Skills para asistentes (24.2a).** `core/skills/catalog.ts` recibe el
+  `overview` de la 24.1, una función de nivel por ruta, un lector de blobs y un
+  registrador, y arma una vez por request lo que una persona ve: `list`, `load`
+  y `file`. Solo conoce la copia publicada (`publishedSnapshot`), nunca la página
+  del brain ni `brain_skill_files`; una skill que no se ve responde igual que una
+  que no existe. El endpoint MCP lo cablea en `core/mcp-server/handler.ts` y
+  registra las tools `skill_list`, `skill_load` y `skill_file` solo si hay alguna
+  skill visible. `core/skills/skill-md.ts` arma el `SKILL.md` de una copia
+  publicada. `zipPackage` (`adapters/skill-zip.ts`) es el espejo de
+  `unzipPackage`, y `app/[tenant]/brain/skills/package/route.ts` lo sirve como
+  descarga de la versión vigente (`exportSkillPackage` decide el permiso).
 - Habilitar skills en una empresa es agregar `skill` a las categorías de su
   brain desde la consola de plataforma.
 
