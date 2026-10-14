@@ -190,7 +190,7 @@ su propio repo.
   y `file`. Solo conoce la copia publicada (`publishedSnapshot`), nunca la página
   del brain ni `brain_skill_files`; una skill que no se ve responde igual que una
   que no existe. El endpoint MCP lo cablea en `core/mcp-server/handler.ts` y
-  registra las tools `skill_list`, `skill_load` y `skill_file` solo si hay alguna
+  registra las tools `skill_list`, `skill_load`, `skill_file` y `skill_package` solo si hay alguna
   skill visible. `core/skills/skill-md.ts` arma el `SKILL.md` de una copia
   publicada. `zipPackage` (`adapters/skill-zip.ts`) es el espejo de
   `unzipPackage`.

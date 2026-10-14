@@ -1,5 +1,31 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const issuePackageLink = vi.fn();
+const deps = { marker: "package-link-deps" };
+
+vi.mock("@/lib/brain/core/skills/package-link", () => ({
+	issuePackageLink: (...args: unknown[]) => issuePackageLink(...args),
+}));
+vi.mock("@/lib/brain/adapters/skill-packages", () => ({
+	packageLinkDeps: () => deps,
+}));
+vi.mock("@/lib/brain/adapters/mcp-supabase", () => ({
+	supabaseClaimsVerifier: vi.fn(),
+	supabaseAccessStore: vi.fn(),
+	supabaseHit: vi.fn(),
+}));
+vi.mock("@/lib/brain/adapters/access-rules", () => ({
+	accessRulesStore: vi.fn(),
+}));
+vi.mock("@/lib/brain/adapters/skills", () => ({
+	skillStore: vi.fn(),
+	blobStore: vi.fn(),
+}));
+vi.mock("@/lib/brain/adapters/provider", () => ({ getBrainProvider: vi.fn() }));
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
+
 import {
+	productionDeps,
 	publicSettings,
 	skillLoadEvent,
 } from "@/lib/brain/adapters/mcp-production";
@@ -59,5 +85,24 @@ describe("skillLoadEvent", () => {
 			summary: "skills/ventas/reporte",
 			payload: { name: "reporte", version: 2, digest: "dg" },
 		});
+	});
+});
+
+describe("productionDeps().skills.issue", () => {
+	it("emite el paquete con canal mcp y los campos del pedido", async () => {
+		vi.stubEnv("PUBLIC_APP_URL", "https://agentes.innov.as");
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+		issuePackageLink.mockResolvedValue({ ok: true });
+		const request = {
+			tenantId: "t1",
+			userId: "u1",
+			name: "reporte",
+			slug: "skills/ventas/reporte",
+		};
+		await productionDeps().skills.issue(request as never);
+		expect(issuePackageLink).toHaveBeenCalledWith(
+			{ ...request, channel: "mcp" },
+			deps,
+		);
 	});
 });
