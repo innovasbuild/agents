@@ -623,7 +623,7 @@ Agregada el 2026-10-09 (G1, el gap más grande). Tercera superficie MCP, constru
 
 **Modelo Claude Code:** Opus 5 para las specs (toca permisos del brain y ejecución de código); Sonnet 5 en sesión nueva para implementar.
 **Modelo runtime:** n/a en la 24.1 y la 24.2 (no hay modelo del lado de la plataforma); el del agente en la 24.3.
-**Spec/Plan:** 24.1: `docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md` · Plan: `docs/superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md`. 24.2a: `docs/superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md` (plan a escribir). 24.2b y 24.3: a escribir.
+**Spec/Plan:** 24.1: `docs/superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md` · Plan: `docs/superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md`. 24.2a: `docs/superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md` · Plan: `docs/superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md`. 24.2b y 24.3: a escribir.
 
 Agregada el 2026-10-11. Que cada empresa publique en su brain skills para sus empleados (procedimiento en markdown más scripts y plantillas, formato Agent Skills) y que se usen, siempre en su última versión publicada, desde el chat de la plataforma y desde Claude, ChatGPT o Codex. Frontera decidida: el agente define qué se puede hacer (tools con nivel de efecto); la skill define cómo se hace una tarea en esa empresa y nunca agrega una tool ni un permiso. Los scripts son cómputo puro, sin red ni credenciales. Cuatro entregas (la 24.2 se partió en dos el 2026-10-13):
 
