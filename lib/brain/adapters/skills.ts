@@ -4,14 +4,18 @@
 import { loadTenantBindings } from "@/lib/connectors/bindings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import { resolveAccess } from "../core/access/resolve-access";
+import { isAdminRole, type Principal } from "../core/access/types";
 import { BrainNotFound } from "../core/errors";
 import { resolveBrainBinding } from "../core/resolve";
+import { visibleSkills } from "../core/skills/catalog";
 import type { BlobStore, FilesDeps } from "../core/skills/files";
 import type { PublishDeps } from "../core/skills/publish";
 import {
 	createSupabaseSkillStore,
 	type SkillStore,
 } from "../core/skills/store";
+import type { BrainRole } from "../core/types";
 import { accessRulesStore } from "./access-rules";
 import { resolveActingProvider } from "./acting-provider";
 import { getBrainProvider } from "./provider";
@@ -110,4 +114,40 @@ export function filesDeps(): FilesDeps {
 			return provider.upsert(write, { kind: "user", userId: actor.userId });
 		},
 	};
+}
+
+export interface MemberSkill {
+	slug: string;
+	name: string;
+	description: string;
+	version: number;
+}
+
+// Las skills que una persona ve en /conectar (spec etapa 24.2b §8): las
+// mismas que skill_list le daría por MCP. Con un brain externo no hay skills.
+export async function memberSkills(member: {
+	tenantId: string;
+	userId: string;
+	role: BrainRole;
+}): Promise<MemberSkill[]> {
+	if (!(await wikiBinding(member.tenantId))) return [];
+	// Como en el handler MCP: un administrador no depende de reglas, y si no se
+	// pueden cargar, esto lanza (falla cerrada).
+	const rules = isAdminRole(member.role)
+		? []
+		: await accessRulesStore().load(member.tenantId);
+	const principal: Principal = {
+		kind: "user",
+		userId: member.userId,
+		role: member.role,
+	};
+	const rows = await skillStore().overview(member.tenantId);
+	return visibleSkills(rows, (slug) =>
+		resolveAccess(rules, principal, slug),
+	).map(({ slug, name, snapshot }) => ({
+		slug,
+		name,
+		description: snapshot.description,
+		version: snapshot.version,
+	}));
 }
