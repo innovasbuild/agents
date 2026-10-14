@@ -1803,6 +1803,14 @@ export type Database = {
 				Args: { p_actor: string; p_connection: string; p_enabled: boolean };
 				Returns: undefined;
 			};
+			platform_spend_report: {
+				Args: { p_from: string; p_to: string };
+				Returns: {
+					amount: number;
+					day: string;
+					tenant_id: string;
+				}[];
+			};
 			refresh_fichas_candidates: {
 				Args: { p_limit: number; p_now: string; p_tenant: string };
 				Returns: {
@@ -1876,6 +1884,14 @@ export type Database = {
 					daily_limit: number;
 					resource: string;
 					spent: number;
+				}[];
+			};
+			tenant_spend_report: {
+				Args: { p_from: string; p_tenant: string; p_to: string };
+				Returns: {
+					amount: number;
+					day: string;
+					origin: string;
 				}[];
 			};
 			unblock_member: {
