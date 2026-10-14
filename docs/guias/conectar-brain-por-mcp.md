@@ -1,0 +1,77 @@
+---
+title: Conectar el brain por MCP
+category: guias
+status: activo
+tags: [brain, mcp]
+updated: 2026-10-13
+sources:
+  - lib/brain/README.md
+  - app/brain/[tenant]/mcp/route.ts
+  - app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts
+  - app/oauth/consent/page.tsx
+  - app/[tenant]/conectar/page.tsx
+  - lib/connect/instructions.ts
+  - lib/connect/connectables.ts
+  - lib/brain/core/mcp-server/handler.ts
+  - lib/brain/core/mcp-server/access.ts
+  - lib/brain/core/mcp-server/server.ts
+  - lib/brain/core/mcp-server/rate-limit.ts
+  - lib/brain/core/limits.ts
+  - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
+  - docs/superpowers/specs/2026-10-09-etapa-19-conectar-design.md
+---
+
+# Conectar el brain desde tus herramientas
+
+Cada cliente tiene su brain en una URL propia:
+
+    https://agentes.innov.as/brain/<cliente>/mcp
+
+Es la ruta `/brain/[tenant]/mcp` de la app; la metadata OAuth que usan los clientes para autenticar la sirve `/.well-known/oauth-protected-resource/brain/[tenant]/mcp`, y la pantalla de aprobación es `/oauth/consent`.
+
+Entrás con tu cuenta de la plataforma. Qué podés leer y dónde podés escribir lo deciden los permisos del brain por carpeta y por página: los administradores del cliente pueden todo; el resto, lo que cada carpeta o página le dé.
+
+Las instrucciones por cliente, con la URL de tu empresa ya puesta, están en la plataforma: menú **Conectar** (`/[tenant]/conectar`, o sea `/<cliente>/conectar`). Este archivo queda como referencia.
+
+## Claude Code
+
+    claude mcp add --transport http brain-<cliente> https://agentes.innov.as/brain/<cliente>/mcp
+
+Después, dentro de Claude Code, `/mcp`, elegí `brain-<cliente>` y autenticá. Se abre el navegador, entrás con tu cuenta y aprobás el acceso.
+
+## claude.ai
+
+Configuración → Conectores → Agregar conector personalizado. Pegá la URL del brain. Al conectar, se abre la misma pantalla de login y aprobación. Sin probar todavía contra esta plataforma.
+
+## Codex
+
+Corré estos dos comandos en tu terminal:
+
+    codex mcp add brain-<cliente> --url https://agentes.innov.as/brain/<cliente>/mcp
+    codex mcp login brain-<cliente>
+
+Se abre el navegador, entrás con tu cuenta y aprobás el acceso. Probado.
+
+## ChatGPT y Cursor
+
+La pantalla **Conectar** también trae los pasos para ChatGPT (Configuración → Conectores, modo desarrollador, autenticación OAuth; probado con una cuenta personal, no con un espacio de trabajo corporativo) y para Cursor (una entrada `mcpServers` con la URL en `~/.cursor/mcp.json`; sin probar). Los pasos exactos salen de `lib/connect/instructions.ts`.
+
+## Qué podés hacer
+
+- `brain_search`: buscar por texto, categoría o tag.
+- `brain_read`: leer una página completa con su revisión.
+- `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
+
+Las skills de la empresa (todo lo que está bajo `skills/`) no salen por estas tres tools: se arman y se publican desde la plataforma.
+
+Las tres tools aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
+
+Por defecto hay un límite de 60 lecturas y 10 escrituras por minuto por persona (cada brain puede tener otros valores, entre 1 y 1000, en su configuración). Si lo pasás, la respuesta dice cuántos segundos esperar. Un pedido de más de 1 MiB se rechaza con 413.
+
+## Si algo falla
+
+- **403**: ese cliente no existe o tu cuenta no tiene acceso. Revisá el slug de la URL; si está bien, pedile a un administrador que te invite.
+- **403 "Tu empresa no permite entrar con ese método"**: la empresa restringió con qué métodos se entra (link, código, Google). Entrá a la plataforma con uno permitido y volvé a conectar.
+- **404**: el cliente no tiene brain configurado. Si tu cuenta es de administración de plataforma, también da 404 cuando el cliente no existe (para el resto, un cliente que no existe da 403).
+- **401**: el token venció o no fue emitido para una aplicación conectada. Volvé a conectar el brain.
+- **No se abre el login**: revisá que la URL termine en `/mcp` y que estés usando la de tu cliente.

@@ -3,7 +3,7 @@ test -d ~/.claude/skills/gstack/bin && echo GSTACK_OK || echo GSTACK_MISSING
 Si falta: STOP y pedir instalación.
 
 ## Reglas del repo
-- Etapas en docs/innovas-agents-kickoff.md. Una sesión por etapa; /context-save al cerrar.
+- Etapas en docs/producto/roadmap.md. Una sesión por etapa; /context-save al cerrar.
 - Antes de escribir código de eve, leer node_modules/eve/docs/README.md y la guía del slot que tocás.
 - Antes de tocar SQL, cargar supabase-postgres-best-practices. Toda tabla lleva tenant_id y RLS.
 - events es append-only. Nunca UPDATE/DELETE.
@@ -13,7 +13,13 @@ Si falta: STOP y pedir instalación.
 - Comandos: npm run dev · npm run typecheck · npm test · npm run lint:fix
 - Base: npm run db:start · npm run db:reset · npm run db:test · npm run db:types (necesitan Docker abierto)
 
-## Orquestación (leer docs/02-orquestacion.md antes de crear un nodo, workflow o agente)
+## Documentación
+- La wiki vive en `docs/` y arranca en `docs/README.md`. Cómo mantenerla: `docs/guias/documentar.md`.
+- `docs/referencia/` se regenera con `npm run docs:sync` y no se edita a mano.
+- Una tool, nodo, workflow, tabla, ruta, proveedor, variable de entorno, spec o PR nuevo hace fallar `npm run docs:check` hasta que tenga página o una exclusión con motivo en `docs/_meta/cobertura.ts`. No se debilita el test.
+- Una etapa no se cierra sin `/docs-wiki` en verde.
+
+## Orquestación (leer docs/arquitectura/orquestacion.md antes de crear un nodo, workflow o agente)
 - Se sube un escalón (llamada al modelo → nodo → workflow → agente) solo cuando el anterior no alcanza.
 - Workflows y agentes por capacidad, nunca por cliente. La diferencia entre tenants es una fila y su brain.
 - Nodo = servicio puro en lib/<dominio>/services/: un trabajo, salida con schema, tenant desde el caller.
@@ -80,4 +86,4 @@ contacto→empresa 279 (+1 principal) · deal→contacto 3 · deal→empresa 341
 Lecturas: libres. Cualquier escritura (crear, actualizar, asociar, mover etapa): mostrar el payload y pedir confirmación antes de ejecutar.
 
 ## Skill routing
-Diseño nuevo → superpowers:brainstorming · Bug → /investigate · Probar en navegador → /qa · PR → /ship
+Diseño nuevo → superpowers:brainstorming · Bug → /investigate · Probar en navegador → /qa · PR → /ship · Cerrar etapa o documentar una rama → /docs-wiki

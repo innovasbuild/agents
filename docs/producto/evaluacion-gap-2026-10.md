@@ -1,9 +1,9 @@
 ---
-title: Evaluación de la plataforma contra la visión de producto — gap
-fecha: 2026-10-09
-base: origin/main e3dc003 (PR #83) · roadmap docs/01-roadmap-etapas.md
-autor: Claude (sesión de evaluación con Mati)
-plan: docs/2026-10-09-plan-cierre-gap-plataforma.md
+title: Evaluación de gap de la plataforma (2026-10)
+category: producto
+status: activo
+tags: [gap, evaluacion]
+updated: 2026-10-13
 ---
 
 > **Actualización del mismo día.** La primera versión se escribió sobre a3bb5b8 (PR #79). Durante el día se publicaron los PR #80 a #83: el ingreso por dominio quedó implementado (G3 cerrado en lo esencial) y el canal MCP del agente quedó alineado con el tenant dueño (parte de G6). Las secciones de abajo están corregidas; el plan de cierre vive en el documento enlazado arriba.
@@ -24,7 +24,7 @@ Lo que Mati describió se descompone así. Cada fila tiene un estado honesto seg
 | V6 | Catálogo de agentes preprogramados (comercial, postventa, compras, decisor) | 🔴 | Hay un solo agente, `outreach`. La arquitectura "un agente, N tenants" está probada con un solo tenant real (Etapa 7, segundo tenant, nunca corrió). `create_tenant` hardcodea `outreach`. |
 | V7 | Permisos por agente: qué datos usa y quién lo puede usar | 🟡 | Qué datos: `tenant_agents.config.brain` (`none/read/read_write`) y conexiones por tenant. Quién lo usa: **no hay control**; alcanza con ser miembro. Para actuar hace falta además fila en `executors`. |
 | V8 | Herramientas de la empresa conectadas con permisos granulares, visibles desde la plataforma o por MCP | 🔴 | Las conexiones (HubSpot, ColdIQ, Places, Apollo, Gmail) existen por tenant, pero **solo las usa el agente por dentro**. Ningún usuario puede ver ni usar las tools de su empresa desde su Claude. Sin permisos por usuario o rol sobre conexiones. |
-| V9 | Listado para el usuario de lo que tiene disponible, con instrucciones de conexión | 🔴 | Solo dos markdown en el repo (`docs/brain-mcp-conexion.md`, `docs/agente-mcp-conexion.md`). Nada en la UI. Uno de los dos está desactualizado. |
+| V9 | Listado para el usuario de lo que tiene disponible, con instrucciones de conexión | 🔴 | Solo dos markdown en el repo (`docs/guias/conectar-brain-por-mcp.md`, `docs/guias/conectar-agente-por-mcp.md`). Nada en la UI. Uno de los dos está desactualizado. |
 
 Lectura rápida: **la base multi-tenant y el brain están sólidos; lo que falta es la capa de producto** que convierte eso en "cada empresa configura sus agentes y herramientas, y cada persona se conecta desde donde trabaja".
 
@@ -56,7 +56,7 @@ Lectura rápida: **la base multi-tenant y el brain están sólidos; lo que falta
 - Un agente, `outreach`, en `next.config.ts`. Modelo, instrucciones, conexiones y tools del brain son dinámicos por tenant (`defineDynamic` en `session.started`). Skills estáticas.
 - `tenant_agents (tenant_id, agent, enabled, model, daily_quota, config)`. Sin UI para prender o apagar; `create_tenant` inserta siempre `outreach`.
 - Canal MCP del agente (`agents/outreach/channels/mcp.ts`): `mcpChannel` de eve con el mismo emisor OAuth. Expone solo `agent_start/get/update/cancel`; el tenant viaja en `?tenant=<slug>`. No chequea `tenant_agents.enabled` (el canal web sí). Desde PR #82 reconoce como plataforma solo al `platform_admin` del tenant dueño, igual que web y brain. Las aprobaciones por este canal se contestan con `agent_update` desde el cliente, sin pasar por `/cola`.
-- Niveles de efecto 0 a 3 con aprobación según efecto (`lib/workflows/registry.ts`, `docs/02-orquestacion.md`). Es la pieza que hace viable exponer herramientas hacia afuera sin perder el control.
+- Niveles de efecto 0 a 3 con aprobación según efecto (`lib/workflows/registry.ts`, `docs/arquitectura/orquestacion.md`). Es la pieza que hace viable exponer herramientas hacia afuera sin perder el control.
 
 ### 2.4 Conexiones a herramientas de la empresa
 
@@ -86,7 +86,7 @@ Decisiones de diseño abiertas: cómo generalizar `brain_access_rules` a "reglas
 
 ### G2 · No hay dónde ver "qué tengo disponible y cómo lo conecto" — S
 
-Dos markdown en el repo, ninguna pantalla. Y `docs/brain-mcp-conexion.md` sigue diciendo que solo los admins escriben por MCP, cuando desde la Etapa 17 la regla por carpeta decide.
+Dos markdown en el repo, ninguna pantalla. Y `docs/guias/conectar-brain-por-mcp.md` sigue diciendo que solo los admins escriben por MCP, cuando desde la Etapa 17 la regla por carpeta decide.
 
 Hace falta una página por usuario (por ejemplo `/<slug>/conectar` o una pestaña en el perfil) que liste, según sus permisos:
 
@@ -141,7 +141,7 @@ La Etapa 7 es la que valida la promesa "la diferencia entre tenants es una fila 
 
 ## 4. Orden sugerido
 
-El orden y el detalle de cada etapa están en `docs/2026-10-09-plan-cierre-gap-plataforma.md`, y las etapas 19 a 23 quedaron agregadas a `docs/01-roadmap-etapas.md`. En una línea:
+El orden y el detalle de cada etapa están en `docs/producto/plan-cierre-gap-2026-10.md`, y las etapas 19 a 23 quedaron agregadas a `docs/producto/roadmap.md`. En una línea:
 
 1. **Etapa 19** · página "Conectá tus herramientas" y cierre en producción de 17, 18 e ingreso por dominio (G2 y G6).
 2. **Etapa 20** · Microsoft, imposición de métodos de login y bloqueo por persona (resto de G3).

@@ -1,8 +1,9 @@
 ---
-title: Plan para cerrar el gap entre la plataforma y la visión de producto
-fecha: 2026-10-09
-base: docs/2026-10-09-evaluacion-gap-plataforma.md · origin/main e3dc003 (PR #83)
-estado: propuesta, a confirmar con Mati
+title: Plan de cierre del gap (2026-10)
+category: producto
+status: activo
+tags: [gap, plan]
+updated: 2026-10-13
 ---
 
 # Plan de cierre del gap
@@ -59,7 +60,7 @@ Por qué este orden y no otro:
 - [ ] Página `/<slug>/conectar` (nombre a decidir en la spec; aparece en el menú para todos los roles). Lista por usuario, según lo que tiene permitido: el brain (URL `/brain/<slug>/mcp`), cada agente habilitado en `tenant_agents` (URL `/eve/<agente>/v1/mcp?tenant=<slug>`), y un lugar reservado para el MCP de herramientas (Etapa 23).
 - [ ] Por ítem, pestañas con instrucciones para Claude Code (`claude mcp add ...`), claude.ai (conector personalizado), ChatGPT (conector MCP remoto con OAuth), Codex y Cursor (`.mcp.json`). Texto en castellano, botón de copiar, sin exponer tokens: la autenticación la hace el OAuth de Supabase al conectar.
 - [ ] Probar de verdad claude.ai y ChatGPT contra el brain de `innovas` en producción. Para ChatGPT, averiguar si hace falta exponer tools `search` y `fetch` (lo exige para deep research) y decidir si el brain las ofrece como alias.
-- [ ] Corregir `docs/brain-mcp-conexion.md` (hoy dice que solo admins escriben) y `docs/agente-mcp-conexion.md` para que coincidan con la página. La página es la fuente; los markdown quedan como referencia o se borran.
+- [ ] Corregir `docs/guias/conectar-brain-por-mcp.md` (hoy dice que solo admins escriben) y `docs/guias/conectar-agente-por-mcp.md` para que coincidan con la página. La página es la fuente; los markdown quedan como referencia o se borran.
 - [ ] Verificación en producción de lo pendiente: criterio de cierre de la 17 (restringir una carpeta y que otro miembro no la vea en árbol, MCP ni chat), recorrido de la 18 (borrado, editor, 375 px, modo oscuro), e ingreso por dominio (una persona nunca invitada entra por `/login/<slug>`). Confirmar "Confirm email" prendido en Supabase Auth y `PLATFORM_OWNER_TENANT_SLUG` en Vercel.
 - [ ] Marcar 17 y 18 como `[x]` en el roadmap.
 - [ ] El canal MCP del agente chequea `tenant_agents.enabled` como ya lo hace el canal web (hoy el freno llega recién en las tools).
