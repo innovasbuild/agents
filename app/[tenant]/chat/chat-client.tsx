@@ -212,12 +212,14 @@ export function ChatClient({
 				</aside>
 
 				{active ? (
-					<Thread
-						agentName={showAgents ? agentName(active.agent) : null}
-						key={active.id}
-						slug={slug}
-						thread={active}
-					/>
+					// La key va en el Fragment: remonta el hilo al cambiar de hilo o de agente.
+					<Fragment key={active.id}>
+						<Thread
+							agentName={showAgents ? agentName(active.agent) : null}
+							slug={slug}
+							thread={active}
+						/>
+					</Fragment>
 				) : (
 					<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
 						<p className="text-muted-foreground">
