@@ -155,7 +155,7 @@ describe("formato", () => {
 		expect(utcDayStart(new Date("2026-10-14T01:30:00Z")).toISOString()).toBe(
 			"2026-10-14T00:00:00.000Z",
 		);
-		// 23:30 UTC del 13 es 20:30 del 13 en Buenos Aires, pero 02:30 del 14 en UTC+3.
+		// 23:30 del 13 en Buenos Aires (UTC-3) ya es 02:30Z del 14.
 		expect(
 			utcDayStart(new Date("2026-10-13T23:30:00-03:00")).toISOString(),
 		).toBe("2026-10-14T00:00:00.000Z");
