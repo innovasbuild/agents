@@ -1,7 +1,7 @@
 # Etapa 21.6: dominio propio por empresa (la plataforma se sirve desde el dominio del cliente, MCP incluido)
 
 **Fecha:** 2026-10-14
-**Estado:** borrador para ejecutar. Hay tres decisiones abiertas para Mati (§3.1); las dos primeras bloquean el corte b. El corte a se puede empezar sin ellas. Caso de referencia: la empresa `okeefe` en `ai.okeefe.com.ar` (§1).
+**Estado:** lista para ejecutar. Las decisiones A1 a A3 están resueltas (§3.1) y no queda nada abierto para Mati salvo crear el DNS de `ai.innov.as` antes del cierre (§7). Caso de referencia: la empresa `okeefe` en `ai.okeefe.com.ar` (§1).
 **Rama:** `feat/etapa-21-6a-resolucion-de-host` (corte a), sale de `main`. Esta spec vive en `docs/etapa-21-6-dominio-por-tenant`.
 **Antecedentes:** `01-multi-tenant.md` (D2: el tenant vive en la URL y el dominio se suma después mapeando host a slug, sin tocar el modelo), `2026-09-24-etapa-11-brain-mcp-design.md` (OAuth 2.1 y el recurso protegido del brain), `2026-09-27-etapa-6-canal-mcp-design.md` (canal MCP del agente), `2026-10-09-etapa-19-conectar-design.md` (la pantalla `/conectar` y sus URLs), `2026-10-09-etapa-20-login-design.md` (login y método), `2026-10-05-consola-plataforma-design.md` (consola donde se administra). La entrada del roadmap es **21.6** en `docs/producto/roadmap.md`.
 
@@ -18,7 +18,7 @@ Antes de tocar nada, cargá:
 Reglas del repo que pegan acá, para no tropezar:
 
 - **Nada específico de un cliente en código.** Un dominio es una fila en la base, nunca una constante ni un `if (host === "cliente.com")`.
-- **Un cambio de variable de entorno o de ruta falla `npm run docs:check`** hasta que tenga página. Esta spec ya tiene su fila en `docs/decisiones/README.md`; el código nuevo necesita su página en `docs/dominios/plataforma.md` y `docs/arquitectura/entornos-y-deploy.md`. Cerrá con `/docs-wiki` en verde.
+- **Un cambio de variable de entorno o de ruta falla `npm run docs:check`** hasta que tenga página (`PUBLIC_ROOT_ALIASES` y las variables del corte b entran en `docs/arquitectura/entornos-y-deploy.md`). Esta spec ya tiene su fila en `docs/decisiones/README.md`; el código nuevo necesita su página en `docs/dominios/plataforma.md` y `docs/arquitectura/entornos-y-deploy.md`. Cerrá con `/docs-wiki` en verde.
 - **El canal de eve no importa `next/*`.** `agents/outreach/channels/mcp.ts` compila con `eve build`, que no puede arrastrar `next/navigation` ni `next/headers`. Todo lo que ese canal toque (la resolución de host y de URL pública) vive en `lib/` sin imports de Next. Los tests de Vitest no ven este error: corré `npx eve build` antes de dar el corte por terminado.
 - **Español rioplatense** en pantallas e instrucciones; código e identificadores en inglés.
 
@@ -94,13 +94,11 @@ Qué ya funciona sin tocarlo: `safeNextPath` (`lib/auth/next-path.ts`) y `isSame
 | H13 | En un host de empresa las **URLs visibles no llevan el slug**. Si llega una con slug, el proxy redirige (308) a la forma limpia | Es lo que se pidió (`/login`, `/chat`, `/brain/mcp`). Hoy hay unos 70 `href` que arman `/${tenant}/...`: con la redirección no se toca ninguno. El costo es un salto extra por navegación interna hasta que exista un helper de links (§8) |
 | H14 | El endpoint MCP del brain en un host de empresa es **`/brain/mcp`**, sin slug. La forma `/brain/<slug>/mcp` solo existe en el host raíz | El slug sale del host. Dos formas de decir lo mismo en un mismo host abren la puerta a pedir un slug ajeno |
 
-### 3.1 Decisiones abiertas (resuelve Mati antes de arrancar el corte b)
+### 3.1 Decisiones resueltas (Mati, 2026-10-14)
 
-**A1 · ¿Con qué dominio raíz neutro se queda la plataforma?** Mientras `PUBLIC_APP_URL` sea `agentes.innov.as`, hay tres pantallas que un cliente con dominio propio **sigue viendo bajo INNOV.AS**: el consentimiento OAuth del MCP (`/oauth/consent`, ver §4.7), el correo de Supabase Auth (remitente y link) y cualquier link a Connect. Si el objetivo es que *nunca* aparezca innov.as, hay que mover el host raíz a un dominio neutro del producto (Central IA) y dejar `agentes.innov.as` como alias. Es solo una variable más una entrada en Supabase y Vercel, no código. **Recomendación:** definir el dominio del producto antes de abrir el primer cliente con dominio propio; si no existe todavía, arrancar con `agentes.innov.as` y dejar el movimiento como tarea de operación (§7).
-
-**A2 · ¿Subdominio por cliente bajo nuestro dominio (`okeefe.<raíz>`) en esta entrega?** El roadmap original (21.6) lo pedía primero. Esta spec lo deja afuera porque no resuelve el pedido (el cliente seguiría viendo el dominio de INNOV.AS) y exige un comodín DNS con los nameservers de Vercel. La resolución por tabla (§4.2) ya lo soporta: es una fila más y un comodín en Vercel. **Recomendación:** no, queda como 21.6d si lo pide un cliente.
-
-**A3 · ¿Quién tiene permiso para pedir un dominio?** La spec asume solo plataforma (H10). Si el cliente tiene que poder pedirlo desde su settings, se agrega un estado `requested` y una pantalla en `/settings`, sin cambiar el resto. **Recomendación:** solo plataforma por ahora; hay un solo cliente con esta necesidad.
+- **A1 · Host raíz: `ai.innov.as`.** La plataforma pasa a servirse desde `ai.innov.as` (Mati crea el DNS antes del cierre, §7). `PUBLIC_APP_URL` pasa a ser `https://ai.innov.as`, que es también la Site URL de Supabase y, por lo tanto, el host del consentimiento OAuth (§4.7). `agentes.innov.as` **sigue siendo host raíz durante la transición**: ya hay personas con el brain conectado en `https://agentes.innov.as/brain/<slug>/mcp` y sesiones abiertas ahí, y un host raíz no reconocido da 404 (§4.2). Se declara con la variable nueva `PUBLIC_ROOT_ALIASES` (hosts separados por coma). Consecuencia que se acepta: el paso del consentimiento sigue mostrando un host de INNOV.AS (`ai.innov.as`), sin el nombre de la empresa.
+- **A2 · Sin subdominio por cliente** bajo nuestro dominio en esta entrega. Si lo pide un cliente, es la 21.6d: una fila más en `tenant_domains` y un comodín en Vercel.
+- **A3 · Solo plataforma carga dominios** (H10). El administrador de la empresa ve el estado y las instrucciones de DNS. Si más adelante tiene que poder pedirlo, se agrega un estado `requested` y una pantalla en `/settings`, sin cambiar el resto.
 
 ## 4. Diseño
 
@@ -134,7 +132,7 @@ Reglas de la migración:
 
 - **RLS prendida.** Lectura para los miembros de la empresa (el administrador ve estado e instrucciones). Escritura: ninguna política para `authenticated`; lo escribe la consola con la service role, como el resto de las escrituras de plataforma. Un pgTAP (`supabase/tests/29_tenant_domains.sql`) prueba que un miembro de otra empresa no lee ni una fila y que nadie con rol `authenticated` inserta.
 - **Un hostname, una empresa.** El `unique` cierra que dos empresas reclamen el mismo dominio. El `check` de formato exige minúsculas, sin puerto, sin comodín, sin esquema; la capa de aplicación normaliza antes (minúsculas, `punycode` para IDN, sin punto final).
-- **Hostnames prohibidos**, validados en la aplicación (no en SQL, porque dependen de variables): el host raíz de `PUBLIC_APP_URL`, cualquier `*.vercel.app`, cualquier host terminado en el dominio raíz de la plataforma y `localhost`. Los `*.localhost` (por ejemplo `okeefe.localhost`) se aceptan solo fuera de producción, para probar en local.
+- **Hostnames prohibidos**, validados en la aplicación (no en SQL, porque dependen de variables): los hosts raíz (`PUBLIC_APP_URL` y `PUBLIC_ROOT_ALIASES`), cualquier `*.vercel.app`, cualquier host terminado en el dominio padre de un host raíz (hoy `.innov.as`) y `localhost`. Los `*.localhost` (por ejemplo `okeefe.localhost`) se aceptan solo fuera de producción, para probar en local.
 - **Un solo primario por empresa**, el que se usa para armar links (H9). El primer dominio activo pasa a primario; cambiarlo es una acción explícita.
 - **Función de resolución** `public.resolve_tenant_by_host(p_host text) returns table (slug text, active boolean)`, `security definer`, `stable`, con `search_path` fijado y `execute` solo para `service_role`. Devuelve únicamente dominios `active` de empresas `active`. Es lo único que lee el proxy; no expone la tabla.
 - **`events` es append-only.** Alta, verificación y baja de un dominio dejan un evento (`tenant_domain.added`, `tenant_domain.activated`, `tenant_domain.failed`, `tenant_domain.removed`) con el hostname y quién lo hizo. Solo `insert`.
@@ -155,7 +153,7 @@ resolveHost(host: string | null, deps: HostDeps): Promise<HostBinding>
 requestHost(headers: Headers): string | null      // x-forwarded-host ?? host, normalizado
 ```
 
-- `HostDeps` inyecta `rootHosts: string[]` (derivado de `PUBLIC_APP_URL`, más `localhost` y `127.0.0.1` fuera de producción) y `lookup(host): Promise<string | null>` (el slug, o null). El adaptador de producción (`lib/tenants/host-store.ts`) llama a `resolve_tenant_by_host` con la service role.
+- `HostDeps` inyecta `rootHosts: string[]` (el host de `PUBLIC_APP_URL`, más los de `PUBLIC_ROOT_ALIASES`, más `localhost` y `127.0.0.1` fuera de producción) y `lookup(host): Promise<string | null>` (el slug, o null). El adaptador de producción (`lib/tenants/host-store.ts`) llama a `resolve_tenant_by_host` con la service role.
 - **Caché en memoria** con vencimiento de 60 segundos, que guarda también los "no existe" (si no, un host basura pega contra la base en cada request). Máximo 500 entradas, descarte de la más vieja. Consecuencia declarada: un dominio recién activado o dado de baja tarda hasta un minuto en regir en cada instancia.
 - Un host `unknown` **no** se trata como raíz: el proxy responde 404 y los handlers de MCP caen al `PUBLIC_APP_URL` fijo. Esto cubre el caso de un `Host` inventado.
 - **Un error del lookup no es un "no existe".** Si la llamada a la base falla, `resolveHost` lanza, el proxy responde 503 para ese host y el error **no se cachea** (si no, una caída de un segundo dejaría un dominio real en 404 durante un minuto). El host raíz nunca consulta la base.
@@ -256,12 +254,12 @@ El flujo de un cliente MCP (Claude, ChatGPT, Codex):
 1. Pega `https://ai.okeefe.com.ar/brain/mcp`. **Dominio de la empresa.**
 2. Pide la metadata en `https://ai.okeefe.com.ar/.well-known/oauth-protected-resource/brain/mcp`. **Dominio de la empresa** (§4.5).
 3. La metadata nombra el servidor de autorización: `https://<proyecto>.supabase.co/auth/v1` (`issuer`). **Dominio de Supabase. No es de la empresa ni de INNOV.AS.** La persona normalmente no ve esa URL; el cliente MCP la usa por detrás.
-4. Supabase redirige a la pantalla de consentimiento: **Site URL + `/oauth/consent`**, es decir, el host raíz. **Esta pantalla se ve**, y hoy es `agentes.innov.as`. La persona inicia sesión ahí (sesión del host raíz) y aprueba.
+4. Supabase redirige a la pantalla de consentimiento: **Site URL + `/oauth/consent`**, es decir, el host raíz. **Esta pantalla se ve**: hoy es `agentes.innov.as` y pasa a ser `ai.innov.as` (A1). La persona inicia sesión ahí (sesión del host raíz) y aprueba.
 5. El código vuelve al cliente MCP; el cliente usa el token contra `https://ai.okeefe.com.ar/brain/mcp`.
 
 Consecuencia: **la URL que se pega y la que usa el cliente MCP son del dominio de la empresa; el paso del consentimiento es el único que pasa por el host raíz.** Esto es una limitación de Supabase (una sola Site URL por proyecto), no de nuestro código. Opciones, de menor a mayor esfuerzo:
 
-- **Aceptarla** y que el host raíz sea un dominio neutro del producto (decisión A1). Es lo recomendado.
+- **Aceptarla** (decisión A1: el host raíz es `ai.innov.as`). Es lo que se hace.
 - Poner un **dominio propio de Supabase** (add-on de pago) para el emisor, para que el paso 3 deje de mostrar `supabase.co`. Es global, no por empresa.
 - Emitir tokens con un servidor OAuth propio por host. Fuera de alcance: es construir un servidor de autorización.
 
@@ -338,7 +336,7 @@ Se prueba de punta a punta en local con `okeefe.localhost` y una fila insertada 
 
 ### 21.6b · Operación sin terminal: consola, Vercel, Supabase y correos
 
-Depende de A1 y A3.
+Sin decisiones pendientes (A1 a A3 resueltas, §3.1).
 
 1. Adaptadores de Vercel y de Supabase Auth (§4.8, §4.9) con interfaces inyectables y dobles de prueba.
 2. Sección "Dominio" en la consola y línea de solo lectura en settings (§4.10).
@@ -362,7 +360,7 @@ Operación, no código (§7): variables, primer dominio real, verificación de p
 **Tests automáticos (Vitest, en `tests/tenants/` y `tests/brain/mcp-server/`):**
 
 - `normalizeHost`: mayúsculas, puerto, punto final, IDN, entradas basura (`""`, `"a b"`, `"a/b"`, `"host:80:90"`).
-- `resolveHost`: raíz, empresa, desconocido; la caché devuelve sin ir a la base; la caché negativa; vencimiento a los 60 s; tope de 500 entradas.
+- `resolveHost`: raíz, alias raíz (`PUBLIC_ROOT_ALIASES`: `agentes.innov.as` sigue siendo raíz y no consulta la base), empresa, desconocido; la caché devuelve sin ir a la base; la caché negativa; vencimiento a los 60 s; tope de 500 entradas.
 - `publicOriginForRequest`: host raíz, host de empresa, host inventado (devuelve `PUBLIC_APP_URL`), sin header, `x-forwarded-host` con varios valores.
 - Metadata del brain y del agente por host: en un host de empresa, `resource` es `<host>/brain/mcp` (y `<host>/eve/outreach/v1/mcp`) y `resource_metadata` el `.well-known` correspondiente; en el host raíz, la forma con slug de hoy; con un host inventado, la del `PUBLIC_APP_URL`.
 - `assertHostServesTenant`: host de empresa + slug propio pasa; + slug ajeno da 404 indistinguible de "no existe"; host raíz no valida.
@@ -387,11 +385,12 @@ Lo hace una persona con acceso, en este orden:
 
 1. `npx supabase migration list` y revisar que no haya ajenas pendientes (`db push` aplica todas). **Migración antes que código** (corte a): la función `resolve_tenant_by_host` tiene que existir antes de que el proxy nuevo la llame; con el código nuevo y la base vieja, el lookup falla.
    - Aun así, el host raíz no depende de la base (§4.2): con el código nuevo y la base vieja, las empresas sin dominio siguen andando; solo fallan (503) los hosts de empresa, que todavía no existen.
-2. Cargar en Vercel (solo Production) `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`.
-3. Desplegar y verificar que el host raíz y las empresas sin dominio siguen igual (regresión).
-4. Cargar el primer dominio real desde la consola, pasarle el Anexo A al cliente y esperar `active`.
-5. Recorrer en ese dominio: login (código y link), chat, `/conectar`, conexión real de Claude al brain, y una invitación (el link tiene que salir con el dominio de la empresa).
-6. Documentar en la wiki (`docs/dominios/plataforma.md`, `docs/arquitectura/entornos-y-deploy.md`, `docs/arquitectura/identidad-y-acceso.md`) y una guía `docs/guias/dominio-de-un-cliente.md` con el Anexo A. `/docs-wiki` en verde.
+2. Cargar en Vercel (solo Production) `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF` (del corte b) y, desde el corte a, `PUBLIC_ROOT_ALIASES` (vacía hasta el paso 4).
+3. Desplegar el corte a y verificar que el host raíz y las empresas sin dominio siguen igual (regresión). **Esto va antes de mover el host raíz**: con el código viejo, cambiar `PUBLIC_APP_URL` haría que la metadata del MCP anuncie `ai.innov.as` a clientes conectados a `agentes.innov.as`, y se rechazarían.
+4. **Mover el host raíz a `ai.innov.as` (A1).** Mati crea el DNS de `ai.innov.as` y se agrega el dominio al proyecto de Vercel. Después: `PUBLIC_APP_URL=https://ai.innov.as` y `PUBLIC_ROOT_ALIASES=agentes.innov.as` en Production; en Supabase Auth, Site URL `https://ai.innov.as` y Redirect URLs sumando `https://ai.innov.as/auth/callback**` y `https://ai.innov.as/oauth/consent**` **sin sacar las de `agentes.innov.as`**. Verificar: login en los dos hosts, una conexión MCP ya hecha contra `agentes.innov.as/brain/<slug>/mcp` que sigue andando, y una conexión nueva cuyo consentimiento cae en `ai.innov.as`. Retirar `agentes.innov.as` queda para cuando no tenga tráfico; no es parte de esta etapa.
+5. Cargar el primer dominio real desde la consola, pasarle el Anexo A al cliente y esperar `active`.
+6. Recorrer en ese dominio: login (código y link), chat, `/conectar`, conexión real de Claude al brain, y una invitación (el link tiene que salir con el dominio de la empresa).
+7. Documentar en la wiki (`docs/dominios/plataforma.md`, `docs/arquitectura/entornos-y-deploy.md`, `docs/arquitectura/identidad-y-acceso.md`) y una guía `docs/guias/dominio-de-un-cliente.md` con el Anexo A. `/docs-wiki` en verde.
 
 Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decisiones/README.md` pasa de "en curso" a "cerrada" con las páginas de la wiki nombradas.
 
@@ -414,7 +413,7 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 | El lookup del proxy depende de la base en cada navegación | Una caída de la base tira las empresas con dominio propio (503) | Caché de 60 s que no guarda errores; el host raíz nunca consulta la base (§4.2) |
 | `/brain/mcp` ambiguo con las páginas del brain, y el `matcher` ahora incluye `brain/` | Una página del brain inalcanzable, o el MCP del host raíz pasando por Supabase | `/brain/mcp` es el endpoint y no existe una página con ese nombre (test); el host raíz sale temprano en `/brain/<slug>/mcp` (§4.3) |
 | El 308 a la URL limpia no lo sigue bien la navegación del cliente | Recargas completas o URLs con slug visibles | Spike S5; plan B: helper de links (§8) |
-| El consentimiento OAuth muestra el host raíz | El cliente ve `innov.as` en un paso | Decisión A1 y §4.7; aceptado, documentado en la guía del cliente |
+| El consentimiento OAuth muestra el host raíz | El cliente ve `ai.innov.as` en un paso | Decisión A1 y §4.7; aceptado, documentado en la guía del cliente |
 | `PATCH` de Redirect URLs pisa entradas manuales | Se rompe un redirect que no es nuestro | Escribir conservando las entradas que no son de `tenant_domains` (§4.9) |
 | Cuota de dominios del plan de Vercel | No se pueden cargar más dominios | Spike S2: confirmar el límite antes de comprometerse con un cliente |
 
@@ -454,4 +453,5 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 | `app/plataforma/[slug]/page.tsx` y sus actions | Sección "Dominio" | b |
 | `app/[tenant]/settings/` | Línea de solo lectura | b |
 | `app/[tenant]/settings/usuarios/actions.ts:249`, `app/plataforma/nueva/actions.ts:112`, `app/api/invitations/route.ts:65`, `app/(auth)/login/actions.ts:71` | `publicOriginForTenant` en los links por correo | b |
+| `lib/tenants/host.ts` | `rootHosts` lee también `PUBLIC_ROOT_ALIASES` (variable nueva, A1) | a |
 | `docs/dominios/plataforma.md`, `docs/arquitectura/entornos-y-deploy.md`, `docs/arquitectura/identidad-y-acceso.md`, `docs/guias/dominio-de-un-cliente.md` | Documentación | c |
