@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type McpChannelAuthDeps,
+	mcpChallenge,
 	resolveMcpChannelAuth,
 } from "@/lib/agents/mcp-channel-auth";
 
@@ -465,5 +466,78 @@ describe("resolveMcpChannelAuth en el dominio de una empresa", () => {
 		);
 		expect(result).toMatchObject({ ok: false, kind: "unauthenticated" });
 		expect(host).not.toHaveBeenCalled();
+	});
+});
+
+describe("mcpChallenge", () => {
+	const FALLBACK = "https://agentes.innov.as";
+	const META = "/.well-known/oauth-protected-resource/eve/outreach/v1/mcp";
+	// Dentro de eve el request.url es interno: lo único público es el header.
+	const internal = (headers: Record<string, string>) =>
+		new Request("http://127.0.0.1:63104/eve/v1/mcp", { headers });
+
+	it("en el dominio de una empresa apunta a la metadata de ese dominio", async () => {
+		const challenges = await mcpChallenge(
+			internal({ "x-forwarded-host": "ai.okeefe.com.ar" }),
+			"outreach",
+			async () => ({ kind: "tenant", slug: "okeefe" }),
+			FALLBACK,
+		);
+		expect(challenges).toEqual([
+			{
+				scheme: "Bearer",
+				parameters: {
+					resource_metadata: `https://ai.okeefe.com.ar${META}`,
+					scope: "openid email",
+				},
+			},
+		]);
+	});
+
+	it("en el host raíz, el origen fijo", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "agentes.innov.as" }),
+			"outreach",
+			async () => ({ kind: "root" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+	});
+
+	it("un host inventado nunca se refleja", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "evil.com" }),
+			"outreach",
+			async () => ({ kind: "unknown" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+	});
+
+	it("si el host no se puede resolver, el origen fijo", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const [challenge] = await mcpChallenge(
+			internal({ "x-forwarded-host": "ai.okeefe.com.ar" }),
+			"outreach",
+			async () => {
+				throw new Error("base caída");
+			},
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.resource_metadata).toBe(`${FALLBACK}${META}`);
+		error.mockRestore();
+	});
+
+	it("con un token presente pero inválido suma error=invalid_token", async () => {
+		const [challenge] = await mcpChallenge(
+			internal({
+				"x-forwarded-host": "ai.okeefe.com.ar",
+				authorization: "Bearer vencido",
+			}),
+			"outreach",
+			async () => ({ kind: "tenant", slug: "okeefe" }),
+			FALLBACK,
+		);
+		expect(challenge?.parameters?.error).toBe("invalid_token");
 	});
 });

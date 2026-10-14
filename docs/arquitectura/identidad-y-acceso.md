@@ -142,7 +142,7 @@ El `resource` que publica la metadata tiene que ser exactamente la URL a la que 
 | Metadata del brain | `/.well-known/oauth-protected-resource/brain/mcp` | `.../brain/okeefe/mcp` |
 | Agente | `https://ai.okeefe.com.ar/eve/outreach/v1/mcp` (sin `?tenant=`) | `https://agentes.innov.as/eve/outreach/v1/mcp?tenant=okeefe` |
 
-El proxy reescribe `/brain/mcp` a `/brain/okeefe/mcp`, así que el endpoint es la misma ruta de siempre. El canal del agente no fija `resource`: eve lo deriva del origen del request. Un host de empresa solo sirve a su empresa (`assertHostServesTenant`; en el canal del agente, `?tenant=` pasa a ser opcional y uno distinto del host se trata como sin acceso). Un `Host` que no resuelve a nada nunca se refleja en la metadata: se usa el origen fijo. `/conectar` muestra estas URLs según el host por el que entró la persona.
+El proxy reescribe `/brain/mcp` a `/brain/okeefe/mcp`, así que el endpoint es la misma ruta de siempre. El canal del agente conserva `resource` fijo (eve lo derivaría del request interno, no del público), pero su desafío 401 lo arma `mcpChallenge` con `x-forwarded-host`, así que apunta a la metadata del dominio por el que llegó la persona. Un host de empresa solo sirve a su empresa (`assertHostServesTenant`; en el canal del agente, `?tenant=` pasa a ser opcional y uno distinto del host se trata como sin acceso). Un `Host` que no resuelve a nada nunca se refleja en la metadata: se usa el origen fijo. `/conectar` muestra estas URLs según el host por el que entró la persona.
 
 Lo que no se puede ocultar: Supabase arma la URL del consentimiento con una sola Site URL, así que `/oauth/consent` siempre se muestra en el host raíz, y el emisor sigue siendo el de Supabase.
 

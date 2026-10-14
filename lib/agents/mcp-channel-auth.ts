@@ -18,6 +18,7 @@ import {
 import { tenantSubjectId } from "../connectors/auth";
 import type { HostBinding } from "../tenants/host";
 import { resolveHostBinding } from "../tenants/host-store";
+import { fallbackPublicUrl, originForBinding } from "../tenants/public-url";
 import { loadAgentEnabled } from "./agent-enabled";
 
 type SessionAuthContext = Exclude<
@@ -221,7 +222,54 @@ export async function verifyMcpChannelToken(
 	});
 	if (result.ok) return result.sessionAuth;
 	if (result.kind === "unauthenticated") {
-		throw new UnauthenticatedError({ message: result.message });
+		throw new UnauthenticatedError({
+			message: result.message,
+			challenges: await mcpChallenge(
+				request,
+				agent,
+				(headers) => resolveHostBinding(headers),
+				fallbackPublicUrl(process.env) ?? "",
+			),
+		});
 	}
 	throw new ForbiddenError({ message: result.message });
+}
+
+/**
+ * El desafío 401 del canal, con la metadata del host por el que llegó la
+ * persona (spec 21.6). Dentro de eve el request.url es interno (en desarrollo,
+ * http://127.0.0.1:<puerto>/eve/v1/mcp) y eve armaría la URL de la metadata con
+ * eso; lo público es x-forwarded-host. eve respeta un resource_metadata que ya
+ * viene en el desafío. Un host que no resuelve nunca se refleja.
+ */
+export async function mcpChallenge(
+	request: Request,
+	agent: string,
+	resolve: (headers: Headers) => Promise<HostBinding>,
+	fallback: string,
+) {
+	let binding: HostBinding = { kind: "unknown" };
+	try {
+		binding = await resolve(request.headers);
+	} catch (error) {
+		console.error("canal mcp: no pude resolver el host del desafío", error);
+	}
+	const { origin } = originForBinding(request.headers, binding, fallback);
+	const hasToken = /^Bearer\s+\S/i.test(
+		request.headers.get("authorization") ?? "",
+	);
+	return [
+		{
+			scheme: "Bearer" as const,
+			parameters: {
+				...(origin
+					? {
+							resource_metadata: `${origin}/.well-known/oauth-protected-resource/eve/${agent}/v1/mcp`,
+						}
+					: {}),
+				scope: "openid email",
+				...(hasToken ? { error: "invalid_token" } : {}),
+			},
+		},
+	];
 }
