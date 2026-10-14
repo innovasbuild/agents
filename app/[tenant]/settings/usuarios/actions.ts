@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { invitationOrigin } from "@/lib/domains/origin";
 import { sendInvitationMail } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -246,7 +247,11 @@ export async function resendInvitation(
 	const outcome = await sendInvitationMail({
 		admin: createAdminClient(),
 		email: allowed.row.email,
-		origin: originFrom(await headers()),
+		// Con el dominio propio de la empresa, si lo tiene (spec 21.6 H9).
+		origin: await invitationOrigin(
+			allowed.row.tenant_id,
+			originFrom(await headers()),
+		),
 		next: tenant?.slug ? `/${tenant.slug}` : undefined,
 	});
 

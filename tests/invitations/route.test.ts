@@ -48,6 +48,16 @@ vi.mock("@/lib/tenants/login-check-server", () => ({
 	},
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+const origin = vi.hoisted(() => ({
+	calls: [] as { tenantId: string; fallback: string }[],
+	value: null as string | null,
+}));
+vi.mock("@/lib/domains/origin", () => ({
+	invitationOrigin: async (tenantId: string, fallback: string) => {
+		origin.calls.push({ tenantId, fallback });
+		return origin.value ?? fallback;
+	},
+}));
 vi.mock("@/lib/invitations/invite", () => ({
 	inviteToTenant: async (params: Record<string, unknown>) => {
 		state.calls.push(params);
@@ -78,6 +88,25 @@ describe("POST /api/invitations", () => {
 		state.calls = [];
 		gate.allows = true;
 		gate.calls = [];
+		origin.calls = [];
+		origin.value = null;
+	});
+
+	it("el link sale con el dominio propio de la empresa si lo tiene", async () => {
+		origin.value = "https://ai.acme.com";
+
+		await POST(request(valid));
+
+		expect(origin.calls).toEqual([
+			{ tenantId: TENANT_ID, fallback: "https://app.test" },
+		]);
+		expect(state.calls[0]).toMatchObject({ origin: "https://ai.acme.com" });
+	});
+
+	it("sin dominio propio el link sale con el origen del request, como siempre", async () => {
+		await POST(request(valid));
+
+		expect(state.calls[0]).toMatchObject({ origin: "https://app.test" });
 	});
 
 	it("401 sin sesión", async () => {
