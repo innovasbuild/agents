@@ -68,7 +68,7 @@ describe("panel de conciliación", () => {
 			lines: [
 				line({ diff: 2, diffPct: 0.2, flagged: true }),
 				line({
-					key: "sin_etiqueta",
+					key: "k2",
 					kind: "sin_etiqueta",
 					label: "Sin etiqueta",
 					ledger: 0,
