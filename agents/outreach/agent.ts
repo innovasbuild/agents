@@ -1,5 +1,5 @@
 import { defineAgent, defineDynamic } from "eve";
-import { resolveModelForTenant } from "../../lib/agents/model";
+import { modelSelection, resolveModelForTenant } from "../../lib/agents/model";
 
 function attribute(value: unknown): string {
 	return typeof value === "string" ? value : "";
@@ -16,11 +16,12 @@ export default defineAgent({
 				const tenantId = attribute(auth?.attributes?.tenantId);
 				if (!tenantId) return "anthropic/claude-sonnet-5";
 
-				return await resolveModelForTenant(
+				const model = await resolveModelForTenant(
 					tenantId,
 					"outreach",
 					attribute(auth?.attributes?.conversationId) || null,
 				);
+				return modelSelection(model, attribute(auth?.attributes?.tenantSlug));
 			},
 		},
 	}),
