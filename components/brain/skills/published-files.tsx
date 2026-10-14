@@ -1,4 +1,4 @@
-import { skillFileHref } from "@/lib/brain/core/skills/http";
+import { skillFileHref, skillPackageHref } from "@/lib/brain/core/skills/http";
 import type { SkillFile } from "@/lib/brain/core/skills/package";
 
 export function formatSize(bytes: number): string {
@@ -11,33 +11,45 @@ export function formatSize(bytes: number): string {
 export function PublishedFiles({
 	tenantSlug,
 	slug,
+	version,
 	files,
 }: {
 	tenantSlug: string;
 	slug: string;
+	version: number;
 	files: SkillFile[];
 }) {
-	if (files.length === 0) return null;
 	return (
 		<section className="space-y-2">
-			<h2 className="font-medium text-sm">Archivos de la skill</h2>
-			<ul className="divide-y rounded-lg border text-sm">
-				{files.map((file) => (
-					<li key={file.path} className="flex items-center gap-3 px-3 py-2">
-						<a
-							className="mr-auto break-all underline"
-							href={skillFileHref(tenantSlug, slug, file.path)}
-							target="_blank"
-							rel="noreferrer"
-						>
-							{file.path}
-						</a>
-						<span className="shrink-0 text-muted-foreground">
-							{formatSize(file.size)}
-						</span>
-					</li>
-				))}
-			</ul>
+			<div className="flex flex-wrap items-center gap-3">
+				<h2 className="mr-auto font-medium text-sm">Archivos de la skill</h2>
+				<a
+					className="text-sm underline"
+					href={skillPackageHref(tenantSlug, slug)}
+					download
+				>
+					Descargar paquete (v{version})
+				</a>
+			</div>
+			{files.length > 0 && (
+				<ul className="divide-y rounded-lg border text-sm">
+					{files.map((file) => (
+						<li key={file.path} className="flex items-center gap-3 px-3 py-2">
+							<a
+								className="mr-auto break-all underline"
+								href={skillFileHref(tenantSlug, slug, file.path)}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{file.path}
+							</a>
+							<span className="shrink-0 text-muted-foreground">
+								{formatSize(file.size)}
+							</span>
+						</li>
+					))}
+				</ul>
+			)}
 		</section>
 	);
 }

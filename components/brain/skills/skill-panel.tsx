@@ -9,7 +9,7 @@ import {
 } from "@/app/[tenant]/brain/skill-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { skillFileHref } from "@/lib/brain/core/skills/http";
+import { skillFileHref, skillPackageHref } from "@/lib/brain/core/skills/http";
 import type { SkillFile } from "@/lib/brain/core/skills/package";
 import {
 	type SkillState,
@@ -140,6 +140,15 @@ export function SkillPanel({
 			<div className="space-y-2">
 				<h2 className="font-medium">Skill</h2>
 				<p>{skillStateLabel(state)}</p>
+				{state.kind === "publicada" && (
+					<a
+						className="inline-block underline"
+						href={skillPackageHref(tenantSlug, slug)}
+						download
+					>
+						Descargar paquete (v{state.version})
+					</a>
+				)}
 				{canPublish ? (
 					<div className="flex flex-wrap gap-2">
 						{publishable && (

@@ -55,3 +55,7 @@ export function skillFileHref(
 	if (version !== undefined) query.set("version", String(version));
 	return `/${tenantSlug}/brain/skills/files?${query}`;
 }
+
+export function skillPackageHref(tenantSlug: string, slug: string): string {
+	return `/${tenantSlug}/brain/skills/package?${new URLSearchParams({ slug })}`;
+}
