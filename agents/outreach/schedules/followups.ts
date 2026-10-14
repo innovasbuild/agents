@@ -85,6 +85,7 @@ async function crmForExecutor(
  * de la conversación, y encola. */
 async function draftAndQueue(
 	store: OutreachStore,
+	gatewayOptionsFor: ReturnType<typeof createGatewayOptions>,
 	input: DraftAndQueueInput,
 ): Promise<DraftAndQueueResult> {
 	const [contact] = await store.findContactsByKeys(input.tenantId, [
@@ -171,7 +172,6 @@ async function draftAndQueue(
 	}
 
 	const brain = await brainForTenant(input.tenantId);
-	const gatewayOptionsFor = createGatewayOptions(admin);
 	const draft = await draftMessage(
 		{ caller, contactKey: input.contactKey, kind: input.kind },
 		{
@@ -280,6 +280,8 @@ export default defineSchedule({
 	async run() {
 		const admin = createAdminClient();
 		const store = createSupabaseOutreachStore(admin);
+		// Una vez por corrida: el resolvedor cachea el slug por empresa.
+		const gatewayOptionsFor = createGatewayOptions(admin);
 		const now = new Date();
 		const scheduleKey = scheduleKeyFor(SCHEDULE, now);
 
@@ -290,7 +292,7 @@ export default defineSchedule({
 		// del tenant: se pasa cualquier tenant activo solo para la FK.
 		const result = await runScheduledFollowups({
 			store: buildFollowupsStore(store),
-			draftAndQueue: (input) => draftAndQueue(store, input),
+			draftAndQueue: (input) => draftAndQueue(store, gatewayOptionsFor, input),
 			listOpenDeals: (input) => listOpenDeals(store, input),
 			now: () => new Date(),
 			takeLock: async (tenants) => {
