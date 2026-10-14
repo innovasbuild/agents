@@ -82,4 +82,24 @@ describe("stepUsageEntry", () => {
 		});
 		expect(entry?.meta.source).toBe("tabla");
 	});
+
+	it("con generationId, lo guarda en meta", () => {
+		const entry = stepUsageEntry({
+			...base,
+			usage: { costUsd: 0.5 },
+			generationId: "gen_abc",
+		});
+		expect(entry?.meta.generationId).toBe("gen_abc");
+	});
+
+	it("sin generationId (ausente, nulo o vacío), meta no lleva la clave", () => {
+		for (const generationId of [undefined, null, ""]) {
+			const entry = stepUsageEntry({
+				...base,
+				usage: { costUsd: 0.5 },
+				generationId,
+			});
+			expect(entry?.meta).not.toHaveProperty("generationId");
+		}
+	});
 });
