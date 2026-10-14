@@ -261,7 +261,7 @@ describe("tools de skills", () => {
 		expect(client.getInstructions()).toBeUndefined();
 	});
 
-	it("con catálogo aparecen las tres, las instrucciones y la lista en skill_load", async () => {
+	it("con catálogo aparecen las cuatro, las instrucciones y la lista en skill_load", async () => {
 		const client = await connect(build(fakeCatalog()));
 		const tools = (await client.listTools()).tools;
 		expect(tools.map((t) => t.name).sort()).toEqual([
@@ -271,11 +271,43 @@ describe("tools de skills", () => {
 			"skill_file",
 			"skill_list",
 			"skill_load",
+			"skill_package",
 		]);
 		expect(tools.find((t) => t.name === "skill_load")?.description).toContain(
 			"- reporte: Arma el reporte mensual.",
 		);
 		expect(client.getInstructions()).toContain("skill_load");
+		expect(client.getInstructions()).toContain("skill_package");
+	});
+
+	it("skill_package devuelve el link del catálogo y cuenta como lectura", async () => {
+		const limiter = fakeLimiter();
+		const catalog = fakeCatalog();
+		const client = await connect(build(catalog, limiter));
+		const result = await client.callTool({
+			name: "skill_package",
+			arguments: { name: "reporte" },
+		});
+		expect(result.structuredContent).toEqual({
+			ok: true,
+			name: "reporte",
+			version: 2,
+			filename: "reporte-v2.zip",
+			url: "https://storage.test/firmado",
+			expiresIn: 600,
+		});
+		expect(catalog.package).toHaveBeenCalledWith("reporte");
+		expect(limiter.check).toHaveBeenCalledWith("read");
+	});
+
+	it("la descripción de skill_package dice que se baja a una carpeta temporal y no se instala", async () => {
+		const client = await connect(build(fakeCatalog()));
+		const description =
+			(await client.listTools()).tools.find((t) => t.name === "skill_package")
+				?.description ?? "";
+		expect(description).toContain("10 minutos");
+		expect(description).toContain("carpeta temporal");
+		expect(description).toContain("no lo instales");
 	});
 
 	it("skill_list, skill_load y skill_file devuelven el resultado del catálogo y cuentan como lectura", async () => {

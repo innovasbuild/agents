@@ -629,6 +629,41 @@ describe("handleBrainMcp · skills", () => {
 		expect(blob).toHaveBeenCalledWith("tenant-a", "sha-a");
 	});
 
+	it("skill_package pide el link con el tenant, la persona y la copia publicada", async () => {
+		const issue = vi.fn(async () => ({
+			name: "reporte",
+			version: 2,
+			filename: "reporte-v2.zip",
+			url: "https://storage.test/firmado",
+			expiresIn: 600,
+		}));
+		const client = await connect(
+			"ana",
+			deps({
+				skills: {
+					overview: async () => [publishedRow("skills/ventas/reporte")],
+					blob: async () => null,
+					record: async () => {},
+					issue,
+				},
+			}),
+		);
+		const result = await client.callTool({
+			name: "skill_package",
+			arguments: { name: "reporte" },
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			url: "https://storage.test/firmado",
+		});
+		expect(issue).toHaveBeenCalledWith({
+			tenantId: "tenant-a",
+			userId: "ana",
+			slug: "skills/ventas/reporte",
+			snapshot: expect.objectContaining({ version: 2, digest: "dg" }),
+		});
+	});
+
 	it("las reglas del brain deciden qué skills ve un miembro; un administrador ve todas", async () => {
 		const d = () =>
 			deps({

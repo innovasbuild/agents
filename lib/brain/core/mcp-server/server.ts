@@ -15,10 +15,14 @@ export const SKILL_TOOL_NAMES = {
 	list: "skill_list",
 	load: "skill_load",
 	file: "skill_file",
+	package: "skill_package",
 } as const;
 
 const SKILL_INSTRUCTIONS =
-	"Esta empresa publica skills: procedimientos revisados para hacer una tarea a su manera. Antes de una tarea que coincida con una skill de la lista de skill_load, cargala con skill_load y seguí sus instrucciones. Los archivos de texto de una skill se leen con skill_file. Los scripts de una skill todavía no se pueden ejecutar desde este servidor: leelos si sirven de referencia.";
+	"Esta empresa publica skills: procedimientos revisados para hacer una tarea a su manera. Antes de una tarea que coincida con una skill de la lista de skill_load, cargala con skill_load y seguí sus instrucciones. Los archivos de texto de una skill se leen con skill_file. Si la skill trae scripts y tu entorno puede ejecutar código y bajar archivos, pedí el paquete completo con skill_package. Si no puede, seguí las instrucciones con lo que tengas y avisale a la persona que hay un script que no pudiste correr.";
+
+const SKILL_PACKAGE_DESCRIPTION =
+	"Devuelve un link de descarga que vence en 10 minutos con el paquete completo de una skill (zip con SKILL.md, scripts y binarios), siempre en su última versión publicada. Bajalo a una carpeta temporal, descomprimilo y corré los scripts desde ahí; no lo instales en tu carpeta de skills: esa copia queda vieja cuando la empresa publica una versión nueva; pedilo de nuevo en cada sesión. Si el link venció, pedí otro. Si tu entorno no puede bajar archivos, seguí con skill_load y skill_file y avisale a la persona.";
 
 const SKILL_LOAD_INTRO =
 	"Carga una skill de la empresa: devuelve sus instrucciones y la lista de sus archivos. Usala antes de empezar una tarea que coincida con alguna de estas skills, sin esperar a que te lo pidan. Skills disponibles:";
@@ -145,7 +149,7 @@ export function buildBrainMcpServer(ctx: {
 			SKILL_TOOL_NAMES.file,
 			{
 				description:
-					"Lee un archivo de texto de una skill ya cargada, por la ruta que figura en la lista de archivos de skill_load. Los binarios y los archivos de más de 256 KB no se leen desde acá.",
+					"Lee un archivo de texto de una skill ya cargada, por la ruta que figura en la lista de archivos de skill_load. Los binarios y los archivos de más de 256 KB no se leen desde acá: vienen en el paquete de skill_package.",
 				inputSchema: {
 					name: z.string().min(1).max(64),
 					path: z.string().min(1).max(200),
@@ -155,6 +159,19 @@ export function buildBrainMcpServer(ctx: {
 				run("read", async () => ({
 					ok: true,
 					...(await skills.file(name, path)),
+				})),
+		);
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.package,
+			{
+				description: SKILL_PACKAGE_DESCRIPTION,
+				inputSchema: { name: z.string().min(1).max(64) },
+			},
+			async ({ name }) =>
+				run("read", async () => ({
+					ok: true,
+					...(await skills.package(name)),
 				})),
 		);
 	}

@@ -9,6 +9,7 @@ import type {
 	BrainMcpDeps,
 	McpSkillsDeps,
 } from "../core/mcp-server/handler.ts";
+import { issuePackageLink } from "../core/skills/package-link.ts";
 import { accessRulesStore } from "./access-rules.ts";
 import {
 	supabaseAccessStore,
@@ -16,6 +17,7 @@ import {
 	supabaseHit,
 } from "./mcp-supabase.ts";
 import { getBrainProvider } from "./provider.ts";
+import { packageLinkDeps } from "./skill-packages.ts";
 import { blobStore, skillStore } from "./skills.ts";
 
 let memoized:
@@ -62,9 +64,8 @@ function skillsDeps(): McpSkillsDeps {
 				.insert(skillLoadEvent(entry));
 			if (error) throw new Error(error.message);
 		},
-		issue: async () => {
-			throw new Error("skill_package: sin cablear todavía");
-		},
+		issue: (request) =>
+			issuePackageLink({ ...request, channel: "mcp" }, packageLinkDeps()),
 	};
 }
 
