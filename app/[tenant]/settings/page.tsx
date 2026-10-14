@@ -222,10 +222,16 @@ export default async function SettingsPage({
 				</Link>
 			) : null}
 			<Link
-				className="inline-block text-sm underline underline-offset-4"
+				className="mr-6 inline-block text-sm underline underline-offset-4"
 				href={`/${slug}/settings/usuarios`}
 			>
 				Usuarios →
+			</Link>
+			<Link
+				className="inline-block text-sm underline underline-offset-4"
+				href={`/${slug}/settings/gasto`}
+			>
+				Gasto →
 			</Link>
 		</div>
 	);

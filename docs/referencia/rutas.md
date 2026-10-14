@@ -36,6 +36,7 @@ Las páginas y los endpoints de `app/`.
 | `/[tenant]/mis-cuentas` | página | `app/[tenant]/mis-cuentas/page.tsx` |
 | `/[tenant]/pipeline` | página | `app/[tenant]/pipeline/page.tsx` |
 | `/[tenant]/settings` | página | `app/[tenant]/settings/page.tsx` |
+| `/[tenant]/settings/gasto` | página | `app/[tenant]/settings/gasto/page.tsx` |
 | `/[tenant]/settings/outreach` | página | `app/[tenant]/settings/outreach/page.tsx` |
 | `/[tenant]/settings/usuarios` | página | `app/[tenant]/settings/usuarios/page.tsx` |
 | `/api/invitations` | endpoint | `app/api/invitations/route.ts` |
