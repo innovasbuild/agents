@@ -15,6 +15,7 @@ function supabaseAuth(): AuthFn<Request> {
 			request,
 			caller.userId,
 			caller.allowsLogin,
+			"outreach",
 		);
 		if (context === null) return null;
 
