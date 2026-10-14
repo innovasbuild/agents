@@ -9,6 +9,7 @@ import {
 	toPlatformRows,
 	toSpendRows,
 	usd,
+	utcDayStart,
 } from "@/lib/usage/report";
 
 describe("parsePeriod", () => {
@@ -134,5 +135,29 @@ describe("formato", () => {
 
 	it("dayLabel no corre el día por la zona horaria", () => {
 		expect(dayLabel("2026-10-05")).toBe("05/10/2026");
+	});
+
+	it("utcDayStart es la medianoche UTC del día, sin importar la hora", () => {
+		expect(utcDayStart(new Date("2026-10-13T15:30:00Z")).toISOString()).toBe(
+			"2026-10-13T00:00:00.000Z",
+		);
+		// Casi fin de día en UTC: sigue siendo el mismo día.
+		expect(
+			utcDayStart(new Date("2026-10-13T23:59:59.999Z")).toISOString(),
+		).toBe("2026-10-13T00:00:00.000Z");
+		expect(utcDayStart(new Date("2026-10-13T00:00:00Z")).toISOString()).toBe(
+			"2026-10-13T00:00:00.000Z",
+		);
+	});
+
+	it("utcDayStart usa el día UTC aunque en Buenos Aires ya sea otro", () => {
+		// 01:30 UTC del 14 es 22:30 del 13 en Buenos Aires (UTC-3).
+		expect(utcDayStart(new Date("2026-10-14T01:30:00Z")).toISOString()).toBe(
+			"2026-10-14T00:00:00.000Z",
+		);
+		// 23:30 UTC del 13 es 20:30 del 13 en Buenos Aires, pero 02:30 del 14 en UTC+3.
+		expect(
+			utcDayStart(new Date("2026-10-13T23:30:00-03:00")).toISOString(),
+		).toBe("2026-10-14T00:00:00.000Z");
 	});
 });

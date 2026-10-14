@@ -4,9 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 import {
 	capitalizeFirst,
+	DAY_MS,
 	monthRange,
 	toPlatformRows,
 	usd,
+	utcDayStart,
 } from "@/lib/usage/report";
 import { ReconcilePanel } from "./reconcile-panel";
 
@@ -15,8 +17,6 @@ interface TenantRow {
 	slug: string;
 	display_name: string;
 }
-
-const DAY_MS = 86_400_000;
 
 interface Totals {
 	today: Map<string, number>;
@@ -32,9 +32,7 @@ export default async function GastoPlataformaPage() {
 	const now = new Date();
 	const current = monthRange("actual", now);
 	const previous = monthRange("anterior", now);
-	const todayStart = new Date(
-		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-	);
+	const todayStart = utcDayStart(now);
 	const todayEnd = new Date(todayStart.getTime() + DAY_MS);
 
 	let tenants: TenantRow[] = [];
@@ -127,38 +125,36 @@ export default async function GastoPlataformaPage() {
 								<th className="px-4 py-2 text-right font-normal" scope="col">
 									Hoy
 								</th>
-								<th className="px-4 py-2 text-right font-normal " scope="col">
+								<th className="px-4 py-2 text-right font-normal" scope="col">
 									{capitalizeFirst(current.label)}
 								</th>
-								<th className="px-4 py-2 text-right font-normal " scope="col">
+								<th className="px-4 py-2 text-right font-normal" scope="col">
 									{capitalizeFirst(previous.label)}
 								</th>
 							</tr>
 						</thead>
 						<tbody className="divide-y">
-							{tenants.map((tenant) => {
-								return (
-									<tr key={tenant.id}>
-										<td className="px-4 py-2">
-											<Link
-												className="underline underline-offset-4"
-												href={`/plataforma/${tenant.slug}`}
-											>
-												{tenant.display_name}
-											</Link>
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(totals.today.get(tenant.id) ?? 0)}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(totals.month.get(tenant.id) ?? 0)}
-										</td>
-										<td className="px-4 py-2 text-right tabular-nums">
-											{usd(totals.previous.get(tenant.id) ?? 0)}
-										</td>
-									</tr>
-								);
-							})}
+							{tenants.map((tenant) => (
+								<tr key={tenant.id}>
+									<td className="px-4 py-2">
+										<Link
+											className="underline underline-offset-4"
+											href={`/plataforma/${tenant.slug}`}
+										>
+											{tenant.display_name}
+										</Link>
+									</td>
+									<td className="px-4 py-2 text-right tabular-nums">
+										{usd(totals.today.get(tenant.id) ?? 0)}
+									</td>
+									<td className="px-4 py-2 text-right tabular-nums">
+										{usd(totals.month.get(tenant.id) ?? 0)}
+									</td>
+									<td className="px-4 py-2 text-right tabular-nums">
+										{usd(totals.previous.get(tenant.id) ?? 0)}
+									</td>
+								</tr>
+							))}
 						</tbody>
 						<tfoot className="border-t font-medium">
 							<tr>

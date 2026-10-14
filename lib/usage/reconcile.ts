@@ -1,12 +1,13 @@
 // Compara el libro (usage_entries) contra el reporte del AI Gateway por tag
 // (spec 21.5 §5.3). Puro: la acción junta los datos y esto arma la tabla.
-import { monthRange, type Period } from "./report";
+import { DAY_MS, monthRange, type Period, utcDayStart } from "./report";
 
 export const TOLERANCE_USD = 1;
 export const TOLERANCE_PCT = 0.05;
+// Medio centavo: el mínimo que se ve en pantalla (el reporte redondea).
+const ROUNDING_USD = 0.005;
 
 const TAG_PREFIX = "tenant:";
-const DAY_MS = 86_400_000;
 const isoDay = (date: Date) => date.toISOString().slice(0, 10);
 
 /**
@@ -20,9 +21,7 @@ export function reconcileRange(
 	now: Date,
 ): { startDate: string; endDate: string; from: Date; to: Date } | null {
 	const month = monthRange(period, now);
-	const today = new Date(
-		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-	);
+	const today = utcDayStart(now);
 	const to = period === "actual" ? today : month.to;
 	if (to.getTime() <= month.from.getTime()) return null;
 	return {
@@ -115,7 +114,6 @@ export function reconcile(input: {
 	}
 
 	// Lo que el gateway cobró sin tag de empresa: una llamada sin etiquetar.
-	// Medio centavo de margen por redondeo del reporte.
 	const untagged = Math.max(0, input.gatewayTotal - tagged);
 	lines.push({
 		...line(
@@ -123,7 +121,7 @@ export function reconcile(input: {
 			0,
 			untagged,
 		),
-		flagged: untagged > 0.005,
+		flagged: untagged > ROUNDING_USD,
 	});
 	return lines;
 }

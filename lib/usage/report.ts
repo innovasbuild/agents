@@ -39,6 +39,15 @@ export function monthRange(
 	};
 }
 
+export const DAY_MS = 86_400_000;
+
+/** Medianoche UTC del día de `now`: el límite de "hoy" para la página y la conciliación. */
+export function utcDayStart(now: Date): Date {
+	return new Date(
+		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+	);
+}
+
 // Postgres devuelve numeric como texto según el camino.
 const num = (value: unknown): number => {
 	const parsed = typeof value === "string" ? Number(value) : value;
