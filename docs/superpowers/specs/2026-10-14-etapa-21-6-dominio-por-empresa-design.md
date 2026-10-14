@@ -1,7 +1,7 @@
 # Etapa 21.6: dominio propio por empresa (la plataforma se sirve desde el dominio del cliente, MCP incluido)
 
 **Fecha:** 2026-10-14
-**Estado:** borrador para ejecutar. Hay tres decisiones abiertas para Mati (§3.1); las dos primeras bloquean el corte b. El corte a se puede empezar sin ellas.
+**Estado:** borrador para ejecutar. Hay tres decisiones abiertas para Mati (§3.1); las dos primeras bloquean el corte b. El corte a se puede empezar sin ellas. Caso de referencia: la empresa `okeefe` en `ai.okeefe.com.ar` (§1).
 **Rama:** `feat/etapa-21-6a-resolucion-de-host` (corte a), sale de `main`. Esta spec vive en `docs/etapa-21-6-dominio-por-tenant`.
 **Antecedentes:** `01-multi-tenant.md` (D2: el tenant vive en la URL y el dominio se suma después mapeando host a slug, sin tocar el modelo), `2026-09-24-etapa-11-brain-mcp-design.md` (OAuth 2.1 y el recurso protegido del brain), `2026-09-27-etapa-6-canal-mcp-design.md` (canal MCP del agente), `2026-10-09-etapa-19-conectar-design.md` (la pantalla `/conectar` y sus URLs), `2026-10-09-etapa-20-login-design.md` (login y método), `2026-10-05-consola-plataforma-design.md` (consola donde se administra). La entrada del roadmap es **21.6** en `docs/producto/roadmap.md`.
 
@@ -24,14 +24,24 @@ Reglas del repo que pegan acá, para no tropezar:
 
 ## 1. Qué resuelve
 
-Hoy todos los clientes entran por el mismo host (`agentes.innov.as`, el valor de `PUBLIC_APP_URL` en producción) y se distinguen por el primer segmento de la ruta: `agentes.innov.as/lagomarsino/chat`. El cliente ve el nombre de INNOV.AS en la barra de direcciones, en los links de invitación, en el link mágico y, sobre todo, en las URLs que pega en Claude, ChatGPT o Codex para conectar su brain y sus agentes: `https://agentes.innov.as/brain/lagomarsino/mcp`.
+Hoy todos los clientes entran por el mismo host (`agentes.innov.as`, el valor de `PUBLIC_APP_URL` en producción) y se distinguen por el primer segmento de la ruta: `agentes.innov.as/okeefe/chat`. El cliente ve el nombre de INNOV.AS en la barra de direcciones, en los links de invitación, en el link mágico y, sobre todo, en las URLs que pega en Claude, ChatGPT o Codex para conectar su brain y sus agentes: `https://agentes.innov.as/brain/lagomarsino/mcp`.
 
-Queremos que cada empresa pueda usar su propio dominio (`ia.lagomarsino.com`) apuntado a la plataforma, y que **todo lo que la plataforma le muestra o le manda a esa empresa salga con ese dominio**:
+Queremos que cada empresa pueda usar su propio dominio apuntado a la plataforma, y que **todo lo que la plataforma le muestra o le manda a esa empresa salga con ese dominio**. El caso de referencia es la empresa `okeefe` (slug `okeefe`) con el dominio `ai.okeefe.com.ar`:
 
-- La aplicación completa (login, chat, brain, settings) se sirve en `https://ia.lagomarsino.com/...`.
-- Las URLs de conexión por MCP se muestran y funcionan bajo ese dominio: `https://ia.lagomarsino.com/brain/lagomarsino/mcp` y `https://ia.lagomarsino.com/eve/outreach/v1/mcp`.
+| La persona abre | Qué tiene que pasar |
+|---|---|
+| `https://ai.okeefe.com.ar/login` | La página de login de okeefe, con su marca |
+| `https://ai.okeefe.com.ar/chat` | El chat principal de okeefe |
+| `https://ai.okeefe.com.ar/brain/mcp` | El endpoint MCP del brain de okeefe: es la URL que cada persona pega en su Claude |
+
+Y alrededor de esas tres:
+
+- Toda la app se sirve con **URLs limpias, sin el slug**: `/`, `/chat`, `/conectar`, `/brain/mapa`, `/settings/usuarios`. Hoy esas rutas son `/okeefe/chat`, etc.
+- El agente por MCP queda en `https://ai.okeefe.com.ar/eve/outreach/v1/mcp`, sin `?tenant=`.
+- La metadata OAuth de los dos MCP se publica bajo el mismo dominio, porque los clientes MCP exigen que coincida con la URL a la que se conectaron.
+- `/conectar` muestra esas URLs, no las del host raíz.
 - Los links que se mandan por correo (invitaciones, link mágico) apuntan a ese dominio.
-- La empresa que no tiene dominio propio sigue funcionando exactamente igual que hoy.
+- La empresa que no tiene dominio propio sigue funcionando exactamente igual que hoy, en `agentes.innov.as/<slug>/...` y `/brain/<slug>/mcp`.
 
 Al cerrar esta entrega:
 
@@ -70,31 +80,33 @@ Qué ya funciona sin tocarlo: `safeNextPath` (`lib/auth/next-path.ts`) y `isSame
 | # | Decisión | Por qué |
 |---|---|---|
 | H1 | El dominio de una empresa es **una fila** en una tabla nueva, `tenant_domains`, no una columna de `tenants` | Una empresa puede tener más de uno (el viejo y el nuevo durante una migración), cada uno tiene estado de verificación, y la regla del repo pide `tenant_id` y RLS en toda tabla. Una columna `custom_domain` (la idea del roadmap) no guarda estado ni permite dos |
-| H2 | Un dominio de empresa es siempre un **hostname completo y propio** (`ia.cliente.com`), nunca un comodín ni un apex | El apex exige registros A y no soporta CNAME en muchos proveedores; un comodín exige delegar los nameservers. Pedimos un subdominio con CNAME: lo puede crear cualquiera con acceso al DNS |
-| H3 | El host decide el tenant: **un host atado a una empresa solo sirve esa empresa** | Es el aislamiento. En `ia.lagomarsino.com` cualquier ruta que nombre otro slug da 404 |
-| H4 | La **ruta no cambia**: `app/[tenant]` queda como está y el proxy hace `rewrite` interno | Es la decisión D2: no se toca el modelo. La barra de direcciones muestra `/chat` y la app ve `/lagomarsino/chat` |
+| H2 | Un dominio de empresa es siempre un **hostname completo y propio** (`ai.okeefe.com.ar`), nunca un comodín ni un apex | El apex exige registros A y no soporta CNAME en muchos proveedores; un comodín exige delegar los nameservers. Pedimos un subdominio con CNAME: lo puede crear cualquiera con acceso al DNS |
+| H3 | El host decide el tenant: **un host atado a una empresa solo sirve esa empresa** | Es el aislamiento. En `ai.okeefe.com.ar` no hay forma de nombrar a otra empresa: el slug sale del host y cualquier ruta que intente nombrar otro da 404 |
+| H4 | La **ruta interna no cambia**: `app/[tenant]` queda como está y el proxy hace `rewrite` interno | Es la decisión D2: no se toca el modelo. La barra de direcciones muestra `/chat` y la app ve `/okeefe/chat` |
 | H5 | El host raíz (`PUBLIC_APP_URL`) sigue sirviendo todo como hoy, incluido `/plataforma` | Cero regresión para las empresas sin dominio y para el equipo de INNOV.AS |
-| H6 | La sesión es **por host**. No se comparte con `cookieOptions.domain` | Se conserva el aislamiento de dos pestañas con dos clientes. Compartir cookie entre `ia.cliente.com` y `agentes.innov.as` es imposible de todos modos (dominios distintos) y entre subdominios de INNOV.AS cambiaría el modelo de seguridad |
+| H6 | La sesión es **por host**. No se comparte con `cookieOptions.domain` | Se conserva el aislamiento de dos pestañas con dos clientes. Compartir cookie entre `ai.okeefe.com.ar` y `agentes.innov.as` es imposible de todos modos (dominios distintos) y entre subdominios de INNOV.AS cambiaría el modelo de seguridad |
 | H7 | El login se completa **en el mismo host** donde empezó. Supabase tiene que conocer ese host en su lista de redirects, y la plataforma la mantiene sola | Si el `redirectTo` no está permitido, Supabase cae a la Site URL y el `code` PKCE llega a otro host, que no tiene el verificador: el login falla. La lista se escribe con la Management API (§4.9) |
 | H8 | La URL pública de un request **se deriva del host del request y se valida** contra la tabla; nunca se confía en el header sin mirarlo | Un `Host` arbitrario no puede terminar en la metadata OAuth ni en un link de correo (inyección de host) |
 | H9 | Los links que la plataforma manda **por una empresa** (invitación, link mágico) salen con el **dominio primario de esa empresa**, no con el host de quien opera | Una persona de plataforma que invita desde `agentes.innov.as` hoy genera un link a `agentes.innov.as`. Con dominio propio tiene que salir el de la empresa |
 | H10 | Alta del dominio en Vercel y en Supabase: **solo `platform_admin`**, por API, desde la consola | Es un privilegio de plataforma (consume cuota del proyecto y toca la configuración de Auth). El administrador de la empresa ve el estado y las instrucciones de DNS, no puede cargar dominios |
 | H11 | Las rutas **sin empresa** (`/plataforma`, `/oauth/consent`, `/login` sin slug) se sirven solo desde el host raíz | Son de la plataforma. En un host de empresa, `/plataforma` da 404 |
 | H12 | Los callbacks de Connect y de los conectores siguen en el **host raíz**, que es el que está registrado en cada proveedor | Cada callback nuevo es una URL más que registrar en Google, HubSpot, etc., por cliente. No escala y no es necesario |
+| H13 | En un host de empresa las **URLs visibles no llevan el slug**. Si llega una con slug, el proxy redirige (308) a la forma limpia | Es lo que se pidió (`/login`, `/chat`, `/brain/mcp`). Hoy hay unos 70 `href` que arman `/${tenant}/...`: con la redirección no se toca ninguno. El costo es un salto extra por navegación interna hasta que exista un helper de links (§8) |
+| H14 | El endpoint MCP del brain en un host de empresa es **`/brain/mcp`**, sin slug. La forma `/brain/<slug>/mcp` solo existe en el host raíz | El slug sale del host. Dos formas de decir lo mismo en un mismo host abren la puerta a pedir un slug ajeno |
 
 ### 3.1 Decisiones abiertas (resuelve Mati antes de arrancar el corte b)
 
 **A1 · ¿Con qué dominio raíz neutro se queda la plataforma?** Mientras `PUBLIC_APP_URL` sea `agentes.innov.as`, hay tres pantallas que un cliente con dominio propio **sigue viendo bajo INNOV.AS**: el consentimiento OAuth del MCP (`/oauth/consent`, ver §4.7), el correo de Supabase Auth (remitente y link) y cualquier link a Connect. Si el objetivo es que *nunca* aparezca innov.as, hay que mover el host raíz a un dominio neutro del producto (Central IA) y dejar `agentes.innov.as` como alias. Es solo una variable más una entrada en Supabase y Vercel, no código. **Recomendación:** definir el dominio del producto antes de abrir el primer cliente con dominio propio; si no existe todavía, arrancar con `agentes.innov.as` y dejar el movimiento como tarea de operación (§7).
 
-**A2 · ¿Subdominio por cliente bajo nuestro dominio (`lagomarsino.<raíz>`) en esta entrega?** El roadmap original (21.6) lo pedía primero. Esta spec lo deja afuera porque no resuelve el pedido (el cliente seguiría viendo el dominio de INNOV.AS) y exige un comodín DNS con los nameservers de Vercel. La resolución por tabla (§4.2) ya lo soporta: es una fila más y un comodín en Vercel. **Recomendación:** no, queda como 21.6d si lo pide un cliente.
+**A2 · ¿Subdominio por cliente bajo nuestro dominio (`okeefe.<raíz>`) en esta entrega?** El roadmap original (21.6) lo pedía primero. Esta spec lo deja afuera porque no resuelve el pedido (el cliente seguiría viendo el dominio de INNOV.AS) y exige un comodín DNS con los nameservers de Vercel. La resolución por tabla (§4.2) ya lo soporta: es una fila más y un comodín en Vercel. **Recomendación:** no, queda como 21.6d si lo pide un cliente.
 
 **A3 · ¿Quién tiene permiso para pedir un dominio?** La spec asume solo plataforma (H10). Si el cliente tiene que poder pedirlo desde su settings, se agrega un estado `requested` y una pantalla en `/settings`, sin cambiar el resto. **Recomendación:** solo plataforma por ahora; hay un solo cliente con esta necesidad.
 
 ## 4. Diseño
 
-### 4.1 Modelo de datos (corte b)
+### 4.1 Modelo de datos (corte a)
 
-Una migración nueva, `supabase/migrations/<timestamp>_tenant_domains.sql`. Cargá `supabase-postgres-best-practices` antes.
+Una migración nueva, `supabase/migrations/<timestamp>_tenant_domains.sql`. Cargá `supabase-postgres-best-practices` antes. Hasta el corte b no hay pantalla para cargar filas: se insertan con SQL (service role), y alcanza para probar todo el corte a.
 
 ```sql
 create table public.tenant_domains (
@@ -122,7 +134,7 @@ Reglas de la migración:
 
 - **RLS prendida.** Lectura para los miembros de la empresa (el administrador ve estado e instrucciones). Escritura: ninguna política para `authenticated`; lo escribe la consola con la service role, como el resto de las escrituras de plataforma. Un pgTAP (`supabase/tests/29_tenant_domains.sql`) prueba que un miembro de otra empresa no lee ni una fila y que nadie con rol `authenticated` inserta.
 - **Un hostname, una empresa.** El `unique` cierra que dos empresas reclamen el mismo dominio. El `check` de formato exige minúsculas, sin puerto, sin comodín, sin esquema; la capa de aplicación normaliza antes (minúsculas, `punycode` para IDN, sin punto final).
-- **Hostnames prohibidos**, validados en la aplicación (no en SQL, porque dependen de variables): el host raíz de `PUBLIC_APP_URL`, cualquier `*.vercel.app` y cualquier host terminado en el dominio raíz de la plataforma, `localhost`.
+- **Hostnames prohibidos**, validados en la aplicación (no en SQL, porque dependen de variables): el host raíz de `PUBLIC_APP_URL`, cualquier `*.vercel.app`, cualquier host terminado en el dominio raíz de la plataforma y `localhost`. Los `*.localhost` (por ejemplo `okeefe.localhost`) se aceptan solo fuera de producción, para probar en local.
 - **Un solo primario por empresa**, el que se usa para armar links (H9). El primer dominio activo pasa a primario; cambiarlo es una acción explícita.
 - **Función de resolución** `public.resolve_tenant_by_host(p_host text) returns table (slug text, active boolean)`, `security definer`, `stable`, con `search_path` fijado y `execute` solo para `service_role`. Devuelve únicamente dominios `active` de empresas `active`. Es lo único que lee el proxy; no expone la tabla.
 - **`events` es append-only.** Alta, verificación y baja de un dominio dejan un evento (`tenant_domain.added`, `tenant_domain.activated`, `tenant_domain.failed`, `tenant_domain.removed`) con el hostname y quién lo hizo. Solo `insert`.
@@ -150,29 +162,39 @@ requestHost(headers: Headers): string | null      // x-forwarded-host ?? host, n
 
 ### 4.3 Proxy (corte a)
 
-`proxy.ts` hoy refresca la sesión y listo. Se le suma, antes del refresco, la resolución del host:
+`proxy.ts` hoy refresca la sesión y listo, y su `matcher` excluye `eve/`, `brain/` y `.well-known/`. Cambia en dos cosas.
 
-1. `requestHost` → `resolveHost`.
-2. `root`: sigue como hoy.
-3. `unknown`: `404` (`NextResponse.rewrite` a una ruta que haga `notFound()`, o una respuesta 404 directa).
-4. `tenant(slug)`: reescribir la ruta pública a la interna:
+**El `matcher` deja de excluir `brain/`.** En un host de empresa las páginas del brain (`/brain/mapa`, `/brain/p/...`) son parte de la app y tienen que pasar por el proxy para reescribirse. Siguen excluidos `_next/static`, `_next/image`, `eve/`, `.well-known/`, `favicon.ico` y las imágenes. Para no cambiar nada en el host raíz, el proxy sale temprano con `NextResponse.next()` (sin tocar Supabase) cuando el host es raíz y la ruta es `/brain/<slug>/mcp`: es el endpoint de hoy, que se autentica por bearer.
 
-| Pide el navegador en `ia.cliente.com` | La app ve | Nota |
+**Resolución del host**, antes del refresco de sesión:
+
+1. `requestHost` → `resolveHost`. Si lanza, 503 (§4.2).
+2. `root`: sigue como hoy, con la salida temprana de arriba.
+3. `unknown`: 404.
+4. `tenant(slug)`: aplica la tabla.
+
+Tabla para la empresa `okeefe` (host `ai.okeefe.com.ar`). Se evalúa de arriba abajo:
+
+| Pide el navegador | Qué hace el proxy | La app ve |
 |---|---|---|
-| `/` | `/<slug>` | La landing de la empresa |
-| `/login` | `/login/<slug>` | El login con la marca de la empresa |
-| `/auth/callback`, `/auth/confirmar`, `/sin-acceso` | igual | Sin empresa en el path; el login tiene que terminar en este host (H7) |
-| `/<slug>` o `/<slug>/...` | igual | Compatibilidad: los `href` de toda la app son `/<tenant>/...` y siguen funcionando sin tocarlos (ver D-URL abajo) |
-| `/<otro-slug>/...` | **404** | H3 |
-| `/plataforma/...`, `/oauth/...` | **404** | H11 |
-| `/chat`, `/brain/...` (páginas) y demás rutas de la app | `/<slug>/chat`, etc. | El proxy antepone el slug |
-| `/brain/<slug>/mcp`, `/eve/...`, `/.well-known/...`, `/api/...` | **no pasan por el proxy** (matcher actual) | Su validación de host vive en el handler (§4.5) |
+| `/login/okeefe` | 308 a `/login` | |
+| `/okeefe` o `/okeefe/<resto>` | 308 a `/` o `/<resto>`, conservando la query | |
+| `/brain/okeefe/mcp` | 404 (H14) | |
+| `/plataforma/...`, `/oauth/...` | 404 (H11) | |
+| `/` | rewrite | `/okeefe` |
+| `/login` | rewrite | `/login/okeefe` |
+| `/brain/mcp` | rewrite | `/brain/okeefe/mcp` (el endpoint) |
+| `/auth/callback`, `/auth/confirmar`, `/sin-acceso`, `/api/...` | pasa | igual |
+| `/chat`, `/conectar`, `/settings/...`, `/brain`, `/brain/mapa`, `/brain/p/...` y cualquier otra | rewrite | `/okeefe/chat`, `/okeefe/brain/mapa`, etc. |
+| `/eve/...`, `/.well-known/...` | no pasan por el proxy | El handler resuelve la empresa por host (§4.5) |
 
-> **D-URL, para que nadie se confunda:** en esta entrega la barra de direcciones va a mostrar `ia.cliente.com/lagomarsino/chat` cuando alguien sigue un link interno, porque los `href` ya vienen con el slug. Es feo pero **no filtra nada de INNOV.AS** y evita tocar cada link de la app. Sacar el slug de las URLs visibles (un helper `appHref(tenant, path)` y reemplazar los `href`) queda como mejora posterior; el rewrite ya acepta las dos formas.
+Cosas a cuidar:
 
-Detalle que ya conviene dejar resuelto: `/brain/...` es **a la vez** una página de la app (`app/[tenant]/brain/...`, por ejemplo `/lagomarsino/brain/mapa`) y el endpoint MCP (`/brain/<slug>/mcp`, que el matcher excluye por empezar con `brain/`). En un host de empresa, `/brain/mapa` sin slug sería ambiguo con `/brain/<slug>/...`. Por eso la tabla de arriba **no** reescribe un `/brain/...` suelto: las páginas del brain se alcanzan por `/<slug>/brain/...`, y `/brain/<slug>/mcp` queda reservado para el endpoint.
-
-El refresco de sesión de Supabase sigue igual y usa las cookies del host del request.
+- **Las redirecciones van primero** y los rewrites son internos: el proxy no se vuelve a ejecutar sobre la ruta reescrita, así que no hay bucle.
+- **Los `href` de la app no se tocan** (H13). Un link a `/okeefe/chat` entra, el proxy lo manda a `/chat`, y de ahí al rewrite. También cubre `redirect("/okeefe/...")` de server actions y los destinos que devuelve `completeLogin`. **Spike S5** confirma que la navegación del cliente (`Link`, `router.push`, `redirect()` de una acción) sigue la redirección y deja la URL limpia sin recargar toda la página.
+- **`/brain/mcp` y las páginas del brain no chocan**: ninguna página del brain se llama `mcp` (hoy: `editar`, `historial`, `mapa`, `nueva`, `p`, `raw`, `skills`). Si alguna vez se agrega una con ese nombre, hay que elegir otra ruta; un test lo vigila (§6).
+- **Los slugs reservados** (`login`, `auth`, `brain`, `eve`, `oauth`, `api`, `sin-acceso`, `plataforma`) son justamente los primeros segmentos que la tabla trata aparte, por eso el constraint de `tenants` ya los prohíbe como slug. Si se agrega una ruta de primer nivel nueva, hay que sumarla a ese constraint y a esta tabla.
+- El refresco de sesión de Supabase sigue igual y usa las cookies del host del request.
 
 ### 4.4 URL pública por request (corte a)
 
@@ -194,23 +216,30 @@ publicOriginForTenant(tenantId: string, deps: TenantOriginDeps): Promise<string>
 
 ### 4.5 URLs de MCP bajo el dominio de la empresa (corte a)
 
-Es el pedido explícito. Hay cinco piezas y las cinco se resuelven por request:
+Es el pedido explícito. Para `okeefe`:
 
-1. **`BrainMcpDeps`** (`lib/brain/core/mcp-server/handler.ts`): `publicUrl` deja de ser un valor del proceso. `handleBrainMcp(request, tenant, deps)` ya recibe el `request`; el route handler `app/brain/[tenant]/mcp/route.ts` calcula `publicOriginForRequest(request)` y lo pasa en `productionDeps({ publicUrl })`. `resourceUrl`, `metadataUrl` y el `WWW-Authenticate` quedan correctos sin más cambios, porque ya reciben `publicUrl` como argumento.
-2. **Metadata OAuth del brain**: `app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts` hace lo mismo con su `request` (hoy lo ignora: `_request`).
-3. **Metadata OAuth del agente**: `app/.well-known/oauth-protected-resource/eve/outreach/v1/mcp/route.ts`, igual.
-4. **Canal MCP del agente**: `agents/outreach/channels/mcp.ts` calcula `resource` **una vez al compilar**. Eso no sirve con varios hosts: un cliente MCP que se conecta a `https://ia.cliente.com/eve/outreach/v1/mcp` valida que el `resource` de la metadata sea exactamente esa URL (RFC 9728), y si no coincide corta. La doc de eve (`channels/mcp.mdx`, "Protected-resource metadata") dice que `resource` solo hay que fijarlo "cuando no se puede derivar del request entrante": **omitirlo** hace que eve lo derive del request. Es el camino preferido. **Spike S1 obligatorio** (§6): confirmar que, sin `resource`, eve deriva host y puerto del request detrás del proxy de Vercel, y que el verificador (`verifyMcpChannelToken`) no depende de `aud` (hoy valida con `getClaims` y no mira el recurso). Si eve no lo deriva bien, el plan B es un `AuthFn` propio que devuelva el desafío con el `resource` calculado por request.
-5. **`/conectar`**: `app/[tenant]/conectar/page.tsx:42` pasa `publicOriginForRequest(request)` (en un server component, desde `headers()`) a `buildConnectables`. Resultado: la persona que entra por `ia.cliente.com` ve y copia URLs de `ia.cliente.com`. Una persona que entra por el host raíz sigue viendo las del host raíz. **Mejora recomendada:** si la empresa tiene dominio primario activo, mostrar siempre ese, aunque la persona haya entrado por el raíz (es lo que el cliente va a pegar); mostrarlo con `publicOriginForTenant`.
+| | En su dominio | En el host raíz (como hoy) |
+|---|---|---|
+| MCP del brain | `https://ai.okeefe.com.ar/brain/mcp` | `https://agentes.innov.as/brain/okeefe/mcp` |
+| Metadata OAuth del brain | `https://ai.okeefe.com.ar/.well-known/oauth-protected-resource/brain/mcp` | `.../brain/okeefe/mcp` |
+| MCP del agente | `https://ai.okeefe.com.ar/eve/outreach/v1/mcp` | `https://agentes.innov.as/eve/outreach/v1/mcp?tenant=okeefe` |
+| Metadata OAuth del agente | `https://ai.okeefe.com.ar/.well-known/oauth-protected-resource/eve/outreach/v1/mcp` | la misma ruta |
 
-**Validación de host en los endpoints de MCP** (viven fuera del proxy, §2). Agregar `assertHostServesTenant(request, slug)` en `lib/tenants/host.ts` y llamarlo en:
+El `resource` que publica la metadata tiene que ser **exactamente** la URL a la que el cliente se conectó, y la ruta de la metadata se deriva de la ruta del recurso (RFC 9728). Por eso en un host de empresa el brain publica `resource = https://ai.okeefe.com.ar/brain/mcp` y su metadata vive en `/.well-known/oauth-protected-resource/brain/mcp`. Cinco piezas:
 
-- `app/brain/[tenant]/mcp/route.ts` (el slug es el del path),
-- `resolveMcpChannelAuth` (`lib/agents/mcp-channel-auth.ts`, el slug es `?tenant=`),
-- y en las dos rutas `.well-known`.
+1. **Endpoint del brain.** El proxy ya reescribe `/brain/mcp` a `/brain/okeefe/mcp` (§4.3), así que `app/brain/[tenant]/mcp/route.ts` conserva su ruta. Lo que cambia es el origen y la forma de la URL: `BrainMcpDeps` suma `tenantHost: boolean` y `publicUrl` se calcula por request (`publicOriginForRequest`, §4.4). En `lib/brain/core/mcp-server/handler.ts`, `resourceUrl` y `metadataUrl` (`:65-70`) arman `<publicUrl>/brain/mcp` y `<publicUrl>/.well-known/oauth-protected-resource/brain/mcp` cuando `tenantHost` es verdadero, y las formas con slug de hoy cuando no. `protectedResourceMetadata` (`:78`) y el `WWW-Authenticate` (`:130`) ya consumen esas dos funciones.
+2. **Metadata OAuth del brain en un host de empresa.** Ruta nueva, `app/.well-known/oauth-protected-resource/brain/mcp/route.ts`. Es estática y de otra profundidad que `brain/[tenant]/mcp`, así que no choca. Resuelve la empresa por host (`.well-known` no pasa por el proxy); en el host raíz da 404. La ruta con slug de hoy hace lo mismo con el origen por request, hoy lo ignora (`_request`).
+3. **Metadata OAuth del agente** (`app/.well-known/oauth-protected-resource/eve/outreach/v1/mcp/route.ts`): origen por request, sin cambiar la ruta.
+4. **Canal MCP del agente.** `agents/outreach/channels/mcp.ts` calcula `resource` **una vez al compilar**. Eso no sirve con varios hosts: un cliente MCP que se conecta a `https://ai.okeefe.com.ar/eve/outreach/v1/mcp` valida que el `resource` de la metadata coincida con esa URL, y si no, corta. La doc de eve (`channels/mcp.mdx`, "Protected-resource metadata") dice que `resource` solo hay que fijarlo "cuando no se puede derivar del request entrante": **omitirlo** hace que eve lo derive del request. Es el camino preferido. **Spike S1 obligatorio** (§6): confirmar que, sin `resource`, eve deriva host y esquema del request detrás del proxy de Vercel, y que el verificador (`verifyMcpChannelToken`) no depende de `aud` (hoy valida con `getClaims` y no mira el recurso). Si eve no lo deriva bien, el plan B es un `AuthFn` propio que devuelva el desafío con el `resource` calculado por request.
+5. **`/conectar`.** `app/[tenant]/conectar/page.tsx:42` pasa el origen por request a `buildConnectables` (`lib/connect/connectables.ts`), que suma `tenantHost: boolean`. En un host de empresa arma `<origen>/brain/mcp` y `<origen>/eve/<agente>/v1/mcp` (sin `?tenant=`); en el host raíz, las de hoy. **Mejora recomendada:** si la empresa tiene dominio primario activo, mostrar siempre las URLs de ese dominio aunque la persona haya entrado por el host raíz (es lo que el cliente va a pegar), con `publicOriginForTenant`. El `id` de cada conectable sigue saliendo del slug (`brain-okeefe`), no del host.
 
-Regla: si el host es de una empresa, el slug del request **tiene que ser el de esa empresa**; si no, `404` con el mismo cuerpo que "no existe ese cliente" (que no se pueda distinguir de un slug inexistente). Si el host es el raíz, no se valida nada (como hoy). Además, en un host de empresa el `?tenant=` del agente pasa a ser **opcional**: si falta, se toma del host. Así la URL que se le da al cliente puede ser simplemente `https://ia.cliente.com/eve/outreach/v1/mcp`, sin `?tenant=`. En el host raíz sigue siendo obligatorio.
+**Validación de host en los handlers** (los endpoints de MCP viven fuera del proxy o detrás de un rewrite; el chequeo no puede depender solo del proxy). `assertHostServesTenant(request, slug)` en `lib/tenants/host.ts`, llamado en:
 
-`buildConnectables` (`lib/connect/connectables.ts`) tiene que saber si el origen es el de una empresa para decidir si arma el `?tenant=`: se le suma un campo `tenantHost: boolean`. En un host de empresa, la URL del agente es `<origen>/eve/<agente>/v1/mcp`.
+- `app/brain/[tenant]/mcp/route.ts` (el slug es el que dejó el rewrite),
+- `resolveMcpChannelAuth` (`lib/agents/mcp-channel-auth.ts`, el slug es `?tenant=` o el del host),
+- y en las rutas `.well-known`.
+
+Regla: si el host es de una empresa, el slug del request **tiene que ser el de esa empresa**; si no, `404` con el mismo cuerpo que "no existe ese cliente" (que no se pueda distinguir de un slug inexistente). Si el host es el raíz, no se valida nada (como hoy). En un host de empresa el `?tenant=` del agente pasa a ser **opcional**: si falta, se toma del host; si viene y no coincide, 404. En el host raíz sigue siendo obligatorio.
 
 ### 4.6 Sesión y login por host (corte b)
 
@@ -224,11 +253,11 @@ Regla: si el host es de una empresa, el slug del request **tiene que ser el de e
 
 El flujo de un cliente MCP (Claude, ChatGPT, Codex):
 
-1. Pega `https://ia.cliente.com/brain/lagomarsino/mcp`. **Dominio de la empresa.**
-2. Pide la metadata en `https://ia.cliente.com/.well-known/oauth-protected-resource/brain/lagomarsino/mcp`. **Dominio de la empresa** (§4.5).
+1. Pega `https://ai.okeefe.com.ar/brain/mcp`. **Dominio de la empresa.**
+2. Pide la metadata en `https://ai.okeefe.com.ar/.well-known/oauth-protected-resource/brain/mcp`. **Dominio de la empresa** (§4.5).
 3. La metadata nombra el servidor de autorización: `https://<proyecto>.supabase.co/auth/v1` (`issuer`). **Dominio de Supabase. No es de la empresa ni de INNOV.AS.** La persona normalmente no ve esa URL; el cliente MCP la usa por detrás.
 4. Supabase redirige a la pantalla de consentimiento: **Site URL + `/oauth/consent`**, es decir, el host raíz. **Esta pantalla se ve**, y hoy es `agentes.innov.as`. La persona inicia sesión ahí (sesión del host raíz) y aprueba.
-5. El código vuelve al cliente MCP; el cliente usa el token contra `https://ia.cliente.com/...`.
+5. El código vuelve al cliente MCP; el cliente usa el token contra `https://ai.okeefe.com.ar/brain/mcp`.
 
 Consecuencia: **la URL que se pega y la que usa el cliente MCP son del dominio de la empresa; el paso del consentimiento es el único que pasa por el host raíz.** Esto es una limitación de Supabase (una sola Site URL por proyecto), no de nuestro código. Opciones, de menor a mayor esfuerzo:
 
@@ -244,7 +273,7 @@ Adaptador `lib/domains/vercel.ts` (con interfaz inyectable, como los demás adap
 
 - Agregar el dominio al proyecto, consultar su estado/verificación y quitarlo. Los endpoints concretos y la forma de la respuesta **se confirman contra la documentación vigente de Vercel en el spike S2**, no se asumen de memoria; la API cambia de versión (`v9`/`v10`).
 - Variables nuevas, **solo servidor y solo producción**: `VERCEL_API_TOKEN` (token con alcance al proyecto), `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`. Se documentan en `docs/arquitectura/entornos-y-deploy.md`. Nunca llegan al navegador ni a un log.
-- **Instrucción de DNS para el cliente.** La consola muestra lo que el cliente tiene que crear: un registro `CNAME` de `ia.cliente.com` al valor que devuelva Vercel para el proyecto (el valor se lee de la API/respuesta, no se escribe a mano en el código). Si Vercel pide además un registro `TXT` de verificación (cuando el dominio ya está en otra cuenta), se muestra también. El texto de la instrucción está en el Anexo A.
+- **Instrucción de DNS para el cliente.** La consola muestra lo que el cliente tiene que crear: un registro `CNAME` de `ai.okeefe.com.ar` al valor que devuelva Vercel para el proyecto (el valor se lee de la API/respuesta, no se escribe a mano en el código). Si Vercel pide además un registro `TXT` de verificación (cuando el dominio ya está en otra cuenta), se muestra también. El texto de la instrucción está en el Anexo A.
 - **Estados:** `pending` (cargado, sin registrar en Vercel), `verifying` (en Vercel, esperando DNS), `active` (verificado y con certificado), `failed` (con `last_error` legible). El paso `verifying → active` lo hace una **verificación a pedido** (botón "Verificar ahora") y un **barrido periódico** (un `defineSchedule` de eve, o un cron del proyecto, cada 5 minutos, solo sobre filas `verifying`). Mientras no esté `active`, `resolve_tenant_by_host` no devuelve la fila: el dominio no sirve nada.
 - Dar de baja: sacar el dominio de Vercel, borrar la fila, resincronizar Supabase (§4.9) y dejar el evento.
 
@@ -275,14 +304,14 @@ En `app/plataforma/[slug]/page.tsx`, una sección **"Dominio"** (entre "Brain" y
 - "Verificar ahora", "Hacer primario", "Quitar".
 - Todas son server actions que re-verifican el rol en el servidor (no solo ocultan el botón) y dejan su evento.
 
-En `/[tenant]/settings` (administrador de la empresa), una línea **solo lectura**: "Tu dominio: ia.cliente.com (activo)". Sin acciones (A3).
+En `/[tenant]/settings` (administrador de la empresa), una línea **solo lectura**: "Tu dominio: ai.okeefe.com.ar (activo)". Sin acciones (A3).
 
 Textos en español rioplatense. Una pantalla nueva sigue la guía `docs/guias/agregar-una-pantalla.md`; probarla en 375 px.
 
 ### 4.11 Seguridad: lo que hay que no romper
 
 - **Host header.** Ningún origen se arma con un host sin validar (H8). Test: `Host: evil.com` contra `/.well-known/...` devuelve la URL de `PUBLIC_APP_URL`, nunca `evil.com`.
-- **Cross-tenant por host.** `ia.lagomarsino.com/brain/otro-cliente/mcp` da 404 (§4.5). Test explícito.
+- **Cross-tenant por host.** En `ai.okeefe.com.ar`, `/lagomarsino/chat` termina en 404 (el proxy lo lee como una ruta de okeefe que no existe), `/brain/okeefe/mcp` da 404 (H14) y un pedido directo al handler con otro slug da 404 por `assertHostServesTenant` (§4.5). Test explícito de los tres.
 - **Takeover de dominio.** Quitar el dominio de Vercel al darlo de baja. Un hostname cargado pero no verificado no sirve nada (H3 + la función solo devuelve `active`). Un cliente no puede cargar el dominio de otro: lo carga plataforma y el `unique` lo corta.
 - **Cookies.** No se fija `domain` en las cookies de Supabase. Verificar que no se haga en ningún `createServerClient`.
 - **Server actions.** Next compara `Origin` contra el host del request; con un dominio propio detrás del proxy de Vercel hay que probar que las acciones (login, invitaciones, settings) siguen aceptándose. Si fallara, el ajuste va en `serverActions.allowedOrigins`, que se alimenta de la misma tabla (no de una lista fija en `next.config.ts`).
@@ -291,31 +320,30 @@ Textos en español rioplatense. Una pantalla nueva sigue la guía `docs/guias/ag
 
 ## 5. Entrega en tres cortes
 
-Cada corte se mergea solo y deja el producto andando.
+Cada corte se mergea solo y deja el producto andando. El corte a concentra el riesgo y deja todo el comportamiento de cara al cliente funcionando; el b lo vuelve operable sin terminal.
 
-### 21.6a · Resolución de host y URLs de MCP por request (sin migración, sin Vercel)
+### 21.6a · Tabla, resolución de host, proxy y URLs de MCP
 
-Es el corte más grande en código y el que más riesgo de regresión tiene. No necesita las decisiones abiertas.
+Es el corte más grande y el que más riesgo de regresión tiene. No necesita las decisiones abiertas. Sin filas en `tenant_domains` no cambia nada en producción.
 
-1. `lib/tenants/host.ts` y `lib/tenants/public-url.ts` (puros, con tests de unidad), más `lib/tenants/host-store.ts` con el lookup. Hasta que exista la tabla, el lookup devuelve siempre `null`: todo host que no sea raíz es `unknown`.
-2. `publicSettings(origin?)` y los cinco puntos de §4.5. El canal de eve (`agents/outreach/channels/mcp.ts`) según el resultado del spike S1.
-3. `assertHostServesTenant` en los endpoints de MCP y en las rutas `.well-known`.
-4. `/conectar` con el origen por request y `tenantHost` en `buildConnectables`.
-5. Tests nuevos (§6). Los existentes (`tests/brain/mcp-server/production.test.ts`, `tests/tenants/origin.test.ts`) siguen verdes sin modificarse: `publicSettings()` sin argumento no cambia.
+1. Migración `tenant_domains` y `resolve_tenant_by_host`, eventos, pgTAP, `db:types` (§4.1).
+2. `lib/tenants/host.ts`, `lib/tenants/public-url.ts` y `lib/tenants/host-store.ts` (§4.2, §4.4), puros y con tests de unidad.
+3. `proxy.ts`: matcher y tabla de §4.3.
+4. Los cinco puntos de §4.5, incluido el nuevo `app/.well-known/oauth-protected-resource/brain/mcp/route.ts`, y el canal de eve según el spike S1.
+5. `assertHostServesTenant` en los endpoints de MCP y en las rutas `.well-known`.
+6. `/conectar` con el origen por request y `tenantHost`.
+7. Tests (§6). Los existentes (`tests/brain/mcp-server/production.test.ts`, `tests/tenants/origin.test.ts`) siguen verdes sin modificarse: `publicSettings()` sin argumento no cambia.
 
-Con este corte ya se puede probar todo en local con dominios `*.localhost` y una tabla simulada (§6), y no cambia nada en producción mientras no haya filas.
+Se prueba de punta a punta en local con `okeefe.localhost` y una fila insertada a mano (§6). En producción, el primer cliente se puede habilitar ya con el dominio cargado a mano en Vercel y en las Redirect URLs de Supabase y la fila por SQL, si no se quiere esperar al corte b.
 
-### 21.6b · Dominios por empresa: tabla, Vercel, Supabase y consola
+### 21.6b · Operación sin terminal: consola, Vercel, Supabase y correos
 
 Depende de A1 y A3.
 
-1. Migración `tenant_domains`, `resolve_tenant_by_host`, eventos, pgTAP, `db:types`.
-2. `host-store.ts` lee de la base.
-3. El proxy aplica los rewrites de §4.3.
-4. Adaptadores de Vercel y de Supabase Auth (§4.8, §4.9) con interfaces inyectables y dobles de prueba.
-5. Sección "Dominio" en la consola y línea de solo lectura en settings (§4.10).
-6. Links por correo con `publicOriginForTenant` (H9).
-7. Verificación a pedido y barrido periódico.
+1. Adaptadores de Vercel y de Supabase Auth (§4.8, §4.9) con interfaces inyectables y dobles de prueba.
+2. Sección "Dominio" en la consola y línea de solo lectura en settings (§4.10).
+3. Verificación a pedido y barrido periódico.
+4. Links por correo con `publicOriginForTenant` (H9).
 
 ### 21.6c · Cierre en producción
 
@@ -328,34 +356,36 @@ Operación, no código (§7): variables, primer dominio real, verificación de p
 - **S1 · `resource` del canal de eve.** ¿`oauthResource` sin `resource` deriva la URL del request, detrás del reverse proxy de Vercel, con el host público? Probar con `eve build` + una request con `X-Forwarded-Host`. Decide si §4.5 punto 4 es "omitir `resource`" o un `AuthFn` propio.
 - **S2 · API de dominios de Vercel.** Endpoints vigentes, forma de la respuesta de verificación, qué valor de CNAME devuelve, límites de dominios por proyecto y si el plan actual del equipo permite el volumen esperado. Confirmar contra la doc oficial, no contra memoria.
 - **S3 · Management API de Supabase Auth.** Confirmar el campo de la lista de redirects, que el `PATCH` reemplaza la lista completa y que el token requerido es el de cuenta (no el service role).
-- **S4 · PKCE en un host propio.** Con un dominio de prueba real, completar un login con link mágico y con Google, y confirmar que `exchangeCodeForSession` encuentra el verificador. Es el riesgo funcional más grande del corte b.
+- **S4 · PKCE en un host propio.** Con un dominio de prueba real, completar un login con link mágico y con Google, y confirmar que `exchangeCodeForSession` encuentra el verificador. Es el riesgo funcional más grande de la entrega.
+- **S5 · Redirección a la URL limpia.** En un host de empresa, probar que un `Link` a `/okeefe/chat`, un `router.push` y el `redirect()` de una server action terminan en `/chat` sin recarga completa, que un `POST` de server action sobre una URL con slug conserva método y cuerpo, y cuánto cuesta el salto extra. Si la navegación del cliente no lo maneja bien, el plan B es el helper de links que está en §8 y pasa a ser parte del corte a.
 
 **Tests automáticos (Vitest, en `tests/tenants/` y `tests/brain/mcp-server/`):**
 
 - `normalizeHost`: mayúsculas, puerto, punto final, IDN, entradas basura (`""`, `"a b"`, `"a/b"`, `"host:80:90"`).
 - `resolveHost`: raíz, empresa, desconocido; la caché devuelve sin ir a la base; la caché negativa; vencimiento a los 60 s; tope de 500 entradas.
 - `publicOriginForRequest`: host raíz, host de empresa, host inventado (devuelve `PUBLIC_APP_URL`), sin header, `x-forwarded-host` con varios valores.
-- Metadata del brain y del agente por host: `resource` y `resource_metadata` salen con el host del request; con host inventado, con el fijo.
+- Metadata del brain y del agente por host: en un host de empresa, `resource` es `<host>/brain/mcp` (y `<host>/eve/outreach/v1/mcp`) y `resource_metadata` el `.well-known` correspondiente; en el host raíz, la forma con slug de hoy; con un host inventado, la del `PUBLIC_APP_URL`.
 - `assertHostServesTenant`: host de empresa + slug propio pasa; + slug ajeno da 404 indistinguible de "no existe"; host raíz no valida.
-- `buildConnectables`: con `tenantHost`, la URL del agente no lleva `?tenant=`; sin él, igual que hoy.
+- `buildConnectables`: con `tenantHost`, la URL del brain es `<origen>/brain/mcp` y la del agente no lleva `?tenant=`; sin él, las de hoy.
 - `resolveMcpChannelAuth`: `?tenant=` ausente en un host de empresa se toma del host; ausente en el raíz sigue dando el error actual.
 - Que cada link de correo use `publicOriginForTenant`: un test por cada uno de los cuatro puntos (§4.4).
-- `proxy.ts`: la tabla de §4.3, fila por fila (incluye `/plataforma` y otro slug dando 404, y que `/brain/<slug>/mcp` y `.well-known` no se tocan).
+- `proxy.ts`: la tabla de §4.3, fila por fila (incluye las dos redirecciones 308 con query, `/plataforma` y `/brain/okeefe/mcp` dando 404, y que en el host raíz `/brain/<slug>/mcp` sale temprano sin tocar Supabase).
+- Que no exista una página del brain llamada `mcp` (lista los directorios de `app/[tenant]/brain/`): `/brain/mcp` quedaría ambiguo.
 
 **pgTAP:** `supabase/tests/29_tenant_domains.sql` (RLS, `unique`, un solo primario, `resolve_tenant_by_host` solo devuelve `active` de empresas activas, `anon` y `authenticated` no ejecutan la función).
 
 **Navegador (verificación obligatoria, no se da por hecho con los tests):**
 
-- Los hosts `*.localhost` resuelven a `127.0.0.1` sin tocar `/etc/hosts`. Con `npm run dev`, un tenant de prueba y una fila en `tenant_domains` (`lagomarsino.localhost`), probar: landing, login por código, chat, `/conectar` (las URLs tienen que ser `http://lagomarsino.localhost:3000/...`), un slug ajeno (404), `/plataforma` (404), y el host raíz sin regresión.
+- Los hosts `*.localhost` resuelven a `127.0.0.1` sin tocar `/etc/hosts`. Con `npm run dev`, un tenant de prueba y una fila en `tenant_domains` (`okeefe.localhost`), probar en `http://okeefe.localhost:3000`: `/login` (login de okeefe), `/chat` (el chat), `/brain/mapa`, `/conectar` (las URLs tienen que ser `http://okeefe.localhost:3000/brain/mcp` y `.../eve/outreach/v1/mcp`), que `/okeefe/chat` termine en `/chat`, un slug ajeno (404), `/plataforma` (404), y el host raíz sin regresión (`localhost:3000/okeefe/chat` y `/brain/okeefe/mcp` como hoy).
 - `npx eve build` limpio.
-- Un cliente MCP real (Claude Code: `claude mcp add --transport http ...`) contra la URL del dominio de prueba, hasta el consentimiento. Anotar en qué host aterriza el consentimiento (§4.7).
+- Un cliente MCP real (Claude Code: `claude mcp add --transport http okeefe-brain https://ai.okeefe.com.ar/brain/mcp`) contra el dominio de prueba, hasta el consentimiento. Anotar en qué host aterriza el consentimiento (§4.7).
 - 375 px en la sección nueva de la consola.
 
 ## 7. Cierre en producción (21.6c)
 
 Lo hace una persona con acceso, en este orden:
 
-1. `npx supabase migration list` y revisar que no haya ajenas pendientes (`db push` aplica todas). **Migración antes que código**: la función `resolve_tenant_by_host` tiene que existir antes de que el proxy nuevo la llame; con el código nuevo y la base vieja, el lookup falla.
+1. `npx supabase migration list` y revisar que no haya ajenas pendientes (`db push` aplica todas). **Migración antes que código** (corte a): la función `resolve_tenant_by_host` tiene que existir antes de que el proxy nuevo la llame; con el código nuevo y la base vieja, el lookup falla.
    - Aun así, el host raíz no depende de la base (§4.2): con el código nuevo y la base vieja, las empresas sin dominio siguen andando; solo fallan (503) los hosts de empresa, que todavía no existen.
 2. Cargar en Vercel (solo Production) `VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`.
 3. Desplegar y verificar que el host raíz y las empresas sin dominio siguen igual (regresión).
@@ -368,7 +398,7 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 ## 8. Fuera de alcance
 
 - Subdominio por cliente bajo un dominio de la plataforma (A2); comodines y apex.
-- Sacar el slug de las URLs visibles (D-URL).
+- Un helper de links (`appHref(tenant, path)`) que emita las URLs limpias directamente y evite el salto 308 de H13. Pasa a ser parte del corte a si el spike S5 lo exige.
 - Marca de la empresa en la pantalla de consentimiento (§4.7).
 - Correo de Supabase Auth con remitente y dominio de la empresa (SMTP propio por cliente).
 - Servidor OAuth propio por host.
@@ -382,7 +412,8 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 | El canal MCP de eve deriva mal el `resource` detrás del proxy | Los clientes MCP rechazan la conexión en dominios propios | Spike S1 antes de escribir el corte a; plan B con `AuthFn` propio |
 | `redirectTo` no permitido: el link mágico o Google cae en el host raíz | Login roto en un dominio nuevo | Sincronización completa de la lista (§4.9) y spike S4 con un dominio real |
 | El lookup del proxy depende de la base en cada navegación | Una caída de la base tira las empresas con dominio propio (503) | Caché de 60 s que no guarda errores; el host raíz nunca consulta la base (§4.2) |
-| `/brain/...` ambiguo entre página y endpoint | Una página del brain inalcanzable en el host de empresa | §4.3 deja `/brain/<slug>/mcp` reservado al endpoint y las páginas bajo `/<slug>/brain/...`; test en `proxy` |
+| `/brain/mcp` ambiguo con las páginas del brain, y el `matcher` ahora incluye `brain/` | Una página del brain inalcanzable, o el MCP del host raíz pasando por Supabase | `/brain/mcp` es el endpoint y no existe una página con ese nombre (test); el host raíz sale temprano en `/brain/<slug>/mcp` (§4.3) |
+| El 308 a la URL limpia no lo sigue bien la navegación del cliente | Recargas completas o URLs con slug visibles | Spike S5; plan B: helper de links (§8) |
 | El consentimiento OAuth muestra el host raíz | El cliente ve `innov.as` en un paso | Decisión A1 y §4.7; aceptado, documentado en la guía del cliente |
 | `PATCH` de Redirect URLs pisa entradas manuales | Se rompe un redirect que no es nuestro | Escribir conservando las entradas que no son de `tenant_domains` (§4.9) |
 | Cuota de dominios del plan de Vercel | No se pueden cargar más dominios | Spike S2: confirmar el límite antes de comprometerse con un cliente |
@@ -408,16 +439,17 @@ Una etapa no se cierra sin eso. El estado de la fila de esta spec en `docs/decis
 |---|---|---|
 | `lib/tenants/host.ts` (nuevo) | `normalizeHost`, `resolveHost`, `requestHost`, `assertHostServesTenant`, caché | a |
 | `lib/tenants/public-url.ts` (nuevo) | `publicOriginForRequest`, `publicOriginForTenant` | a |
-| `lib/tenants/host-store.ts` (nuevo) | Lookup contra `resolve_tenant_by_host` | a (devuelve `null`), b (real) |
+| `lib/tenants/host-store.ts` (nuevo) | Lookup contra `resolve_tenant_by_host` | a |
 | `lib/brain/adapters/mcp-production.ts` | `publicSettings(origin?)`, `productionDeps({ publicUrl })` | a |
-| `app/brain/[tenant]/mcp/route.ts` | Origen por request y `assertHostServesTenant` | a |
+| `app/brain/[tenant]/mcp/route.ts`, `lib/brain/core/mcp-server/handler.ts` | Origen por request, `tenantHost` (`resourceUrl`/`metadataUrl` sin slug) y `assertHostServesTenant` | a |
 | `app/.well-known/oauth-protected-resource/brain/[tenant]/mcp/route.ts` | Origen por request | a |
+| `app/.well-known/oauth-protected-resource/brain/mcp/route.ts` (nuevo) | Metadata del brain en un host de empresa | a |
 | `app/.well-known/oauth-protected-resource/eve/outreach/v1/mcp/route.ts` | Origen por request | a |
 | `agents/outreach/channels/mcp.ts` | `resource` por request (S1). Sin `next/*` | a |
 | `lib/agents/mcp-channel-auth.ts` | `?tenant=` opcional en host de empresa; `assertHostServesTenant` | a |
-| `lib/connect/connectables.ts`, `app/[tenant]/conectar/page.tsx` | Origen por request; `tenantHost`; URL del agente sin `?tenant=` | a |
-| `proxy.ts` | Resolución de host y rewrites (§4.3) | b |
-| `supabase/migrations/<ts>_tenant_domains.sql`, `supabase/tests/29_tenant_domains.sql` | Tabla, RLS, función, pgTAP | b |
+| `lib/connect/connectables.ts`, `app/[tenant]/conectar/page.tsx` | Origen por request; `tenantHost`; brain en `/brain/mcp` y agente sin `?tenant=` | a |
+| `proxy.ts` | `matcher` sin `brain/`, resolución de host, redirecciones y rewrites (§4.3) | a |
+| `supabase/migrations/<ts>_tenant_domains.sql`, `supabase/tests/29_tenant_domains.sql` | Tabla, RLS, función, pgTAP | a |
 | `lib/domains/vercel.ts`, `lib/domains/supabase-auth.ts` (nuevos) | Adaptadores con interfaz inyectable | b |
 | `app/plataforma/[slug]/page.tsx` y sus actions | Sección "Dominio" | b |
 | `app/[tenant]/settings/` | Línea de solo lectura | b |
