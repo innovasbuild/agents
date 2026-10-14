@@ -79,6 +79,20 @@ describe("folderReport", () => {
 	});
 });
 
+describe("primer tramo skill (singular)", () => {
+	it("es bloqueante: la carpeta duplicaría la categoría skill", () => {
+		const report = folderReport(
+			["empresa", "skill"],
+			[
+				{ slug: "skill/outreach", category: "skill" },
+				{ slug: "skills/outreach", category: "skill" },
+			],
+		);
+		expect(report.blockers).toEqual(["skill/outreach"]);
+		expect(report.folders).toEqual(["empresa", "skills"]);
+	});
+});
+
 describe("renderFolderReport", () => {
 	it("imprime el estado de cada empresa y avisa si hay bloqueantes", () => {
 		const text = renderFolderReport([

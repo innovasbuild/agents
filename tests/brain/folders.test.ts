@@ -59,6 +59,10 @@ describe("validateFolderPath", () => {
 		expect(validateFolderPath("brain")).toMatchObject({ ok: false });
 		expect(validateFolderPath("comercial/brain")).toEqual({ ok: true });
 	});
+	it("skill (singular) es reservada: duplicaría la categoría de skills", () => {
+		expect(validateFolderPath("skill")).toMatchObject({ ok: false });
+		expect(validateFolderPath("comercial/skill")).toEqual({ ok: true });
+	});
 	it("rechaza rutas de más de 200 caracteres", () => {
 		expect(validateFolderPath(`a/${"b".repeat(199)}`).ok).toBe(false);
 	});

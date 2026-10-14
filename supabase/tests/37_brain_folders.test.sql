@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(24);
+select plan(29);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values ('a7a7a7a7-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'ana@fol-a.test', now());
@@ -110,6 +110,33 @@ select ok(
   (select count(*) > 0 from public.events where tenant_id = 'b7b7b7b7-0000-0000-0000-00000000000a' and type = 'brain.folder_created'),
   'crear deja evento');
 select is(public.brain_category_for('skills/outreach'), 'skill', 'skills es la categoría skill');
+
+-- 25-27: skill (singular) es reservada; si igual aparece una fila, la config no se duplica
+select throws_ok(
+  $$select public.brain_create_folder('b7b7b7b7-0000-0000-0000-00000000000a', 'a7a7a7a7-0000-0000-0000-000000000001', 'skill', '')$$,
+  'BR422', null, 'skill es reservada al crear');
+select throws_ok(
+  $$select public.brain_ensure_folders('b7b7b7b7-0000-0000-0000-00000000000a', 'skill/outreach', null)$$,
+  'BR422', null, 'una página bajo skill/ no crea la carpeta skill');
+insert into public.brain_folders (tenant_id, path)
+values ('b7b7b7b7-0000-0000-0000-00000000000a', 'skills'),
+       ('b7b7b7b7-0000-0000-0000-00000000000a', 'skill')
+on conflict do nothing;
+select public.brain_sync_categories('b7b7b7b7-0000-0000-0000-00000000000a');
+select is(
+  (select config -> 'categories' from public.tenant_connections where tenant_id = 'b7b7b7b7-0000-0000-0000-00000000000a' and capability = 'brain'),
+  '["comercial", "marketing", "skill"]'::jsonb,
+  'skill y skills dan una sola categoría skill');
+
+-- 28-29: crear y borrar de primer nivel se serializan por tenant
+select ok(
+  (select prosrc ~ 'from public\.tenant_connections\s+where tenant_id = p_tenant and capability = ''brain'' and provider = ''wiki''\s+for update'
+   from pg_proc where oid = 'public.brain_delete_folder(uuid, uuid, text)'::regprocedure),
+  'brain_delete_folder bloquea el binding del tenant');
+select ok(
+  (select prosrc ~ 'from public\.tenant_connections\s+where tenant_id = p_tenant and capability = ''brain'' and provider = ''wiki''\s+for update'
+   from pg_proc where oid = 'public.brain_create_folder(uuid, uuid, text, text)'::regprocedure),
+  'brain_create_folder bloquea el binding del tenant');
 
 select * from finish();
 rollback;

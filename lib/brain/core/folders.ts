@@ -4,9 +4,10 @@ import { MAX_SLUG_LENGTH, SLUG_PATTERN } from "./types.ts";
 
 export const MAX_TOP_FOLDERS = 20;
 export const MAX_FOLDER_DESCRIPTION = 300;
-// skills existe solo si el brain ya tenía la categoría skill; brain es la
+// skills existe solo si el brain ya tenía la categoría skill; skill es esa
+// categoría (una carpeta skill la duplicaría en la config); brain es la
 // categoría de las instrucciones de la raíz (26.2).
-export const RESERVED_TOP_FOLDERS = ["skills", "brain"] as const;
+export const RESERVED_TOP_FOLDERS = ["skills", "skill", "brain"] as const;
 
 // Mismo patrón que el check de brain_pages.category.
 const CATEGORY = /^[a-z][a-z0-9-]{0,40}$/;

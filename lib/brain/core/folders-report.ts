@@ -16,11 +16,11 @@ export function folderReport(
 	const badConfig = categories
 		.filter((c) => !CATEGORY.test(c === "skill" ? "skills" : c))
 		.map((c) => `config:${c}`);
-	const blockers = [
-		...badConfig,
-		...nested.filter((p) => !CATEGORY.test(top(p.slug))).map((p) => p.slug),
-	];
-	const valid = nested.filter((p) => CATEGORY.test(top(p.slug)));
+	// skill/ (singular) lo rechaza brain_ensure_folders: duplicaría la categoría skill.
+	const blocks = (p: { slug: string }) =>
+		!CATEGORY.test(top(p.slug)) || top(p.slug) === "skill";
+	const blockers = [...badConfig, ...nested.filter(blocks).map((p) => p.slug)];
+	const valid = nested.filter((p) => !blocks(p));
 
 	const folders = new Set(
 		categories.map((c) => (c === "skill" ? "skills" : c)),
@@ -101,7 +101,7 @@ export function renderFolderReport(tenants: TenantPages[]): {
 		out.push(`== ${t.tenant} ==`);
 		out.push(
 			...section(
-				"BLOQUEA la migración: primer tramo inválido, renombrar antes de db push",
+				"BLOQUEA la migración: primer tramo inválido o skill/, renombrar antes de db push",
 				r.blockers,
 				(s) => s,
 			),

@@ -37,7 +37,10 @@ begin
   set config = jsonb_set(
         c.config, '{categories}',
         coalesce((
-          select jsonb_agg(public.brain_category_for(f.path) order by f.path)
+          -- distinct: skills y una fila skill colada darían skill dos veces, y
+          -- parseCategories rechaza la config entera.
+          select jsonb_agg(distinct public.brain_category_for(f.path)
+                           order by public.brain_category_for(f.path))
           from public.brain_folders f
           where f.tenant_id = p_tenant and position('/' in f.path) = 0
         ), '[]'::jsonb)),
@@ -55,6 +58,19 @@ declare
   v_rows integer;
   v_top boolean := false;
 begin
+  -- skill es la categoría de skills/: una carpeta skill la duplicaría.
+  if v_parts[1] = 'skill' then
+    raise exception using errcode = 'BR422', message = 'BRAIN_VALIDATION', detail = 'reserved_path';
+  end if;
+  -- Una de primer nivel nueva cambia la config: mismo orden de bloqueo que
+  -- brain_create_folder y brain_delete_folder (primero el binding).
+  if not exists (
+    select 1 from public.brain_folders where tenant_id = p_tenant and path = v_parts[1]
+  ) then
+    perform 1 from public.tenant_connections
+    where tenant_id = p_tenant and capability = 'brain' and provider = 'wiki'
+    for update;
+  end if;
   for i in 1 .. cardinality(v_parts) loop
     insert into public.brain_folders (tenant_id, path, created_by)
     values (p_tenant, array_to_string(v_parts[1:i], '/'), p_actor)
@@ -97,7 +113,12 @@ create or replace function public.brain_create_folder(
 declare
   v_parent text := nullif(regexp_replace(p_path, '/?[^/]+$', ''), '');
 begin
-  if v_parent is null and p_path in ('skills', 'brain') then
+  -- Serializa por tenant el tope de 20 carpetas de primer nivel.
+  perform 1 from public.tenant_connections
+  where tenant_id = p_tenant and capability = 'brain' and provider = 'wiki'
+  for update;
+  -- skill es la categoría de skills/: una carpeta skill la duplicaría.
+  if v_parent is null and p_path in ('skills', 'skill', 'brain') then
     raise exception using errcode = 'BR422', message = 'BRAIN_VALIDATION', detail = 'reserved_path';
   end if;
   if v_parent is null and (
@@ -151,6 +172,11 @@ create or replace function public.brain_delete_folder(
 declare
   v_rules integer;
 begin
+  -- Serializa por tenant el chequeo de la última de primer nivel: dos borrados
+  -- simultáneos de las dos últimas dejarían la config en [].
+  perform 1 from public.tenant_connections
+  where tenant_id = p_tenant and capability = 'brain' and provider = 'wiki'
+  for update;
   perform 1 from public.brain_folders
   where tenant_id = p_tenant and path = p_path
   for update;
