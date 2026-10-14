@@ -1,4 +1,5 @@
 import { ChevronDownIcon } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
@@ -9,10 +10,31 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { brandStyle } from "@/lib/brand/contrast";
+import { tenantMetadata } from "@/lib/tenants/brand-metadata";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { visibleNav } from "@/lib/tenants/nav";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+
+function brandLogoUrl(path: string | undefined): string | null {
+	return path
+		? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${path}`
+		: null;
+}
+
+// resolveTenantAccess está en cache: el layout lo reusa sin otra consulta.
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ tenant: string }>;
+}): Promise<Metadata> {
+	const tenant = await resolveTenantAccess((await params).tenant);
+	if (!tenant) return {};
+	return tenantMetadata({
+		displayName: tenant.displayName,
+		logoUrl: brandLogoUrl(tenant.brand.logoUrl),
+	});
+}
 
 export default async function TenantLayout({
 	children,
@@ -28,9 +50,7 @@ export default async function TenantLayout({
 	if (!tenant) notFound();
 	const enabledAgents = await loadEnabledAgents(tenant.id);
 
-	const logoUrl = tenant.brand.logoUrl
-		? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/brand/${tenant.brand.logoUrl}`
-		: null;
+	const logoUrl = brandLogoUrl(tenant.brand.logoUrl);
 
 	return (
 		<div
