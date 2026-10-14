@@ -4,12 +4,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
-import { BrainNotFound } from "@/lib/brain/core/errors";
+import { BrainError, BrainNotFound } from "@/lib/brain/core/errors";
 import type { RateLimiter } from "@/lib/brain/core/mcp-server/rate-limit";
 import {
 	buildBrainMcpServer,
 	MCP_MAX_UPSERT_BODY_BYTES,
 } from "@/lib/brain/core/mcp-server/server";
+import type { SkillCatalog } from "@/lib/brain/core/skills/catalog";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const page = {
@@ -198,5 +199,134 @@ describe("buildBrainMcpServer", () => {
 			error: "internal",
 		});
 		errorLog.mockRestore();
+	});
+});
+
+function fakeCatalog(over: Partial<SkillCatalog> = {}): SkillCatalog {
+	return {
+		list: () => [
+			{
+				name: "reporte",
+				description: "Arma el reporte mensual.",
+				version: 2,
+				publishedAt: "2026-10-13T12:00:00Z",
+			},
+		],
+		load: vi.fn(async (name: string) => ({
+			name,
+			description: "Arma el reporte mensual.",
+			version: 2,
+			publishedAt: "2026-10-13T12:00:00Z",
+			digest: "dg",
+			instructions: "# Pasos",
+			files: [],
+		})),
+		file: vi.fn(async (name: string, path: string) => ({
+			name,
+			version: 2,
+			path,
+			size: 4,
+			content: "hola",
+		})),
+		...over,
+	};
+}
+
+function build(skills: SkillCatalog | null, limiter = fakeLimiter()) {
+	return buildBrainMcpServer({
+		userId: "ana",
+		categories: ["comercial"],
+		canon: false,
+		provider: fakeProvider(),
+		limiter,
+		skills,
+	});
+}
+
+describe("tools de skills", () => {
+	it("sin catálogo no hay tools de skills ni instrucciones", async () => {
+		const client = await connect(build(null));
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual([
+			"brain_read",
+			"brain_search",
+			"brain_upsert",
+		]);
+		expect(client.getInstructions()).toBeUndefined();
+	});
+
+	it("con catálogo aparecen las tres, las instrucciones y la lista en skill_load", async () => {
+		const client = await connect(build(fakeCatalog()));
+		const tools = (await client.listTools()).tools;
+		expect(tools.map((t) => t.name).sort()).toEqual([
+			"brain_read",
+			"brain_search",
+			"brain_upsert",
+			"skill_file",
+			"skill_list",
+			"skill_load",
+		]);
+		expect(tools.find((t) => t.name === "skill_load")?.description).toContain(
+			"- reporte: Arma el reporte mensual.",
+		);
+		expect(client.getInstructions()).toContain("skill_load");
+	});
+
+	it("skill_list, skill_load y skill_file devuelven el resultado del catálogo y cuentan como lectura", async () => {
+		const limiter = fakeLimiter();
+		const catalog = fakeCatalog();
+		const client = await connect(build(catalog, limiter));
+		const list = await client.callTool({ name: "skill_list", arguments: {} });
+		expect(list.structuredContent).toEqual({
+			ok: true,
+			skills: catalog.list(),
+		});
+		const load = await client.callTool({
+			name: "skill_load",
+			arguments: { name: "reporte" },
+		});
+		expect(load.structuredContent).toMatchObject({
+			ok: true,
+			name: "reporte",
+			instructions: "# Pasos",
+		});
+		const file = await client.callTool({
+			name: "skill_file",
+			arguments: { name: "reporte", path: "a.md" },
+		});
+		expect(file.structuredContent).toEqual({
+			ok: true,
+			name: "reporte",
+			version: 2,
+			path: "a.md",
+			size: 4,
+			content: "hola",
+		});
+		expect(limiter.check.mock.calls.map((call) => call[0])).toEqual([
+			"read",
+			"read",
+			"read",
+		]);
+	});
+
+	it("un error del catálogo sale con el formato de las tools del brain", async () => {
+		const client = await connect(
+			build(
+				fakeCatalog({
+					load: async () => {
+						throw new BrainError("not_found", "No existe la skill.");
+					},
+				}),
+			),
+		);
+		const result = await client.callTool({
+			name: "skill_load",
+			arguments: { name: "x" },
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toEqual({
+			ok: false,
+			error: "not_found",
+			message: "No existe la skill.",
+		});
 	});
 });
