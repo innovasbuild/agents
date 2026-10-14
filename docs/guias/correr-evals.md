@@ -22,12 +22,19 @@ sources:
   - agents/outreach/evals/frenos.eval.ts
   - agents/outreach/evals/research.eval.ts
   - agents/outreach/evals/sin-aprobacion-no-sale.eval.ts
+  - agents/asistente/evals/evals.config.ts
+  - agents/asistente/evals/support.ts
+  - agents/asistente/evals/smoke.eval.ts
+  - agents/asistente/evals/brain-tools.eval.ts
+  - agents/asistente/evals/sin-dato.eval.ts
+  - agents/asistente/evals/sin-otros-agentes.eval.ts
+  - agents/asistente/evals/deriva-a-outreach.eval.ts
   - docs/guias/instalacion-local.md
 ---
 
 # Correr las evals del agente
 
-Las evals le hacen preguntas reales al agente `outreach` (eve levanta un servidor local y conversa con él) y chequean lo que hizo: qué tools llamó, qué quedó en la base y, en algunos casos, qué dijo (un juez con modelo, `typesafe-ai/jev` por defecto). Son la red de seguridad de los guardrails: que nada salga sin aprobación, que el claim ajeno se respete, que el freno frene. Corren **solo contra la Supabase local** y llaman a un modelo de verdad, así que tardan y gastan tokens.
+Las evals le hacen preguntas reales a un agente (`outreach` por defecto; `asistente` con `--agent asistente`) (eve levanta un servidor local y conversa con él) y chequean lo que hizo: qué tools llamó, qué quedó en la base y, en algunos casos, qué dijo (un juez con modelo, `typesafe-ai/jev` por defecto). Son la red de seguridad de los guardrails: que nada salga sin aprobación, que el claim ajeno se respete, que el freno frene. Corren **solo contra la Supabase local** y llaman a un modelo de verdad, así que tardan y gastan tokens.
 
 ## Pasos
 
@@ -65,7 +72,7 @@ Las evals le hacen preguntas reales al agente `outreach` (eve levanta un servido
    npm run evals
    ```
 
-   El script (`scripts/run-evals.mts`) carga `.env.local` y después `.env.eval`, y ejecuta `eve eval --agent outreach`. **Se niega a correr si `NEXT_PUBLIC_SUPABASE_URL` no es local** (`127.0.0.1` o `localhost`, `isLocalSupabaseUrl` en `lib/agents/eval-auth.ts`) y sale con código 1. Lo mismo hace el principal fijo de las evals: en un deploy de Vercel o contra una base remota no autentica.
+   El script (`scripts/run-evals.mts`) carga `.env.local` y después `.env.eval`, y ejecuta `eve eval --agent <agente>` (`outreach` si no pasás `--agent`). **Se niega a correr si `NEXT_PUBLIC_SUPABASE_URL` no es local** (`127.0.0.1` o `localhost`, `isLocalSupabaseUrl` en `lib/agents/eval-auth.ts`) y sale con código 1. Lo mismo hace el principal fijo de las evals: en un deploy de Vercel o contra una base remota no autentica.
 
 7. Para correr una sola, pasá su id después de `--` (los argumentos van a `eve eval`):
 
@@ -91,9 +98,28 @@ Están en `agents/outreach/evals/`. Todas empiezan con `resetEvalTenant()` (`sup
 | `research` | `research_account` lee la web y guarda una ficha con hechos con URL (necesita salida a internet) |
 | `sin-aprobacion-no-sale` | `send_email` pide aprobación en el primer turno, sin confirmación previa; si se cancela, la pieza sigue pendiente |
 
+## Las evals del `asistente`
+
+Están en `agents/asistente/evals/` y se corren con `--agent asistente`; los ids que siguen son opcionales:
+
+```bash
+npm run evals -- --agent asistente
+npm run evals -- --agent asistente smoke
+```
+
+Sin `--agent` el script corre las de `outreach`. Comparten con ellas el tenant de evals (`eval-outreach`), por eso la concurrencia es 1 también acá, y dos de las del Asistente prenden y apagan el agente de outreach de ese tenant (`setOutreachEnabled` en su `support.ts`) y lo dejan prendido al terminar.
+
+| Eval | Qué comprueba |
+|---|---|
+| `smoke` | El asistente responde con la auth de eval |
+| `brain-tools` | `brain_search`, `brain_read` y `brain_upsert` existen en el agente compilado |
+| `sin-dato` | Si el brain no tiene la respuesta, busca, lo dice y no inventa |
+| `sin-otros-agentes` | Con outreach apagado, ante un pedido de mail dice que no está disponible y no promete otro agente |
+| `deriva-a-outreach` | Con outreach habilitado, ante un pedido de mail nombra a ese agente y no dice haber enviado nada |
+
 ## Agregar una eval
 
-1. Creá `agents/outreach/evals/<nombre>.eval.ts` con un `defineEval` de `eve/evals`: `description`, `timeoutMs` (si no, usa el de `evals.config.ts`, 240 s) y `async test(t)`. Copiá la más parecida a lo que querés probar (`smoke.eval.ts` es la más corta).
+1. Creá `agents/<agente>/evals/<nombre>.eval.ts` con un `defineEval` de `eve/evals`: `description`, `timeoutMs` (si no, usa el de `evals.config.ts`, 240 s) y `async test(t)`. Copiá la más parecida a lo que querés probar (`smoke.eval.ts` es la más corta).
 
 2. Arrancá con `await resetEvalTenant();` y usá los helpers de `support.ts` para sembrar el estado (`seedPendingPiece`, `ensureContact`, `enableEvalGmailBinding`...). Si cambiaste algo global, restauralo en un `finally`, como hace `aprobar-sin-gmail`.
 
@@ -102,7 +128,7 @@ Están en `agents/outreach/evals/`. Todas empiezan con `resetEvalTenant()` (`sup
 4. Correla sola hasta que pase, y después con el resto:
 
    ```bash
-   npm run evals -- <nombre>
+   npm run evals -- [--agent <agente>] <nombre>
    ```
 
 5. Regenerá la referencia, que lista las evals (`docs/referencia/evals.md`), y sumá la fila a la tabla de arriba:

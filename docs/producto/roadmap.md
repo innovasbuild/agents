@@ -589,12 +589,14 @@ Frontera decidida el 2026-10-10: cada cliente trae sus llaves y su administrador
 
 Agregada el 2026-10-09 (G5). Partida el 2026-10-13 en dos entregas: **22.1**, un chat para todos los agentes y el agente Asistente (solo brain); **22.2**, permisos de uso por agente y reglas de acceso generalizadas. Más de un agente, catálogo por empresa, selector en el chat, y permisos de quién puede usar cada agente. Decisión central: generalizar las reglas del brain a reglas de acceso a recursos (`brain | agent | connection`), que la Etapa 23 reusa.
 
-- [ ] Registro de agentes en código (nombre, descripción, capacidades, nivel máximo de efecto) con test que falla si una carpeta de `agents/` no está registrada.
-- [ ] Segundo agente real (candidato: inbound de la Etapa 10, o el que tenga un cliente esperándolo; se elige en el brainstorming).
-- [ ] Chat con selector de agente e hilos por agente.
+- [x] Registro de agentes en código (nombre, descripción, capacidades, nivel máximo de efecto) con test que falla si una carpeta de `agents/` no está registrada.
+- [ ] Segundo agente real (candidato: inbound de la Etapa 10, o el que tenga un cliente esperándolo; se elige en el brainstorming). Para la 22.1 es `asistente` (solo brain), en código y con su migración; falta el cierre en producción.
+- [x] Chat con selector de agente e hilos por agente.
 - [ ] Reglas de acceso generalizadas y permisos de uso por agente (persona o todos los miembros; usar o ninguno). El agente como principal con reglas propias sobre el brain reemplaza `config.brain` (pendiente de la spec 17 §9).
 - [ ] Página de la 19, chat y canal MCP muestran y aceptan solo los agentes permitidos.
 - [ ] `/ship` + `/context-save`.
+
+**Antes de desplegar (22.1):** `npx supabase migration list` (`db push` aplica todas las pendientes: confirmar las ajenas), aplicar `20261021120000_asistente_agent` y recién después el código. Con la migración primero, el código viejo ignora la fila `asistente`. **Después del deploy:** en `innovas`, abrir un hilo con Asistente, pedirle que liste sus herramientas (tienen que ser `brain_search`, `brain_read` y `brain_upsert`) y confirmar el `run` con `agent = 'asistente'`; abrir un hilo de outreach y confirmar que la firma aparece en la tarjeta del mail; en una empresa solo con brain, confirmar que `/<slug>` cae en el chat sin selector y que su brain no recibió páginas de canon. El chat no tiene tope de presupuesto: el gasto de modelos de una empresa solo con brain lo paga INNOV.AS hasta la 21.5; se apaga desde `/plataforma/<slug>`.
 
 **Terminado cuando:** una empresa tiene dos agentes habilitados; un admin le da uso de uno solo a una persona; esa persona lo ve en el chat, en la página de conexión y por MCP, y el otro no aparece ni responde por ningún canal.
 
