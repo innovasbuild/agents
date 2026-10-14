@@ -234,10 +234,14 @@ export async function createBrain(
 		{ p_tenant: tenantId },
 	);
 	if (foldersError) {
-		console.error("consola: no pude crear las carpetas del brain", foldersError);
+		console.error(
+			"consola: no pude crear las carpetas del brain",
+			foldersError,
+		);
 		return {
 			ok: false,
-			message: "El brain se creó, pero no sus carpetas. Probá de nuevo.",
+			message:
+				"El brain se creó, pero no sus carpetas. Crealas desde el brain.",
 		};
 	}
 	// Sin un agente que use el canon, el brain nace vacío (spec 21.4 §4.1).
