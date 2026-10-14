@@ -42,6 +42,12 @@ const mail = vi.hoisted(() => ({
 	sent: [] as { email: string; origin: string; next?: string }[],
 }));
 
+const tenantOrigin = vi.hoisted(() => ({ value: null as string | null }));
+vi.mock("@/lib/domains/origin", () => ({
+	invitationOrigin: async (_tenantId: string, fallback: string) =>
+		tenantOrigin.value ?? fallback,
+}));
+
 vi.mock("next/cache", () => ({
 	revalidatePath: (path: string) => {
 		db.revalidated.push(path);
@@ -332,6 +338,15 @@ describe("resendInvitation", () => {
 				next: "/acme-real",
 			},
 		]);
+	});
+
+	it("el link sale con el dominio propio de la empresa si lo tiene", async () => {
+		tenantOrigin.value = "https://ai.acme.com";
+
+		await resendInvitation(ROW_ID, "acme");
+
+		expect(mail.sent[0]?.origin).toBe("https://ai.acme.com");
+		tenantOrigin.value = null;
 	});
 
 	it("si la persona ya tiene cuenta lo dice, y el vencimiento se renueva igual", async () => {

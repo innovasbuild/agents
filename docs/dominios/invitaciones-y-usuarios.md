@@ -3,10 +3,11 @@ title: Invitaciones y usuarios
 category: dominios
 status: activo
 tags: [invitaciones, usuarios, roles, ingreso-por-dominio, memberships, bloqueo]
-updated: 2026-10-13
+updated: 2026-10-14
 sources:
   - lib/invitations/invite.ts
   - lib/invitations/domain.ts
+  - lib/domains/origin.ts
   - lib/auth/join-on-login.ts
   - lib/auth/login-gate.ts
   - lib/auth/magic-link.ts
@@ -56,6 +57,8 @@ Los roles son tres (`tenant_role`): `platform_admin`, `tenant_admin` y `tenant_m
 1. Si el correo no es de un dominio de `tenants.allowed_domains` y no vino `allowExternal`, devuelve `dominio_no_permitido` (HTTP 422 con la lista de dominios, para que el formulario ofrezca "permitir correo externo"). Lista vacía significa sin restricción. Con `allowExternal` se deja el evento `invitation.external`.
 2. Inserta una fila en `invitations` (`pending`, vence a los 14 días, un correo pendiente por empresa: el índice único parcial devuelve `duplicada`, HTTP 409).
 3. Manda el mail de Supabase (`inviteUserByEmail`). Si la persona ya tiene cuenta, Supabase no reinvita (`ya_existe`, igual HTTP 201: la invitación queda pendiente y se acepta en su próximo ingreso). Un fallo real de envío da 502 y la fila queda pendiente.
+
+**A dónde apunta el link.** Si la empresa tiene un dominio propio activo, el link del mail (`/auth/callback?next=/<slug>`) sale con ese dominio y no con el host de quien invita (`invitationOrigin`, `lib/domains/origin.ts`, Etapa 21.6): una persona de plataforma que invita desde el host raíz genera un link al dominio de la empresa. Vale para este endpoint y para el reenvío desde `/settings/usuarios`. Sin dominio propio, o si no se puede leer, sale con el origen de siempre. El link mágico del login no cambia: vuelve al host donde se pidió.
 
 El rol de la invitación es el rol de la membership que se crea. El selector Usuario / Administrador del formulario ([#68](https://github.com/innovasbuild/agents/pull/68)) lo manda; antes siempre iba `tenant_member`.
 
