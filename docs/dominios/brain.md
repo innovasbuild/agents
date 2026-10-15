@@ -40,9 +40,11 @@ sources:
   - docs/superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md
   - docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md
   - docs/superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md
+  - docs/superpowers/plans/2026-10-15-etapa-24-5-editar-skills-por-mcp.md
   - docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md
   - docs/superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md
   - lib/brain/core/folders.ts
+  - lib/brain/core/skills/draft.ts
   - lib/brain/core/folders-report.ts
   - scripts/brain-folders-report.mts
   - supabase/migrations/20261025120000_brain_folders.sql
@@ -224,6 +226,10 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 - **Límite aceptado (P7):** claude.ai y ChatGPT web no corren scripts siempre al día; su entorno no sale a internet por defecto. Queda como etapa 24.4.
 - **Pendientes:** limpiar los zips huérfanos de versiones retiradas o reemplazadas (P8); dependencias entre skills (24.2c); skills en el chat interno (24.3); ejecutar del lado de la plataforma (24.4). El cierre en producción está en la spec §13.
 
+### Crear y editar skills por MCP (etapa 24.5)
+
+`lib/brain/core/skills/draft.ts` es el único lugar que ve el borrador de una skill desde un asistente. El handler le pasa el proveedor con `withAccess` pero **sin** `withoutSkills`; las tres tools del brain siguen recibiendo el envuelto con la guardia. Las tools (`skill_create`, `skill_draft_read`, `skill_draft_edit`, `skill_draft_write_file`) se registran solo si la categoría `skill` está habilitada y la persona puede editar algo bajo `skills/`, y todo cambio va al borrador: publicar es solo de la web (24.1 S5). Reusan `putSkillFile` y `readSkillFile` para el permiso de editor y los topes del paquete, y el guardado del brain para el `SKILL.md` (con `baseRevision`, o sin él para crear: el guardado sin `baseRevision` solo crea páginas nuevas, así que `skill_create` nunca pisa una página).
+
 ### Frontera core/adapters
 
 `lib/brain/core` no importa nada de afuera: solo `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo, `@supabase/supabase-js`. Los imports relativos llevan extensión `.ts` porque scripts con Node directo los recorren. Lo que el host tiene que proveer (`WikiStore`, `AccessStore`, `AccessRulesStore`, `unauthorized`, `SaveDeps`) está en la tabla del README del módulo.
@@ -256,7 +262,7 @@ Specs y planes en `docs/superpowers/`:
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
 [etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
 [etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md) ·
-[etapa 24.5, crear y editar skills por MCP](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md).
+[etapa 24.5, crear y editar skills por MCP](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-15-etapa-24-5-editar-skills-por-mcp.md).
 
 Pull requests:
 

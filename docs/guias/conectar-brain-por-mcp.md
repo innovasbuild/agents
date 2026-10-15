@@ -17,6 +17,7 @@ sources:
   - lib/brain/core/mcp-server/server.ts
   - lib/brain/core/mcp-server/rate-limit.ts
   - lib/brain/core/skills/catalog.ts
+  - lib/brain/core/skills/draft.ts
   - app/[tenant]/brain/skills/package/route.ts
   - lib/brain/core/limits.ts
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -88,7 +89,24 @@ Cosas a saber:
 - Cada `skill_package` deja un evento `brain.skill_package_issued`.
 - Las cuatro cuentan como lecturas en el límite por minuto.
 
-Las skills se arman y se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
+Las skills se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
+
+### Crear y editar skills desde tu asistente
+
+Si sos editor de una carpeta de skills (o de una skill), tu asistente tiene cuatro tools más. Aparecen solo para quien puede editar algo bajo `skills/`, y solo si la empresa tiene habilitada la categoría `skill`:
+
+- `skill_create`: crea una skill nueva como **borrador**, en `skills/<carpeta>/<nombre>`. La carpeta tiene que existir.
+- `skill_draft_read`: lee el borrador (el `SKILL.md` completo, su revisión, su estado y sus archivos) o un archivo de texto.
+- `skill_draft_edit`: cambia el borrador reemplazando un fragmento que aparece una sola vez, en el `SKILL.md` o en un archivo de texto.
+- `skill_draft_write_file`: crea o reemplaza un archivo de texto del paquete.
+
+Cosas a saber:
+
+- **Todo va al borrador.** Lo que usan los demás no cambia hasta que un administrador publica desde la plataforma; `skill_load` y `skill_file` siguen devolviendo la versión publicada. Para probar tu cambio, pedile a tu asistente que lea el borrador.
+- Cada respuesta trae un link a la pantalla de la skill, donde un administrador revisa y publica.
+- Por MCP entran archivos de texto de hasta 256 KB (el `SKILL.md` hasta 100 KB). Los binarios, borrar archivos, publicar y retirar son de la plataforma.
+- Si otra persona guardó la skill mientras editabas, el asistente recibe un conflicto y tiene que leer el borrador de nuevo. Una skill que no podés editar responde igual que una que no existe.
+- Los cambios al `SKILL.md` quedan en el historial de la página con tu nombre y `Edición por MCP: <motivo>` (la alta, con `Alta por MCP: <motivo>`). Las escrituras cuentan como escrituras en el límite por minuto.
 
 ## Si algo falla
 
