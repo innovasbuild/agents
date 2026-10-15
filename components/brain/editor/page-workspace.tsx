@@ -24,7 +24,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { diffLines } from "@/lib/brain/core/diff";
 import { chooseBodyToSave } from "@/lib/brain/core/editor/body-to-save";
-import { reservedNotice } from "@/lib/brain/core/editor/reserved";
+import {
+	categoryToSave,
+	reservedNotice,
+} from "@/lib/brain/core/editor/reserved";
 import type { RulesPanelView } from "@/lib/brain/core/editor/rules-panel";
 import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { historyHref, pageHref } from "@/lib/brain/core/editor/slug";
@@ -135,7 +138,10 @@ export function PageWorkspace({
 	// Una reservada avisa qué gobierna y cuenta caracteres (spec etapa 26 §4.1).
 	const notice = reservedNotice(form.slug);
 
-	const isSkill = form.category === SKILL_CATEGORY;
+	// Una reservada guarda la categoría de su ruta: nunca es skill, así que
+	// conserva el selector de Estado y no se fuerza a Activo.
+	const category = categoryToSave(form.slug, form.category);
+	const isSkill = category === SKILL_CATEGORY;
 	const frontmatterText = (key: string) =>
 		typeof form.frontmatter[key] === "string"
 			? (form.frontmatter[key] as string)
@@ -217,7 +223,7 @@ export function PageWorkspace({
 					tenantSlug,
 					slug: form.slug,
 					title: form.title,
-					category: form.category,
+					category,
 					status: form.status,
 					tags,
 					frontmatter: form.frontmatter,

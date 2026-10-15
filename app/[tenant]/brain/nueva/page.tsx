@@ -10,12 +10,11 @@ import {
 import { editableFolders } from "@/lib/brain/core/access/tree";
 import { resolveNewPagePrefix } from "@/lib/brain/core/editor/new-page";
 import {
+	categoryToSave,
 	resolveNewRulesPage,
 	typedFolder,
 } from "@/lib/brain/core/editor/reserved";
 import { pageHref } from "@/lib/brain/core/editor/slug";
-import { categoryForPath } from "@/lib/brain/core/folders";
-import { BRAIN_CATEGORY, RULES_LEAF } from "@/lib/brain/core/types";
 
 export default async function NewBrainPage({
 	params,
@@ -44,7 +43,7 @@ export default async function NewBrainPage({
 	// crea quien administra la carpeta. Si ya existe en cualquier estado, se
 	// abre. Nace en borrador: no aplica hasta que se active.
 	if (reglas === "1") {
-		const target = resolveNewRulesPage(en, ctx.access);
+		const target = resolveNewRulesPage(en, ctx.access, folders);
 		if (!target) notFound();
 		if (pages.some((p) => p.slug === target.slug))
 			redirect(pageHref(tenantSlug, target.slug));
@@ -62,10 +61,7 @@ export default async function NewBrainPage({
 						title: target.title,
 						// La que va a guardar el proveedor: brain en la raíz, la del
 						// primer segmento en una carpeta.
-						category:
-							target.slug === RULES_LEAF
-								? BRAIN_CATEGORY
-								: categoryForPath(target.slug),
+						category: categoryToSave(target.slug, ctx.categories[0]),
 						status: "borrador",
 						tags: [],
 						frontmatter: {},
