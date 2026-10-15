@@ -558,6 +558,24 @@ describe("skill_draft_edit · SKILL.md", () => {
 		expect(save).not.toHaveBeenCalled();
 	});
 
+	it("rechaza una clave del encabezado que no se guarda, sin guardar", async () => {
+		const { drafts, save } = setup();
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "name: facturacion",
+				new: "name: facturacion\nallowed-tools: Bash",
+				reason: "r",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringMatching(
+				/allowed-tools.*name, description, license, compatibility/s,
+			),
+		});
+		expect(save).not.toHaveBeenCalled();
+	});
+
 	it("rechaza un cuerpo de más de 100 KB", async () => {
 		const { drafts, save } = setup();
 		await expect(

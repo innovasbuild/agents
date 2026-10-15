@@ -31,7 +31,7 @@ import {
 	skillName,
 } from "./package.ts";
 import type { SkillActor, SkillFailure } from "./publish.ts";
-import { renderSkillMd, skillMdName } from "./skill-md.ts";
+import { renderSkillMd, skillMdKeys, skillMdName } from "./skill-md.ts";
 import { skillState } from "./state.ts";
 import type { SkillOverviewRow } from "./store.ts";
 
@@ -84,6 +84,9 @@ export interface SkillDrafts {
 }
 
 export const SKILL_MD = "SKILL.md";
+
+// Los campos del encabezado que se guardan: el resto se perdería en silencio.
+const HEADER_KEYS = ["name", "description", "license", "compatibility"];
 
 const decoder = new TextDecoder();
 const encoder = new TextEncoder();
@@ -145,6 +148,14 @@ function checkedSkillMd(
 	if (!parsed) {
 		throw invalid(
 			"El SKILL.md quedó sin un encabezado YAML válido (entre dos líneas ---).",
+		);
+	}
+	const unsupported = (skillMdKeys(text) ?? []).filter(
+		(key) => !HEADER_KEYS.includes(key),
+	);
+	if (unsupported.length > 0) {
+		throw invalid(
+			`El encabezado tiene ${unsupported.length === 1 ? "un campo" : "campos"} que no se guarda${unsupported.length === 1 ? "" : "n"}: ${unsupported.join(", ")}. Solo se admiten ${HEADER_KEYS.join(", ")}.`,
 		);
 	}
 	if (skillMdName(text) !== skillName(slug)) {

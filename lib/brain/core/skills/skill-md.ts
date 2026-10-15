@@ -36,3 +36,18 @@ export function skillMdName(text: string): string | null {
 		return null;
 	}
 }
+
+// Las claves de primer nivel del encabezado de un SKILL.md, o null si no hay
+// encabezado o no se lee como un mapa YAML.
+export function skillMdKeys(text: string): string[] | null {
+	const match = HEADER.exec(text);
+	if (!match) return null;
+	try {
+		const data: unknown = parse(match[1]);
+		if (typeof data !== "object" || data === null || Array.isArray(data))
+			return null;
+		return Object.keys(data);
+	} catch {
+		return null;
+	}
+}
