@@ -30,12 +30,20 @@ const { useFolderRules, RULES_DEBOUNCE_MS } = await import(
 const INITIAL = { kind: "rules", entries: [{ slug: "inicial" }] };
 const view = (slug: string) => ({ kind: "rules", entries: [{ slug }] });
 
-function Probe({ slug, enabled = true }: { slug: string; enabled?: boolean }) {
+function Probe({
+	slug,
+	enabled = true,
+	initial = INITIAL,
+}: {
+	slug: string;
+	enabled?: boolean;
+	initial?: unknown;
+}) {
 	const current = useFolderRules({
 		enabled,
 		tenantSlug: "acme",
 		slug,
-		initial: INITIAL as never,
+		initial: initial as never,
 	});
 	return createElement("pre", null, JSON.stringify(current));
 }
@@ -43,9 +51,13 @@ function Probe({ slug, enabled = true }: { slug: string; enabled?: boolean }) {
 let host: HTMLDivElement;
 let root: Root;
 const shown = () => host.textContent ?? "";
-const show = async (slug: string, enabled = true) => {
+const show = async (
+	slug: string,
+	enabled = true,
+	initial: unknown = INITIAL,
+) => {
 	await act(async () => {
-		root.render(createElement(Probe, { slug, enabled }));
+		root.render(createElement(Probe, { slug, enabled, initial }));
 	});
 };
 const wait = async (ms: number) => {
@@ -129,5 +141,31 @@ describe("useFolderRules", () => {
 		await show("legal/", false);
 		await wait(1000);
 		expect(state.calls).toEqual([]);
+	});
+
+	it("apagado sigue al valor que manda el servidor", async () => {
+		await show("x/00-reglas", false);
+		expect(shown()).toContain("inicial");
+		await show("x/00-reglas", false, view("refrescada"));
+		expect(shown()).toContain("refrescada");
+		await show("x/00-reglas", false, null);
+		expect(shown()).toBe("null");
+	});
+
+	it("después de un error, volver a la carpeta inicial pide de nuevo", async () => {
+		await show("comercial/");
+		await show("legal/");
+		await wait(RULES_DEBOUNCE_MS);
+		await act(async () => state.calls[0].reject(new Error("red")));
+		expect(shown()).toContain('"kind":"error"');
+		await show("comercial/x");
+		await wait(RULES_DEBOUNCE_MS);
+		expect(state.calls.map((call) => call.input.folder)).toEqual([
+			"legal",
+			"comercial",
+		]);
+		await act(async () => state.calls[1].resolve(view("comercial")));
+		expect(shown()).toContain("comercial");
+		expect(shown()).not.toContain('"kind":"error"');
 	});
 });

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { nodeBuiltins } from "./client-safe";
 
 vi.mock("@/app/[tenant]/brain/rules-actions", () => ({
 	loadNewPageRules: vi.fn(),
@@ -94,5 +95,17 @@ describe("frontera de cliente", () => {
 			expect(lines.every((line) => line.startsWith("import type"))).toBe(true);
 			expect(source).not.toMatch(/core\/rules(-source)?["']/);
 		}
+	});
+
+	it("el panel no alcanza node:* por imports de runtime", () => {
+		expect(nodeBuiltins("components/brain/rules-panel.tsx")).toEqual([]);
+	});
+
+	it("el resumen lleva un indicador de que se despliega", () => {
+		const html = render({ kind: "rules", entries: [entry()] });
+		expect(html).toMatch(
+			/<summary[^>]*>(?:(?!<\/summary>)[\s\S])*<svg[^>]*aria-hidden="true"/,
+		);
+		expect(html).toContain("group-open:rotate-180");
 	});
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadNewPageRules } from "@/app/[tenant]/brain/rules-actions";
@@ -43,7 +44,10 @@ export function useFolderRules({
 					setView(next);
 				})
 				.catch(() => {
-					if (!stale) setView({ kind: "error", message: RULES_LOAD_ERROR });
+					if (stale) return;
+					// Ninguna carpeta queda cargada: volver a cualquiera pide de nuevo.
+					loaded.current = null;
+					setView({ kind: "error", message: RULES_LOAD_ERROR });
 				});
 		}, RULES_DEBOUNCE_MS);
 		return () => {
@@ -51,7 +55,8 @@ export function useFolderRules({
 			clearTimeout(timer);
 		};
 	}, [enabled, tenantSlug, folder]);
-	return view;
+	// Apagado (edición), manda el servidor: router.refresh() trae reglas nuevas.
+	return enabled ? view : initial;
 }
 
 // Informativo (spec etapa 26 §4.3): las reglas que reciben los asistentes antes
@@ -71,7 +76,7 @@ export function RulesPanel({
 		[pages],
 	);
 	return (
-		<details className="rounded-lg border bg-card text-card-foreground">
+		<details className="group rounded-lg border bg-card text-card-foreground">
 			<summary className="flex min-h-11 cursor-pointer items-center gap-2 px-4 font-medium text-sm lg:min-h-9">
 				Reglas que aplican{" "}
 				{view.kind === "rules" && (
@@ -79,6 +84,10 @@ export function RulesPanel({
 						({view.entries.length})
 					</span>
 				)}
+				<ChevronDownIcon
+					aria-hidden="true"
+					className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
+				/>
 			</summary>
 			<div className="space-y-4 border-t px-4 py-3 text-sm">
 				{view.kind === "error" ? (
