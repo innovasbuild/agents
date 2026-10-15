@@ -53,9 +53,7 @@ describe("lo que importa el cliente no llega a node:*", () => {
 		"lib/brain/core/reserved-slugs.ts",
 		"lib/brain/core/editor/reserved.ts",
 	])("%s", (entry) => {
-		expect(runtimePackages(entry).filter((p) => p.startsWith("node:"))).toEqual(
-			[],
-		);
+		expect(nodeBuiltins(entry)).toEqual([]);
 	});
 
 	it("el detector ve un builtin sin prefijo node:", () => {
