@@ -4,9 +4,11 @@ import {
 	loadBrainPages,
 	loadBrainTree,
 	loadEditorContext,
+	loadNewPageRulesPanel,
 } from "@/lib/brain/adapters/editor";
 import { editableFolders } from "@/lib/brain/core/access/tree";
 import { resolveNewPagePrefix } from "@/lib/brain/core/editor/new-page";
+import { typedFolder } from "@/lib/brain/core/editor/reserved";
 
 export default async function NewBrainPage({
 	params,
@@ -24,6 +26,8 @@ export default async function NewBrainPage({
 	const folders = editableFolders(await loadBrainTree(ctx));
 	if (folders.length === 0) notFound();
 	const pages = await loadBrainPages(ctx);
+	const prefix = resolveNewPagePrefix(en, folders);
+	const rules = await loadNewPageRulesPanel(ctx, typedFolder(prefix) ?? "");
 	return (
 		<div>
 			<h1 className="mb-2 text-3xl leading-tight">Nueva página</h1>
@@ -42,8 +46,9 @@ export default async function NewBrainPage({
 					title,
 					status,
 				}))}
+				rules={rules}
 				initial={{
-					slug: resolveNewPagePrefix(en, folders),
+					slug: prefix,
 					title: "",
 					category: ctx.categories[0],
 					status: "borrador",

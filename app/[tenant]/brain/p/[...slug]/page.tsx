@@ -7,7 +7,11 @@ import { ReadingView } from "@/components/brain/reading-view";
 import { PublishedFiles } from "@/components/brain/skills/published-files";
 import { SkillPanel } from "@/components/brain/skills/skill-panel";
 import { Button } from "@/components/ui/button";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import {
+	loadBrainPages,
+	loadEditorContext,
+	loadPageRulesPanel,
+} from "@/lib/brain/adapters/editor";
 import { skillStore } from "@/lib/brain/adapters/skills";
 import { isAdminRole } from "@/lib/brain/core/access/types";
 import { entryMode } from "@/lib/brain/core/editor/entry-mode";
@@ -76,6 +80,7 @@ export default async function BrainPageView({
 	// Sin `key` derivada de la revisión: remontaría el editor tras cada
 	// router.refresh() y perdería su historial de deshacer.
 	if (entryMode(level) === "edit") {
+		const rules = await loadPageRulesPanel(ctx, slug);
 		let skill: ReactNode;
 		if (skillRow) {
 			const store = skillStore();
@@ -124,6 +129,7 @@ export default async function BrainPageView({
 				}}
 				canDelete={level === "administrador"}
 				skill={skill}
+				rules={rules}
 				facts={
 					<PageFacts
 						tenantSlug={tenantSlug}

@@ -17,11 +17,13 @@ import { DeletePageButton } from "@/components/brain/delete-page-button";
 import { DetailsSheet } from "@/components/brain/details-sheet";
 import { DiffView } from "@/components/brain/diff-view";
 import { Paper } from "@/components/brain/paper";
+import { RulesPanel, useFolderRules } from "@/components/brain/rules-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { diffLines } from "@/lib/brain/core/diff";
 import { chooseBodyToSave } from "@/lib/brain/core/editor/body-to-save";
+import type { RulesPanelView } from "@/lib/brain/core/editor/rules-panel";
 import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { historyHref, pageHref } from "@/lib/brain/core/editor/slug";
 import {
@@ -81,6 +83,9 @@ export interface PageWorkspaceProps {
 	canDelete?: boolean;
 	// Panel de la skill (estado, archivos, versiones), ya armado en el servidor.
 	skill?: ReactNode;
+	// Reglas que aplican, ya armadas en el servidor (spec etapa 26 §4.3). null:
+	// la ruta no tiene, no se ven o es de skills.
+	rules?: RulesPanelView | null;
 }
 
 export function PageWorkspace({
@@ -93,6 +98,7 @@ export function PageWorkspace({
 	facts,
 	canDelete,
 	skill,
+	rules,
 }: PageWorkspaceProps) {
 	const router = useRouter();
 	const tagsId = useId();
@@ -114,6 +120,13 @@ export function PageWorkspace({
 	const [serverBody, setServerBody] = useState<string | null>(null);
 	const [editorKey, setEditorKey] = useState(0);
 	const [isPending, startTransition] = useTransition();
+	// En una página nueva el panel sigue a la carpeta que se escribe en el slug.
+	const rulesView = useFolderRules({
+		enabled: mode === "new",
+		tenantSlug,
+		slug: form.slug,
+		initial: rules ?? null,
+	});
 
 	const isSkill = form.category === SKILL_CATEGORY;
 	const frontmatterText = (key: string) =>
@@ -409,6 +422,9 @@ export function PageWorkspace({
 				</DetailsSheet>
 			</div>
 
+			{rulesView && (
+				<RulesPanel tenantSlug={tenantSlug} view={rulesView} pages={pages} />
+			)}
 			<Paper>
 				{mode === "new" && (
 					<label htmlFor={slugId} className="mb-4 block space-y-1 text-sm">
