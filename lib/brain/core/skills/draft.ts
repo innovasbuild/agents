@@ -10,14 +10,27 @@ import {
 	type Level,
 	type Principal,
 } from "../access/types.ts";
-import { BrainError } from "../errors.ts";
+import { BrainConflict, BrainError, BrainNotFound } from "../errors.ts";
 import type { BrainPage } from "../types.ts";
 import { MAX_READABLE_BYTES } from "./catalog.ts";
-import { type FilesDeps, readSkillFile } from "./files.ts";
+import {
+	type FilesDeps,
+	type ParsedSkillMd,
+	parseSkillMd,
+	putSkillFile,
+	readSkillFile,
+} from "./files.ts";
 import { looksLikeText } from "./http.ts";
-import { isSkillSlug, SKILLS_PREFIX, skillName } from "./package.ts";
+import {
+	isSkillSlug,
+	isValidFilePath,
+	MAX_COMPATIBILITY,
+	MAX_DESCRIPTION,
+	SKILLS_PREFIX,
+	skillName,
+} from "./package.ts";
 import type { SkillActor, SkillFailure } from "./publish.ts";
-import { renderSkillMd } from "./skill-md.ts";
+import { renderSkillMd, skillMdName } from "./skill-md.ts";
 import { skillState } from "./state.ts";
 import type { SkillOverviewRow } from "./store.ts";
 
@@ -46,11 +59,111 @@ export interface SkillDrafts {
 		skill: string;
 		path?: string;
 	}): Promise<Record<string, unknown>>;
+	edit(input: {
+		skill: string;
+		path?: string;
+		old: string;
+		new: string;
+		reason: string;
+	}): Promise<DraftChange>;
 }
 
 export const SKILL_MD = "SKILL.md";
 
 const decoder = new TextDecoder();
+const encoder = new TextEncoder();
+
+// Igual que MCP_MAX_UPSERT_BODY_BYTES de server.ts.
+export const MAX_DRAFT_BODY_BYTES = 102_400;
+
+const DRAFT_NOTE =
+	"El cambio quedó en el borrador: todavía no lo ven los demás. Un administrador lo publica desde la plataforma.";
+
+const invalid = (message: string) => new BrainError("validation", message);
+
+function occurrences(text: string, fragment: string): number {
+	let count = 0;
+	for (
+		let at = text.indexOf(fragment);
+		at !== -1;
+		at = text.indexOf(fragment, at + fragment.length)
+	) {
+		count += 1;
+	}
+	return count;
+}
+
+// Sin String.replace: un "$&" en el texto nuevo se escribe tal cual.
+function replaceOnce(text: string, old: string, replacement: string): string {
+	const at = text.indexOf(old);
+	return text.slice(0, at) + replacement + text.slice(at + old.length);
+}
+
+// El fragmento tiene que aparecer exactamente una vez.
+function applyEdit(
+	text: string,
+	old: string,
+	replacement: string,
+	where: string,
+): string {
+	if (old.length === 0) throw invalid("old no puede estar vacío.");
+	const count = occurrences(text, old);
+	if (count === 0) {
+		throw invalid(
+			`El fragmento no aparece en ${where}. Leelo con skill_draft_read y copiá el texto exacto.`,
+		);
+	}
+	if (count > 1) {
+		throw invalid(
+			`El fragmento aparece ${count} veces en ${where}. Sumá texto alrededor para que sea único.`,
+		);
+	}
+	return replaceOnce(text, old, replacement);
+}
+
+function checkedSkillMd(
+	text: string,
+	slug: string,
+	descriptionBefore: string,
+): ParsedSkillMd {
+	const parsed = parseSkillMd(text);
+	if (!parsed) {
+		throw invalid(
+			"El SKILL.md quedó sin un encabezado YAML válido (entre dos líneas ---).",
+		);
+	}
+	if (skillMdName(text) !== skillName(slug)) {
+		throw invalid(
+			"El campo name del encabezado es la ruta de la skill y no se cambia.",
+		);
+	}
+	if (parsed.description.length > MAX_DESCRIPTION) {
+		throw invalid("La description supera los 1024 caracteres.");
+	}
+	if (parsed.description.length === 0 && descriptionBefore.length > 0) {
+		throw invalid(
+			"No se puede dejar la skill sin description: el asistente la usa para saber cuándo cargarla.",
+		);
+	}
+	if (parsed.compatibility.length > MAX_COMPATIBILITY) {
+		throw invalid("El campo compatibility supera los 500 caracteres.");
+	}
+	if (encoder.encode(parsed.body).length > MAX_DRAFT_BODY_BYTES) {
+		throw invalid("El cuerpo del SKILL.md supera los 100 KB.");
+	}
+	return parsed;
+}
+
+function translateSave(error: unknown, slug: string): unknown {
+	if (error instanceof BrainConflict) {
+		return new BrainError(
+			"conflict",
+			"Alguien guardó la skill mientras la editabas. Leela de nuevo con skill_draft_read y repetí el cambio.",
+		);
+	}
+	if (error instanceof BrainNotFound) return notFound(slug);
+	return error;
+}
 
 export const notFound = (skill: string) =>
 	new BrainError(
@@ -132,6 +245,27 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 		return page;
 	}
 
+	// El estado se vuelve a leer: el guardado cambió la revisión o los archivos.
+	async function changed(
+		actor: SkillActor,
+		row: SkillOverviewRow,
+		path: string,
+		revision?: number,
+	): Promise<DraftChange> {
+		const fresh = (await files.store.overview(actor.tenantId)).find(
+			(item) => item.slug === row.slug,
+		);
+		return {
+			slug: row.slug,
+			name: skillName(row.slug),
+			path,
+			...(revision !== undefined ? { revision } : {}),
+			state: draftState(fresh ?? row),
+			reviewUrl: deps.reviewUrl(row.slug),
+			message: DRAFT_NOTE,
+		};
+	}
+
 	return {
 		async read({ skill, path }) {
 			const { actor, row } = await resolve(skill);
@@ -177,6 +311,73 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 					readable: file.size <= MAX_READABLE_BYTES,
 				})),
 			};
+		},
+		async edit({ skill, path, old, new: replacement, reason }) {
+			const { actor, row } = await resolve(skill);
+
+			if (path === undefined || path === "" || path === SKILL_MD) {
+				const page = await draftPage(actor, row.slug);
+				const previous = page.frontmatter.description;
+				const before = typeof previous === "string" ? previous.trim() : "";
+				const text = applyEdit(
+					skillMdOf(row.slug, page),
+					old,
+					replacement,
+					"el SKILL.md del borrador",
+				);
+				const parsed = checkedSkillMd(text, row.slug, before);
+				const frontmatter: Record<string, unknown> = {
+					...page.frontmatter,
+					description: parsed.description,
+				};
+				for (const key of ["compatibility", "license"] as const) {
+					if (parsed[key]) frontmatter[key] = parsed[key];
+					else delete frontmatter[key];
+				}
+				let saved: { revision: number };
+				try {
+					saved = await files.save(actor, {
+						slug: row.slug,
+						title: page.title,
+						category: page.category,
+						status: page.status,
+						tags: page.tags,
+						frontmatter,
+						body: parsed.body,
+						reason: `Edición por MCP: ${reason}`,
+						baseRevision: page.revision,
+					});
+				} catch (error) {
+					throw translateSave(error, row.slug);
+				}
+				return changed(actor, row, SKILL_MD, saved.revision);
+			}
+
+			if (!isValidFilePath(path)) throw invalid("Ruta de archivo inválida.");
+			const read = await readSkillFile(tenantSlug, row.slug, { path }, files);
+			if (!read.ok) failure(read);
+			if (
+				read.bytes.length > MAX_READABLE_BYTES ||
+				!looksLikeText(read.bytes)
+			) {
+				throw invalid(
+					`"${path}" no es un archivo de texto de hasta 256 KB: se edita desde la plataforma.`,
+				);
+			}
+			const next = encoder.encode(
+				applyEdit(decoder.decode(read.bytes), old, replacement, `"${path}"`),
+			);
+			if (next.length > MAX_READABLE_BYTES) {
+				throw invalid(`"${path}" quedaría de más de 256 KB.`);
+			}
+			const put = await putSkillFile(
+				tenantSlug,
+				row.slug,
+				{ path, bytes: next },
+				files,
+			);
+			if (!put.ok) failure(put);
+			return changed(actor, row, path);
 		},
 	};
 }

@@ -1,6 +1,6 @@
 // Arma el SKILL.md de una copia publicada (spec etapa 24.2a §5). Puro. Del
 // frontmatter del brain solo salen los campos del formato Agent Skills.
-import { stringify } from "yaml";
+import { parse, stringify } from "yaml";
 
 export function renderSkillMd(input: {
 	name: string;
@@ -18,4 +18,21 @@ export function renderSkillMd(input: {
 	}
 	// lineWidth 0: una descripción larga no se parte en varias líneas.
 	return `---\n${stringify(fields, { lineWidth: 0 })}---\n\n${input.body}`;
+}
+
+const HEADER = /^---\r?\n([\s\S]*?)\r?\n---/;
+
+// El campo name del encabezado de un SKILL.md, o null si no hay o no se lee.
+export function skillMdName(text: string): string | null {
+	const match = HEADER.exec(text);
+	if (!match) return null;
+	try {
+		const data: unknown = parse(match[1]);
+		if (typeof data !== "object" || data === null || Array.isArray(data))
+			return null;
+		const name = (data as Record<string, unknown>).name;
+		return typeof name === "string" ? name.trim() : null;
+	} catch {
+		return null;
+	}
 }

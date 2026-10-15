@@ -412,3 +412,263 @@ describe("canEditSkills", () => {
 		expect(canEditSkills(rules, principal, [row])).toBe(true);
 	});
 });
+
+describe("skill_draft_edit · SKILL.md", () => {
+	it("cambia el cuerpo, guarda con la revisión leída y deja el motivo", async () => {
+		const { drafts, save, pages } = setup();
+		const result = await drafts.edit({
+			skill: "facturacion",
+			old: "Paso dos.",
+			new: "Paso dos y tres.",
+			reason: "sumo un paso",
+		});
+		expect(save).toHaveBeenCalledTimes(1);
+		const write = save.mock.calls[0][1];
+		expect(write).toMatchObject({
+			slug: SLUG,
+			title: "Facturación",
+			category: "skill",
+			status: "activo",
+			tags: ["finanzas"],
+			body: "# Facturación\n\nPaso uno.\nPaso dos y tres.\n",
+			reason: "Edición por MCP: sumo un paso",
+			baseRevision: 4,
+		});
+		expect(write.frontmatter).toMatchObject({
+			description: "Usar para emitir y validar facturas.",
+			compatibility: "Python 3",
+			updated: "2026-10-01",
+		});
+		expect(pages.get(SLUG)?.revision).toBe(5);
+		expect(result).toMatchObject({
+			slug: SLUG,
+			path: "SKILL.md",
+			revision: 5,
+			state: "con_cambios",
+			reviewUrl: `https://agents.test/acme/brain/p/${SLUG}`,
+		});
+		expect(result.message).toContain("borrador");
+	});
+
+	it("cambia la description desde el encabezado", async () => {
+		const { drafts, save } = setup();
+		await drafts.edit({
+			skill: "facturacion",
+			old: "Usar para emitir y validar facturas.",
+			new: "Usar para facturar.",
+			reason: "más corta",
+		});
+		expect(save.mock.calls[0][1].frontmatter).toMatchObject({
+			description: "Usar para facturar.",
+		});
+	});
+
+	it("quita compatibility si se borra la línea", async () => {
+		const { drafts, save } = setup();
+		await drafts.edit({
+			skill: "facturacion",
+			old: "compatibility: Python 3\n",
+			new: "",
+			reason: "ya no hace falta",
+		});
+		expect(save.mock.calls[0][1].frontmatter).not.toHaveProperty(
+			"compatibility",
+		);
+	});
+
+	it("escribe literal un texto con $& o $1", async () => {
+		const { drafts, save } = setup();
+		await drafts.edit({
+			skill: "facturacion",
+			old: "Paso dos.",
+			new: "Cobrar $& más $1 y $$.",
+			reason: "precio",
+		});
+		expect(save.mock.calls[0][1].body).toContain("Cobrar $& más $1 y $$.");
+	});
+
+	it("rechaza un fragmento vacío, ausente o repetido sin guardar", async () => {
+		const { drafts, save } = setup();
+		const base = { skill: "facturacion", new: "x", reason: "r" };
+		await expect(drafts.edit({ ...base, old: "" })).rejects.toMatchObject({
+			code: "validation",
+		});
+		await expect(
+			drafts.edit({ ...base, old: "no está en el texto" }),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("no aparece"),
+		});
+		await expect(drafts.edit({ ...base, old: "Paso" })).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("2 veces"),
+		});
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("rechaza dejar la skill sin description o con una de más de 1024", async () => {
+		const { drafts, save } = setup();
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "description: Usar para emitir y validar facturas.\n",
+				new: "",
+				reason: "r",
+			}),
+		).rejects.toMatchObject({ code: "validation" });
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "Usar para emitir y validar facturas.",
+				new: "x".repeat(1025),
+				reason: "r",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("1024"),
+		});
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("rechaza romper el encabezado o cambiar name", async () => {
+		const { drafts, save } = setup();
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "---\nname: facturacion",
+				new: "name: facturacion",
+				reason: "r",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("encabezado"),
+		});
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "name: facturacion",
+				new: "name: otra",
+				reason: "r",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("name"),
+		});
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("rechaza un cuerpo de más de 100 KB", async () => {
+		const { drafts, save } = setup();
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "Paso uno.",
+				new: "x".repeat(102_401),
+				reason: "r",
+			}),
+		).rejects.toMatchObject({ code: "validation" });
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("un borrador que venía sin description se puede seguir editando", async () => {
+		const { drafts, pages, save } = setup();
+		const page = pages.get(SLUG);
+		if (page) page.frontmatter = { updated: "2026-10-01" };
+		await drafts.edit({
+			skill: "facturacion",
+			old: "Paso uno.",
+			new: "Primero.",
+			reason: "r",
+		});
+		expect(save).toHaveBeenCalledTimes(1);
+	});
+
+	it("si alguien guardó en el medio devuelve un conflicto que dice qué hacer", async () => {
+		const { drafts } = setup({ saveError: new BrainConflict(SLUG, 5) });
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				old: "Paso uno.",
+				new: "Primero.",
+				reason: "r",
+			}),
+		).rejects.toMatchObject({
+			code: "conflict",
+			message: expect.stringContaining("skill_draft_read"),
+		});
+	});
+
+	it("un lector y el editor de otra carpeta reciben not_found", async () => {
+		const input = {
+			skill: "facturacion",
+			old: "Paso uno.",
+			new: "x",
+			reason: "r",
+		};
+		const lector = setup({ rules: LECTOR });
+		await expect(lector.drafts.edit(input)).rejects.toMatchObject({
+			code: "not_found",
+		});
+		expect(lector.save).not.toHaveBeenCalled();
+		const otro = setup({
+			rules: [members("", "lector"), members("skills/ventas", "editor")],
+		});
+		await expect(otro.drafts.edit(input)).rejects.toMatchObject({
+			code: "not_found",
+		});
+	});
+});
+
+describe("skill_draft_edit · archivos", () => {
+	it("cambia un archivo de texto y lo sube con su hash", async () => {
+		const { drafts, putFile, blobs } = setup();
+		const result = await drafts.edit({
+			skill: "facturacion",
+			path: "scripts/calc.py",
+			old: "hola",
+			new: "chau",
+			reason: "saludo",
+		});
+		expect(putFile).toHaveBeenCalledWith(
+			expect.objectContaining({ path: "scripts/calc.py", size: 13 }),
+		);
+		const sha = putFile.mock.calls[0][0].sha256;
+		expect(dec(blobs.get(`${TENANT}/${sha}`) as Uint8Array)).toBe(
+			"print('chau')",
+		);
+		expect(result).toMatchObject({
+			path: "scripts/calc.py",
+			state: "con_cambios",
+		});
+		expect(result.revision).toBeUndefined();
+	});
+
+	it("rechaza un binario, un archivo que no está y un fragmento ausente", async () => {
+		const { drafts, putFile } = setup();
+		const base = { skill: "facturacion", old: "a", new: "b", reason: "r" };
+		await expect(
+			drafts.edit({ ...base, path: "assets/logo.png" }),
+		).rejects.toMatchObject({ code: "validation" });
+		await expect(
+			drafts.edit({ ...base, path: "no/esta.md" }),
+		).rejects.toMatchObject({ code: "not_found" });
+		await expect(
+			drafts.edit({ ...base, path: "scripts/calc.py", old: "zzz" }),
+		).rejects.toMatchObject({ code: "validation" });
+		expect(putFile).not.toHaveBeenCalled();
+	});
+
+	it("rechaza un resultado de más de 256 KB", async () => {
+		const { drafts, putFile } = setup();
+		await expect(
+			drafts.edit({
+				skill: "facturacion",
+				path: "scripts/calc.py",
+				old: "hola",
+				new: "x".repeat(262_144),
+				reason: "r",
+			}),
+		).rejects.toMatchObject({ code: "validation" });
+		expect(putFile).not.toHaveBeenCalled();
+	});
+});
