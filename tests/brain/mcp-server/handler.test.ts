@@ -985,6 +985,23 @@ describe("handleBrainMcp · edición de skills", () => {
 		expect(await names(client)).toEqual(BRAIN_TOOLS);
 	});
 
+	it("si el overview falla, la conexión anda con las tools del brain y sin las de edición", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const client = await connect(
+			"admin",
+			deps({
+				...withSkillCategory,
+				skills: skillsDeps({
+					overview: async () => {
+						throw new Error("rpc caída");
+					},
+				}),
+			}),
+		);
+		expect(await names(client)).toEqual(BRAIN_TOOLS);
+		spy.mockRestore();
+	});
+
 	it("skill_create guarda con la persona como autora y devuelve el link con el slug de la empresa", async () => {
 		const d = deps({ ...withSkillCategory, skills: skillsDeps() });
 		const client = await connect("admin", d);
