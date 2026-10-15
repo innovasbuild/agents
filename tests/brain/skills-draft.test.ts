@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { resolveAccess } from "@/lib/brain/core/access/resolve-access";
 import type { AccessRule, Principal } from "@/lib/brain/core/access/types";
-import { BrainConflict } from "@/lib/brain/core/errors";
+import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
 import {
 	canEditSkills,
 	createSkillDrafts,
@@ -10,6 +10,7 @@ import type { FilesDeps } from "@/lib/brain/core/skills/files";
 import type { SkillFile } from "@/lib/brain/core/skills/package";
 import type { SkillOverviewRow } from "@/lib/brain/core/skills/store";
 import type { BrainPage, BrainRole, BrainWrite } from "@/lib/brain/core/types";
+import { WikiStoreError } from "@/lib/brain/core/wiki-store";
 
 const SLUG = "skills/admin/facturacion";
 const TENANT = "t1";
@@ -670,5 +671,220 @@ describe("skill_draft_edit · archivos", () => {
 			}),
 		).rejects.toMatchObject({ code: "validation" });
 		expect(putFile).not.toHaveBeenCalled();
+	});
+});
+
+describe("skill_draft_write_file", () => {
+	it("crea un archivo de texto del paquete", async () => {
+		const { drafts, putFile, blobs } = setup();
+		const result = await drafts.writeFile({
+			skill: "facturacion",
+			path: "references/guia.md",
+			content: "# Guía\n",
+		});
+		expect(putFile).toHaveBeenCalledWith(
+			expect.objectContaining({ path: "references/guia.md", size: 8 }),
+		);
+		const sha = putFile.mock.calls[0][0].sha256;
+		expect(dec(blobs.get(`${TENANT}/${sha}`) as Uint8Array)).toBe("# Guía\n");
+		expect(result).toMatchObject({
+			path: "references/guia.md",
+			state: "con_cambios",
+		});
+	});
+
+	it("reemplaza un archivo que ya estaba", async () => {
+		const { drafts, files } = setup();
+		await drafts.writeFile({
+			skill: "facturacion",
+			path: "scripts/calc.py",
+			content: "print('nuevo')",
+		});
+		expect(files().filter((f) => f.path === "scripts/calc.py")).toHaveLength(1);
+	});
+
+	it("SKILL.md no es un archivo del paquete y manda a skill_draft_edit", async () => {
+		const { drafts, putFile } = setup();
+		await expect(
+			drafts.writeFile({
+				skill: "facturacion",
+				path: "SKILL.md",
+				content: "x",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("skill_draft_edit"),
+		});
+		expect(putFile).not.toHaveBeenCalled();
+	});
+
+	it("rechaza rutas inválidas y contenido de más de 256 KB", async () => {
+		const { drafts, putFile } = setup();
+		await expect(
+			drafts.writeFile({ skill: "facturacion", path: "../x.md", content: "x" }),
+		).rejects.toMatchObject({ code: "validation" });
+		await expect(
+			drafts.writeFile({
+				skill: "facturacion",
+				path: "references/big.md",
+				content: "x".repeat(262_145),
+			}),
+		).rejects.toMatchObject({ code: "validation" });
+		expect(putFile).not.toHaveBeenCalled();
+	});
+
+	it("el tope de archivos de la base se traduce a un error de validación", async () => {
+		const { drafts, putFile } = setup();
+		putFile.mockRejectedValueOnce(
+			new WikiStoreError("BR422", "x", "package_limit"),
+		);
+		await expect(
+			drafts.writeFile({
+				skill: "facturacion",
+				path: "references/uno.md",
+				content: "x",
+			}),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("50 archivos"),
+		});
+	});
+
+	it("un lector recibe not_found", async () => {
+		const { drafts, putFile } = setup({ rules: LECTOR });
+		await expect(
+			drafts.writeFile({
+				skill: "facturacion",
+				path: "references/guia.md",
+				content: "x",
+			}),
+		).rejects.toMatchObject({ code: "not_found" });
+		expect(putFile).not.toHaveBeenCalled();
+	});
+});
+
+describe("skill_create", () => {
+	const input = {
+		name: "reporte-mensual",
+		folder: "admin",
+		description: "Armar el reporte mensual.",
+		instructions: "# Reporte\n\nPasos.\n",
+		reason: "primer borrador",
+	};
+
+	it("crea el borrador sin pisar nada: sin baseRevision, categoría skill, título por defecto", async () => {
+		const { drafts, save } = setup();
+		const result = await drafts.create(input);
+		const write = save.mock.calls[0][1];
+		expect(write).toMatchObject({
+			slug: "skills/admin/reporte-mensual",
+			title: "reporte-mensual",
+			category: "skill",
+			status: "activo",
+			tags: [],
+			body: "# Reporte\n\nPasos.\n",
+			frontmatter: { description: "Armar el reporte mensual." },
+			reason: "Alta por MCP: primer borrador",
+		});
+		expect(write.baseRevision).toBeUndefined();
+		expect(result).toMatchObject({
+			slug: "skills/admin/reporte-mensual",
+			name: "reporte-mensual",
+			path: "SKILL.md",
+			revision: 1,
+			state: "sin_publicar",
+			reviewUrl:
+				"https://agents.test/acme/brain/p/skills/admin/reporte-mensual",
+		});
+	});
+
+	it("la skill creada se puede leer y editar enseguida, y los demás no la ven publicada", async () => {
+		const { drafts, rows } = setup();
+		await drafts.create(input);
+		const read = await drafts.read({ skill: "reporte-mensual" });
+		expect(read).toMatchObject({ state: "sin_publicar", revision: 1 });
+		expect(
+			rows.find((r) => r.slug === "skills/admin/reporte-mensual")?.current,
+		).toBeNull();
+	});
+
+	it("sin carpeta cae directo bajo skills/, con compatibility y título propio", async () => {
+		const { drafts, save } = setup();
+		await drafts.create({
+			...input,
+			folder: undefined,
+			title: "Reporte mensual",
+			compatibility: "Python 3",
+		});
+		expect(save.mock.calls[0][1]).toMatchObject({
+			slug: "skills/reporte-mensual",
+			title: "Reporte mensual",
+			frontmatter: {
+				description: "Armar el reporte mensual.",
+				compatibility: "Python 3",
+			},
+		});
+	});
+
+	it("rechaza nombres, carpetas, textos y largos inválidos sin guardar", async () => {
+		const { drafts, save } = setup();
+		for (const bad of [
+			{ name: "Reporte Mensual" },
+			{ name: "a/b" },
+			{ name: "x".repeat(65) },
+			{ folder: "Admin" },
+			{ description: "   " },
+			{ description: "x".repeat(1025) },
+			{ compatibility: "x".repeat(501) },
+			{ instructions: "   " },
+			{ instructions: "x".repeat(102_401) },
+		]) {
+			await expect(drafts.create({ ...input, ...bad })).rejects.toMatchObject({
+				code: "validation",
+			});
+		}
+		expect(save).not.toHaveBeenCalled();
+	});
+
+	it("un lector no crea, y un editor solo crea en su carpeta", async () => {
+		const lector = setup({ rules: LECTOR });
+		await expect(lector.drafts.create(input)).rejects.toMatchObject({
+			code: "forbidden",
+		});
+		expect(lector.save).not.toHaveBeenCalled();
+
+		const ventas = setup({
+			rules: [members("", "lector"), members("skills/ventas", "editor")],
+		});
+		await expect(ventas.drafts.create(input)).rejects.toMatchObject({
+			code: "forbidden",
+		});
+		await ventas.drafts.create({ ...input, folder: "ventas" });
+		expect(ventas.save).toHaveBeenCalledTimes(1);
+	});
+
+	it("si la ruta ya existe, conflicto que manda a skill_draft_edit", async () => {
+		const { drafts } = setup();
+		await expect(
+			drafts.create({ ...input, name: "facturacion" }),
+		).rejects.toMatchObject({
+			code: "conflict",
+			message: expect.stringContaining("skill_draft_edit"),
+		});
+	});
+
+	it("si la carpeta no existe, el error del guardado llega tal cual", async () => {
+		const { drafts } = setup({
+			saveError: new BrainValidation(
+				["folder"],
+				"No existe la carpeta skills/nueva. Pedile a un administrador que la cree.",
+			),
+		});
+		await expect(
+			drafts.create({ ...input, folder: "nueva" }),
+		).rejects.toMatchObject({
+			code: "validation",
+			message: expect.stringContaining("No existe la carpeta"),
+		});
 	});
 });

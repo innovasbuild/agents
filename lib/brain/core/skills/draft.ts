@@ -11,7 +11,7 @@ import {
 	type Principal,
 } from "../access/types.ts";
 import { BrainConflict, BrainError, BrainNotFound } from "../errors.ts";
-import type { BrainPage } from "../types.ts";
+import { type BrainPage, MAX_SLUG_LENGTH, SLUG_PATTERN } from "../types.ts";
 import { MAX_READABLE_BYTES } from "./catalog.ts";
 import {
 	type FilesDeps,
@@ -26,6 +26,7 @@ import {
 	isValidFilePath,
 	MAX_COMPATIBILITY,
 	MAX_DESCRIPTION,
+	MAX_SKILL_NAME,
 	SKILLS_PREFIX,
 	skillName,
 } from "./package.ts";
@@ -64,6 +65,20 @@ export interface SkillDrafts {
 		path?: string;
 		old: string;
 		new: string;
+		reason: string;
+	}): Promise<DraftChange>;
+	writeFile(input: {
+		skill: string;
+		path: string;
+		content: string;
+	}): Promise<DraftChange>;
+	create(input: {
+		name: string;
+		folder?: string;
+		title?: string;
+		description: string;
+		instructions: string;
+		compatibility?: string;
 		reason: string;
 	}): Promise<DraftChange>;
 }
@@ -378,6 +393,110 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 			);
 			if (!put.ok) failure(put);
 			return changed(actor, row, path);
+		},
+
+		async writeFile({ skill, path, content }) {
+			const { actor, row } = await resolve(skill);
+			if (path === SKILL_MD) {
+				throw invalid(
+					"SKILL.md no es un archivo del paquete: cambialo con skill_draft_edit.",
+				);
+			}
+			if (!isValidFilePath(path)) {
+				throw invalid(
+					"Ruta inválida. Usá letras, números, guiones y puntos, sin espacios ni «..», hasta seis niveles.",
+				);
+			}
+			const bytes = encoder.encode(content);
+			if (bytes.length > MAX_READABLE_BYTES) {
+				throw invalid(
+					"Por acá entran archivos de texto de hasta 256 KB; los más grandes se suben desde la plataforma.",
+				);
+			}
+			const put = await putSkillFile(
+				tenantSlug,
+				row.slug,
+				{ path, bytes },
+				files,
+			);
+			if (!put.ok) failure(put);
+			return changed(actor, row, path);
+		},
+
+		async create(input) {
+			const actor = await files.actor(tenantSlug);
+			if (!actor) throw notFound(input.name);
+			const name = input.name.trim();
+			const folder = input.folder?.trim().replace(/^\/+|\/+$/g, "");
+			const slug = folder
+				? `${SKILLS_PREFIX}${folder}/${name}`
+				: `${SKILLS_PREFIX}${name}`;
+			if (
+				name.length === 0 ||
+				name.length > MAX_SKILL_NAME ||
+				name.includes("/") ||
+				slug.length > MAX_SLUG_LENGTH ||
+				!SLUG_PATTERN.test(slug)
+			) {
+				throw invalid(
+					"El nombre y la carpeta usan minúsculas, dígitos y guiones (la carpeta puede tener subniveles separados por /). El nombre llega a 64 caracteres.",
+				);
+			}
+			const description = input.description.trim();
+			if (description.length === 0 || description.length > MAX_DESCRIPTION) {
+				throw invalid(
+					"La description es obligatoria y llega a 1024 caracteres: dice cuándo conviene usar la skill.",
+				);
+			}
+			const compatibility = input.compatibility?.trim() ?? "";
+			if (compatibility.length > MAX_COMPATIBILITY) {
+				throw invalid("El campo compatibility supera los 500 caracteres.");
+			}
+			if (
+				input.instructions.trim().length === 0 ||
+				encoder.encode(input.instructions).length > MAX_DRAFT_BODY_BYTES
+			) {
+				throw invalid("Las instrucciones son obligatorias y llegan a 100 KB.");
+			}
+			if (!atLeast(deps.levelOf(slug), "editor")) {
+				throw new BrainError(
+					"forbidden",
+					"Necesitás ser editor de esa carpeta para crear una skill ahí.",
+				);
+			}
+			let saved: { revision: number };
+			try {
+				saved = await files.save(actor, {
+					slug,
+					title: input.title?.trim() || name,
+					category: "skill",
+					status: "activo",
+					tags: [],
+					frontmatter: {
+						description,
+						...(compatibility ? { compatibility } : {}),
+					},
+					body: input.instructions,
+					reason: `Alta por MCP: ${input.reason}`,
+				});
+			} catch (error) {
+				if (error instanceof BrainConflict) {
+					throw new BrainError(
+						"conflict",
+						`Ya existe una página en ${slug}. Para cambiarla usá skill_draft_edit.`,
+					);
+				}
+				throw error;
+			}
+			return {
+				slug,
+				name,
+				path: SKILL_MD,
+				revision: saved.revision,
+				state: "sin_publicar",
+				reviewUrl: deps.reviewUrl(slug),
+				message: DRAFT_NOTE,
+			};
 		},
 	};
 }
