@@ -10,6 +10,11 @@ su propio repo.
   `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo,
   `@supabase/supabase-js`. Lo vigila `tests/brain/boundary.test.ts`, que mira
   imports estáticos y dinámicos; no detecta globals de Node como `Buffer`.
+- `core/rules.ts`, `core/rules-source.ts`, `core/session.ts`, `core/rules-report.ts`:
+  páginas reservadas (`00-reglas`, `00-plantilla`), cascada de reglas
+  (`rulesFor`), fuente de reglas y `requireRules` (la exigencia de
+  `rulesRevision`, solo en el MCP y en las tools del agente), bloque de
+  arranque (`formatBrainSession`) y reporte en seco.
 - `core/access/`: modelo de permisos por carpeta y página (`resolveAccess`,
   `withAccess`) y lectura de reglas. Un `tenant_member` ve y edita lo que las
   reglas le dan; administradores, agente, plataforma e import no pasan por
@@ -18,6 +23,10 @@ su propio repo.
   actor tiene que derivarse dentro de execute desde
   `toolCtx.session.auth.current` (como ya hace la tool de escritura con
   `auth.initiator` para el autor), no fijarse al iniciar la sesión.
+- `adapters/rules.ts` y `adapters/session-instructions.ts`: cablean la fuente
+  de reglas a Supabase y arman el bloque de arranque del chat
+  (`brainSessionInstructions`); `lib/agents/eve/brain-instructions.ts` lo monta
+  en `session.started`.
 - `adapters/`: lo que conecta el módulo con esta plataforma (Supabase admin,
   conexiones del tenant, sesión, eve, Next). Es lo que hay que reescribir en el
   repo nuevo.
