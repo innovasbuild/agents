@@ -2,17 +2,30 @@
 // Instrucciones y reglas del brain (spec etapa 26 §4.1, §4.2). Puro: lo usan el
 // proveedor wiki, el MCP, las tools del agente y un script con Node directo.
 import { createHash } from "node:crypto";
-import { ancestorChain, parentPath } from "./access/resolve-access.ts";
+import { ancestorChain } from "./access/resolve-access.ts";
 import { ROOT_PATH } from "./access/types.ts";
 import { BrainValidation } from "./errors.ts";
+import {
+	folderOfPage,
+	isRulesSlug,
+	rulesCharLimit,
+	rulesSlugFor,
+} from "./reserved-slugs.ts";
 import {
 	type BrainStatus,
 	MAX_CASCADE_CHARS,
 	MAX_FOLDER_RULES_CHARS,
-	MAX_ROOT_RULES_CHARS,
-	RESERVED_LEAVES,
-	RULES_LEAF,
 } from "./types.ts";
+
+export {
+	folderOfPage,
+	isReservedSlug,
+	isRulesSlug,
+	isTemplateSlug,
+	leafOf,
+	rulesCharLimit,
+	rulesSlugFor,
+} from "./reserved-slugs.ts";
 
 export interface RuleEntry {
 	/** Carpeta que gobierna; "" es la raíz. */
@@ -46,27 +59,6 @@ export interface RulePage {
 	status: BrainStatus;
 	revision: number;
 	body: string;
-}
-
-export function leafOf(slug: string): string {
-	return slug.slice(slug.lastIndexOf("/") + 1);
-}
-
-export function isReservedSlug(slug: string): boolean {
-	return (RESERVED_LEAVES as readonly string[]).includes(leafOf(slug));
-}
-
-export function isRulesSlug(slug: string): boolean {
-	return leafOf(slug) === RULES_LEAF;
-}
-
-export function rulesSlugFor(folder: string): string {
-	return folder === ROOT_PATH ? RULES_LEAF : `${folder}/${RULES_LEAF}`;
-}
-
-/** Carpeta en la que vive una página; "" para una de la raíz. */
-export function folderOfPage(slug: string): string {
-	return parentPath(slug) ?? ROOT_PATH;
 }
 
 // Raíz primero. Una 00-reglas no se gobierna a sí misma: su propia revisión ya
@@ -142,8 +134,8 @@ export function checkRulesWrite(
 ): void {
 	if (!isRulesSlug(write.slug) || write.status !== "activo") return;
 	const folder = folderOfPage(write.slug);
-	const limit =
-		folder === ROOT_PATH ? MAX_ROOT_RULES_CHARS : MAX_FOLDER_RULES_CHARS;
+	// isRulesSlug ya pasó: el tope existe.
+	const limit = rulesCharLimit(write.slug) ?? MAX_FOLDER_RULES_CHARS;
 	if (write.body.length > limit) {
 		throw new BrainValidation(
 			["body"],

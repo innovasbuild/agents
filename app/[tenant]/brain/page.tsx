@@ -10,11 +10,13 @@ import {
 	loadEditorContext,
 } from "@/lib/brain/adapters/editor";
 import {
+	countPages,
 	editableFolders,
 	isFolderNode,
 	type TreeNode,
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
+import { listedInIndex } from "@/lib/brain/core/editor/reserved";
 import { buildLinkIndex } from "@/lib/brain/core/links";
 import {
 	BRAIN_STATUSES,
@@ -95,12 +97,12 @@ export default async function BrainIndexPage({
 		: folder && !q.trim() && !tag
 			? (findNode(shownTree, folder)?.children.filter(isFolderNode) ?? [])
 			: [];
-	const countPages = (node: TreeNode): number =>
-		(node.page ? 1 : 0) +
-		node.children.reduce((sum, c) => sum + countPages(c), 0);
-	const listed = browsing
-		? visible.filter((p) => !p.slug.includes("/"))
-		: visible;
+	// Las reservadas no se mezclan con las páginas comunes; la búsqueda sí las
+	// encuentra, con su insignia (spec etapa 26 §4.1).
+	const listed = listedInIndex(
+		browsing ? visible.filter((p) => !p.slug.includes("/")) : visible,
+		q.trim() !== "",
+	);
 	if (!q.trim()) listed.sort((a, b) => a.slug.localeCompare(b.slug));
 
 	const counts = new Map(
@@ -201,8 +203,13 @@ export default async function BrainIndexPage({
 								className="flex min-h-11 items-center gap-3 px-4 py-2 hover:bg-muted/50"
 							>
 								<span className="min-w-0 flex-1">
-									<span className="block truncate font-medium">
-										{node.name}
+									<span className="flex min-w-0 items-center gap-2">
+										<span className="truncate font-medium">{node.name}</span>
+										{node.rules?.status === "activo" && (
+											<span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-secondary-foreground text-xs">
+												Reglas
+											</span>
+										)}
 									</span>
 									{node.folder?.description && (
 										<span className="block truncate text-muted-foreground text-xs">

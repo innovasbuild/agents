@@ -373,3 +373,111 @@ describe("deletePage", () => {
 		expect(del).not.toHaveBeenCalled();
 	});
 });
+
+describe("páginas reservadas", () => {
+	const PAGES_WITH_RULES = [
+		...PAGES,
+		page("comercial/00-reglas", "Reglas de comercial"),
+		page("comercial/00-plantilla", "Plantilla de comercial"),
+		page("comercial/ventas/00-reglas", "Reglas de ventas"),
+		page("comercial/00-reglas-viejas", "No es reservada"),
+		page("00-reglas", "Reglas de la raíz"),
+	];
+
+	it.each(["comercial/00-reglas", "comercial/00-plantilla"])(
+		"administrar solo %s no alcanza para borrarla",
+		async (slug) => {
+			const { deps, del } = setup({
+				role: "tenant_member",
+				userId: "ana",
+				pages: PAGES_WITH_RULES,
+				rules: [members("", "lector"), user(slug, "ana", "administrador")],
+			});
+			const forbidden = {
+				ok: false,
+				code: "forbidden",
+				message:
+					"Las reglas y la plantilla de una carpeta las borra quien administra esa carpeta.",
+			};
+			expect(await previewDelete("i", slug, deps)).toMatchObject(forbidden);
+			expect(await deletePage("i", slug, 3, deps)).toMatchObject(forbidden);
+			expect(del).not.toHaveBeenCalled();
+		},
+	);
+
+	it("quien administra la carpeta la borra", async () => {
+		const { deps, del } = setup({
+			...MEMBER_OF_COMERCIAL,
+			pages: PAGES_WITH_RULES,
+		});
+		expect(await previewDelete("i", "comercial/00-reglas", deps)).toMatchObject(
+			{ ok: true },
+		);
+		expect(
+			await deletePage("i", "comercial/00-plantilla", 3, deps),
+		).toMatchObject({ ok: true });
+		expect(del).toHaveBeenCalledTimes(1);
+	});
+
+	it("un administrador del tenant borra una reservada", async () => {
+		const { deps } = setup({ pages: PAGES_WITH_RULES });
+		expect(await previewDelete("i", "comercial/00-reglas", deps)).toMatchObject(
+			{ ok: true },
+		);
+		expect(await deletePage("i", "00-reglas", 3, deps)).toMatchObject({
+			ok: true,
+		});
+	});
+
+	it("quien administra un ancestro borra la 00-reglas de una carpeta hija", async () => {
+		const { deps } = setup({
+			...MEMBER_OF_COMERCIAL,
+			pages: PAGES_WITH_RULES,
+		});
+		expect(
+			await previewDelete("i", "comercial/ventas/00-reglas", deps),
+		).toMatchObject({ ok: true });
+	});
+
+	it("la 00-reglas de la raíz exige administrar la raíz", async () => {
+		const onlyPage = setup({
+			role: "tenant_member",
+			userId: "ana",
+			pages: PAGES_WITH_RULES,
+			rules: [
+				members("", "lector"),
+				user("comercial", "ana", "administrador"),
+				user("00-reglas", "ana", "administrador"),
+			],
+		});
+		expect(await previewDelete("i", "00-reglas", onlyPage.deps)).toMatchObject({
+			ok: false,
+			code: "forbidden",
+		});
+
+		const rootAdmin = setup({
+			role: "tenant_member",
+			userId: "ana",
+			pages: PAGES_WITH_RULES,
+			rules: [members("", "lector"), user("", "ana", "administrador")],
+		});
+		expect(await previewDelete("i", "00-reglas", rootAdmin.deps)).toMatchObject(
+			{ ok: true },
+		);
+	});
+
+	it("una página con nombre parecido no es reservada y sigue la regla de página", async () => {
+		const { deps } = setup({
+			role: "tenant_member",
+			userId: "ana",
+			pages: PAGES_WITH_RULES,
+			rules: [
+				members("", "lector"),
+				user("comercial/00-reglas-viejas", "ana", "administrador"),
+			],
+		});
+		expect(
+			await previewDelete("i", "comercial/00-reglas-viejas", deps),
+		).toMatchObject({ ok: true });
+	});
+});

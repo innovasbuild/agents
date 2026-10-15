@@ -8,6 +8,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OkEditorContext } from "@/lib/brain/adapters/editor";
+import { BrainNotFound } from "@/lib/brain/core/errors";
 import type { BrainRevision } from "@/lib/brain/core/types";
 import type { Binding } from "@/lib/connectors/providers";
 import type { TenantAccess } from "@/lib/tenants/resolve";
@@ -15,6 +16,7 @@ import type { TenantAccess } from "@/lib/tenants/resolve";
 const state = vi.hoisted(() => ({
 	bindings: [] as unknown[],
 	access: null as unknown,
+	accessRules: [] as unknown[],
 	// user_id -> tenants donde tiene membresia; user_id -> email
 	memberships: [] as Array<{ tenant_id: string; user_id: string }>,
 	emails: {} as Record<string, string>,
@@ -32,7 +34,19 @@ vi.mock("@/lib/connectors/bindings", () => ({
 }));
 
 vi.mock("@/lib/brain/adapters/access-rules", () => ({
-	accessRulesStore: () => ({ load: async () => [] }),
+	accessRulesStore: () => ({ load: async () => state.accessRules }),
+}));
+
+vi.mock("@/lib/brain/adapters/rules", () => ({
+	getBrainRules: () => ({
+		cascade: async () => ({
+			revision: "r1",
+			chain: [{ path: "", slug: "00-reglas", revision: 1, body: "raíz" }],
+			fields: [],
+			template: null,
+		}),
+		session: async () => ({ root: null, folders: [] }),
+	}),
 }));
 
 vi.mock("@/lib/tenants/resolve", () => ({
@@ -137,6 +151,7 @@ function ctxWith(history: BrainRevision[] | null): OkEditorContext {
 beforeEach(() => {
 	state.bindings = [];
 	state.access = null;
+	state.accessRules = [];
 	state.memberships = [];
 	state.emails = {};
 	state.membershipQueries = [];
@@ -260,6 +275,24 @@ describe("loadEditorContext", () => {
 		expect(ctx.categories).toEqual(["comercial", "ventas"]);
 		expect(typeof ctx.provider.read).toBe("function");
 		expect(ctx.tenant.id).toBe("tenant-a");
+	});
+
+	it("las reglas del contexto se filtran por lo que ve la persona y dejan skills afuera", async () => {
+		state.access = tenant({ role: "tenant_member" });
+		state.bindings = [binding()];
+		state.accessRules = [
+			{ path: "", principal: "members", userId: null, level: "lector" },
+			{ path: "talento", principal: "members", userId: null, level: "ninguno" },
+		];
+		const ctx = await loadEditorContext("miembro-reglas");
+		if (ctx?.kind !== "ok") throw new Error("esperaba ok");
+		await expect(ctx.rules.cascade("talento/x")).rejects.toBeInstanceOf(
+			BrainNotFound,
+		);
+		await expect(ctx.rules.cascade("skills/x")).rejects.toBeInstanceOf(
+			BrainNotFound,
+		);
+		expect((await ctx.rules.cascade("comercial/x")).chain).toHaveLength(1);
 	});
 });
 

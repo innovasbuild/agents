@@ -181,7 +181,7 @@ export function createWikiProvider(
 					"Una página nueva va dentro de una carpeta: usá una ruta como categoria/nombre.",
 				);
 			}
-			// La de primer nivel la valida la categoría. Las subcarpetas, acá; el
+			// Las subcarpetas se validan acá y la de primer nivel más abajo; el
 			// import no, porque la base crea las que falten.
 			const parent = parentPath(write.slug);
 			if (isNew && author.kind !== "import" && parent?.includes("/")) {
@@ -195,6 +195,21 @@ export function createWikiProvider(
 						`No existe la carpeta ${parent}.${near ? ` La más cercana es ${near}.` : ""} Pedile a un administrador que la cree.`,
 					);
 				}
+			}
+			// Una carpeta de primer nivel que no existe se nombra igual que una
+			// subcarpeta. skills/ sigue dependiendo de la categoría skill.
+			const top = write.slug.split("/")[0];
+			if (
+				isNew &&
+				nested &&
+				author.kind !== "import" &&
+				top !== "skills" &&
+				!config.categories.includes(top)
+			) {
+				throw new BrainValidation(
+					["folder"],
+					`No existe la carpeta ${top}. Pedile a un administrador que la cree.`,
+				);
 			}
 			const frontmatter = validateWrite(write, config, today());
 			// Topes de una 00-reglas (spec etapa 26 §4.1), con cualquier autor.

@@ -9,6 +9,7 @@ import {
 } from "../access/types.ts";
 import type { PageDeleter } from "../delete-store.ts";
 import { planLinkCleanup } from "../links-cleanup";
+import { folderOfPage, isReservedSlug } from "../reserved-slugs.ts";
 import {
 	type BrainPage,
 	type BrainRole,
@@ -105,6 +106,17 @@ async function authorize(
 	if (level === null) return fail("not_found", NOT_FOUND);
 	if (level !== "administrador") {
 		return fail("forbidden", "Solo un administrador puede borrar esta página.");
+	}
+	// Una reservada es gobierno de su carpeta (spec etapa 26 §4.1): la borra
+	// quien administra la carpeta, igual que quien la escribe (withAccess).
+	if (
+		isReservedSlug(slug) &&
+		resolveAccess(rules, principal, folderOfPage(slug)) !== "administrador"
+	) {
+		return fail(
+			"forbidden",
+			"Las reglas y la plantilla de una carpeta las borra quien administra esa carpeta.",
+		);
 	}
 
 	const pages = await deps.pages(actor.tenantId);

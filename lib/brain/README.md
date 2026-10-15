@@ -15,6 +15,11 @@ su propio repo.
   (`rulesFor`), fuente de reglas y `requireRules` (la exigencia de
   `rulesRevision`, solo en el MCP y en las tools del agente), bloque de
   arranque (`formatBrainSession`) y reporte en seco.
+- `core/reserved-slugs.ts`, `core/editor/reserved.ts` y `core/editor/rules-panel.ts`:
+  reservadas en el editor web. Los dos primeros no importan `rules.ts` ni
+  `node:crypto` (los usan componentes de cliente: nombres reservados, avisos,
+  insignias, `entryLevel`); `rules-panel.ts` arma el panel "Reglas que aplican"
+  en el servidor y el cliente importa de él solo tipos.
 - `core/access/`: modelo de permisos por carpeta y página (`resolveAccess`,
   `withAccess`) y lectura de reglas. Un `tenant_member` ve y edita lo que las
   reglas le dan; administradores, agente, plataforma e import no pasan por

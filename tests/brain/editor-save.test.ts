@@ -199,6 +199,20 @@ describe("savePage", () => {
 		});
 	});
 
+	it("una carpeta que no existe llega a la pantalla con el mensaje del proveedor", async () => {
+		const message =
+			"No existe la carpeta foo. Pedile a un administrador que la cree.";
+		const missing = deps({}, async () => {
+			throw new BrainValidation(["folder"], message);
+		});
+		expect(await savePage(input, missing.deps)).toMatchObject({
+			ok: false,
+			code: "validation",
+			fields: ["folder"],
+			message,
+		});
+	});
+
 	it("slug nuevo que ya existe: conflicto sin revisión con mensaje propio, sin ofrecer reintentar", async () => {
 		// brain_upsert_page (rama "else", p_base_revision null) tira BR409 con la
 		// revisión vigente en el detail, no vacío: translateStoreError la traduce
