@@ -571,7 +571,7 @@ describe("skill_draft_edit · SKILL.md", () => {
 		).rejects.toMatchObject({
 			code: "validation",
 			message: expect.stringMatching(
-				/allowed-tools.*name, description, license, compatibility/s,
+				/allowed-tools[\s\S]*name, description, license, compatibility/,
 			),
 		});
 		expect(save).not.toHaveBeenCalled();
