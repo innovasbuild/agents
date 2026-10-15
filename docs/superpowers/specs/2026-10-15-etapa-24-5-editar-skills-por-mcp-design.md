@@ -71,15 +71,15 @@ Es la única forma de que el asistente vea su propio cambio: `skill_load` y `ski
 
 1. Resuelve la skill y verifica que la persona es editora (D3, D4).
 2. Lee el borrador en ese momento y exige que `old` aparezca **exactamente una vez**. Si no aparece: "no aparece en el borrador". Si aparece más de una vez: "aparece N veces, sumá contexto". `old` no puede estar vacío.
-3. **`SKILL.md`:** aplica el reemplazo sobre `skillMd` (D7), lo vuelve a leer con `parseSkillMd` y valida: encabezado YAML válido, `description` obligatoria de hasta 1024 caracteres, `compatibility` de hasta 500. Un cambio al campo `name` se rechaza: el nombre es la ruta y no cambia. Guarda con `baseRevision` igual a la revisión leída: si alguien guardó en el medio, conflicto y no se pisa nada. Conserva el resto del frontmatter del brain sin tocar. Tope de 100 KB para el cuerpo, el de `brain_upsert`.
+3. **`SKILL.md`:** aplica el reemplazo sobre `skillMd` (D7), lo vuelve a leer con `parseSkillMd` y valida: encabezado YAML válido, `description` de hasta 1024 caracteres (un borrador que ya la tenía no puede quedar sin ella; uno que venía sin `description` se puede seguir editando, porque publicar ya exige que esté), `compatibility` de hasta 500. Un cambio al campo `name` se rechaza: el nombre es la ruta y no cambia. Guarda con `baseRevision` igual a la revisión leída: si alguien guardó en el medio, conflicto y no se pisa nada. Conserva el resto del frontmatter del brain sin tocar. Tope de 100 KB para el cuerpo, el de `brain_upsert`.
 4. **Archivo de texto:** lo lee del borrador por su `sha256`, aplica el reemplazo, y lo guarda con `putSkillFile`. Si el contenido cambió entre la lectura y la escritura, gana la última escritura: los archivos no tienen revisión y editarlos a la vez es raro; se declara y no se resuelve acá.
 5. Responde `{ ok, slug, path, revision?, state, reviewUrl, message }`. El mensaje dice que el cambio **está en el borrador y no en vivo**, y que un administrador lo publica desde la web.
 
-`reason` es obligatorio (hasta 200 caracteres) y queda en la revisión como `Edición por MCP: <reason>`.
+`reason` es obligatorio (hasta 200 caracteres). Cuando el cambio es en el `SKILL.md` queda en la revisión como `Edición por MCP: <reason>`; en un archivo el cambio deja `brain.skill_file_added` con la persona y la ruta, y el motivo se acepta pero no se guarda.
 
 ### 4.3 `skill_draft_write_file`
 
-`{ skill, path, content, reason }` — crea o reemplaza un archivo de texto del paquete.
+`{ skill, path, content }` — crea o reemplaza un archivo de texto del paquete. Sin `reason`: `brain_skill_put_file` no lo guarda.
 
 - `path` válido según `isValidFilePath` (24.1 §5.2); `SKILL.md` no es un archivo del paquete y se rechaza con un mensaje que manda a `skill_draft_edit`.
 - `content` de hasta 256 KB (D8). Cuenta para los topes del paquete: 50 archivos y 20 MB; los hace cumplir la base (`brain_skill_put_file`).
@@ -92,6 +92,7 @@ Es la única forma de que el asistente vea su propio cambio: `skill_load` y `ski
 - La ruta es `skills/<folder>/<name>` (o `skills/<name>` sin carpeta). `name` y cada tramo de `folder` siguen la regla de siempre: minúsculas, dígitos y guiones, `name` de hasta 64.
 - Permiso: editor de la carpeta destino o administrador (D3), el mismo que "Nueva página acá" en la web.
 - Crea la página con categoría `skill`, estado `activo`, sin tags, `title` (por defecto, el nombre), `description` y `compatibility` en el encabezado y `instructions` como cuerpo. Se guarda por el proveedor con los permisos de la persona, como cualquier edición; el chequeo `skillPlacementOk` y la categoría habilitada los hace el mismo camino de la web.
+- La carpeta destino tiene que existir (`skills/` siempre existe); si no, el error la nombra y dice que un administrador la crea.
 - Si la ruta ya existe: conflicto, no se pisa. Si la categoría `skill` no está habilitada para la empresa: mensaje que lo dice y manda al administrador.
 - No chequea si ya hay otra skill publicada con ese nombre: lo valida la publicación (`brain_publish_skill`). Chequearlo acá le diría a un editor qué nombres existen en skills que no ve.
 - Respuesta: `{ ok, slug, name, revision, state: "sin_publicar", reviewUrl, message }`.
@@ -144,7 +145,7 @@ Cada descripción de tool dice, en su primera línea, "cambia el borrador, no la
 
 ## 8. A verificar en el plan
 
-1. **Creación exclusiva.** Confirmar si el guardado del proveedor `wiki` permite crear sin pisar (por ejemplo un `baseRevision` que signifique "no existe todavía"). Si no, `skill_create` verifica que no exista justo antes de guardar, y la carrera entre dos creaciones de la misma ruta en el mismo instante queda como segunda revisión de esa página, visible en el historial. Se anota la decisión en `docs/dominios/brain.md`.
+1. **Creación exclusiva. Resuelto al escribir el plan.** El guardado del brain sin `baseRevision` solo crea páginas nuevas: si la ruta existe da conflicto, también en una carrera entre dos altas (índice único). `skill_create` lo usa tal cual, sin chequear antes.
 2. **Qué deja el guardado en `events`** y si el canal MCP queda distinguible. La revisión lleva el motivo `Edición por MCP: …`; si hace falta un evento propio, se agrega con el tipo en texto libre, sin migración.
 3. **Cómo ve ChatGPT las tools de escritura.** ChatGPT pide confirmación en las tools que declaran escritura: se anotan `readOnlyHint` y `destructiveHint` de cada tool según corresponda.
 
