@@ -12,6 +12,7 @@ export const BRAIN_TOOL_NAMES = {
 	search: "brain_search",
 	read: "brain_read",
 	upsert: "brain_upsert",
+	rules: "brain_rules",
 } as const;
 
 const statusSchema = z.enum(BRAIN_STATUSES as [BrainStatus, ...BrainStatus[]]);
@@ -51,11 +52,11 @@ export function brainContract(
 		},
 		read: {
 			description:
-				"Lee una página completa del brain de esta empresa, con su revisión. Necesitás la revisión para actualizarla con brain_upsert.",
+				"Lee una página completa del brain de esta empresa, con su revisión. Necesitás la revisión para actualizarla con brain_upsert. Trae también rules: las reglas de su carpeta (las instrucciones de la raíz ya llegaron al arrancar) y rules.revision, que pasás como rulesRevision si después la actualizás.",
 			input: z.object({ slug: slugSchema }),
 		},
 		upsert: {
-			description: `Crea o actualiza una página del brain de esta empresa. Para actualizar, leé la página y pasá su revisión en baseRevision; sin baseRevision solo crea páginas nuevas. Nunca borres: para retirar una página, poné status archivado. Explicá el cambio en reason. ${valid}${withCanon ? ` Tags de canon: ${canon}.` : ""}`,
+			description: `Crea o actualiza una página del brain de esta empresa. Para actualizar, leé la página y pasá su revisión en baseRevision; sin baseRevision solo crea páginas nuevas. Nunca borres: para retirar una página, poné status archivado. Explicá el cambio en reason. Si la ruta tiene reglas, pasá rulesRevision (viene en brain_read, en brain_rules o en el rechazo): sin él, o con uno viejo, no se escribe nada y la respuesta es rules_required con las reglas completas; leelas, ajustá la página si hace falta y reintentá con ese rulesRevision. Las páginas 00-reglas y 00-plantilla las escribe solo quien administra su carpeta; la 00-reglas de la raíz se guarda con la categoría brain. ${valid}${withCanon ? ` Tags de canon: ${canon}.` : ""}`,
 			input: z.object({
 				slug: slugSchema,
 				title: z.string().min(1).max(300),
@@ -67,6 +68,19 @@ export function brainContract(
 					.describe("Cuerpo completo en markdown. Reemplaza al anterior."),
 				reason: z.string().min(1).max(500),
 				baseRevision: z.number().int().min(1).optional(),
+				rulesRevision: z.string().max(64).optional(),
+			}),
+		},
+		rules: {
+			description:
+				"Devuelve las instrucciones del brain y las reglas que aplican a una ruta, de la raíz a su carpeta, con el rulesRevision que pide brain_upsert. Pasá la ruta de la página que vas a crear o editar, aunque todavía no exista. Usalo antes de crear una página nueva.",
+			input: z.object({
+				path: z
+					.string()
+					.max(MAX_SLUG_LENGTH)
+					.describe(
+						"Ruta de la página, por ejemplo equipo/ana-perez. Vacía para las instrucciones de la raíz.",
+					),
 			}),
 		},
 	};
