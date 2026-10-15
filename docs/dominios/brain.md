@@ -39,6 +39,7 @@ sources:
   - docs/superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md
   - docs/superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md
   - docs/superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md
+  - docs/superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md
   - docs/superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md
   - docs/superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md
   - lib/brain/core/folders.ts
@@ -254,7 +255,8 @@ Specs y planes en `docs/superpowers/`:
 [etapa 26, carpetas y reglas](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md) y [plan 26.1a](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) ·
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
 [etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
-[etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md).
+[etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md) ·
+[etapa 24.5, crear y editar skills por MCP](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md).
 
 Pull requests:
 
