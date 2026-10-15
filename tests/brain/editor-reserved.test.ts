@@ -15,7 +15,7 @@ import {
 } from "@/lib/brain/core/editor/reserved";
 import * as reservedSlugs from "@/lib/brain/core/reserved-slugs";
 import * as rules from "@/lib/brain/core/rules";
-import { runtimePackages } from "./client-safe";
+import { nodeBuiltins, runtimePackages } from "./client-safe";
 
 const every =
 	(level: Level | null) =>
@@ -43,6 +43,8 @@ describe("reserved-slugs", () => {
 		expect(rules.folderOfPage).toBe(reservedSlugs.folderOfPage);
 		expect(rules.rulesSlugFor).toBe(reservedSlugs.rulesSlugFor);
 		expect(rules.leafOf).toBe(reservedSlugs.leafOf);
+		expect(rules.isTemplateSlug).toBe(reservedSlugs.isTemplateSlug);
+		expect(rules.rulesCharLimit).toBe(reservedSlugs.rulesCharLimit);
 	});
 });
 
@@ -54,6 +56,15 @@ describe("lo que importa el cliente no llega a node:*", () => {
 		expect(runtimePackages(entry).filter((p) => p.startsWith("node:"))).toEqual(
 			[],
 		);
+	});
+
+	it("el detector ve un builtin sin prefijo node:", () => {
+		expect(runtimePackages("tests/brain/fixtures/bare-builtin.ts")).toContain(
+			"crypto",
+		);
+		expect(nodeBuiltins("tests/brain/fixtures/bare-builtin.ts")).toEqual([
+			"crypto",
+		]);
 	});
 
 	it("el detector ve el node:crypto de rules.ts", () => {

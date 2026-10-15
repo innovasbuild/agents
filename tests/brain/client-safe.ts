@@ -3,7 +3,11 @@
 // siguiendo los relativos y el alias @/. Sirve para verificar que lo que usa
 // un componente de cliente no arrastra node:*. Corta en los paquetes y en los
 // archivos "use server" (en el cliente son solo referencias).
+// Límites: la regex no ve `import "x"` (efecto de lado) ni `import()` dinámico,
+// y trata `import { type A } from` como de runtime (conservador).
+
 import { existsSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -46,4 +50,12 @@ export function runtimePackages(entry: string): string[] {
 	};
 	walk(join(ROOT, entry));
 	return [...packages].sort();
+}
+
+// Builtins de Node que alcanza el módulo, con o sin prefijo node:.
+export function nodeBuiltins(entry: string): string[] {
+	return runtimePackages(entry).filter(
+		(spec) =>
+			spec.startsWith("node:") || builtinModules.includes(spec.split("/")[0]),
+	);
 }
