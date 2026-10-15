@@ -224,14 +224,14 @@ Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap).
 | API de Vercel con el token (lista de dominios) | OK: el alta devolvió el `CNAME` y el `TXT` de verificación | 2026-10-15 | Claude (consola) |
 | Límite de dominios del plan | Sin verificar | | |
 | S3: `PATCH` de `uri_allow_list` (coma y reemplazo) | OK: conserva y agrega (las 4 `https://` anotadas siguen; quedaron 8 con la nueva); Site URL intacta. Sin prueba aislada previa | 2026-10-15 | Claude (dashboard) |
-| Dominio activo desde la consola (tiempo desde el `CNAME`) | OK: **Activo** y **Principal** por el barrido, sin apretar Verificar. Tiempo exacto no medido | 2026-10-15 | Claude |
+| Dominio activo desde la consola (tiempo desde el `CNAME`) | OK: **Activo** y **Principal** al mirarlo, sin que nadie apretara Verificar desde la consola de este cierre. No se registró si lo activó el barrido o un clic anterior; tiempo desde el `CNAME` no medido | 2026-10-15 | Claude |
 | S1: `x-forwarded-host` llega al canal MCP del agente | OK: el 401 apunta a `ai.okeefe.com.ar` | 2026-10-15 | Claude (`curl`) |
 | S4: login por link mágico en el dominio propio | Sin verificar: la landing de okeefe solo ofrece Google | | |
 | S4: login con Google en el dominio propio | OK | 2026-10-15 | Mati |
-| Conexión real de Claude al brain y al agente | OK: la conexión de Claude funciona (metadata del brain con `resource` en `ai.okeefe.com.ar`); el agente de outreach solo se probó hasta el 401 | 2026-10-15 | Mati |
+| Conexión real de Claude al brain y al agente | OK según Mati (no precisó si fue el brain, el agente o ambos). Con `curl`, el brain y el agente responden 401 con la metadata en `ai.okeefe.com.ar` | 2026-10-15 | Mati |
 | Dónde aterriza el consentimiento OAuth | No registrado (decisión A1: en el host raíz) | | |
 | Link de invitación con el dominio de la empresa | Sin verificar | | |
-| Regresión en el host raíz | OK: `agentes.innov.as/login/okeefe` responde 200 y `/okeefe/chat` pide sesión como antes. Sin recorrer un flujo completo | 2026-10-15 | Claude (`curl`) |
+| Regresión en el host raíz | OK: `agentes.innov.as/login/okeefe` responde 200 y `/okeefe/chat` da 404 sin sesión (la página hace `notFound()`). Sin recorrer un flujo completo | 2026-10-15 | Claude (`curl`) |
 
 ## 7. Cierre de la etapa
 
