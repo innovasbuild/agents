@@ -92,6 +92,12 @@ export interface BrainWrite {
 	body: string;
 	reason: string;
 	baseRevision?: number;
+	/**
+	 * Revisión de la cascada de reglas que leyó quien escribe (spec etapa 26
+	 * D9). La exigen el MCP y las tools del agente con requireRules; el
+	 * proveedor no la mira.
+	 */
+	rulesRevision?: string;
 }
 
 export type BrainAuthor =
