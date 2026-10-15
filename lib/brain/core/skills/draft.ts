@@ -438,7 +438,12 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 			const actor = await files.actor(tenantSlug);
 			if (!actor) throw notFound(input.name);
 			const name = input.name.trim();
-			const folder = input.folder?.trim().replace(/^\/+|\/+$/g, "");
+			// La carpeta es relativa a skills/: un "skills/" al principio se descarta.
+			const folder = input.folder
+				?.trim()
+				.replace(/^\/+|\/+$/g, "")
+				.replace(/^skills(\/|$)/, "")
+				.replace(/^\/+|\/+$/g, "");
 			const slug = folder
 				? `${SKILLS_PREFIX}${folder}/${name}`
 				: `${SKILLS_PREFIX}${name}`;

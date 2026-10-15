@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { resolveAccess } from "@/lib/brain/core/access/resolve-access";
 import type { AccessRule, Principal } from "@/lib/brain/core/access/types";
 import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
+import { visibleSkills } from "@/lib/brain/core/skills/catalog";
 import {
 	canEditSkills,
 	createSkillDrafts,
@@ -824,6 +825,32 @@ describe("skill_create", () => {
 		expect(
 			rows.find((r) => r.slug === "skills/admin/reporte-mensual")?.current,
 		).toBeNull();
+	});
+
+	it("un borrador creado no figura en el catálogo publicado, para nadie", async () => {
+		const { drafts, rows } = setup();
+		await drafts.create(input);
+		const slug = "skills/admin/reporte-mensual";
+		expect(rows.some((row) => row.slug === slug)).toBe(true);
+		const editor = (path: string) => (path === slug ? "editor" : "lector");
+		const other = (path: string) =>
+			resolveAccess(
+				EDITOR,
+				{ kind: "user", userId: "beto", role: "tenant_member" },
+				path,
+			);
+		for (const levelOf of [editor, other] as const) {
+			const visible = visibleSkills(rows, levelOf);
+			expect(visible.some((skill) => skill.slug === slug)).toBe(false);
+		}
+	});
+
+	it("una carpeta con el prefijo skills/ no duplica el prefijo", async () => {
+		const { drafts, save } = setup();
+		await drafts.create({ ...input, folder: "skills/admin" });
+		await drafts.create({ ...input, name: "otra", folder: "/skills/admin/" });
+		expect(save.mock.calls[0][1].slug).toBe("skills/admin/reporte-mensual");
+		expect(save.mock.calls[1][1].slug).toBe("skills/admin/otra");
 	});
 
 	it("sin carpeta cae directo bajo skills/, con compatibility y título propio", async () => {
