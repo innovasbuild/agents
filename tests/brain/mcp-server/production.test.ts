@@ -22,6 +22,7 @@ vi.mock("@/lib/brain/adapters/skill-storage", () => ({
 	blobStore: vi.fn(),
 }));
 vi.mock("@/lib/brain/adapters/provider", () => ({ getBrainProvider: vi.fn() }));
+vi.mock("@/lib/brain/adapters/rules", () => ({ getBrainRules: vi.fn() }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: vi.fn() }));
 
 import {
@@ -29,6 +30,7 @@ import {
 	publicSettings,
 	skillLoadEvent,
 } from "@/lib/brain/adapters/mcp-production";
+import { getBrainRules } from "@/lib/brain/adapters/rules";
 
 afterEach(() => {
 	vi.unstubAllEnvs();
@@ -122,5 +124,13 @@ describe("productionDeps().skills.issue", () => {
 			{ ...request, channel: "mcp" },
 			deps,
 		);
+	});
+});
+
+describe("productionDeps().brainRules", () => {
+	it("usa las reglas del brain de la plataforma", () => {
+		vi.stubEnv("PUBLIC_APP_URL", "https://agentes.innov.as");
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+		expect(productionDeps().brainRules).toBe(getBrainRules);
 	});
 });

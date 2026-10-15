@@ -3,9 +3,16 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { BRAIN_TOOL_NAMES, brainContract } from "../contract.ts";
-import { BrainError, BrainValidation, toToolError } from "../errors.ts";
+import {
+	BrainError,
+	BrainRulesRequired,
+	BrainValidation,
+	toToolError,
+} from "../errors.ts";
+import { withoutRoot } from "../rules.ts";
+import { type RulesSource, requireRules } from "../rules-source.ts";
 import { describeSkills, type SkillCatalog } from "../skills/catalog.ts";
-import type { BrainProvider } from "../types.ts";
+import type { BrainProvider, BrainWrite } from "../types.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 
 export const MCP_MAX_REQUEST_BYTES = 1_048_576;
@@ -44,20 +51,32 @@ export function buildBrainMcpServer(ctx: {
 	limiter: RateLimiter;
 	/** Skills publicadas que ve la persona; sin ninguna, no hay tools de skills. */
 	skills?: SkillCatalog | null;
+	/** Reglas que ve la persona (spec etapa 26 §4.3). Sin esto, ni brain_rules ni rules en brain_read. */
+	rules?: RulesSource | null;
+	/** Instrucciones del brain y carpetas, para el campo instructions. */
+	brainInstructions?: string | null;
 }): McpServer {
 	const skills = ctx.skills ?? null;
+	const rules = ctx.rules ?? null;
+	const instructions = [
+		ctx.brainInstructions,
+		skills ? SKILL_INSTRUCTIONS : null,
+	]
+		.filter((text): text is string => Boolean(text))
+		.join("\n\n");
 	const server = new McpServer(
 		{ name: "innovas-brain", version: "1.0.0" },
-		skills ? { instructions: SKILL_INSTRUCTIONS } : undefined,
+		instructions ? { instructions } : undefined,
 	);
 	const contract = brainContract(ctx.categories, { canon: ctx.canon });
 
+	// kind null: la tool cuenta su uso adentro (brain_upsert).
 	async function run(
-		kind: "read" | "write",
+		kind: "read" | "write" | null,
 		work: () => Promise<Record<string, unknown>>,
 	) {
 		try {
-			await ctx.limiter.check(kind);
+			if (kind) await ctx.limiter.check(kind);
 			return result(await work());
 		} catch (error) {
 			if (error instanceof BrainError)
@@ -96,11 +115,31 @@ export function buildBrainMcpServer(ctx: {
 			inputSchema: contract.read.input,
 		},
 		async ({ slug }) =>
-			run("read", async () => ({
-				ok: true,
-				page: await ctx.provider.read(slug),
-			})),
+			run("read", async () => {
+				const page = await ctx.provider.read(slug);
+				if (!rules) return { ok: true, page };
+				return {
+					ok: true,
+					page,
+					rules: withoutRoot(await rules.cascade(slug)),
+				};
+			}),
 	);
+
+	if (rules) {
+		server.registerTool(
+			BRAIN_TOOL_NAMES.rules,
+			{
+				description: contract.rules.description,
+				inputSchema: contract.rules.input,
+			},
+			async ({ path }) =>
+				run("read", async () => ({
+					ok: true,
+					rules: await rules.cascade(path),
+				})),
+		);
+	}
 
 	server.registerTool(
 		BRAIN_TOOL_NAMES.upsert,
@@ -109,14 +148,28 @@ export function buildBrainMcpServer(ctx: {
 			inputSchema: contract.upsert.input,
 		},
 		async (input) =>
-			run("write", async () => {
+			run(null, async () => {
+				let write: BrainWrite = input;
+				if (rules) {
+					try {
+						write = await requireRules(rules, input);
+					} catch (error) {
+						// Un rechazo por reglas es parte del flujo: entrega las reglas y
+						// cuenta como lectura, no como escritura (spec etapa 26 §4.3).
+						await ctx.limiter.check(
+							error instanceof BrainRulesRequired ? "read" : "write",
+						);
+						throw error;
+					}
+				}
+				await ctx.limiter.check("write");
 				if (
-					new TextEncoder().encode(input.body).length >
+					new TextEncoder().encode(write.body).length >
 					MCP_MAX_UPSERT_BODY_BYTES
 				) {
 					throw new BrainValidation(["body"]);
 				}
-				const written = await ctx.provider.upsert(input, {
+				const written = await ctx.provider.upsert(write, {
 					kind: "user",
 					userId: ctx.userId,
 				});

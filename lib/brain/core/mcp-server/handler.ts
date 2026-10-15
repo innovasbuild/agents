@@ -6,9 +6,16 @@ import {
 	type AccessRulesStore,
 	isAdminRole,
 	type Principal,
+	ROOT_PATH,
 } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
 import type { BrainBinding } from "../resolve.ts";
+import {
+	EMPTY_RULES,
+	type RulesSource,
+	withRulesAccess,
+} from "../rules-source.ts";
+import { formatBrainSession } from "../session.ts";
 import {
 	loadSkillCatalog,
 	type SkillCatalog,
@@ -53,6 +60,8 @@ export interface BrainMcpDeps {
 	rules: AccessRulesStore;
 	hit: HitFn;
 	provider: (binding: BrainBinding) => BrainProvider;
+	/** Reglas del brain (spec etapa 26 §4.3). Sin esto, ninguna. */
+	brainRules?: (binding: BrainBinding) => RulesSource;
 	/** Si la empresa tiene un agente que usa el canon comercial del brain. */
 	usesCanon: (tenantId: string) => Promise<boolean>;
 	/** Skills publicadas de la empresa (spec 24.2a). */
@@ -195,6 +204,36 @@ async function handleBrainMcpInner(
 		withAccess(deps.provider(access.binding), principal, rules),
 	);
 
+	// Las reglas se filtran por lo que la persona ve (spec etapa 26 §4.2). Un
+	// brain mcp tiene la fuente vacía (D15).
+	const levelOf = (path: string) => resolveAccess(rules, principal, path);
+	const visibleRules = withRulesAccess(
+		deps.brainRules?.(access.binding) ?? EMPTY_RULES,
+		levelOf,
+	);
+	// Las instrucciones de la raíz gobiernan todo el brain: le llegan a quien ve
+	// alguna parte de él. Una ruta solo es visible si lo es la raíz o la ruta de
+	// alguna regla (la que da el permiso), así que alcanza con mirar esas.
+	const seesBrain = [ROOT_PATH, ...rules.map((rule) => rule.path)].some(
+		(path) => levelOf(path) !== null,
+	);
+	// Si no se pueden leer, el servidor arranca sin el bloque: las reglas igual
+	// llegan en brain_read, brain_rules y el rechazo de brain_upsert.
+	let brainInstructions: string | null = null;
+	if (access.binding.provider === "wiki") {
+		try {
+			const context = await visibleRules.session();
+			brainInstructions = formatBrainSession(
+				seesBrain ? context : { ...context, root: null },
+			);
+		} catch (error) {
+			console.error(
+				"brain mcp: no pude leer las instrucciones del brain",
+				error,
+			);
+		}
+	}
+
 	// Solo el brain propio tiene skills (S13). Si no se pueden leer, el
 	// servidor se arma sin ellas: las tools del brain no dependen de las skills.
 	let skills: SkillCatalog | null = null;
@@ -229,6 +268,8 @@ async function handleBrainMcpInner(
 		canon: await deps.usesCanon(access.tenantId),
 		provider,
 		skills,
+		rules: visibleRules,
+		brainInstructions,
 		limiter: createRateLimiter({
 			tenantId: access.tenantId,
 			userId: access.userId,
