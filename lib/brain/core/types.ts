@@ -25,6 +25,19 @@ export const SLUG_PATTERN =
 export const MAX_SLUG_LENGTH = 200;
 export const MAX_BODY_BYTES = 204800;
 
+// Páginas con nombre reservado (spec etapa 26 §4.1). 00-reglas en la raíz son
+// las instrucciones del brain; en una carpeta, sus reglas. 00-plantilla es la
+// plantilla de una carpeta (26.3).
+export const RULES_LEAF = "00-reglas";
+export const TEMPLATE_LEAF = "00-plantilla";
+export const RESERVED_LEAVES = [RULES_LEAF, TEMPLATE_LEAF] as const;
+// Categoría de las instrucciones del brain: la carpeta brain está reservada.
+export const BRAIN_CATEGORY = "brain";
+// En caracteres. La de la raíz entra en cada sesión.
+export const MAX_ROOT_RULES_CHARS = 12_000;
+export const MAX_FOLDER_RULES_CHARS = 20_000;
+export const MAX_CASCADE_CHARS = 40_000;
+
 export interface BrainSearchInput {
 	query: string;
 	category?: string;
