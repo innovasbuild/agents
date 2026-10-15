@@ -7,6 +7,8 @@ const node = (over: Partial<TreeNode>): TreeNode => ({
 	name: "comercial",
 	page: null,
 	folder: { description: "" },
+	rules: null,
+	template: null,
 	level: "administrador",
 	children: [],
 	...over,
