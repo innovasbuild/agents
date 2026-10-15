@@ -211,9 +211,32 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 - `TOOL_LABELS` (`lib/agents/running-tool.ts`) tiene la clave `brain`, pero eve nombra las tools por su clave (`brain_search`, `brain_read`, `brain_upsert`): esas tres muestran "Trabajando…" en el indicador del chat y solo `brain_rules` muestra su etiqueta. Seguimiento: sumar las tres etiquetas y hacer que el test compare contra las claves reales.
 - `requireRules` solo chequea que la persona **vea** la ruta, no que sea `editor`: un lector recibe `rules_required`, relee y recién en el reintento le llega `forbidden`. Un viaje de más, sin filtrar nada que no vea.
 - En el `brain_upsert` del MCP las reglas se leen antes del limitador: un pedido que el límite va a frenar igual hace la lectura de `listRulePages`.
-- Borrar una página reservada chequea `administrador` sobre el slug de la página y no sobre su carpeta (`lib/brain/core/editor/delete.ts`). Candidato a seguimiento.
+- ~~Borrar una página reservada chequea `administrador` sobre el slug de la página y no sobre su carpeta (`lib/brain/core/editor/delete.ts`).~~ Resuelto por la 26.2b: `delete.ts` exige administrar la carpeta.
 - La aprobación de `brain_upsert` del agente (`always()`) ocurre antes de ejecutar: un `rules_required` llega después de que un administrador ya aprobó, y el reintento vuelve a pedir aprobación. Se mitiga con las descripciones y las instrucciones (leer con `brain_rules` o `brain_read` antes de escribir).
-- Pantallas (panel "Reglas que aplican", menús del árbol, insignia en la búsqueda) y el borrado de una reservada: 26.2b, plan [2026-10-15-etapa-26-2b-reglas-editor](../superpowers/plans/2026-10-15-etapa-26-2b-reglas-editor.md).
+- ~~Pantallas (panel "Reglas que aplican", menús del árbol, insignia en la búsqueda)~~ Resuelto por la 26.2b (ver abajo).
+
+### Reglas en el editor web (etapa 26.2b)
+
+Pantallas sobre el núcleo de la 26.2a. No tiene migraciones ni tablas nuevas.
+
+- **Panel "Reglas que aplican"** (`components/brain/rules-panel.tsx`): va arriba del papel, plegado, con el conteo. No aparece si la ruta no tiene reglas, si la persona no la ve o si es de `skills/`. Es informativo: guardar no exige nada. Las reglas se filtran como en el MCP (`editorRules` en `core/editor/rules-panel.ts`: `withRulesAccess` y `withoutSkillRules`, por la ruta pedida), y las `00-reglas` que la persona no puede abrir van sin el link "Abrir". Un error de lectura no rompe el editor: `loadRulesPanel` lo registra y devuelve un aviso (`RULES_LOAD_ERROR`).
+- **En "Nueva página"** el panel sigue a la carpeta del slug que se escribe. El hook `useFolderRules` pide `loadNewPageRules` (`app/[tenant]/brain/rules-actions.ts`, que valida la forma y resuelve el panel con `loadNewPageRulesPanel` sobre el contexto de la persona) una vez por carpeta, con una pausa de 300 ms (`RULES_DEBOUNCE_MS`), y descarta una respuesta vieja. La cascada de una página que no existe se sondea con la hoja `<carpeta>/nueva-pagina` (`probeSlugFor`). Si el pedido falla, el panel pasa a estado de error y volver a cualquier carpeta lo pide de nuevo. En edición el hook está apagado y manda el servidor (`router.refresh()` trae reglas nuevas).
+- **Árbol:** las reservadas no son hijas: cuelgan como marcas `rules` y `template` de su carpeta (`TreeNode` en `core/access/tree.ts`; en la raíz, `rules` son las instrucciones del brain). El indicador solo aparece si la `00-reglas` está activa; `withoutArchived` conserva la marca aunque esté archivada, para que el menú la abra en vez de ofrecer crear otra, y `countPages` no las cuenta (una carpeta con solo su `00-reglas` dice "Vacía").
+- **Menú del árbol:** "Instrucciones del brain" (en la raíz) y "Reglas de la carpeta" abren la `00-reglas` existente en cualquier estado o, si no hay, crean una en `/brain/nueva?reglas=1[&en=<carpeta>]` (`rulesEntryHref`, `resolveNewRulesPage`): en borrador, con el slug fijo, el título de la reservada, el aviso (`ReservedNotice`, `reservedNotice`) y el contador contra el tope. Hace falta administrar la carpeta; `skills/` no ofrece reglas propias y una carpeta que no existe no arma la página. "Borrar carpeta…" aparece deshabilitado con el motivo (`folderDeleteBlocks`: tiene páginas o subcarpetas, o tiene reglas propias); se calcula sobre el árbol sin podar y solo para carpetas con fila, porque `brain_delete_folder` cuenta toda página bajo el prefijo, archivadas y reservadas incluidas. Es solo experiencia: lo frena la base.
+- **Quien no administra la carpeta** abre una reservada en lectura (`entryLevel` en `core/editor/reserved.ts`) y no la puede borrar: `delete.ts` exige `administrador` sobre la carpeta de la página (`folderOfPage`), igual que `withAccess` al escribirla.
+- **Índice y búsqueda:** el índice no lista las reservadas salvo con una consulta (`listedInIndex`); la búsqueda las marca con la insignia "Reglas" o "Plantilla" (`reservedBadge`).
+- **Categoría:** la del editor sale de la ruta (`pageCategory` en `core/editor/page-category.ts`) y se muestra como texto; ya no hay selector. "Nueva página" arranca en la primera carpeta editable que no es `skills` (`resolveNewPagePrefix`); `?en=` solo se acepta si es una carpeta válida y editable.
+- **Módulos aptos para el cliente:** `core/reserved-slugs.ts` y `core/editor/reserved.ts` no importan `rules.ts` ni `node:crypto` porque los usan componentes de cliente (árbol, menú, editor). `rules.ts` re-exporta lo de `reserved-slugs.ts`. `tests/brain/client-safe.ts` sigue los imports de runtime y los tests de esos componentes verifican que no llegan a `node:*`. `core/editor/rules-panel.ts` sí usa `rules.ts`: el cliente importa de él solo tipos.
+
+**Pendientes conocidos de la 26.2b**
+
+- QA en navegador pendiente: la hace una persona con el checklist del plan ([2026-10-15-etapa-26-2b-reglas-editor](../superpowers/plans/2026-10-15-etapa-26-2b-reglas-editor.md), sección Cierre).
+- Un error `category` o `folder` al guardar una página nueva en una carpeta de primer nivel inexistente muestra el mensaje genérico "Datos inválidos en: category." y el campo slug no se marca (`aria-invalid` solo mira `slug`). `wiki.ts` podría dar un mensaje en castellano.
+- En "Nueva página" con `?en=skills`, mientras el slug está en la raíz la categoría mostrada es la inicial (`skill`) y el breadcrumb queda vacío si no hay categoría.
+- Desde "Nueva página" se puede crear `skills/00-reglas` o `skills/00-plantilla` como página de skill forzada a activo (necesita administrar `skills`). Es el comportamiento previo; candidato a rechazar las reservadas bajo `skills/`.
+- El ítem deshabilitado "Borrar carpeta…" hereda la opacidad del menú (`data-disabled:opacity-50`) y atenúa también el motivo: revisar el contraste.
+- Las etiquetas de las tools del brain en `TOOL_LABELS` (clave `brain` contra `brain_search`, `brain_read` y `brain_upsert`) siguen pendientes (ver la 26.2a).
+- Las carpetas implícitas (sin fila en `brain_folders`) no ofrecen "Reglas de la carpeta".
 
 ### El canon como fuente del ICP y de los hooks (etapa 21.3a)
 
@@ -272,6 +295,7 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 | Skills | `tests/brain/skills-*.test.ts` (paquete, estados, vistas, publicar, archivos, zip, ruta, catálogo, `SKILL.md` y ruta de descarga `skills-package-route.test.ts`) y pgTAP `34_brain_skills` |
 | Endpoint MCP | `tests/brain/mcp-server/` (acceso, handler, límites, producción, tools de skills) |
 | Canon como fuente | `tests/brain/canon-reflection.test.ts` y `tests/outreach/canon.test.ts` |
+| Reglas en el editor (26.2b) | `tests/brain/editor-reserved.test.ts`, `editor-rules-panel.test.ts`, `rules-panel.test.ts`, `rules-panel-hook.test.ts`, `reserved-notice.test.ts`, `page-list.test.ts`, `editor-page-category.test.ts`. `tests/brain/client-safe.ts` es el seguidor de imports de cliente |
 | Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`, `37_brain_folders`. Corren con `npm run db:test` (necesita Docker) |
 
 ## 5. Decisiones
@@ -284,7 +308,7 @@ Specs y planes en `docs/superpowers/`:
 [etapa 18.1, borrado](../superpowers/specs/2026-10-08-etapa-18-1-borrado-paginas-brain-design.md) ·
 [etapa 18.2, editor visual](../superpowers/specs/2026-10-08-etapa-18-2-editor-visual-brain-design.md) ·
 [etapa 21.3, config de outreach](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) y [plan 21.3a](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md) ·
-[etapa 26, carpetas y reglas](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md) y [plan 26.1a](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) ·
+[etapa 26, carpetas y reglas](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md), [plan 26.1a](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) y [plan 26.2b](../superpowers/plans/2026-10-15-etapa-26-2b-reglas-editor.md) ·
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
 [etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
 [etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md).
