@@ -1143,6 +1143,26 @@ describe("handleBrainMcp · reglas", () => {
 		errorLog.mockRestore();
 	});
 
+	it("arma el bloque de instrucciones solo en initialize, no en cada tools/call", async () => {
+		const source = brainRules();
+		const session = vi.spyOn(source, "session");
+		const d = deps({ brainRules: () => source });
+		const client = await connect("admin", d);
+		expect(session).toHaveBeenCalledTimes(1);
+		expect(client.getInstructions() ?? "").toContain(
+			"Escribí en tercera persona.",
+		);
+		await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "talento/personal/leo" },
+		});
+		await client.callTool({
+			name: "brain_upsert",
+			arguments: newPage,
+		});
+		expect(session).toHaveBeenCalledTimes(1);
+	});
+
 	it("un brain externo por MCP responde la cascada vacía y no tiene instrucciones del brain", async () => {
 		const client = await connect(
 			"ana",

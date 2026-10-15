@@ -215,8 +215,10 @@ async function handleBrainMcpInner(
 	const seesSomeBrain = seesBrain(rules, levelOf);
 	// Si no se pueden leer, el servidor arranca sin el bloque: las reglas igual
 	// llegan en brain_read, brain_rules y el rechazo de brain_upsert.
+	// Stateless: instructions solo viaja en la respuesta a initialize, así que
+	// el bloque se arma solo en ese request y no en cada tools/call.
 	let brainInstructions: string | null = null;
-	if (access.binding.provider === "wiki") {
+	if (access.binding.provider === "wiki" && isInitialize(parsedBody)) {
 		try {
 			const context = await visibleRules.session();
 			brainInstructions = formatBrainSession(
@@ -283,6 +285,16 @@ async function handleBrainMcpInner(
 	} finally {
 		await server.close();
 	}
+}
+
+// El cuerpo puede ser un mensaje JSON-RPC o un lote.
+function isInitialize(body: unknown): boolean {
+	return (Array.isArray(body) ? body : [body]).some(
+		(message) =>
+			typeof message === "object" &&
+			message !== null &&
+			(message as { method?: unknown }).method === "initialize",
+	);
 }
 
 export async function handleBrainMcp(
