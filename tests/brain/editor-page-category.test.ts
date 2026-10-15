@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pageCategory } from "@/lib/brain/core/editor/page-category";
 import { runtimePackages } from "./client-safe";
@@ -39,5 +40,27 @@ describe("pageCategory", () => {
 			expect(
 				runtimePackages(entry).filter((p) => p.startsWith("node:")),
 			).toEqual([]);
+	});
+});
+
+// Sin selector de categoría, el slug es el único campo que puede marcar un
+// error de categoría o de carpeta, y la miga no queda colgando sin categoría.
+describe("el espacio de trabajo sin selector de categoría", () => {
+	const source = readFileSync(
+		"components/brain/editor/page-workspace.tsx",
+		"utf8",
+	);
+
+	it("el slug se marca inválido también por categoría o carpeta", () => {
+		const slugInput = source.slice(
+			source.indexOf("id={slugId}"),
+			source.indexOf('placeholder="comercial/nueva-pagina"'),
+		);
+		for (const field of ["slug", "category", "folder"])
+			expect(slugInput).toContain(`fieldError("${field}")`);
+	});
+
+	it("la miga muestra un guion si la categoría está vacía", () => {
+		expect(source).toMatch(/← Brain · <span[^>]*>\{category \|\| "—"\}/);
 	});
 });

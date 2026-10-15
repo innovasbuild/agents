@@ -405,7 +405,7 @@ export function PageWorkspace({
 					href={`/${tenantSlug}/brain`}
 					className="mr-auto inline-flex min-h-11 items-center text-muted-foreground text-sm lg:min-h-0"
 				>
-					← Brain · <span className="capitalize">{category}</span>
+					← Brain · <span className="capitalize">{category || "—"}</span>
 				</Link>
 				{mode === "edit" && (
 					<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
@@ -431,7 +431,11 @@ export function PageWorkspace({
 							id={slugId}
 							value={form.slug}
 							readOnly={slugLocked}
-							aria-invalid={!!fieldError("slug")}
+							aria-invalid={
+								!!fieldError("slug") ||
+								!!fieldError("category") ||
+								!!fieldError("folder")
+							}
 							className="min-h-11 lg:min-h-9"
 							placeholder="comercial/nueva-pagina"
 							onChange={(e) =>
