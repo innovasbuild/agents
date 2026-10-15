@@ -10,24 +10,43 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { isFolderNode, type TreeNode } from "@/lib/brain/core/access/tree";
 import { atLeast, type Level } from "@/lib/brain/core/access/types";
+import {
+	isSkillsFolder,
+	rulesEntryHref,
+} from "@/lib/brain/core/editor/reserved";
 import { historyHref } from "@/lib/brain/core/editor/slug";
 
-export type FolderMenuItem = "new-subfolder" | "describe" | "delete-folder";
+export type FolderMenuItem =
+	| "new-subfolder"
+	| "describe"
+	| "rules"
+	| "delete-folder"
+	| "delete-folder-blocked";
 
 // Acciones de carpeta: solo para quien administra. Una carpeta implícita (sin
 // fila en brain_folders) no ofrece ninguna: la base pide la fila del padre para
-// crear adentro. Borrar una de primer nivel pide administrar la raíz.
+// crear adentro. Borrar una de primer nivel pide administrar la raíz; con
+// contenido, el ítem queda deshabilitado con el motivo (spec etapa 26 §3.2).
+// Las reglas (26.2): la raíz abre las instrucciones del brain; skills/ no tiene.
 export function folderMenuItems(
 	node: TreeNode,
 	rootLevel: Level | null,
+	deleteBlockedReason: string | null,
 ): FolderMenuItem[] {
 	if (node.level !== "administrador" || !isFolderNode(node)) return [];
-	if (node.path === "") return ["new-subfolder"];
+	if (node.path === "") return ["new-subfolder", "rules"];
 	if (node.folder === null) return [];
 	const items: FolderMenuItem[] = ["new-subfolder", "describe"];
+	if (!isSkillsFolder(node.path)) items.push("rules");
 	if (node.path.includes("/") || rootLevel === "administrador")
-		items.push("delete-folder");
+		items.push(
+			deleteBlockedReason === null ? "delete-folder" : "delete-folder-blocked",
+		);
 	return items;
+}
+
+export function rulesMenuLabel(node: TreeNode): string {
+	return node.path === "" ? "Instrucciones del brain" : "Reglas de la carpeta";
 }
 
 // Ítems según §7.2: lo que no corresponde no se muestra.
@@ -40,6 +59,7 @@ export function TreeRowMenu({
 	onNewFolder,
 	onDescribe,
 	onDeleteFolder,
+	deleteBlockedReason,
 	label,
 }: {
 	tenantSlug: string;
@@ -50,6 +70,7 @@ export function TreeRowMenu({
 	onNewFolder: () => void;
 	onDescribe: () => void;
 	onDeleteFolder: () => void;
+	deleteBlockedReason: string | null;
 	label?: string;
 }) {
 	const isFolder = isFolderNode(node);
@@ -94,7 +115,7 @@ export function TreeRowMenu({
 			</DropdownMenuItem>,
 		);
 	}
-	const folderItems = folderMenuItems(node, rootLevel);
+	const folderItems = folderMenuItems(node, rootLevel, deleteBlockedReason);
 	if (folderItems.includes("new-subfolder")) {
 		items.push(
 			<DropdownMenuItem
@@ -117,6 +138,15 @@ export function TreeRowMenu({
 			</DropdownMenuItem>,
 		);
 	}
+	if (folderItems.includes("rules")) {
+		items.push(
+			<DropdownMenuItem asChild key="rules" className="min-h-11 lg:min-h-0">
+				<Link href={rulesEntryHref(tenantSlug, node)}>
+					{rulesMenuLabel(node)}
+				</Link>
+			</DropdownMenuItem>,
+		);
+	}
 	if (folderItems.includes("delete-folder")) {
 		items.push(
 			<DropdownMenuItem
@@ -125,6 +155,20 @@ export function TreeRowMenu({
 				onSelect={onDeleteFolder}
 			>
 				Borrar carpeta…
+			</DropdownMenuItem>,
+		);
+	}
+	if (folderItems.includes("delete-folder-blocked")) {
+		items.push(
+			<DropdownMenuItem
+				key="delete-folder"
+				disabled
+				className="min-h-11 flex-col items-start gap-0.5 lg:min-h-0"
+			>
+				<span>Borrar carpeta…</span>
+				<span className="text-muted-foreground text-xs">
+					{deleteBlockedReason}
+				</span>
 			</DropdownMenuItem>,
 		);
 	}
