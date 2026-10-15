@@ -69,6 +69,8 @@ function skillsDeps(): McpSkillsDeps {
 		},
 		issue: (request) =>
 			issuePackageLink({ ...request, channel: "mcp" }, packageLinkDeps()),
+		// Para crear y editar el borrador desde un asistente (spec 24.5).
+		edit: { store: skillStore(), blobs: blobStore() },
 	};
 }
 

@@ -41,7 +41,7 @@ export function rejectSkillWrite(
 ): void {
 	if (isSkillSlug(write.slug) || write.category === SKILL_CATEGORY) {
 		throw new BrainForbidden(
-			"Las skills se editan y se publican desde la plataforma, no desde un asistente.",
+			"Las skills no se editan con brain_upsert: si tu cliente ofrece skill_create y skill_draft_edit, usalas; publicar se hace desde la plataforma.",
 		);
 	}
 }

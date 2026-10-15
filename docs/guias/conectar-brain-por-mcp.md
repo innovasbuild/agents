@@ -17,6 +17,7 @@ sources:
   - lib/brain/core/mcp-server/server.ts
   - lib/brain/core/mcp-server/rate-limit.ts
   - lib/brain/core/skills/catalog.ts
+  - lib/brain/core/skills/draft.ts
   - app/[tenant]/brain/skills/package/route.ts
   - lib/brain/core/limits.ts
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -80,7 +81,7 @@ Las skills (todo lo que está bajo `skills/`) no salen por `brain_search`, `brai
 
 Cosas a saber:
 
-- Siempre recibís la **última versión publicada**, también si sos quien edita la skill: el borrador se ve solo en la plataforma. Ves una skill si tenés al menos lectura sobre su ruta y tiene una publicación vigente; una que no ves responde igual que una que no existe.
+- Siempre recibís la **última versión publicada**, también si sos quien edita la skill: el borrador se ve en la plataforma o con `skill_draft_read` (ver «Crear y editar skills desde tu asistente», más abajo). Ves una skill si tenés al menos lectura sobre su ruta y tiene una publicación vigente; una que no ves responde igual que una que no existe.
 - La descripción de `skill_load` lista hasta 30 skills, con 300 caracteres de descripción cada una. Una skill recién publicada aparece ahí cuando el cliente vuelve a pedir las tools (reconectando, por ejemplo); en `skill_list` aparece siempre.
 - Por MCP se leen archivos de texto de hasta 256 KB; el paquete completo, con binarios, sale con `skill_package` o con **Descargar paquete** en la página de la skill o en **Conectar**.
 - Los scripts los corre tu asistente en su propio entorno. Claude Code, Codex y Cursor bajan el paquete solos y usan siempre la última versión. En claude.ai y ChatGPT el entorno no sale a internet por defecto: descargá el zip y subilo como skill, y volvé a subirlo cuando haya una versión nueva.
@@ -88,7 +89,25 @@ Cosas a saber:
 - Cada `skill_package` deja un evento `brain.skill_package_issued`.
 - Las cuatro cuentan como lecturas en el límite por minuto.
 
-Las skills se arman y se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
+Las skills se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
+
+### Crear y editar skills desde tu asistente
+
+Si sos administrador o editor (de una carpeta de skills o de una skill), tu asistente tiene cuatro tools más. Aparecen solo para quien puede editar algo bajo `skills/`, y solo si la empresa tiene habilitada la categoría `skill`:
+
+- `skill_create`: crea una skill nueva como **borrador**, en `skills/<carpeta>/<nombre>`. La `carpeta` es opcional: sin ella la skill queda directo bajo `skills/`. Va relativa a `skills/` (`ventas`, no `skills/ventas`) y tiene que existir.
+- `skill_draft_read`: lee el borrador (el `SKILL.md` completo, su revisión, su estado y sus archivos) o un archivo de texto.
+- `skill_draft_edit`: cambia el borrador reemplazando un fragmento que aparece una sola vez, en el `SKILL.md` o en un archivo de texto.
+- `skill_draft_write_file`: crea o reemplaza un archivo de texto del paquete.
+
+Cosas a saber:
+
+- **Todo va al borrador.** Lo que usan los demás no cambia hasta que un administrador publica desde la plataforma; `skill_load` y `skill_file` siguen devolviendo la versión publicada. Para probar tu cambio, pedile a tu asistente que lea el borrador.
+- Cada cambio exitoso trae un link a la pantalla de la skill, donde un administrador revisa y publica.
+- Por MCP entran archivos de texto de hasta 256 KB (el `SKILL.md` hasta 100 KB). Los binarios, borrar archivos, publicar y retirar son de la plataforma.
+- Si otra persona guardó la skill mientras editabas, el asistente recibe un conflicto y tiene que leer el borrador de nuevo. Una skill que no podés editar responde igual que una que no existe.
+- Los cambios al `SKILL.md` quedan en el historial de la página con tu nombre y `Edición por MCP: <motivo>` (la alta, con `Alta por MCP: <motivo>`). El motivo se guarda en el historial de la página solo para los cambios al `SKILL.md`: `skill_draft_write_file` no recibe motivo. Las escrituras cuentan como escrituras en el límite por minuto.
+- El encabezado del `SKILL.md` admite `name`, `description`, `license` y `compatibility`. Si una edición agrega otro campo, el asistente recibe un error en lugar de perderlo al guardar.
 
 ## Si algo falla
 

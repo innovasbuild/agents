@@ -462,7 +462,7 @@ describe("reglas en las tools del agente", () => {
 					ctx,
 				);
 				expect(result).toMatchObject({ ok: false, error: "forbidden" });
-				expect(JSON.stringify(result)).toContain("Las skills se editan");
+				expect(JSON.stringify(result)).toContain("Las skills no se editan con brain_upsert");
 				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
 				expect(JSON.stringify(result)).not.toContain("raíz");
 			}
