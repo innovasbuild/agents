@@ -1880,6 +1880,10 @@ export type Database = {
 				};
 				Returns: string;
 			};
+			platform_enable_brain_skills: {
+				Args: { p_actor: string; p_tenant: string };
+				Returns: boolean;
+			};
 			platform_mark_connection_verified: {
 				Args: {
 					p_actor: string;

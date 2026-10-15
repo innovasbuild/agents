@@ -77,7 +77,8 @@ async function call(
 		| "platform_set_connection_enabled"
 		| "platform_remove_connection"
 		| "platform_mark_connection_verified"
-		| "platform_set_budget",
+		| "platform_set_budget"
+		| "platform_enable_brain_skills",
 	args: Record<string, unknown>,
 	byCode?: Record<string, string>,
 ): Promise<ConsoleResult> {
@@ -255,6 +256,25 @@ export async function createBrain(
 				message:
 					"El brain quedó creado, pero no pude crear las páginas por defecto. Crealas a mano en comercial/icp y comercial/hooks.",
 			};
+}
+
+/**
+ * Habilita skills/ en el brain de la empresa. Es el único camino: la carpeta y
+ * la categoría skill son reservadas para el árbol del brain (etapa 26.1a).
+ * Habilitar de nuevo no cambia nada.
+ */
+export async function enableBrainSkills(
+	slug: string,
+	tenantId: string,
+): Promise<ConsoleResult> {
+	const admin = await requirePlatformAdmin();
+	if (!admin) return SIN_PERMISO;
+	if (!idSchema.safeParse(tenantId).success) return INVALIDO;
+
+	return call(slug, "platform_enable_brain_skills", {
+		p_actor: admin.userId,
+		p_tenant: tenantId,
+	});
 }
 
 /** Cuántos identificadores lleva un proveedor: ninguno (OAuth de plataforma), uno, o varios. */
