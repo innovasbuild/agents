@@ -12,6 +12,7 @@ import {
 import { withoutRoot } from "../rules.ts";
 import { type RulesSource, requireRules } from "../rules-source.ts";
 import { describeSkills, type SkillCatalog } from "../skills/catalog.ts";
+import { rejectSkillWrite } from "../skills/view.ts";
 import type { BrainProvider, BrainWrite } from "../types.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 
@@ -152,6 +153,8 @@ export function buildBrainMcpServer(ctx: {
 				let write: BrainWrite = input;
 				if (rules) {
 					try {
+						// Antes que las reglas: una skill se rechaza como skill.
+						rejectSkillWrite(input);
 						write = await requireRules(rules, input);
 					} catch (error) {
 						// Un rechazo por reglas es parte del flujo: entrega las reglas y

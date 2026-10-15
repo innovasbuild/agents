@@ -6,7 +6,7 @@
 // copia publicada; sin versión vigente, para un lector la skill no existe.
 import { atLeast, type Level } from "../access/types.ts";
 import { BrainForbidden, BrainNotFound } from "../errors.ts";
-import type { BrainPage, BrainProvider } from "../types.ts";
+import type { BrainPage, BrainProvider, BrainWrite } from "../types.ts";
 import { isSkillSlug, SKILL_CATEGORY } from "./package.ts";
 import { publishedSnapshot } from "./state.ts";
 import type { SkillOverviewRow } from "./store.ts";
@@ -34,6 +34,18 @@ async function readHidingSkills(
 	}
 }
 
+// Un asistente no escribe skills. Se exporta para chequearlo antes de pedir
+// reglas: así el rechazo es el de skills y no uno de reglas.
+export function rejectSkillWrite(
+	write: Pick<BrainWrite, "slug" | "category">,
+): void {
+	if (isSkillSlug(write.slug) || write.category === SKILL_CATEGORY) {
+		throw new BrainForbidden(
+			"Las skills se editan y se publican desde la plataforma, no desde un asistente.",
+		);
+	}
+}
+
 export function withoutSkills(provider: BrainProvider): BrainProvider {
 	return {
 		async search(input) {
@@ -52,11 +64,7 @@ export function withoutSkills(provider: BrainProvider): BrainProvider {
 			return isSkillSlug(slug) ? null : provider.history(slug);
 		},
 		async upsert(write, author) {
-			if (isSkillSlug(write.slug) || write.category === SKILL_CATEGORY) {
-				throw new BrainForbidden(
-					"Las skills se editan y se publican desde la plataforma, no desde un asistente.",
-				);
-			}
+			rejectSkillWrite(write);
 			return provider.upsert(write, author);
 		},
 	};

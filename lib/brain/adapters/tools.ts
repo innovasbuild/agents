@@ -8,9 +8,13 @@ import { brainContract } from "../core/contract.ts";
 import { agentReservedSlug, toToolError } from "../core/errors.ts";
 import type { BrainBinding } from "../core/resolve.ts";
 import { isReservedSlug, withoutRoot } from "../core/rules.ts";
-import { type RulesSource, requireRules } from "../core/rules-source.ts";
+import {
+	type RulesSource,
+	requireRules,
+	withoutSkillRules,
+} from "../core/rules-source.ts";
 import { assistantCategories } from "../core/skills/package.ts";
-import { withoutSkills } from "../core/skills/view.ts";
+import { rejectSkillWrite, withoutSkills } from "../core/skills/view.ts";
 import type { BrainProvider } from "../core/types.ts";
 import {
 	type BrainActor,
@@ -74,7 +78,9 @@ function buildBrainReadTools(
 				return {
 					ok: true as const,
 					page,
-					rules: withoutRoot(await acting.rules.cascade(slug)),
+					rules: withoutRoot(
+						await withoutSkillRules(acting.rules).cascade(slug),
+					),
 				};
 			} catch (error) {
 				return toToolError(error);
@@ -87,7 +93,10 @@ function buildBrainReadTools(
 		inputSchema: brainContract(categories).rules.input,
 		execute: async ({ path }) => {
 			try {
-				const rules = await resolveActingRules(binding, deps.actor, deps);
+				// Ni el agente sin persona ve las reglas de skills/ (spec 24.1 S6).
+				const rules = withoutSkillRules(
+					await resolveActingRules(binding, deps.actor, deps),
+				);
 				return { ok: true as const, rules: await rules.cascade(path) };
 			} catch (error) {
 				return toToolError(error);
@@ -119,6 +128,8 @@ function buildBrainUpsertTool(
 			const userId =
 				initiator?.principalType === "user" ? initiator.principalId : null;
 			try {
+				// Una skill se rechaza como skill, antes que las reglas (spec 24.1 S6).
+				rejectSkillWrite(input);
 				// Las reglas son gobierno: las decide una persona (spec etapa 26 D10).
 				if (isReservedSlug(input.slug)) throw agentReservedSlug(input.slug);
 				const acting = await resolveActingBrain(binding, deps.actor, deps);

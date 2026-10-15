@@ -409,6 +409,67 @@ describe("reglas en las tools del agente", () => {
 		expect(upsert).not.toHaveBeenCalled();
 	});
 
+	describe("las reglas de skills/ no salen por las tools del agente", () => {
+		const withSkillRules = () =>
+			createWikiRules({
+				tenantId: "tenant-a",
+				store: {
+					listRulePages: async () => [
+						...pages,
+						{
+							slug: "skills/00-reglas",
+							status: "activo",
+							revision: 9,
+							body: "Secreto de skills.",
+						},
+					],
+					listFolders: async () => [],
+				},
+			});
+		function skillSetup() {
+			const upsert = vi.fn(async () => ({ slug: "skills/x", revision: 1 }));
+			const tools = createBrainTools(binding, "read_write", {
+				provider: () => ({
+					search: vi.fn(async () => []),
+					read: vi.fn(async (slug: string) => pageOf(slug)),
+					list: async () => [],
+					history: async () => null,
+					upsert,
+				}),
+				rulesSource: withSkillRules,
+			});
+			if (!("brain_upsert" in tools)) throw new Error("falta brain_upsert");
+			return { tools, upsert };
+		}
+
+		it("brain_rules y brain_read sobre skills/ responden not_found sin cuerpo de reglas", async () => {
+			const { tools } = skillSetup();
+			for (const result of [
+				await tools.brain_rules.execute({ path: "skills/x" }, {} as never),
+				await tools.brain_read.execute({ slug: "skills/x" }, {} as never),
+			]) {
+				expect(result).toMatchObject({ ok: false, error: "not_found" });
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("raíz");
+			}
+		});
+
+		it("brain_upsert sobre skills/ devuelve el error de skills, sin reglas", async () => {
+			const { tools, upsert } = skillSetup();
+			for (const slug of ["skills/x", "skills/00-reglas"]) {
+				const result = await tools.brain_upsert.execute(
+					{ ...input, slug },
+					ctx,
+				);
+				expect(result).toMatchObject({ ok: false, error: "forbidden" });
+				expect(JSON.stringify(result)).toContain("Las skills se editan");
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("raíz");
+			}
+			expect(upsert).not.toHaveBeenCalled();
+		});
+	});
+
 	it("un miembro no recibe las reglas de una ruta que no ve", async () => {
 		const tools = createBrainTools(binding, "read", {
 			actor: { userId: "ana", role: "tenant_member" },

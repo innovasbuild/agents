@@ -11,6 +11,7 @@ import {
 } from "./errors.ts";
 import type { BrainFolder } from "./folders.ts";
 import { type RuleEntry, type RulesCascade, rulesFor } from "./rules.ts";
+import { isSkillSlug } from "./skills/package.ts";
 import { type BrainWrite, MAX_SLUG_LENGTH, SLUG_PATTERN } from "./types.ts";
 import type { WikiStore } from "./wiki-store.ts";
 
@@ -89,6 +90,19 @@ export function withRulesAccess(
 				),
 			};
 		},
+	};
+}
+
+// Los asistentes no ven skills/ (spec 24.1 S6), tampoco sus reglas: mismo
+// not_found que withoutSkills. Va en las superficies de los asistentes, no en
+// createWikiRules: un panel web puede querer las reglas de una skill.
+export function withoutSkillRules(source: RulesSource): RulesSource {
+	return {
+		async cascade(slug) {
+			if (isSkillSlug(slug)) throw new BrainNotFound(slug, []);
+			return source.cascade(slug);
+		},
+		session: () => source.session(),
 	};
 }
 

@@ -13,6 +13,7 @@ import {
 	EMPTY_RULES,
 	type RulesSource,
 	seesBrain,
+	withoutSkillRules,
 	withRulesAccess,
 } from "../rules-source.ts";
 import { formatBrainSession } from "../session.ts";
@@ -207,9 +208,10 @@ async function handleBrainMcpInner(
 	// Las reglas se filtran por lo que la persona ve (spec etapa 26 §4.2). Un
 	// brain mcp tiene la fuente vacía (D15).
 	const levelOf = (path: string) => resolveAccess(rules, principal, path);
-	const visibleRules = withRulesAccess(
-		deps.brainRules?.(access.binding) ?? EMPTY_RULES,
-		levelOf,
+	// withoutSkillRules por fuera, como withoutSkills: ni un administrador ve
+	// las reglas de skills/ por las tools del brain.
+	const visibleRules = withoutSkillRules(
+		withRulesAccess(deps.brainRules?.(access.binding) ?? EMPTY_RULES, levelOf),
 	);
 	// Las instrucciones de la raíz le llegan a quien ve alguna parte del brain.
 	const seesSomeBrain = seesBrain(rules, levelOf);

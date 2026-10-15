@@ -1163,6 +1163,58 @@ describe("handleBrainMcp · reglas", () => {
 		expect(session).toHaveBeenCalledTimes(1);
 	});
 
+	describe("las reglas de skills/ no salen por las tools del brain", () => {
+		const skillRules = () =>
+			createWikiRules({
+				tenantId: "tenant-a",
+				store: {
+					listRulePages: async () => [
+						...rulePages,
+						{
+							slug: "skills/00-reglas",
+							status: "activo" as const,
+							revision: 9,
+							body: "Secreto de skills.",
+						},
+					],
+					listFolders: async () => folders,
+				},
+			});
+
+		it("brain_rules y brain_read sobre skills/ responden not_found sin cuerpo de reglas", async () => {
+			const client = await connect("admin", deps({ brainRules: skillRules }));
+			for (const call of [
+				{ name: "brain_rules", arguments: { path: "skills/x" } },
+				{ name: "brain_read", arguments: { slug: "skills/x" } },
+			]) {
+				const result = await client.callTool(call);
+				expect(result.structuredContent).toMatchObject({
+					ok: false,
+					error: "not_found",
+				});
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("tercera persona");
+			}
+		});
+
+		it("brain_upsert sobre skills/ devuelve el error de skills, sin reglas", async () => {
+			const d = deps({ brainRules: skillRules });
+			const client = await connect("admin", d);
+			const result = await client.callTool({
+				name: "brain_upsert",
+				arguments: { ...newPage, slug: "skills/x" },
+			});
+			expect(result.structuredContent).toMatchObject({
+				ok: false,
+				error: "forbidden",
+			});
+			expect(JSON.stringify(result)).toContain("Las skills se editan");
+			expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+			expect(JSON.stringify(result)).not.toContain("tercera persona");
+			expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+		});
+	});
+
 	it("un brain externo por MCP responde la cascada vacía y no tiene instrucciones del brain", async () => {
 		const client = await connect(
 			"ana",

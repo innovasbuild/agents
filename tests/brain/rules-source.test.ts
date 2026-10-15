@@ -10,6 +10,7 @@ import {
 	createWikiRules,
 	EMPTY_RULES,
 	requireRules,
+	withoutSkillRules,
 	withRulesAccess,
 } from "@/lib/brain/core/rules-source";
 import type { BrainWrite } from "@/lib/brain/core/types";
@@ -130,6 +131,22 @@ describe("withRulesAccess", () => {
 		const context = await guarded.session();
 		expect(context.root).not.toBeNull();
 		expect(context.folders.map((f) => f.path)).toEqual(["talento"]);
+	});
+});
+
+describe("withoutSkillRules", () => {
+	it("una ruta bajo skills/ responde not_found; el resto pasa igual", async () => {
+		const guarded = withoutSkillRules(
+			source([rule("00-reglas"), rule("skills/00-reglas")]),
+		);
+		await expect(guarded.cascade("skills/x")).rejects.toBeInstanceOf(
+			BrainNotFound,
+		);
+		await expect(guarded.cascade("skills/00-reglas")).rejects.toBeInstanceOf(
+			BrainNotFound,
+		);
+		expect((await guarded.cascade("talento/x")).chain).toHaveLength(1);
+		expect((await guarded.session()).root).not.toBeNull();
 	});
 });
 
