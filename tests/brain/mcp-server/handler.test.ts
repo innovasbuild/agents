@@ -10,8 +10,11 @@ import {
 	protectedResourceMetadata,
 } from "@/lib/brain/core/mcp-server/handler";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
-import type { SkillOverviewRow } from "@/lib/brain/core/skills/store";
-import type { BrainProvider } from "@/lib/brain/core/types";
+import type {
+	SkillOverviewRow,
+	SkillStore,
+} from "@/lib/brain/core/skills/store";
+import type { BrainPage, BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
 	id: "b1",
@@ -845,5 +848,262 @@ describe("handleBrainMcp · skills", () => {
 			BRAIN_TOOLS,
 		);
 		expect(overview).not.toHaveBeenCalled();
+	});
+});
+
+describe("handleBrainMcp · edición de skills", () => {
+	const SKILL_SLUG = "skills/ventas/reporte";
+	const withSkillCategory: Partial<BrainMcpDeps> = {
+		store: {
+			...store,
+			brainBinding: async () => ({
+				...binding,
+				config: { ...binding.config, categories: ["comercial", "skill"] },
+			}),
+		},
+	};
+	const row: SkillOverviewRow = {
+		pageId: "p1",
+		slug: SKILL_SLUG,
+		revision: 3,
+		draftFilesDigest: "fd",
+		current: null,
+	};
+	const skillPage: BrainPage = {
+		slug: SKILL_SLUG,
+		title: "Reporte",
+		category: "skill",
+		status: "activo",
+		tags: [],
+		frontmatter: { description: "Describe la skill." },
+		body: "# Pasos\n\nUno.\n",
+		revision: 3,
+		updatedAt: "2026-10-15T00:00:00Z",
+	};
+	const editStore: SkillStore = {
+		overview: async () => [row],
+		files: async () => [],
+		acts: async () => [],
+		putFile: vi.fn(async () => "fd2"),
+		removeFile: vi.fn(),
+		publish: vi.fn(),
+		withdraw: vi.fn(),
+	};
+	const edit = {
+		store: editStore,
+		blobs: { put: vi.fn(async () => {}), get: async () => null },
+	};
+	const DRAFT_TOOLS = [
+		"skill_create",
+		"skill_draft_edit",
+		"skill_draft_read",
+		"skill_draft_write_file",
+	];
+	const skillsDeps = (extra: Partial<BrainMcpDeps["skills"]> = {}) => ({
+		overview: async () => [row],
+		blob: async () => null,
+		record: async () => {},
+		issue: vi.fn(),
+		edit,
+		...extra,
+	});
+	const names = async (client: Awaited<ReturnType<typeof connect>>) =>
+		(await client.listTools()).tools.map((t) => t.name).sort();
+
+	it("un administrador ve las cuatro tools aunque no haya skills publicadas", async () => {
+		const client = await connect(
+			"admin",
+			deps({ ...withSkillCategory, skills: skillsDeps() }),
+		);
+		expect(await names(client)).toEqual([...BRAIN_TOOLS, ...DRAFT_TOOLS]);
+	});
+
+	it("un lector no las ve", async () => {
+		const client = await connect(
+			"ana",
+			deps({ ...withSkillCategory, skills: skillsDeps() }),
+		);
+		expect(await names(client)).toEqual(BRAIN_TOOLS);
+	});
+
+	it("un miembro con regla de editor sobre una carpeta de skills las ve", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				...withSkillCategory,
+				skills: skillsDeps({ overview: async () => [] }),
+				rules: {
+					load: async () => [
+						{
+							path: "skills/ventas",
+							principal: "user",
+							userId: "ana",
+							level: "editor",
+						},
+					],
+				},
+			}),
+		);
+		expect(await names(client)).toEqual([...BRAIN_TOOLS, ...DRAFT_TOOLS]);
+	});
+
+	it("sin la categoría skill habilitada, o sin dependencias de edición, no hay tools", async () => {
+		const sinCategoria = await connect("admin", deps({ skills: skillsDeps() }));
+		expect(await names(sinCategoria)).toEqual(BRAIN_TOOLS);
+		const sinEdit = await connect(
+			"admin",
+			deps({
+				...withSkillCategory,
+				skills: skillsDeps({ edit: undefined }),
+			}),
+		);
+		expect(await names(sinEdit)).toEqual(BRAIN_TOOLS);
+	});
+
+	it("con un brain externo no hay tools de edición", async () => {
+		const client = await connect(
+			"admin",
+			deps({
+				skills: skillsDeps(),
+				store: {
+					...store,
+					brainBinding: async () => ({
+						...binding,
+						provider: "mcp",
+						connectorUid: "c1",
+						config: {
+							url: "https://brain.test/mcp",
+							tools: { search: "search", read: "read", upsert: "upsert" },
+							categories: ["comercial", "skill"],
+							timeoutMs: 5000,
+							mcpLimits: binding.config.mcpLimits,
+						},
+					}),
+				},
+			}),
+		);
+		expect(await names(client)).toEqual(BRAIN_TOOLS);
+	});
+
+	it("skill_create guarda con la persona como autora y devuelve el link con el slug de la empresa", async () => {
+		const d = deps({ ...withSkillCategory, skills: skillsDeps() });
+		const client = await connect("admin", d);
+		const result = await client.callTool({
+			name: "skill_create",
+			arguments: {
+				name: "nueva",
+				folder: "ventas",
+				description: "Armar algo.",
+				instructions: "# Pasos\n",
+				reason: "primer borrador",
+			},
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			slug: "skills/ventas/nueva",
+			state: "sin_publicar",
+			reviewUrl: "https://agents.test/a/brain/p/skills/ventas/nueva",
+		});
+		expect(d.providerInstance.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				slug: "skills/ventas/nueva",
+				category: "skill",
+			}),
+			{ kind: "user", userId: "admin" },
+		);
+	});
+
+	it("con el dominio de la empresa el link sale sin slug", async () => {
+		const client = await connect(
+			"admin",
+			deps({ ...withSkillCategory, skills: skillsDeps(), tenantHost: true }),
+		);
+		const result = await client.callTool({
+			name: "skill_create",
+			arguments: {
+				name: "nueva",
+				description: "Armar algo.",
+				instructions: "# Pasos\n",
+				reason: "r",
+			},
+		});
+		expect(result.structuredContent).toMatchObject({
+			reviewUrl: "https://agents.test/brain/p/skills/nueva",
+		});
+	});
+
+	it("skill_draft_edit lee el borrador y guarda con la revisión leída", async () => {
+		const provider = fakeProvider();
+		provider.read = vi.fn(async () => skillPage);
+		provider.upsert = vi.fn(async () => ({ slug: SKILL_SLUG, revision: 4 }));
+		const client = await connect(
+			"admin",
+			deps({
+				...withSkillCategory,
+				skills: skillsDeps(),
+				provider: () => provider,
+			}),
+		);
+		const result = await client.callTool({
+			name: "skill_draft_edit",
+			arguments: {
+				skill: "reporte",
+				old: "Uno.",
+				new: "Uno y dos.",
+				reason: "r",
+			},
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			slug: SKILL_SLUG,
+			revision: 4,
+		});
+		expect(provider.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				slug: SKILL_SLUG,
+				body: "# Pasos\n\nUno y dos.\n",
+				baseRevision: 3,
+				reason: "Edición por MCP: r",
+			}),
+			{ kind: "user", userId: "admin" },
+		);
+	});
+
+	it("brain_upsert sobre skills/ sigue rechazado y el mensaje manda a las tools de skills", async () => {
+		const d = deps({ ...withSkillCategory, skills: skillsDeps() });
+		const client = await connect("admin", d);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: {
+				slug: SKILL_SLUG,
+				title: "Reporte",
+				// La categoría skill no se anuncia a los asistentes (assistantCategories):
+				// el rechazo sale de la ruta bajo skills/, no de la categoría.
+				category: "comercial",
+				status: "activo",
+				tags: [],
+				body: "x",
+				reason: "r",
+			},
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			error: "forbidden",
+			message: expect.stringContaining("skill_draft_edit"),
+		});
+		expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+	});
+
+	it("brain_read sobre skills/ sigue sin existir para quien edita", async () => {
+		const client = await connect(
+			"admin",
+			deps({ ...withSkillCategory, skills: skillsDeps() }),
+		);
+		const result = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: SKILL_SLUG },
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({ error: "not_found" });
 	});
 });

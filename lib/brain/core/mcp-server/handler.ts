@@ -8,15 +8,22 @@ import {
 	type Principal,
 } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
+import { BrainNotFound } from "../errors.ts";
 import type { BrainBinding } from "../resolve.ts";
 import {
 	loadSkillCatalog,
 	type SkillCatalog,
 	type SkillLoadRecord,
 } from "../skills/catalog.ts";
-import { assistantCategories } from "../skills/package.ts";
+import {
+	canEditSkills,
+	createSkillDrafts,
+	type SkillDrafts,
+} from "../skills/draft.ts";
+import type { BlobStore } from "../skills/files.ts";
+import { assistantCategories, SKILL_CATEGORY } from "../skills/package.ts";
 import type { PackageLink, PackageRequest } from "../skills/package-link.ts";
-import type { SkillOverviewRow } from "../skills/store.ts";
+import type { SkillOverviewRow, SkillStore } from "../skills/store.ts";
 import { withoutSkills } from "../skills/view.ts";
 import type { BrainProvider } from "../types.ts";
 import {
@@ -45,6 +52,8 @@ export interface McpSkillsDeps {
 		entry: SkillLoadRecord & { tenantId: string; userId: string },
 	): Promise<void>;
 	issue(request: Omit<PackageRequest, "channel">): Promise<PackageLink>;
+	/** Para crear y editar el borrador (spec 24.5). Sin esto no hay esas tools. */
+	edit?: { store: SkillStore; blobs: BlobStore };
 }
 
 export interface BrainMcpDeps {
@@ -73,6 +82,18 @@ function resourceUrl(publicUrl: string, slug: string, tenantHost?: boolean) {
 	return tenantHost
 		? `${publicUrl}/brain/mcp`
 		: `${publicUrl}/brain/${slug}/mcp`;
+}
+
+// A dónde mandar a la persona a revisar el borrador: la pantalla de la skill.
+function skillReviewUrl(
+	publicUrl: string,
+	tenantSlug: string,
+	skillSlug: string,
+	tenantHost?: boolean,
+) {
+	return tenantHost
+		? `${publicUrl}/brain/p/${skillSlug}`
+		: `${publicUrl}/${tenantSlug}/brain/p/${skillSlug}`;
 }
 
 function metadataUrl(publicUrl: string, slug: string, tenantHost?: boolean) {
@@ -190,10 +211,22 @@ async function handleBrainMcpInner(
 		role: access.role,
 	};
 	// withoutSkills por fuera de withAccess: ni un administrador ve skills por
-	// las tools del brain (spec 24.1 S6). Las skills salen por su catálogo.
-	const provider = withoutSkills(
-		withAccess(deps.provider(access.binding), principal, rules),
+	// las tools del brain (spec 24.1 S6). Las skills salen por su catálogo y, para
+	// quien las edita, por skill_draft_* (spec 24.5), que usa el proveedor sin
+	// esa guardia y solo adentro de draft.ts.
+	const accessProvider = withAccess(
+		deps.provider(access.binding),
+		principal,
+		rules,
 	);
+	const provider = withoutSkills(accessProvider);
+
+	// El overview se pide una sola vez por request.
+	let overviewRows: Promise<SkillOverviewRow[]> | null = null;
+	const overview = () => {
+		overviewRows ??= deps.skills.overview(access.tenantId);
+		return overviewRows;
+	};
 
 	// Solo el brain propio tiene skills (S13). Si no se pueden leer, el
 	// servidor se arma sin ellas: las tools del brain no dependen de las skills.
@@ -201,7 +234,7 @@ async function handleBrainMcpInner(
 	if (access.binding.provider === "wiki") {
 		try {
 			skills = await loadSkillCatalog({
-				overview: () => deps.skills.overview(access.tenantId),
+				overview,
 				levelOf: (slug) => resolveAccess(rules, principal, slug),
 				blob: (sha256) => deps.skills.blob(access.tenantId, sha256),
 				record: (entry) =>
@@ -223,12 +256,61 @@ async function handleBrainMcpInner(
 		}
 	}
 
+	// Solo quien puede editar algo bajo skills/, con la categoría habilitada.
+	let skillDrafts: SkillDrafts | null = null;
+	const editDeps = deps.skills.edit;
+	if (
+		editDeps &&
+		access.binding.provider === "wiki" &&
+		access.binding.config.categories.includes(SKILL_CATEGORY)
+	) {
+		try {
+			if (canEditSkills(rules, principal, await overview())) {
+				skillDrafts = createSkillDrafts({
+					tenantSlug: slug,
+					levelOf: (path) => resolveAccess(rules, principal, path),
+					reviewUrl: (skillSlug) =>
+						skillReviewUrl(deps.publicUrl, slug, skillSlug, deps.tenantHost),
+					files: {
+						actor: async () => ({
+							tenantId: access.tenantId,
+							userId: access.userId,
+							role: access.role,
+						}),
+						binding: async () => ({ provider: "wiki" }),
+						rules: { load: async () => rules },
+						page: async (_tenantId, skillSlug) => {
+							try {
+								return await accessProvider.read(skillSlug, {
+									suggestions: false,
+								});
+							} catch (error) {
+								if (error instanceof BrainNotFound) return null;
+								throw error;
+							}
+						},
+						save: (_actor, write) =>
+							accessProvider.upsert(write, {
+								kind: "user",
+								userId: access.userId,
+							}),
+						store: editDeps.store,
+						blobs: editDeps.blobs,
+					},
+				});
+			}
+		} catch (error) {
+			console.error("brain mcp: no pude armar la edición de skills", error);
+		}
+	}
+
 	const server = buildBrainMcpServer({
 		userId: access.userId,
 		categories: assistantCategories(access.binding.config.categories),
 		canon: await deps.usesCanon(access.tenantId),
 		provider,
 		skills,
+		skillDrafts,
 		limiter: createRateLimiter({
 			tenantId: access.tenantId,
 			userId: access.userId,
