@@ -15,8 +15,15 @@ import {
 	type Principal,
 } from "../core/access/types";
 import { withAccess } from "../core/access/with-access";
+import {
+	editorRules,
+	loadFolderRulesPanel,
+	loadRulesPanel,
+	type RulesPanelView,
+} from "../core/editor/rules-panel";
 import type { BrainFolder } from "../core/folders";
 import { resolveBrainBinding } from "../core/resolve";
+import type { RulesSource } from "../core/rules-source";
 import { SKILL_CATEGORY } from "../core/skills/package";
 import { skillState } from "../core/skills/state";
 import type { SkillOverviewRow } from "../core/skills/store";
@@ -25,6 +32,7 @@ import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
 import { createSupabaseWikiStore } from "../core/wiki-store";
 import { accessRulesStore } from "./access-rules";
 import { getBrainProvider } from "./provider";
+import { getBrainRules } from "./rules";
 import { skillStore } from "./skills";
 
 export type EditorContext =
@@ -38,6 +46,9 @@ export type EditorContext =
 			skills: () => Promise<SkillOverviewRow[]>;
 			// Carpetas guardadas del tenant (pueden estar vacías); visibleTree las filtra.
 			folders: () => Promise<BrainFolder[]>;
+			// Reglas que gobiernan cada ruta (spec etapa 26 §4.3), ya filtradas por
+			// lo que ve la persona y sin skills/: la misma garantía que el MCP.
+			rules: RulesSource;
 	  }
 	| { kind: "no-brain"; tenant: TenantAccess }
 	| { kind: "external"; tenant: TenantAccess };
@@ -94,6 +105,7 @@ export const loadEditorContext = cache(
 			access,
 			skills,
 			folders,
+			rules: editorRules(getBrainRules(binding), access),
 		};
 	},
 );
@@ -221,4 +233,33 @@ async function memberEmails(
 		}),
 	);
 	return result;
+}
+
+function logRulesError(ctx: OkEditorContext) {
+	return (error: unknown) =>
+		console.error(
+			`brain editor: no pude leer las reglas de ${ctx.tenant.slug}`,
+			error,
+		);
+}
+
+// Panel "Reglas que aplican" de una página (spec etapa 26 §4.3).
+export function loadPageRulesPanel(
+	ctx: OkEditorContext,
+	slug: string,
+): Promise<RulesPanelView | null> {
+	return loadRulesPanel(ctx.rules, slug, ctx.access, logRulesError(ctx));
+}
+
+// El de una página nueva en una carpeta: la página todavía no existe.
+export function loadNewPageRulesPanel(
+	ctx: OkEditorContext,
+	folder: string,
+): Promise<RulesPanelView | null> {
+	return loadFolderRulesPanel(
+		ctx.rules,
+		folder,
+		ctx.access,
+		logRulesError(ctx),
+	);
 }
