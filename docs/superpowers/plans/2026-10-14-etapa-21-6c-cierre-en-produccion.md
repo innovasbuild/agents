@@ -216,7 +216,7 @@ Nada de esto exige revertir la migración: la tabla vacía no tiene efecto.
 
 ## 6. Registro de resultados
 
-Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap).
+Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap). Las casillas de los §0 a §5 no se tildaron una por una en el cierre del 2026-10-15: el registro de lo hecho y de lo que quedó sin verificar es esta tabla.
 
 | Verificación | Resultado | Fecha | Quién |
 |---|---|---|---|
@@ -228,7 +228,7 @@ Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap).
 | S1: `x-forwarded-host` llega al canal MCP del agente | OK: el 401 apunta a `ai.okeefe.com.ar` | 2026-10-15 | Claude (`curl`) |
 | S4: login por link mágico en el dominio propio | Sin verificar: la landing de okeefe solo ofrece Google | | |
 | S4: login con Google en el dominio propio | OK | 2026-10-15 | Mati |
-| Conexión real de Claude por MCP (brain y/o agente) | OK según Mati (no precisó si fue el brain, el agente o ambos). Con `curl`, el brain y el agente responden 401 con la metadata en `ai.okeefe.com.ar` | 2026-10-15 | Mati |
+| Conexión real por MCP (brain y/o agente) | OK según Mati (no precisó si fue el brain, el agente o ambos). Con `curl`, el brain y el agente responden 401 con la metadata en `ai.okeefe.com.ar` | 2026-10-15 | Mati |
 | Dónde aterriza el consentimiento OAuth | No registrado (decisión A1: en el host raíz) | | |
 | Link de invitación con el dominio de la empresa | Sin verificar | | |
 | Regresión en el host raíz | OK: `agentes.innov.as/login/okeefe` responde 200 y `/okeefe/chat` da 404 sin sesión (la página hace `notFound()`). Sin recorrer un flujo completo | 2026-10-15 | Claude (`curl`) |
