@@ -107,5 +107,6 @@ describe("instructions/brain", () => {
 	it("si leer la configuración del agente falla, la sesión arranca sin el bloque", async () => {
 		state.accessError = new Error("db caída");
 		expect(await resolve(outreach, user)).toBeNull();
+		expect(console.error).toHaveBeenCalled();
 	});
 });
