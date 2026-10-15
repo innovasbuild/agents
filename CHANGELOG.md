@@ -2,6 +2,21 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.4.0] - 2026-10-15
+
+### Added
+
+- Dominio propio por empresa. Cada empresa puede servirse desde su propio dominio (por ejemplo `ai.tuempresa.com`) con un solo registro `CNAME`: la app, el login, el chat y las URLs para conectar el brain y el agente de outreach a Claude o ChatGPT (`/brain/mcp` y `/eve/outreach/v1/mcp`) salen con ese dominio y sin el nombre de la empresa en la dirección. Las direcciones viejas con el nombre siguen funcionando y redirigen a las limpias.
+- Sección **Dominio** en la consola de plataforma (`/plataforma/<slug>`): agregar, verificar, elegir el principal y quitar un dominio, con las instrucciones de DNS para el cliente. Al activarlo, la plataforma lo da de alta en Vercel y en las Redirect URLs de Supabase Auth por API; un barrido cada 10 minutos lo activa solo cuando el DNS responde. El administrador de la empresa ve su dominio en `/<slug>/settings`.
+- Los links de invitación salen con el dominio principal de la empresa.
+- Guía para operarlo y texto para mandarle al cliente: `docs/guias/dominio-de-un-cliente.md`.
+
+### Changed
+
+- Las URLs de conexión, la metadata OAuth y la pantalla `/conectar` se arman según el dominio por el que se entra.
+- Límite conocido: la pantalla de autorización que ve cada persona al conectar Claude o ChatGPT sigue siendo la de la plataforma (`agentes.innov.as`), porque Supabase tiene una sola Site URL por proyecto.
+- Para operar dominios hacen falta cinco variables en Production (`VERCEL_API_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID`, `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`) y la migración `20261024120000_tenant_domains` aplicada antes que el código.
+
 ## [0.3.0] - 2026-10-14
 
 ### Added
