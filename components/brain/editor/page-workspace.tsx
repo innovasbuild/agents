@@ -17,12 +17,14 @@ import { DeletePageButton } from "@/components/brain/delete-page-button";
 import { DetailsSheet } from "@/components/brain/details-sheet";
 import { DiffView } from "@/components/brain/diff-view";
 import { Paper } from "@/components/brain/paper";
+import { ReservedNoticeBox } from "@/components/brain/reserved-notice";
 import { RulesPanel, useFolderRules } from "@/components/brain/rules-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { diffLines } from "@/lib/brain/core/diff";
 import { chooseBodyToSave } from "@/lib/brain/core/editor/body-to-save";
+import { reservedNotice } from "@/lib/brain/core/editor/reserved";
 import type { RulesPanelView } from "@/lib/brain/core/editor/rules-panel";
 import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { historyHref, pageHref } from "@/lib/brain/core/editor/slug";
@@ -86,6 +88,8 @@ export interface PageWorkspaceProps {
 	// Reglas que aplican, ya armadas en el servidor (spec etapa 26 §4.3). null:
 	// la ruta no tiene, no se ven o es de skills.
 	rules?: RulesPanelView | null;
+	// Página nueva con el slug ya decidido (las reglas de una carpeta).
+	slugLocked?: boolean;
 }
 
 export function PageWorkspace({
@@ -99,6 +103,7 @@ export function PageWorkspace({
 	canDelete,
 	skill,
 	rules,
+	slugLocked = false,
 }: PageWorkspaceProps) {
 	const router = useRouter();
 	const tagsId = useId();
@@ -122,11 +127,13 @@ export function PageWorkspace({
 	const [isPending, startTransition] = useTransition();
 	// En una página nueva el panel sigue a la carpeta que se escribe en el slug.
 	const rulesView = useFolderRules({
-		enabled: mode === "new",
+		enabled: mode === "new" && !slugLocked,
 		tenantSlug,
 		slug: form.slug,
 		initial: rules ?? null,
 	});
+	// Una reservada avisa qué gobierna y cuenta caracteres (spec etapa 26 §4.1).
+	const notice = reservedNotice(form.slug);
 
 	const isSkill = form.category === SKILL_CATEGORY;
 	const frontmatterText = (key: string) =>
@@ -273,42 +280,46 @@ export function PageWorkspace({
 
 	const detailsFields = (
 		<div className="space-y-4 text-sm">
-			<label className="block space-y-1">
-				<span>Categoría</span>
-				<select
-					className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
-					value={form.category}
-					disabled={mode === "edit" && isSkill}
-					aria-invalid={!!fieldError("category")}
-					onChange={(e) =>
-						setForm((f) => {
-							// Una skill lleva descripción y requisitos; otra categoría no.
-							const {
-								description: _d,
-								compatibility: _c,
-								...rest
-							} = f.frontmatter;
-							return {
-								...f,
-								category: e.target.value,
-								frontmatter:
-									f.category === SKILL_CATEGORY &&
-									e.target.value !== SKILL_CATEGORY
-										? rest
-										: f.frontmatter,
-							};
-						})
-					}
-				>
-					{categories
-						.filter((c) => mode === "new" || isSkill || c !== SKILL_CATEGORY)
-						.map((c) => (
-							<option key={c} value={c}>
-								{c}
-							</option>
-						))}
-				</select>
-			</label>
+			{/* La categoría de una reservada la pone el proveedor según la ruta; elegir
+			    skill acá la forzaría a Activo al guardar. */}
+			{!notice && (
+				<label className="block space-y-1">
+					<span>Categoría</span>
+					<select
+						className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
+						value={form.category}
+						disabled={mode === "edit" && isSkill}
+						aria-invalid={!!fieldError("category")}
+						onChange={(e) =>
+							setForm((f) => {
+								// Una skill lleva descripción y requisitos; otra categoría no.
+								const {
+									description: _d,
+									compatibility: _c,
+									...rest
+								} = f.frontmatter;
+								return {
+									...f,
+									category: e.target.value,
+									frontmatter:
+										f.category === SKILL_CATEGORY &&
+										e.target.value !== SKILL_CATEGORY
+											? rest
+											: f.frontmatter,
+								};
+							})
+						}
+					>
+						{categories
+							.filter((c) => mode === "new" || isSkill || c !== SKILL_CATEGORY)
+							.map((c) => (
+								<option key={c} value={c}>
+									{c}
+								</option>
+							))}
+					</select>
+				</label>
+			)}
 			{!isSkill && (
 				<label className="block space-y-1">
 					<span>Estado</span>
@@ -422,6 +433,7 @@ export function PageWorkspace({
 				</DetailsSheet>
 			</div>
 
+			{notice && <ReservedNoticeBox notice={notice} length={body.length} />}
 			{rulesView && (
 				<RulesPanel tenantSlug={tenantSlug} view={rulesView} pages={pages} />
 			)}
@@ -432,6 +444,7 @@ export function PageWorkspace({
 						<Input
 							id={slugId}
 							value={form.slug}
+							readOnly={slugLocked}
 							aria-invalid={!!fieldError("slug")}
 							className="min-h-11 lg:min-h-9"
 							placeholder="comercial/nueva-pagina"

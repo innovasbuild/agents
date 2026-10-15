@@ -15,6 +15,7 @@ import {
 import { skillStore } from "@/lib/brain/adapters/skills";
 import { isAdminRole } from "@/lib/brain/core/access/types";
 import { entryMode } from "@/lib/brain/core/editor/entry-mode";
+import { entryLevel } from "@/lib/brain/core/editor/reserved";
 import {
 	historyHref,
 	pageHref,
@@ -68,7 +69,9 @@ export default async function BrainPageView({
 		pages.map((p) => [p.slug, { title: p.title, status: p.status }]),
 	);
 
-	const level = ctx.access(slug);
+	// Una reservada se edita solo administrando su carpeta (spec etapa 26
+	// §4.1); para los demás es lectura. El servidor lo exige igual al guardar.
+	const level = entryLevel(slug, ctx.access);
 	const outgoing = index.outgoing.get(slug) ?? [];
 	const incoming = index.incoming.get(slug) ?? [];
 
