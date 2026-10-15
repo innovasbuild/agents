@@ -81,7 +81,7 @@ Las skills (todo lo que está bajo `skills/`) no salen por `brain_search`, `brai
 
 Cosas a saber:
 
-- Siempre recibís la **última versión publicada**, también si sos quien edita la skill: el borrador se ve solo en la plataforma. Ves una skill si tenés al menos lectura sobre su ruta y tiene una publicación vigente; una que no ves responde igual que una que no existe.
+- Siempre recibís la **última versión publicada**, también si sos quien edita la skill: el borrador se ve en la plataforma o con `skill_draft_read` (ver «Crear y editar skills desde tu asistente», más abajo). Ves una skill si tenés al menos lectura sobre su ruta y tiene una publicación vigente; una que no ves responde igual que una que no existe.
 - La descripción de `skill_load` lista hasta 30 skills, con 300 caracteres de descripción cada una. Una skill recién publicada aparece ahí cuando el cliente vuelve a pedir las tools (reconectando, por ejemplo); en `skill_list` aparece siempre.
 - Por MCP se leen archivos de texto de hasta 256 KB; el paquete completo, con binarios, sale con `skill_package` o con **Descargar paquete** en la página de la skill o en **Conectar**.
 - Los scripts los corre tu asistente en su propio entorno. Claude Code, Codex y Cursor bajan el paquete solos y usan siempre la última versión. En claude.ai y ChatGPT el entorno no sale a internet por defecto: descargá el zip y subilo como skill, y volvé a subirlo cuando haya una versión nueva.
