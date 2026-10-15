@@ -3,7 +3,7 @@ title: Plataforma y settings por empresa
 category: dominios
 status: activo
 tags: [plataforma, consola, tenants, marca, settings, presupuestos]
-updated: 2026-10-14
+updated: 2026-10-15
 sources:
   - app/plataforma
   - app/(auth)/login/[tenant]/page.tsx
@@ -24,6 +24,7 @@ sources:
   - lib/agents/catalog.ts
   - supabase/migrations/20261015120000_platform_console.sql
   - supabase/migrations/20261023120000_spend_report.sql
+  - supabase/migrations/20261026120000_platform_enable_brain_skills.sql
   - supabase/migrations/20260912195514_brand_bucket.sql
   - docs/superpowers/specs/2026-10-05-consola-plataforma-design.md
   - docs/superpowers/specs/2026-10-05-alta-empresas-landing-design.md
@@ -84,7 +85,7 @@ El title y el favicon también salen de la marca: `tenantMetadata` (`lib/tenants
 `/plataforma/[slug]` muestra, en orden: el formulario de la empresa, **Qué falta** (`tenantReadiness`: sin agentes, sin brain, faltan conectores, conectores sin verificar, falta el ICP o los hooks en el brain), **Agentes**, **Brain**, **Conectores**, **Dominio**, **Presupuestos** y **Usuarios**.
 
 - **Agentes** (`setAgent`): habilita o deshabilita un agente del catálogo y fija su acceso al brain (`none`, `read`, `read_write`) con `platform_set_agent` (evento `agent.updated`). Un agente que requiere brain no se habilita hasta que exista uno; al prenderse por primera vez se siembran las páginas del canon.
-- **Brain** (`createBrain`): crea el binding `brain/wiki` con la configuración por defecto (categorías `empresa`, `producto`, `comercial`, `operacion` y el frontmatter requerido) y una carpeta de primer nivel por categoría (`brain_folders_from_config`). Las categorías se muestran solo en lectura, con el link "Editar en el brain": son las carpetas de primer nivel y se crean y borran desde el árbol del brain (etapa 26.1a). El contenido del brain se explica en [brain](brain.md).
+- **Brain** (`createBrain`): crea el binding `brain/wiki` con la configuración por defecto (categorías `empresa`, `producto`, `comercial`, `operacion` y el frontmatter requerido) y una carpeta de primer nivel por categoría (`brain_folders_from_config`). Las categorías se muestran solo en lectura, con el link "Editar en el brain": son las carpetas de primer nivel y se crean y borran desde el árbol del brain (etapa 26.1a). **Habilitar skills** (`enableBrainSkills`): si las categorías no incluyen `skill`, la sección ofrece el botón "Habilitar skills", que llama a `platform_enable_brain_skills` (`security definer`, solo `service_role`). Bloquea el binding, crea la carpeta `skills` con `brain_ensure_folders`, sincroniza `config.categories` (suma `skill`) y deja el evento `brain.skills_enabled`. Es el único camino porque `skills` es una ruta reservada que `brain_create_folder` rechaza. Habilitar de nuevo no cambia nada ni deja otro evento; repone la categoría si la carpeta estaba pero la config no; falla con mensaje de consola si la empresa no tiene brain o ya tiene 20 carpetas de primer nivel. Deshabilitar skills no existe. El contenido del brain se explica en [brain](brain.md).
 - **Conectores**: ver [conectores](conectores.md).
 - **Dominio** (`addTenantDomain`, `verifyTenantDomain`, `makeTenantDomainPrimary`, `removeTenantDomain`, en `domain-actions.ts`): el dominio propio de la empresa (por ejemplo `ai.okeefe.com.ar`). Cada acción repite `requirePlatformAdmin` y comprueba que el dominio sea de la empresa de la página; el administrador de la empresa solo lo ve, en su `/settings`. El detalle está abajo.
 - **Presupuestos** (`setBudget`): límite diario por recurso en `tenant_budgets`, vía `platform_set_budget`. Los recursos salen del registro en código (`budgetResources`), no de la base. Con límite en 0 los procesos que usan ese recurso no corren. El día se corta en UTC.
@@ -127,7 +128,7 @@ Ejecutores, aprobaciones y conectores usan las funciones `set_executor`, `remove
 
 ```bash
 npm test -- tests/plataforma tests/tenants tests/brand tests/settings tests/domains
-npm run db:test   # 29_platform_console, 30_tenant_settings, 36_spend_report, 37_tenant_domains, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
+npm run db:test   # 29_platform_console, 38_platform_enable_brain_skills, 30_tenant_settings, 36_spend_report, 37_tenant_domains, 20_auth_methods_create_tenant, 17_reserved_tenant_slugs
 ```
 
 Tests clave: `tests/plataforma/*` (acciones de la consola, alta, páginas), `tests/tenants/platform.test.ts` (gate), `readiness.test.ts`, `tests/brand/contrast.test.ts`, `tests/settings/*` (config, ingreso, outreach, gasto), `tests/plataforma/gasto-*.test.ts` (pantalla y conciliación). `tests/domains/*` cubre las dos APIs con `fetch` simulado contra los contratos documentados, la máquina de estados y la vista. No se probó en automático la verificación contra Vercel real ([#87](https://github.com/innovasbuild/agents/pull/87)), ni los adaptadores de dominios contra la API real de Vercel y de Supabase.

@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
 	brainActorFrom,
+	resolveActingBrain,
 	resolveActingProvider,
 } from "@/lib/brain/adapters/acting-provider";
 import type { AccessRule } from "@/lib/brain/core/access/types";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
+import { EMPTY_RULES } from "@/lib/brain/core/rules-source";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding = {
@@ -128,5 +130,35 @@ describe("resolveActingProvider", () => {
 				},
 			),
 		).rejects.toThrow("base caída");
+	});
+});
+
+describe("resolveActingBrain", () => {
+	it("sin actor devuelve el proveedor y la fuente de reglas tal cual", async () => {
+		const provider = raw();
+		const acting = await resolveActingBrain(binding, undefined, {
+			provider: () => provider,
+			rulesSource: () => EMPTY_RULES,
+		});
+		expect(acting.provider).toBe(provider);
+		expect(acting.rules).toBe(EMPTY_RULES);
+	});
+
+	it("un miembro recibe las reglas filtradas por lo que ve", async () => {
+		const acting = await resolveActingBrain(
+			binding,
+			{ userId: "ana", role: "tenant_member" },
+			{
+				provider: () => raw(),
+				rules: async () => closeDireccion,
+				rulesSource: () => EMPTY_RULES,
+			},
+		);
+		await expect(acting.rules.cascade("direccion/x")).rejects.toMatchObject({
+			code: "not_found",
+		});
+		await expect(acting.rules.cascade("comercial/x")).resolves.toMatchObject({
+			revision: "",
+		});
 	});
 });

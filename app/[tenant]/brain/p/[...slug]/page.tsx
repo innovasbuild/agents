@@ -7,10 +7,15 @@ import { ReadingView } from "@/components/brain/reading-view";
 import { PublishedFiles } from "@/components/brain/skills/published-files";
 import { SkillPanel } from "@/components/brain/skills/skill-panel";
 import { Button } from "@/components/ui/button";
-import { loadBrainPages, loadEditorContext } from "@/lib/brain/adapters/editor";
+import {
+	loadBrainPages,
+	loadEditorContext,
+	loadPageRulesPanel,
+} from "@/lib/brain/adapters/editor";
 import { skillStore } from "@/lib/brain/adapters/skills";
 import { isAdminRole } from "@/lib/brain/core/access/types";
 import { entryMode } from "@/lib/brain/core/editor/entry-mode";
+import { entryLevel } from "@/lib/brain/core/editor/reserved";
 import {
 	historyHref,
 	pageHref,
@@ -64,7 +69,9 @@ export default async function BrainPageView({
 		pages.map((p) => [p.slug, { title: p.title, status: p.status }]),
 	);
 
-	const level = ctx.access(slug);
+	// Una reservada se edita solo administrando su carpeta (spec etapa 26
+	// §4.1); para los demás es lectura. El servidor lo exige igual al guardar.
+	const level = entryLevel(slug, ctx.access);
 	const outgoing = index.outgoing.get(slug) ?? [];
 	const incoming = index.incoming.get(slug) ?? [];
 
@@ -76,6 +83,7 @@ export default async function BrainPageView({
 	// Sin `key` derivada de la revisión: remontaría el editor tras cada
 	// router.refresh() y perdería su historial de deshacer.
 	if (entryMode(level) === "edit") {
+		const rules = await loadPageRulesPanel(ctx, slug);
 		let skill: ReactNode;
 		if (skillRow) {
 			const store = skillStore();
@@ -105,7 +113,6 @@ export default async function BrainPageView({
 			<PageWorkspace
 				mode="edit"
 				tenantSlug={tenantSlug}
-				categories={ctx.categories}
 				knownTags={[...new Set(pages.flatMap((p) => p.tags))]}
 				pages={pages.map(({ slug: s, title, status }) => ({
 					slug: s,
@@ -124,6 +131,7 @@ export default async function BrainPageView({
 				}}
 				canDelete={level === "administrador"}
 				skill={skill}
+				rules={rules}
 				facts={
 					<PageFacts
 						tenantSlug={tenantSlug}

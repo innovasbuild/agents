@@ -19,6 +19,7 @@ function store(folders: string[]): WikiStore {
 		list: async () => [],
 		listRevisions: async () => null,
 		listFolders: async () => folders.map((path) => ({ path, description: "" })),
+		listRulePages: async () => [],
 		upsert: vi.fn(async (params) => ({ slug: params.slug, revision: 1 })),
 	};
 }
@@ -69,13 +70,84 @@ describe("carpetas en el proveedor wiki", () => {
 		expect(s.upsert).not.toHaveBeenCalled();
 	});
 
-	it("una carpeta de primer nivel que no existe falla como categoría", async () => {
+	it("una carpeta de primer nivel que no existe falla como carpeta y la nombra", async () => {
 		const s = store(["comercial"]);
+		const result = provider(s).upsert(write("marketing/pauta"), {
+			kind: "user",
+			userId: "u",
+		});
+		await expect(result).rejects.toMatchObject({
+			fields: ["folder"],
+			message:
+				"No existe la carpeta marketing. Pedile a un administrador que la cree.",
+		});
+		expect(s.upsert).not.toHaveBeenCalled();
+	});
+
+	it("el agente recibe el mismo mensaje por una carpeta de primer nivel que no existe", async () => {
+		const s = store([]);
 		await expect(
-			provider(s).upsert(write("marketing/pauta"), {
+			provider(s).upsert(write("foo/x"), {
+				kind: "agent",
+				userId: null,
+				sessionId: "s",
+			}),
+		).rejects.toMatchObject({
+			fields: ["folder"],
+			message: expect.stringContaining("No existe la carpeta foo."),
+		});
+	});
+
+	it("una carpeta de primer nivel que existe sigue entrando", async () => {
+		const s = store(["comercial"]);
+		await provider(s).upsert(write("comercial/x"), {
+			kind: "user",
+			userId: "u",
+		});
+		expect(s.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ slug: "comercial/x", category: "comercial" }),
+		);
+	});
+
+	it("una subcarpeta que no existe bajo una carpeta inexistente sigue nombrando la subcarpeta", async () => {
+		const s = store([]);
+		await expect(
+			provider(s).upsert(write("marketing/pauta/x"), {
 				kind: "user",
 				userId: "u",
 			}),
+		).rejects.toMatchObject({
+			fields: ["folder"],
+			message: expect.stringContaining("No existe la carpeta marketing/pauta."),
+		});
+	});
+
+	it("una edición en una carpeta de primer nivel desconocida sigue fallando como categoría", async () => {
+		const s = store([]);
+		await expect(
+			provider(s).upsert(
+				{ ...write("marketing/pauta"), baseRevision: 2 },
+				{ kind: "user", userId: "u" },
+			),
+		).rejects.toMatchObject({ fields: expect.arrayContaining(["category"]) });
+	});
+
+	it("el import con una carpeta de primer nivel desconocida sigue fallando como categoría", async () => {
+		const s = store([]);
+		await expect(
+			provider(s).upsert(write("marketing/pauta"), {
+				kind: "import",
+				userId: null,
+				sourcePath: "a.md",
+				sourceHash: "h",
+			}),
+		).rejects.toMatchObject({ fields: expect.arrayContaining(["category"]) });
+	});
+
+	it("skills/ sin la categoría skill en la config sigue fallando como categoría", async () => {
+		const s = store([]);
+		await expect(
+			provider(s).upsert(write("skills/x"), { kind: "user", userId: "u" }),
 		).rejects.toMatchObject({ fields: expect.arrayContaining(["category"]) });
 	});
 

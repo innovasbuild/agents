@@ -1,6 +1,6 @@
 // Carpetas del brain (spec etapa 26 §3.1). Puro y sin imports de Next: lo usan
 // el proveedor wiki, el editor y scripts con Node directo.
-import { MAX_SLUG_LENGTH, SLUG_PATTERN } from "./types.ts";
+import { MAX_SLUG_LENGTH, RESERVED_LEAVES, SLUG_PATTERN } from "./types.ts";
 
 export const MAX_TOP_FOLDERS = 20;
 export const MAX_FOLDER_DESCRIPTION = 300;
@@ -62,5 +62,12 @@ export function validateFolderPath(
 		(RESERVED_TOP_FOLDERS as readonly string[]).includes(top)
 	)
 		return { ok: false, message: `«${top}» es un nombre reservado del brain.` };
+	// Una carpeta x/00-reglas confundiría las reglas de x con una carpeta (26.2).
+	const last = path.slice(path.lastIndexOf("/") + 1);
+	if ((RESERVED_LEAVES as readonly string[]).includes(last))
+		return {
+			ok: false,
+			message: `«${last}» es un nombre reservado del brain: lo usan las reglas y la plantilla de cada carpeta.`,
+		};
 	return { ok: true };
 }

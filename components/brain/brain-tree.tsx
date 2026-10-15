@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRightIcon } from "lucide-react";
+import { ChevronRightIcon, ScrollTextIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -10,6 +10,7 @@ import { FolderDialog } from "@/components/brain/folder-dialog";
 import { ShareDialog } from "@/components/brain/share-dialog";
 import { TreeRowMenu } from "@/components/brain/tree-row-menu";
 import {
+	folderDeleteBlocks,
 	isFolderNode,
 	type TreeNode,
 	withoutArchived,
@@ -38,6 +39,19 @@ function writeOpen(key: string, open: OpenState) {
 	} catch {
 		// sin almacenamiento: el plegado dura lo que dure la pantalla
 	}
+}
+
+// Marca de "tiene reglas" (spec etapa 26 §4.1): solo si la 00-reglas está activa.
+function RulesMark({ label }: { label: string }) {
+	return (
+		<span
+			title={label}
+			className="inline-flex shrink-0 items-center px-1 text-muted-foreground"
+		>
+			<ScrollTextIcon aria-hidden className="size-3.5" />
+			<span className="sr-only">{label}</span>
+		</span>
+	);
 }
 
 export function BrainTree({
@@ -75,6 +89,8 @@ export function BrainTree({
 		() => (showArchived ? root : withoutArchived(root)),
 		[root, showArchived],
 	);
+	// Sobre el árbol sin podar: una archivada también impide borrar la carpeta.
+	const blocks = useMemo(() => folderDeleteBlocks(root), [root]);
 	const prefix = `/${tenantSlug}/brain/p/`;
 	const currentSlug = pathname.startsWith(prefix)
 		? pathname.slice(prefix.length)
@@ -146,9 +162,15 @@ export function BrainTree({
 							{label}
 						</button>
 					)}
+					{node.rules?.status === "activo" && (
+						<RulesMark label="Esta carpeta tiene reglas" />
+					)}
 					<TreeRowMenu
 						tenantSlug={tenantSlug}
 						node={node}
+						deleteBlockedReason={
+							node.folder !== null ? (blocks.get(node.path) ?? null) : null
+						}
 						rootLevel={root.level}
 						onShare={() => setSharing({ path: node.path, name: label })}
 						onDelete={() =>
@@ -187,6 +209,9 @@ export function BrainTree({
 				>
 					Brain
 				</Link>
+				{root.rules?.status === "activo" && (
+					<RulesMark label="El brain tiene instrucciones" />
+				)}
 				<TreeRowMenu
 					tenantSlug={tenantSlug}
 					node={root}
@@ -197,6 +222,7 @@ export function BrainTree({
 					onNewFolder={() => setFolderDialog({ kind: "create", parent: "" })}
 					onDescribe={() => {}}
 					onDeleteFolder={() => {}}
+					deleteBlockedReason={null}
 				/>
 			</div>
 			{canCreate && (

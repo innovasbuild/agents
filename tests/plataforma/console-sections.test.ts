@@ -95,6 +95,46 @@ describe("BrainSection", () => {
 	});
 });
 
+describe("BrainSection, skills", () => {
+	const brain = {
+		provider: "wiki",
+		createdAt: "2026-10-10T00:00:00Z",
+	};
+
+	it("sin la categoría skill ofrece habilitar skills", () => {
+		const html = renderToStaticMarkup(
+			createElement(BrainSection, {
+				slug: "acme",
+				tenantId: TENANT,
+				brain: { ...brain, categories: ["empresa"] },
+			}),
+		);
+		expect(html).toContain("Habilitar skills");
+	});
+
+	it("con la categoría skill no lo ofrece", () => {
+		const html = renderToStaticMarkup(
+			createElement(BrainSection, {
+				slug: "acme",
+				tenantId: TENANT,
+				brain: { ...brain, categories: ["empresa", "skill"] },
+			}),
+		);
+		expect(html).not.toContain("Habilitar skills");
+	});
+
+	it("un brain deshabilitado no lo ofrece", () => {
+		const html = renderToStaticMarkup(
+			createElement(BrainSection, {
+				slug: "acme",
+				tenantId: TENANT,
+				brain: { ...brain, categories: ["empresa"], enabled: false },
+			}),
+		);
+		expect(html).not.toContain("Habilitar skills");
+	});
+});
+
 describe("BrainSection deshabilitado", () => {
 	it("un brain deshabilitado lo dice y no ofrece crearlo de nuevo", () => {
 		const html = renderToStaticMarkup(

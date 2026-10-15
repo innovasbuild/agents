@@ -3,7 +3,7 @@ title: Tenancy
 category: arquitectura
 status: activo
 tags: [tenancy, rls, roles, plataforma]
-updated: 2026-10-14
+updated: 2026-10-15
 sources:
   - docs/superpowers/specs/01-multi-tenant.md
   - docs/superpowers/specs/2026-10-05-consola-plataforma-design.md
@@ -107,7 +107,7 @@ El modo abierto exige al menos un dominio (`tenants_self_signup_needs_domain`). 
 
 Una empresa puede servirse desde su propio dominio (por ejemplo `ai.okeefe.com.ar`, un `CNAME` a la plataforma) además de `agentes.innov.as/<slug>`. El host decide la empresa; las rutas de `app/[tenant]` no cambian (Etapa 21.6, [spec](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md)).
 
-La tabla `tenant_domains` guarda una fila por hostname: `tenant_id`, `hostname` (único, en minúsculas, sin puerto ni comodín), `is_primary` (uno por empresa), `status` (`pending`, `verifying`, `active`, `failed`) y `last_error`. La RLS deja leer a los miembros de la empresa y a plataforma; **nadie con rol `authenticated` escribe**: hasta el corte b de la 21.6 las filas se cargan por SQL con la service role. Un trigger deja un evento por cada alta, activación, falla y baja (`tenant_domain.*`). La función `resolve_tenant_by_host(host)` devuelve el slug solo de un dominio `active` de una empresa activa, y solo la ejecuta la service role: un dominio cargado pero sin verificar no sirve nada.
+La tabla `tenant_domains` guarda una fila por hostname: `tenant_id`, `hostname` (único, en minúsculas, sin puerto ni comodín), `is_primary` (uno por empresa), `status` (`pending`, `verifying`, `active`, `failed`) y `last_error`. La RLS deja leer a los miembros de la empresa y a plataforma; **nadie con rol `authenticated` escribe**: las filas las escribe la consola de plataforma con la service role (`lib/domains/store.ts`, corte b de la 21.6; ver [plataforma](../dominios/plataforma.md)). Un trigger deja un evento por cada alta, activación, falla y baja (`tenant_domain.*`). La función `resolve_tenant_by_host(host)` devuelve el slug solo de un dominio `active` de una empresa activa, y solo la ejecuta la service role: un dominio cargado pero sin verificar no sirve nada.
 
 `proxy.ts` resuelve el host de cada request (`lib/tenants/host.ts`, con una caché en memoria de 60 segundos que no guarda errores):
 
@@ -159,7 +159,7 @@ Una empresa sin `tenant_agents` es válida (PR [#91](https://github.com/innovasb
 - [Multi-tenant](../superpowers/specs/01-multi-tenant.md): modelo de datos y RLS. Quedó atrás en que el `tenant_admin` puede insertar membresías y actualizar `brand` o `allowed_models` de su fila (hoy no, PR [#80](https://github.com/innovasbuild/agents/pull/80) y `tenants_guard_columns`).
 - [Consola de plataforma](../superpowers/specs/2026-10-05-consola-plataforma-design.md), PR [#70](https://github.com/innovasbuild/agents/pull/70): la consola, `PLATFORM_OWNER_TENANT_SLUG` y el slug `plataforma`. Su límite sobre `mcp-channel-auth` lo cerró el PR [#82](https://github.com/innovasbuild/agents/pull/82), y "no crear tenants" (P8) lo superó el PR 71.
 - [Alta de empresas y landing](../superpowers/specs/2026-10-05-alta-empresas-landing-design.md), PR [#71](https://github.com/innovasbuild/agents/pull/71): `/plataforma/nueva` y `/login/<slug>`. La función `create_tenant` que cita fue reemplazada por `platform_create_tenant` en la 21.1 (PR [#87](https://github.com/innovasbuild/agents/pull/87)).
-- [Etapa 21.6](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md): dominio propio por empresa. Corte a: tabla, resolución de host, proxy y URLs de MCP.
+- [Etapa 21.6](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md): dominio propio por empresa. Corte a: tabla, resolución de host, proxy y URLs de MCP. Corte b: consola, alta en Vercel y en las Redirect URLs de Supabase (ver [plataforma](../dominios/plataforma.md)).
 - [Etapa 21.4](../superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md), PR [#91](https://github.com/innovasbuild/agents/pull/91): empresa sin agentes e ingreso por código.
 - Ingreso por dominio y bloqueos: PR [#80](https://github.com/innovasbuild/agents/pull/80) cerró el hueco de `memberships`.
 - Ver también: [vision-general](vision-general.md), [datos](datos.md), [plataforma](../dominios/plataforma.md), [invitaciones y usuarios](../dominios/invitaciones-y-usuarios.md), [alta de tenant](../guias/alta-de-tenant.md).

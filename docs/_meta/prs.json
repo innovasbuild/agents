@@ -604,5 +604,53 @@
 		"title": "docs: estado del cierre en producción de la 21.5",
 		"mergedAt": "2026-10-14T12:49:47Z",
 		"headRefName": "docs/cierre-parcial-21-5"
+	},
+	{
+		"number": 102,
+		"title": "docs: filas de los PR 93 a 101 en la wiki",
+		"mergedAt": "2026-10-14T15:33:03Z",
+		"headRefName": "docs/filas-pr-93-101"
+	},
+	{
+		"number": 103,
+		"title": "docs: spec de la etapa 21.6, dominio propio por empresa con URLs de MCP",
+		"mergedAt": "2026-10-14T15:33:21Z",
+		"headRefName": "docs/etapa-21-6-dominio-por-tenant"
+	},
+	{
+		"number": 104,
+		"title": "docs: spec 21.6 con URLs limpias, MCP en /brain/mcp y decisiones cerradas",
+		"mergedAt": "2026-10-14T21:51:41Z",
+		"headRefName": "docs/etapa-21-6-dominio-por-tenant"
+	},
+	{
+		"number": 105,
+		"title": "feat: dominio propio por empresa, corte 21.6a (host, proxy y URLs de MCP)",
+		"mergedAt": "2026-10-14T22:32:11Z",
+		"headRefName": "feat/etapa-21-6a-resolucion-de-host"
+	},
+	{
+		"number": 106,
+		"title": "feat: dominio propio por empresa, corte 21.6b (consola, Vercel, Supabase y links)",
+		"mergedAt": "2026-10-14T22:38:21Z",
+		"headRefName": "feat/etapa-21-6b-operacion-de-dominios"
+	},
+	{
+		"number": 107,
+		"title": "docs: checklist del cierre en producción de la 21.6 (corte c)",
+		"mergedAt": "2026-10-14T22:43:09Z",
+		"headRefName": "docs/etapa-21-6c-cierre-en-produccion"
+	},
+	{
+		"number": 108,
+		"title": "feat: carpetas del brain (Etapa 26.1a)",
+		"mergedAt": "2026-10-14T23:36:25Z",
+		"headRefName": "feat/etapa-26-1a-carpetas"
+	},
+	{
+		"number": 109,
+		"title": "feat: instrucciones y reglas del brain, núcleo (Etapa 26.2a)",
+		"mergedAt": "2026-10-15T02:56:13Z",
+		"headRefName": "feat/etapa-26-2a-reglas"
 	}
 ]

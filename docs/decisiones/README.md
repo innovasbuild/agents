@@ -3,7 +3,7 @@ title: Decisiones por spec
 category: decisiones
 status: activo
 tags: [decisiones, specs, etapas]
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 
 # Decisiones por spec
@@ -44,11 +44,11 @@ Una fila por spec de `docs/superpowers/specs/`. Es el detector de feature nueva:
 | 2026-10-10 | 21.3 · Config de outreach | [spec](../superpowers/specs/2026-10-10-etapa-21-3-config-outreach-design.md) | [plan](../superpowers/plans/2026-10-10-etapa-21-3a-brain-como-fuente.md) · [plan](../superpowers/plans/2026-10-10-etapa-21-3b-pantallas-outreach.md) | en curso | [Outreach](../dominios/outreach.md) · [Brain](../dominios/brain.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |
 | 2026-10-11 | 21.4 · Segundo tenant | [spec](../superpowers/specs/2026-10-11-etapa-21-4-segundo-tenant-design.md) | [plan](../superpowers/plans/2026-10-11-etapa-21-4a-empresa-sin-agentes.md) | en curso | [Tenancy](../arquitectura/tenancy.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) · [Alta de una empresa nueva](../guias/alta-de-tenant.md) |
 | 2026-10-13 | 21.5 · Gasto de IA por empresa | [spec](../superpowers/specs/2026-10-13-etapa-21-5-gasto-ia-por-empresa-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-21-5-gasto-ia-por-empresa.md) | en curso | [Modelos y costos](../arquitectura/modelos-y-costos.md) |
-| 2026-10-14 | 21.6 · Dominio propio por empresa | [spec](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md) | [plan del cierre](../superpowers/plans/2026-10-14-etapa-21-6c-cierre-en-produccion.md) | en curso | [Plataforma y settings por empresa](../dominios/plataforma.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) |
+| 2026-10-14 | 21.6 · Dominio propio por empresa | [spec](../superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md) | [plan del cierre](../superpowers/plans/2026-10-14-etapa-21-6c-cierre-en-produccion.md) | cerrada | [Plataforma y settings por empresa](../dominios/plataforma.md) · [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Entornos y deploy](../arquitectura/entornos-y-deploy.md) · [Tenancy](../arquitectura/tenancy.md) · [Dominio propio de un cliente](../guias/dominio-de-un-cliente.md) |
 | 2026-10-11 | 24.1 · Skills de empresa: paquete y publicación | [spec](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) | [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) | en curso | [Brain](../dominios/brain.md) |
 | 2026-10-13 | 24.2a · Skills de empresa por MCP | [spec](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) | en curso | [Brain](../dominios/brain.md) |
 | 2026-10-14 | 24.2b · Paquete completo por MCP y skills en `/conectar` | [spec](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) | [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md) | en curso | [Brain](../dominios/brain.md) |
 | 2026-10-13 | 25 · Wiki y harness | [spec](../superpowers/specs/2026-10-13-etapa-25-wiki-documentacion-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-25-wiki-documentacion.md) | cerrada | [Cómo mantener la wiki](../guias/documentar.md) |
 | 2026-10-13 | 22.1 · Chat multiagente y Asistente | [spec](../superpowers/specs/2026-10-13-etapa-22-1-chat-multiagente-design.md) | [plan](../superpowers/plans/2026-10-13-etapa-22-1-chat-multiagente.md) | en curso | [Agentes eve](../dominios/agentes-eve.md) |
 | 2026-10-15 | 24.5 · Crear y editar skills de empresa por MCP | [spec](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md) | [plan](../superpowers/plans/2026-10-15-etapa-24-5-editar-skills-por-mcp.md) | en curso | [Brain](../dominios/brain.md) |
-| 2026-10-14 | 26 · Carpetas, reglas y estructura del brain | [spec](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md) | [plan](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) | en curso | [Brain](../dominios/brain.md) |
+| 2026-10-14 | 26 · Carpetas, reglas y estructura del brain | [spec](../superpowers/specs/2026-10-14-etapa-26-carpetas-y-reglas-brain-design.md) | [plan](../superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md) · [plan](../superpowers/plans/2026-10-14-etapa-26-2a-reglas-nucleo.md) · [plan](../superpowers/plans/2026-10-15-etapa-26-2b-reglas-editor.md) | en curso | [Brain](../dominios/brain.md) |

@@ -17,11 +17,16 @@ import { DeletePageButton } from "@/components/brain/delete-page-button";
 import { DetailsSheet } from "@/components/brain/details-sheet";
 import { DiffView } from "@/components/brain/diff-view";
 import { Paper } from "@/components/brain/paper";
+import { ReservedNoticeBox } from "@/components/brain/reserved-notice";
+import { RulesPanel, useFolderRules } from "@/components/brain/rules-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { diffLines } from "@/lib/brain/core/diff";
 import { chooseBodyToSave } from "@/lib/brain/core/editor/body-to-save";
+import { pageCategory } from "@/lib/brain/core/editor/page-category";
+import { reservedNotice } from "@/lib/brain/core/editor/reserved";
+import type { RulesPanelView } from "@/lib/brain/core/editor/rules-panel";
 import type { SavePageResult } from "@/lib/brain/core/editor/save";
 import { historyHref, pageHref } from "@/lib/brain/core/editor/slug";
 import {
@@ -52,6 +57,14 @@ function stableJson(value: unknown): string {
 	);
 }
 
+// Una página nueva que deja de ser skill no se lleva sus campos de skill.
+function withoutSkillFields(
+	frontmatter: Record<string, unknown>,
+): Record<string, unknown> {
+	const { description: _d, compatibility: _c, ...rest } = frontmatter;
+	return rest;
+}
+
 export interface WorkspaceInitial {
 	slug: string;
 	title: string;
@@ -72,7 +85,6 @@ const STATUS_LABEL = {
 export interface PageWorkspaceProps {
 	mode: "edit" | "new";
 	tenantSlug: string;
-	categories: string[];
 	knownTags: string[];
 	pages: Array<{ slug: string; title: string; status: BrainStatus }>;
 	initial: WorkspaceInitial;
@@ -81,18 +93,24 @@ export interface PageWorkspaceProps {
 	canDelete?: boolean;
 	// Panel de la skill (estado, archivos, versiones), ya armado en el servidor.
 	skill?: ReactNode;
+	// Reglas que aplican, ya armadas en el servidor (spec etapa 26 §4.3). null:
+	// la ruta no tiene, no se ven o es de skills.
+	rules?: RulesPanelView | null;
+	// Página nueva con el slug ya decidido (las reglas de una carpeta).
+	slugLocked?: boolean;
 }
 
 export function PageWorkspace({
 	mode,
 	tenantSlug,
-	categories,
 	knownTags,
 	pages,
 	initial,
 	facts,
 	canDelete,
 	skill,
+	rules,
+	slugLocked = false,
 }: PageWorkspaceProps) {
 	const router = useRouter();
 	const tagsId = useId();
@@ -114,8 +132,21 @@ export function PageWorkspace({
 	const [serverBody, setServerBody] = useState<string | null>(null);
 	const [editorKey, setEditorKey] = useState(0);
 	const [isPending, startTransition] = useTransition();
+	// En una página nueva el panel sigue a la carpeta que se escribe en el slug.
+	const rulesView = useFolderRules({
+		enabled: mode === "new" && !slugLocked,
+		tenantSlug,
+		slug: form.slug,
+		initial: rules ?? null,
+	});
+	// Una reservada avisa qué gobierna y cuenta caracteres (spec etapa 26 §4.1).
+	const notice = reservedNotice(form.slug);
 
-	const isSkill = form.category === SKILL_CATEGORY;
+	// La categoría sale de la ruta, como la calcula el servidor (spec etapa 26
+	// D1): solo bajo skills/ es skill. Una reservada nunca lo es, así que
+	// conserva el selector de Estado y no se fuerza a Activo.
+	const category = pageCategory(form.slug, saved.category);
+	const isSkill = category === SKILL_CATEGORY;
 	const frontmatterText = (key: string) =>
 		typeof form.frontmatter[key] === "string"
 			? (form.frontmatter[key] as string)
@@ -148,7 +179,6 @@ export function PageWorkspace({
 	);
 	const dirty =
 		form.title !== saved.title ||
-		form.category !== saved.category ||
 		form.status !== saved.status ||
 		form.slug !== saved.slug ||
 		stableJson(form.frontmatter) !== stableJson(saved.frontmatter) ||
@@ -197,10 +227,13 @@ export function PageWorkspace({
 					tenantSlug,
 					slug: form.slug,
 					title: form.title,
-					category: form.category,
+					category,
 					status: form.status,
 					tags,
-					frontmatter: form.frontmatter,
+					frontmatter:
+						mode === "new" && !isSkill
+							? withoutSkillFields(form.frontmatter)
+							: form.frontmatter,
 					body,
 					reason: sentReason,
 					baseRevision,
@@ -217,7 +250,13 @@ export function PageWorkspace({
 					// cambiaron metadatos, el original y la línea de base quedan.
 					if (body !== original) setBaseline(body);
 					setOriginal(body);
-					setSaved({ ...form, tags, body, revision: outcome.revision });
+					setSaved({
+						...form,
+						category,
+						tags,
+						body,
+						revision: outcome.revision,
+					});
 					setBaseRevision(outcome.revision);
 					// No borra un motivo escrito mientras se guardaba.
 					setReason((current) => (current === sentReason ? "" : current));
@@ -260,42 +299,13 @@ export function PageWorkspace({
 
 	const detailsFields = (
 		<div className="space-y-4 text-sm">
-			<label className="block space-y-1">
-				<span>Categoría</span>
-				<select
-					className="h-11 w-full rounded-md border bg-background px-3 lg:h-9"
-					value={form.category}
-					disabled={mode === "edit" && isSkill}
-					aria-invalid={!!fieldError("category")}
-					onChange={(e) =>
-						setForm((f) => {
-							// Una skill lleva descripción y requisitos; otra categoría no.
-							const {
-								description: _d,
-								compatibility: _c,
-								...rest
-							} = f.frontmatter;
-							return {
-								...f,
-								category: e.target.value,
-								frontmatter:
-									f.category === SKILL_CATEGORY &&
-									e.target.value !== SKILL_CATEGORY
-										? rest
-										: f.frontmatter,
-							};
-						})
-					}
-				>
-					{categories
-						.filter((c) => mode === "new" || isSkill || c !== SKILL_CATEGORY)
-						.map((c) => (
-							<option key={c} value={c}>
-								{c}
-							</option>
-						))}
-				</select>
-			</label>
+			<div className="space-y-1">
+				<span className="block">Categoría</span>
+				<span className="block text-muted-foreground">
+					<span className="capitalize">{category || "—"}</span>: sale de la
+					carpeta de la página.
+				</span>
+			</div>
 			{!isSkill && (
 				<label className="block space-y-1">
 					<span>Estado</span>
@@ -395,7 +405,7 @@ export function PageWorkspace({
 					href={`/${tenantSlug}/brain`}
 					className="mr-auto inline-flex min-h-11 items-center text-muted-foreground text-sm lg:min-h-0"
 				>
-					← Brain · <span className="capitalize">{form.category}</span>
+					← Brain · <span className="capitalize">{category || "—"}</span>
 				</Link>
 				{mode === "edit" && (
 					<Button asChild variant="outline" className="min-h-11 lg:min-h-0">
@@ -409,6 +419,10 @@ export function PageWorkspace({
 				</DetailsSheet>
 			</div>
 
+			{notice && <ReservedNoticeBox notice={notice} length={body.length} />}
+			{rulesView && (
+				<RulesPanel tenantSlug={tenantSlug} view={rulesView} pages={pages} />
+			)}
 			<Paper>
 				{mode === "new" && (
 					<label htmlFor={slugId} className="mb-4 block space-y-1 text-sm">
@@ -416,7 +430,12 @@ export function PageWorkspace({
 						<Input
 							id={slugId}
 							value={form.slug}
-							aria-invalid={!!fieldError("slug")}
+							readOnly={slugLocked}
+							aria-invalid={
+								!!fieldError("slug") ||
+								!!fieldError("category") ||
+								!!fieldError("folder")
+							}
 							className="min-h-11 lg:min-h-9"
 							placeholder="comercial/nueva-pagina"
 							onChange={(e) =>

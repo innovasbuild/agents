@@ -8,6 +8,7 @@ import {
 	BrainConflict,
 	BrainForbidden,
 	BrainNotFound,
+	BrainReservedSlug,
 	BrainValidation,
 } from "@/lib/brain/core/errors";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
@@ -198,6 +199,20 @@ describe("savePage", () => {
 		});
 	});
 
+	it("una carpeta que no existe llega a la pantalla con el mensaje del proveedor", async () => {
+		const message =
+			"No existe la carpeta foo. Pedile a un administrador que la cree.";
+		const missing = deps({}, async () => {
+			throw new BrainValidation(["folder"], message);
+		});
+		expect(await savePage(input, missing.deps)).toMatchObject({
+			ok: false,
+			code: "validation",
+			fields: ["folder"],
+			message,
+		});
+	});
+
 	it("slug nuevo que ya existe: conflicto sin revisión con mensaje propio, sin ofrecer reintentar", async () => {
 		// brain_upsert_page (rama "else", p_base_revision null) tira BR409 con la
 		// revisión vigente en el detail, no vacío: translateStoreError la traduce
@@ -228,5 +243,22 @@ describe("savePage", () => {
 			/No se pudo guardar \(.+\)/,
 		);
 		spy.mockRestore();
+	});
+
+	it("una página reservada sin administrar su carpeta muestra el mensaje de a quién pedírselo", async () => {
+		const { deps: d } = deps(
+			{},
+			vi.fn(async () => {
+				throw new BrainReservedSlug(
+					"Las reglas de talento las escribe quien administra esa carpeta.",
+				);
+			}),
+		);
+		expect(await savePage({ ...input, slug: "talento/00-reglas" }, d)).toEqual({
+			ok: false,
+			code: "forbidden",
+			message:
+				"Las reglas de talento las escribe quien administra esa carpeta.",
+		});
 	});
 });

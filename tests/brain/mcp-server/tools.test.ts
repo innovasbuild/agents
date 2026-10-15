@@ -10,6 +10,7 @@ import {
 	buildBrainMcpServer,
 	MCP_MAX_UPSERT_BODY_BYTES,
 } from "@/lib/brain/core/mcp-server/server";
+import { createWikiRules, EMPTY_RULES } from "@/lib/brain/core/rules-source";
 import type { SkillCatalog } from "@/lib/brain/core/skills/catalog";
 import type { DraftChange, SkillDrafts } from "@/lib/brain/core/skills/draft";
 import type { BrainProvider } from "@/lib/brain/core/types";
@@ -200,6 +201,188 @@ describe("buildBrainMcpServer", () => {
 			error: "internal",
 		});
 		errorLog.mockRestore();
+	});
+
+	it("con fuente de reglas suma brain_rules y brain_read trae las reglas sin la raíz", async () => {
+		const rules = createWikiRules({
+			tenantId: "t",
+			store: {
+				listRulePages: async () => [
+					{ slug: "00-reglas", status: "activo", revision: 1, body: "raíz" },
+					{
+						slug: "comercial/00-reglas",
+						status: "activo",
+						revision: 2,
+						body: "comercial",
+					},
+				],
+				listFolders: async () => [],
+			},
+		});
+		const server = buildBrainMcpServer({
+			userId: "ana",
+			categories: ["comercial"],
+			canon: false,
+			provider: fakeProvider(),
+			limiter: fakeLimiter(),
+			rules,
+		});
+		const client = await connect(server);
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual([
+			"brain_read",
+			"brain_rules",
+			"brain_search",
+			"brain_upsert",
+		]);
+		const read = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "comercial/icp" },
+		});
+		expect(read.structuredContent).toMatchObject({
+			ok: true,
+			page,
+			rules: { chain: [{ path: "comercial", body: "comercial" }] },
+		});
+		const cascade = await client.callTool({
+			name: "brain_rules",
+			arguments: { path: "comercial/nueva" },
+		});
+		expect(cascade.structuredContent).toMatchObject({
+			ok: true,
+			rules: {
+				chain: [{ path: "" }, { path: "comercial" }],
+				fields: [],
+				template: null,
+			},
+		});
+	});
+
+	it("un rules_required cuenta como lectura y no llega al proveedor", async () => {
+		const provider = fakeProvider();
+		const limiter = fakeLimiter();
+		const rules = createWikiRules({
+			tenantId: "t",
+			store: {
+				listRulePages: async () => [
+					{
+						slug: "comercial/00-reglas",
+						status: "activo",
+						revision: 2,
+						body: "b",
+					},
+				],
+				listFolders: async () => [],
+			},
+		});
+		const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+		const server = buildBrainMcpServer({
+			userId: "admin",
+			categories: ["comercial"],
+			canon: false,
+			provider,
+			limiter,
+			rules,
+		});
+		const client = await connect(server);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: {
+				slug: "comercial/icp",
+				title: "ICP",
+				category: "comercial",
+				status: "activo",
+				tags: [],
+				body: "x",
+				reason: "r",
+			},
+		});
+		// La escritura no ocurrió: para el protocolo es un error y el modelo
+		// reintenta. Cuenta como lectura, nunca como escritura, y no se loguea
+		// (plan 26.2a, decisión 5).
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "rules_required",
+		});
+		expect(limiter.check.mock.calls).toEqual([["read"]]);
+		expect(provider.upsert).not.toHaveBeenCalled();
+		expect(errorLog).not.toHaveBeenCalled();
+		errorLog.mockRestore();
+	});
+
+	it("el reintento con el rulesRevision vigente cuenta como escritura", async () => {
+		const provider = fakeProvider();
+		const limiter = fakeLimiter();
+		const rules = createWikiRules({
+			tenantId: "t",
+			store: {
+				listRulePages: async () => [
+					{
+						slug: "comercial/00-reglas",
+						status: "activo",
+						revision: 2,
+						body: "b",
+					},
+				],
+				listFolders: async () => [],
+			},
+		});
+		const server = buildBrainMcpServer({
+			userId: "admin",
+			categories: ["comercial"],
+			canon: false,
+			provider,
+			limiter,
+			rules,
+		});
+		const client = await connect(server);
+		const { revision } = await rules.cascade("comercial/icp");
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: {
+				slug: "comercial/icp",
+				title: "ICP",
+				category: "comercial",
+				status: "activo",
+				tags: [],
+				body: "x",
+				reason: "r",
+				rulesRevision: revision,
+			},
+		});
+		expect(result.structuredContent).toMatchObject({ ok: true });
+		expect(limiter.check.mock.calls).toEqual([["write"]]);
+	});
+
+	it("las instrucciones suman el bloque del brain a las de skills", async () => {
+		const server = buildBrainMcpServer({
+			userId: "ana",
+			categories: ["comercial"],
+			canon: false,
+			provider: fakeProvider(),
+			limiter: fakeLimiter(),
+			rules: EMPTY_RULES,
+			brainInstructions: "# Instrucciones del brain\n\nTercera persona.",
+		});
+		const client = await connect(server);
+		expect(client.getInstructions()).toBe(
+			"# Instrucciones del brain\n\nTercera persona.",
+		);
+		const withSkills = await connect(
+			buildBrainMcpServer({
+				userId: "ana",
+				categories: ["comercial"],
+				canon: false,
+				provider: fakeProvider(),
+				limiter: fakeLimiter(),
+				skills: fakeCatalog(),
+				rules: EMPTY_RULES,
+				brainInstructions: "# Instrucciones del brain\n\nTercera persona.",
+			}),
+		);
+		const both = withSkills.getInstructions() ?? "";
+		expect(both.startsWith("# Instrucciones del brain")).toBe(true);
+		expect(both).toContain("skill_load");
 	});
 });
 

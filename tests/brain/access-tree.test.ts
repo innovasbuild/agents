@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { resolveAccess } from "@/lib/brain/core/access/resolve-access";
 import {
+	countPages,
 	editableFolders,
+	FOLDER_HAS_CONTENT,
+	FOLDER_HAS_RULES,
+	folderDeleteBlocks,
 	isFolderNode,
 	visibleTree,
 	withoutArchived,
@@ -233,5 +237,109 @@ describe("carpetas guardadas", () => {
 			{ path: "comercial", description: "" },
 		]);
 		expect(editableFolders(root)).toEqual(["", "comercial"]);
+	});
+});
+
+describe("páginas reservadas", () => {
+	const all = () => "lector" as const;
+
+	it("una 00-reglas no es una hoja: marca su carpeta, sin cuerpo", () => {
+		const root = visibleTree(
+			[page("comercial/icp"), page("comercial/00-reglas"), page("00-reglas")],
+			all,
+			[{ path: "comercial", description: "" }],
+		);
+		expect(root.children.map((n) => n.path)).toEqual(["comercial"]);
+		expect(root.rules).toEqual({
+			slug: "00-reglas",
+			title: "00-reglas",
+			status: "activo",
+		});
+		const comercial = root.children[0];
+		expect(comercial.children.map((n) => n.path)).toEqual(["comercial/icp"]);
+		expect(comercial.rules?.slug).toBe("comercial/00-reglas");
+		expect(comercial.template).toBeNull();
+		expect(JSON.stringify(root)).not.toContain("contenido que no debe viajar");
+	});
+
+	it("la 00-plantilla tampoco se lista y queda como template", () => {
+		const root = visibleTree([page("comercial/00-plantilla")], all, [
+			{ path: "comercial", description: "" },
+		]);
+		expect(root.children[0].children).toEqual([]);
+		expect(root.children[0].template?.slug).toBe("comercial/00-plantilla");
+	});
+
+	it("una carpeta con solo su 00-reglas sigue siendo carpeta y cuenta 0 páginas", () => {
+		const root = visibleTree([page("talento/personal/00-reglas")], all, [
+			{ path: "talento", description: "" },
+			{ path: "talento/personal", description: "" },
+		]);
+		const clean = withoutArchived(root);
+		const personal = clean.children[0].children[0];
+		expect(personal.path).toBe("talento/personal");
+		expect(isFolderNode(personal)).toBe(true);
+		expect(personal.rules?.slug).toBe("talento/personal/00-reglas");
+		expect(countPages(clean.children[0])).toBe(0);
+	});
+
+	it("una carpeta implícita con solo una 00-reglas archivada se poda; con una activa, no", () => {
+		const archived = visibleTree([page("x/00-reglas", "archivado")], all);
+		expect(withoutArchived(archived).children).toEqual([]);
+		const active = visibleTree([page("x/00-reglas")], all);
+		expect(withoutArchived(active).children.map((n) => n.path)).toEqual(["x"]);
+	});
+
+	it("withoutArchived conserva la marca de una 00-reglas archivada", () => {
+		const root = visibleTree([page("comercial/00-reglas", "archivado")], all, [
+			{ path: "comercial", description: "" },
+		]);
+		expect(withoutArchived(root).children[0].rules?.status).toBe("archivado");
+	});
+
+	it("quien no ve la 00-reglas no recibe la marca", () => {
+		const access = (path: string) =>
+			path === "comercial/00-reglas" ? null : ("lector" as const);
+		const root = visibleTree([page("comercial/00-reglas")], access, [
+			{ path: "comercial", description: "" },
+		]);
+		expect(root.children[0].rules).toBeNull();
+	});
+
+	it("countPages no suma las reservadas", () => {
+		const root = visibleTree(
+			[
+				page("comercial/icp"),
+				page("comercial/sub/a"),
+				page("comercial/00-reglas"),
+				page("comercial/sub/00-plantilla"),
+			],
+			all,
+		);
+		expect(countPages(root.children[0])).toBe(2);
+	});
+});
+
+describe("folderDeleteBlocks", () => {
+	const all = () => "administrador" as const;
+
+	it("una carpeta con solo reglas no se ofrece para borrar y dice por qué", () => {
+		const root = visibleTree([page("talento/personal/00-reglas")], all, [
+			{ path: "talento", description: "" },
+			{ path: "talento/personal", description: "" },
+			{ path: "marketing", description: "" },
+		]);
+		const blocks = folderDeleteBlocks(root);
+		expect(blocks.get("talento/personal")).toBe(FOLDER_HAS_RULES);
+		expect(blocks.get("talento")).toBe(FOLDER_HAS_CONTENT);
+		expect(blocks.has("marketing")).toBe(false);
+		expect(blocks.has("")).toBe(false);
+	});
+
+	it("una página archivada también cuenta como contenido", () => {
+		const root = visibleTree([page("comercial/vieja", "archivado")], all, [
+			{ path: "comercial", description: "" },
+		]);
+		expect(folderDeleteBlocks(root).get("comercial")).toBe(FOLDER_HAS_CONTENT);
 	});
 });

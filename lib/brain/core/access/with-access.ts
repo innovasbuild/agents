@@ -1,7 +1,8 @@
 // El punto único de control (spec etapa 17 §5): envuelve un BrainProvider con
 // los permisos de quien pregunta. Lo invisible responde not_found, igual que lo
 // que no existe; forbidden es solo para lo visible sin permiso de escritura.
-import { BrainForbidden, BrainNotFound } from "../errors.ts";
+import { BrainForbidden, BrainNotFound, BrainReservedSlug } from "../errors.ts";
+import { folderOfPage, isReservedSlug } from "../rules.ts";
 import type { BrainProvider } from "../types.ts";
 import { resolveAccess } from "./resolve-access.ts";
 import {
@@ -9,6 +10,7 @@ import {
 	atLeast,
 	isAdministrator,
 	type Principal,
+	ROOT_PATH,
 } from "./types.ts";
 
 // Tope de brain_search_pages. Se pide de más para no quedarse corto después de
@@ -76,6 +78,19 @@ export function withAccess(
 				throw new BrainForbidden(
 					"No tenés permiso para escribir en esta parte del brain.",
 				);
+			}
+			// Las reservadas son gobierno: las escribe quien administra su carpeta
+			// (spec etapa 26 §4.1). Va después del chequeo de editor: a quien no
+			// puede escribir ahí no se le cuenta que es una página de reglas.
+			if (isReservedSlug(write.slug)) {
+				const folder = folderOfPage(write.slug);
+				if (!atLeast(levelOf(folder), "administrador")) {
+					throw new BrainReservedSlug(
+						folder === ROOT_PATH
+							? "Las instrucciones del brain las escribe quien administra la raíz del brain. Pedíselo a un administrador de la empresa."
+							: `Las reglas y la plantilla de ${folder} las escribe quien administra esa carpeta. Pedíselo a quien la administra.`,
+					);
+				}
 			}
 			return provider.upsert(write, author);
 		},

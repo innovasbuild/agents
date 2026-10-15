@@ -10,6 +10,7 @@ import {
 	protectedResourceMetadata,
 } from "@/lib/brain/core/mcp-server/handler";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
+import { createWikiRules } from "@/lib/brain/core/rules-source";
 import type {
 	SkillOverviewRow,
 	SkillStore,
@@ -103,15 +104,15 @@ async function connect(token: string, d: BrainMcpDeps, slug = "a") {
 }
 
 describe("handleBrainMcp", () => {
-	it("todos ven las tres tools: el permiso se aplica al llamarlas", async () => {
+	it("todos ven las tools del brain: el permiso se aplica al llamarlas", async () => {
 		const member = await connect("ana", deps());
 		expect(
 			(await member.listTools()).tools.map((tool) => tool.name).sort(),
-		).toEqual(["brain_read", "brain_search", "brain_upsert"]);
+		).toEqual(["brain_read", "brain_rules", "brain_search", "brain_upsert"]);
 		const admin = await connect("admin", deps());
 		expect(
 			(await admin.listTools()).tools.map((tool) => tool.name).sort(),
-		).toEqual(["brain_read", "brain_search", "brain_upsert"]);
+		).toEqual(["brain_read", "brain_rules", "brain_search", "brain_upsert"]);
 	});
 
 	it("las descripciones nombran el canon solo si la empresa lo usa", async () => {
@@ -146,7 +147,12 @@ describe("handleBrainMcp", () => {
 			name: "brain_read",
 			arguments: { slug: "comercial/icp" },
 		});
-		expect(read.structuredContent).toEqual({ ok: true, page });
+		// Sin reglas en el brain, brain_read trae la cascada vacía (spec etapa 26 §4.3).
+		expect(read.structuredContent).toEqual({
+			ok: true,
+			page,
+			rules: { revision: "", chain: [] },
+		});
 		const search = await client.callTool({
 			name: "brain_search",
 			arguments: { query: "icp" },
@@ -650,7 +656,12 @@ function publishedRow(slug: string): SkillOverviewRow {
 	};
 }
 
-const BRAIN_TOOLS = ["brain_read", "brain_search", "brain_upsert"];
+const BRAIN_TOOLS = [
+	"brain_read",
+	"brain_rules",
+	"brain_search",
+	"brain_upsert",
+];
 
 describe("handleBrainMcp · skills", () => {
 	it("sin skills publicadas el servidor queda como antes", async () => {
@@ -848,6 +859,386 @@ describe("handleBrainMcp · skills", () => {
 			BRAIN_TOOLS,
 		);
 		expect(overview).not.toHaveBeenCalled();
+	});
+});
+
+describe("handleBrainMcp · reglas", () => {
+	const rulePages = [
+		{
+			slug: "00-reglas",
+			status: "activo" as const,
+			revision: 2,
+			body: "Escribí en tercera persona.",
+		},
+		{
+			slug: "talento/personal/00-reglas",
+			status: "activo" as const,
+			revision: 5,
+			body: "Cada ficha lleva reporta_a.",
+		},
+	];
+	const folders = [
+		{ path: "talento", description: "Personas | equipos" },
+		{ path: "talento/personal", description: "" },
+		{ path: "direccion", description: "Presupuesto" },
+		{ path: "skills", description: "" },
+	];
+	const brainRules = () =>
+		createWikiRules({
+			tenantId: "tenant-a",
+			store: {
+				listRulePages: async () => rulePages,
+				listFolders: async () => folders,
+			},
+		});
+	const newPage = {
+		slug: "talento/personal/leo",
+		title: "Leo",
+		category: "comercial",
+		status: "activo",
+		tags: [],
+		body: "Ficha",
+		reason: "alta",
+	};
+
+	it("brain_upsert sin rulesRevision devuelve rules_required con la raíz, no escribe y cuenta como lectura", async () => {
+		const hit = vi.fn(async () => ({ allowed: true, retryAfterSeconds: 0 }));
+		const d = deps({ brainRules, hit });
+		const client = await connect("admin", d);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: newPage,
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "rules_required",
+			rules: { chain: [{ path: "" }, { path: "talento/personal" }] },
+		});
+		expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+		const kinds = hit.mock.calls.map(
+			(call) => (call as unknown as [{ kind: string }])[0].kind,
+		);
+		expect(kinds).toContain("read");
+		expect(kinds).not.toContain("write");
+	});
+
+	it("el reintento con el rulesRevision devuelto entra, sin pasarle rulesRevision al proveedor", async () => {
+		const d = deps({ brainRules });
+		const client = await connect("admin", d);
+		const first = await client.callTool({
+			name: "brain_upsert",
+			arguments: newPage,
+		});
+		const revision = (
+			first.structuredContent as { rules: { revision: string } }
+		).rules.revision;
+		const second = await client.callTool({
+			name: "brain_upsert",
+			arguments: { ...newPage, rulesRevision: revision },
+		});
+		expect(second.structuredContent).toMatchObject({ ok: true });
+		const [written] = vi.mocked(d.providerInstance.upsert).mock.calls[0];
+		expect(written).toMatchObject({ slug: "talento/personal/leo" });
+		expect(written).not.toHaveProperty("rulesRevision");
+	});
+
+	it("un miembro que no ve la carpeta recibe forbidden, nunca las reglas", async () => {
+		const d = deps({
+			brainRules,
+			rules: {
+				load: async () => [
+					{
+						path: "talento",
+						principal: "members",
+						userId: null,
+						level: "ninguno",
+					},
+				],
+			},
+		});
+		const client = await connect("ana", d);
+		const result = await client.callTool({
+			name: "brain_upsert",
+			arguments: newPage,
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "forbidden",
+		});
+		expect(JSON.stringify(result)).not.toContain("reporta_a");
+		const update = await client.callTool({
+			name: "brain_upsert",
+			arguments: { ...newPage, baseRevision: 1 },
+		});
+		expect(update.structuredContent).toMatchObject({
+			ok: false,
+			error: "not_found",
+		});
+		expect(JSON.stringify(update)).not.toContain("reporta_a");
+		const cascade = await client.callTool({
+			name: "brain_rules",
+			arguments: { path: "talento/personal/leo" },
+		});
+		expect(cascade.structuredContent).toMatchObject({
+			ok: false,
+			error: "not_found",
+		});
+		expect(JSON.stringify(cascade)).not.toContain("reporta_a");
+	});
+
+	it("brain_read trae las reglas de la carpeta sin la raíz", async () => {
+		const client = await connect("admin", deps({ brainRules }));
+		const result = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "talento/personal/leo" },
+		});
+		const rules = (
+			result.structuredContent as {
+				rules: { revision: string; chain: Array<{ path: string }> };
+			}
+		).rules;
+		expect(rules.chain.map((e) => e.path)).toEqual(["talento/personal"]);
+		expect(rules.revision).toMatch(/^[0-9a-f]{16}$/);
+	});
+
+	it("una 00-reglas se lee sin traerse a sí misma y se escribe con la revisión de arriba", async () => {
+		const d = deps({ brainRules });
+		const client = await connect("admin", d);
+		const read = await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "talento/personal/00-reglas" },
+		});
+		expect(
+			(read.structuredContent as { rules: { chain: unknown[] } }).rules.chain,
+		).toEqual([]);
+		const write = await client.callTool({
+			name: "brain_upsert",
+			arguments: {
+				...newPage,
+				slug: "talento/personal/00-reglas",
+				baseRevision: 5,
+			},
+		});
+		expect(write.structuredContent).toMatchObject({
+			error: "rules_required",
+			rules: { chain: [{ path: "" }] },
+		});
+	});
+
+	it("brain_rules de una ruta que no existe devuelve la cascada completa", async () => {
+		const client = await connect("ana", deps({ brainRules }));
+		const result = await client.callTool({
+			name: "brain_rules",
+			arguments: { path: "talento/personal/nueva" },
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			rules: { chain: [{ path: "" }, { path: "talento/personal" }] },
+		});
+	});
+
+	it("las instrucciones traen las de la raíz y solo las carpetas que la persona ve", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				brainRules,
+				rules: {
+					load: async () => [
+						{
+							path: "direccion",
+							principal: "members",
+							userId: null,
+							level: "ninguno",
+						},
+					],
+				},
+			}),
+		);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).toContain("Escribí en tercera persona.");
+		expect(instructions).toContain("| talento | Personas \\| equipos |");
+		expect(instructions).toContain("brain_rules");
+		expect(instructions).not.toContain("direccion");
+		expect(instructions).not.toContain("| skills");
+		expect(instructions).not.toContain("| talento/personal");
+	});
+
+	it("quien no ve nada del brain no recibe las instrucciones de la raíz", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				brainRules,
+				rules: {
+					load: async () => [
+						{ path: "", principal: "members", userId: null, level: "ninguno" },
+					],
+				},
+			}),
+		);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).not.toContain("Escribí en tercera persona.");
+		expect(instructions).not.toContain("| talento");
+	});
+
+	it("quien solo ve una subcarpeta recibe las instrucciones de la raíz que la gobiernan", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				brainRules,
+				rules: {
+					load: async () => [
+						{ path: "", principal: "members", userId: null, level: "ninguno" },
+						{
+							path: "talento/personal",
+							principal: "user",
+							userId: "ana",
+							level: "editor",
+						},
+					],
+				},
+			}),
+		);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).toContain("Escribí en tercera persona.");
+		// La tabla es de primer nivel: talento no lo ve.
+		expect(instructions).not.toContain("| talento");
+	});
+
+	it("un administrador recibe las instrucciones aunque los miembros no vean la raíz", async () => {
+		const client = await connect(
+			"admin",
+			deps({
+				brainRules,
+				rules: {
+					load: async () => [
+						{ path: "", principal: "members", userId: null, level: "ninguno" },
+					],
+				},
+			}),
+		);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).toContain("Escribí en tercera persona.");
+		expect(instructions).toContain("| direccion | Presupuesto |");
+	});
+
+	it("si no se pueden leer las reglas, el servidor arranca sin el bloque", async () => {
+		const errorLog = vi.spyOn(console, "error").mockImplementation(() => {});
+		const client = await connect(
+			"ana",
+			deps({
+				brainRules: () =>
+					createWikiRules({
+						tenantId: "tenant-a",
+						store: {
+							listRulePages: async () => {
+								throw new Error("caída");
+							},
+							listFolders: async () => folders,
+						},
+					}),
+			}),
+		);
+		expect(client.getInstructions()).toBeUndefined();
+		expect((await client.listTools()).tools.map((t) => t.name).sort()).toEqual(
+			BRAIN_TOOLS,
+		);
+		errorLog.mockRestore();
+	});
+
+	it("arma el bloque de instrucciones solo en initialize, no en cada tools/call", async () => {
+		const source = brainRules();
+		const session = vi.spyOn(source, "session");
+		const d = deps({ brainRules: () => source });
+		const client = await connect("admin", d);
+		expect(session).toHaveBeenCalledTimes(1);
+		expect(client.getInstructions() ?? "").toContain(
+			"Escribí en tercera persona.",
+		);
+		await client.callTool({
+			name: "brain_read",
+			arguments: { slug: "talento/personal/leo" },
+		});
+		await client.callTool({
+			name: "brain_upsert",
+			arguments: newPage,
+		});
+		expect(session).toHaveBeenCalledTimes(1);
+	});
+
+	describe("las reglas de skills/ no salen por las tools del brain", () => {
+		const skillRules = () =>
+			createWikiRules({
+				tenantId: "tenant-a",
+				store: {
+					listRulePages: async () => [
+						...rulePages,
+						{
+							slug: "skills/00-reglas",
+							status: "activo" as const,
+							revision: 9,
+							body: "Secreto de skills.",
+						},
+					],
+					listFolders: async () => folders,
+				},
+			});
+
+		it("brain_rules y brain_read sobre skills/ responden not_found sin cuerpo de reglas", async () => {
+			const client = await connect("admin", deps({ brainRules: skillRules }));
+			for (const call of [
+				{ name: "brain_rules", arguments: { path: "skills/x" } },
+				{ name: "brain_read", arguments: { slug: "skills/x" } },
+			]) {
+				const result = await client.callTool(call);
+				expect(result.structuredContent).toMatchObject({
+					ok: false,
+					error: "not_found",
+				});
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("tercera persona");
+			}
+		});
+
+		it("brain_upsert sobre skills/ devuelve el error de skills, sin reglas", async () => {
+			const d = deps({ brainRules: skillRules });
+			const client = await connect("admin", d);
+			const result = await client.callTool({
+				name: "brain_upsert",
+				arguments: { ...newPage, slug: "skills/x" },
+			});
+			expect(result.structuredContent).toMatchObject({
+				ok: false,
+				error: "forbidden",
+			});
+			expect(JSON.stringify(result)).toContain(
+				"Las skills no se editan con brain_upsert",
+			);
+			expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+			expect(JSON.stringify(result)).not.toContain("tercera persona");
+			expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+		});
+	});
+
+	it("un brain externo por MCP responde la cascada vacía y no tiene instrucciones del brain", async () => {
+		const client = await connect(
+			"ana",
+			deps({
+				store: {
+					...store,
+					brainBinding: async () => ({ ...binding, provider: "mcp" }) as never,
+				},
+			}),
+		);
+		const result = await client.callTool({
+			name: "brain_rules",
+			arguments: { path: "talento/x" },
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			rules: { revision: "", chain: [] },
+		});
+		expect(client.getInstructions()).toBeUndefined();
 	});
 });
 

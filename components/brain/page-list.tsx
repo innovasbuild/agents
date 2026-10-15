@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { reservedBadge } from "@/lib/brain/core/editor/reserved";
 import { pageHref } from "@/lib/brain/core/editor/slug";
 import { type BrainPage, CANON_TAGS } from "@/lib/brain/core/types";
 
@@ -30,6 +31,7 @@ export function PageList({
 				const canon = page.tags.filter((t) =>
 					(CANON_TAGS as readonly string[]).includes(t),
 				);
+				const badge = reservedBadge(page.slug);
 				return (
 					<li key={page.slug}>
 						<Link
@@ -45,6 +47,11 @@ export function PageList({
 							<span className="rounded-full border px-2 py-0.5 text-xs capitalize">
 								{page.category}
 							</span>
+							{badge && (
+								<span className="rounded-full bg-secondary px-2 py-0.5 text-secondary-foreground text-xs">
+									{badge}
+								</span>
+							)}
 							{canon.map((tag) => (
 								<span
 									key={tag}

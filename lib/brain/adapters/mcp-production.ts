@@ -19,6 +19,7 @@ import {
 	supabaseHit,
 } from "./mcp-supabase.ts";
 import { getBrainProvider } from "./provider.ts";
+import { getBrainRules } from "./rules.ts";
 import { packageLinkDeps } from "./skill-packages.ts";
 import { blobStore, skillStore } from "./skill-storage.ts";
 
@@ -103,6 +104,7 @@ export function productionDeps(
 		...(host && { tenantHost: host.tenantHost, hostServes: host.serves }),
 		...sharedDeps(),
 		provider: getBrainProvider,
+		brainRules: getBrainRules,
 		skills: skillsDeps(),
 		usesCanon: async (tenantId) => {
 			// Si no se puede leer, las descripciones de siempre (con canon): una

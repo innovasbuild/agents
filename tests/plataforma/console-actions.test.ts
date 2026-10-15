@@ -142,6 +142,9 @@ describe("gate común", () => {
 			await actions.setAgent("acme", TENANT, "outreach", true, "read"),
 		).toEqual(SIN_PERMISO);
 		expect(await actions.createBrain("acme", TENANT)).toEqual(SIN_PERMISO);
+		expect(await actions.enableBrainSkills("acme", TENANT)).toEqual(
+			SIN_PERMISO,
+		);
 		expect(
 			await actions.bindConnection("acme", TENANT, "coldiq", ["x"]),
 		).toEqual(SIN_PERMISO);
@@ -276,6 +279,46 @@ describe("createBrain", () => {
 			fn: "brain_folders_from_config",
 			args: { p_tenant: TENANT },
 		});
+	});
+});
+
+describe("enableBrainSkills", () => {
+	it("llama a platform_enable_brain_skills con el actor y refresca la consola", async () => {
+		expect(await actions.enableBrainSkills("acme", TENANT)).toEqual({
+			ok: true,
+		});
+		expect(state.rpcCalls).toEqual([
+			{
+				fn: "platform_enable_brain_skills",
+				args: { p_actor: "u1", p_tenant: TENANT },
+			},
+		]);
+		expect(state.revalidated).toContain("/plataforma/acme");
+	});
+
+	it("un id que no es uuid no toca la base", async () => {
+		expect(await actions.enableBrainSkills("acme", "no-es-uuid")).toEqual({
+			ok: false,
+			message: "No se pudo procesar el pedido.",
+		});
+		expect(state.rpcCalls).toEqual([]);
+	});
+
+	it("muestra tal cual el mensaje de consola de la función", async () => {
+		state.rpc.error = {
+			code: "23514",
+			message: "la empresa no tiene brain",
+			hint: "consola",
+		};
+		expect(await actions.enableBrainSkills("acme", TENANT)).toEqual({
+			ok: false,
+			message: "la empresa no tiene brain",
+		});
+	});
+
+	it("un error crudo no se filtra a la pantalla", async () => {
+		state.failFn = "platform_enable_brain_skills";
+		expect(await actions.enableBrainSkills("acme", TENANT)).toEqual(GENERICO);
 	});
 });
 

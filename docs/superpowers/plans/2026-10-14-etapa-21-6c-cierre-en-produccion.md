@@ -216,28 +216,28 @@ Nada de esto exige revertir la migración: la tabla vacía no tiene efecto.
 
 ## 6. Registro de resultados
 
-Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap).
+Copiá esta tabla al cerrar y completala (va a la spec, §6, y al roadmap). Las casillas de los §0 a §5 no se tildaron una por una en el cierre del 2026-10-15: el registro de lo hecho y de lo que quedó sin verificar es esta tabla.
 
 | Verificación | Resultado | Fecha | Quién |
 |---|---|---|---|
-| Migración `20261024120000_tenant_domains` aplicada | | | |
-| API de Vercel con el token (lista de dominios) | | | |
-| Límite de dominios del plan | | | |
-| S3: `PATCH` de `uri_allow_list` (coma y reemplazo) | | | |
-| Dominio activo desde la consola (tiempo desde el `CNAME`) | | | |
-| S1: `x-forwarded-host` llega al canal MCP del agente | | | |
-| S4: login por link mágico en el dominio propio | | | |
-| S4: login con Google en el dominio propio | | | |
-| Conexión real de Claude al brain y al agente | | | |
-| Dónde aterriza el consentimiento OAuth | | | |
-| Link de invitación con el dominio de la empresa | | | |
-| Regresión en el host raíz | | | |
+| Migración `20261024120000_tenant_domains` aplicada | OK: figura en local y remoto; `db push` dice que está al día | 2026-10-15 | Mati |
+| API de Vercel con el token (lista de dominios) | OK: el alta devolvió el `CNAME` y el `TXT` de verificación | 2026-10-15 | Claude (consola) |
+| Límite de dominios del plan | Sin verificar | | |
+| S3: `PATCH` de `uri_allow_list` (coma y reemplazo) | OK: conserva y agrega (las 4 `https://` anotadas siguen; 8 entradas en total, total anterior exacto sin registrar); Site URL intacta. Sin prueba aislada previa | 2026-10-15 | Claude (dashboard) |
+| Dominio activo desde la consola (tiempo desde el `CNAME`) | **Activo** y **Principal** al mirarlo. Mecanismo (barrido o clic) y tiempo desde el `CNAME` sin verificar | 2026-10-15 | Claude |
+| S1: `x-forwarded-host` llega al canal MCP del agente | OK: el 401 apunta a `ai.okeefe.com.ar` | 2026-10-15 | Claude (`curl`) |
+| S4: login por link mágico en el dominio propio | Sin verificar: la landing de okeefe solo ofrece Google | | |
+| S4: login con Google en el dominio propio | OK | 2026-10-15 | Mati |
+| Conexión real por MCP (brain y/o agente) | OK según Mati (no precisó si fue el brain, el agente o ambos). Con `curl`, el brain y el agente responden 401 con la metadata en `ai.okeefe.com.ar` | 2026-10-15 | Mati |
+| Dónde aterriza el consentimiento OAuth | No registrado (decisión A1: en el host raíz) | | |
+| Link de invitación con el dominio de la empresa | Sin verificar | | |
+| Regresión en el host raíz | OK: `agentes.innov.as/login/okeefe` responde 200 y `/okeefe/chat` da 404 sin sesión (la página hace `notFound()`). Sin recorrer un flujo completo | 2026-10-15 | Claude (`curl`) |
 
 ## 7. Cierre de la etapa
 
-- [ ] Los resultados del §6 están anotados en la spec (§6, spikes S1, S3 y S4) y las limitaciones nuevas, si aparecieron.
-- [ ] El roadmap (21.6) pasa a `[x]` con lo verificado y lo que quedó sin verificar.
-- [ ] La fila de la 21.6 en `docs/decisiones/README.md` pasa de "en curso" a "cerrada" y nombra sus páginas de la wiki: [Tenancy](../../arquitectura/tenancy.md), [Identidad y acceso](../../arquitectura/identidad-y-acceso.md), [Entornos y deploy](../../arquitectura/entornos-y-deploy.md), [Plataforma y settings por empresa](../../dominios/plataforma.md) y la guía [Dominio propio de un cliente](../../guias/dominio-de-un-cliente.md).
-- [ ] `/docs-wiki` y `npm run docs:check` en verde.
+- [x] Los resultados del §6 están anotados en la spec (§6, spikes S1, S3 y S4) y las limitaciones nuevas, si aparecieron.
+- [x] El roadmap (21.6) pasa a `[x]` con lo verificado y lo que quedó sin verificar.
+- [x] La fila de la 21.6 en `docs/decisiones/README.md` pasa de "en curso" a "cerrada" y nombra sus páginas de la wiki: [Tenancy](../../arquitectura/tenancy.md), [Identidad y acceso](../../arquitectura/identidad-y-acceso.md), [Entornos y deploy](../../arquitectura/entornos-y-deploy.md), [Plataforma y settings por empresa](../../dominios/plataforma.md) y la guía [Dominio propio de un cliente](../../guias/dominio-de-un-cliente.md).
+- [x] `/docs-wiki` y `npm run docs:check` en verde.
 - [ ] `/ship` para el bump de `VERSION` y el `CHANGELOG`.
 - [ ] Borrá el respaldo `~/uri_allow_list.backup.json` y los tokens que ya no uses (`unset` en la terminal y revocalos si fueron de un solo uso).
