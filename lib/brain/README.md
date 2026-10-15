@@ -172,6 +172,11 @@ su propio repo.
   ve el borrador; quien solo lee ve la copia publicada (la revisión publicada,
   estado `activo` y sin etiquetas, nada del borrador), y sin versión vigente la
   skill no existe para él.
+- Lo mismo con las reglas: `withoutSkillRules` (`core/rules-source.ts`) va en
+  el endpoint MCP y en las tools del agente, y `brain_rules` o `brain_read`
+  sobre `skills/` dan `not_found`. `brain_upsert` llama a `rejectSkillWrite`
+  antes de `requireRules`, así el rechazo es el de skills y no uno de reglas.
+  No va en `createWikiRules`: un panel web puede querer las reglas de una skill.
 - `resolveActingProvider` **no** lleva `withoutSkills`: lo usa el guardado del
   editor web, que tiene que escribir borradores.
 - Los archivos se sirven siempre por `app/[tenant]/brain/skills/files/route.ts`,
