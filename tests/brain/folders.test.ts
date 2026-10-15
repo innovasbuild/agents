@@ -67,3 +67,13 @@ describe("validateFolderPath", () => {
 		expect(validateFolderPath(`a/${"b".repeat(199)}`).ok).toBe(false);
 	});
 });
+
+describe("validateFolderPath y las páginas reservadas", () => {
+	it("una carpeta no se puede llamar como una página reservada", () => {
+		expect(validateFolderPath("comercial/00-reglas").ok).toBe(false);
+		expect(validateFolderPath("comercial/00-plantilla").ok).toBe(false);
+		expect(validateFolderPath("comercial/00-reglas-viejas")).toEqual({
+			ok: true,
+		});
+	});
+});

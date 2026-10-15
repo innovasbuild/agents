@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AccessRule, Principal } from "@/lib/brain/core/access/types";
 import { withAccess } from "@/lib/brain/core/access/with-access";
-import { BrainForbidden, BrainNotFound } from "@/lib/brain/core/errors";
+import {
+	BrainForbidden,
+	BrainNotFound,
+	BrainReservedSlug,
+} from "@/lib/brain/core/errors";
 import type { BrainPage, BrainProvider } from "@/lib/brain/core/types";
 
 const SLUGS = [
@@ -251,5 +255,106 @@ describe("withAccess · upsert", () => {
 		expect((await wrapped.list()).map((p) => p.slug)).toContain(
 			"direccion/presupuesto",
 		);
+	});
+});
+
+describe("withAccess · páginas reservadas", () => {
+	function inner(): BrainProvider {
+		return {
+			search: vi.fn(async () => []),
+			read: vi.fn(),
+			list: async () => [],
+			history: async () => null,
+			upsert: vi.fn(async () => ({ slug: "x", revision: 1 })),
+		};
+	}
+	const member: Principal = {
+		kind: "user",
+		userId: "ana",
+		role: "tenant_member",
+	};
+	const author = { kind: "user" as const, userId: "ana" };
+	const reglas = (slug: string) => ({
+		slug,
+		title: "Reglas",
+		category: "talento",
+		status: "activo" as const,
+		tags: [],
+		body: "b",
+		reason: "r",
+	});
+
+	it("un editor de la carpeta recibe reserved_slug al escribir sus reglas", async () => {
+		const provider = inner();
+		const rules: AccessRule[] = [
+			{
+				path: "talento/personal",
+				principal: "user",
+				userId: "ana",
+				level: "editor",
+			},
+		];
+		await expect(
+			withAccess(provider, member, rules).upsert(
+				reglas("talento/personal/00-reglas"),
+				author,
+			),
+		).rejects.toBeInstanceOf(BrainReservedSlug);
+		await expect(
+			withAccess(provider, member, rules).upsert(
+				reglas("talento/personal/00-plantilla"),
+				author,
+			),
+		).rejects.toThrow(/administra esa carpeta/);
+		expect(provider.upsert).not.toHaveBeenCalled();
+	});
+
+	it("quien administra la carpeta las escribe", async () => {
+		const provider = inner();
+		const rules: AccessRule[] = [
+			{
+				path: "talento/personal",
+				principal: "user",
+				userId: "ana",
+				level: "administrador",
+			},
+		];
+		await withAccess(provider, member, rules).upsert(
+			reglas("talento/personal/00-reglas"),
+			author,
+		);
+		expect(provider.upsert).toHaveBeenCalled();
+	});
+
+	it("las instrucciones del brain exigen administrar la raíz", async () => {
+		const provider = inner();
+		const rules: AccessRule[] = [
+			{ path: "", principal: "user", userId: "ana", level: "editor" },
+		];
+		await expect(
+			withAccess(provider, member, rules).upsert(reglas("00-reglas"), author),
+		).rejects.toThrow(/raíz del brain/);
+	});
+
+	it("sin permiso de editor sigue siendo forbidden, sin nombrar las reglas", async () => {
+		const provider = inner();
+		await expect(
+			withAccess(provider, member, []).upsert(
+				reglas("talento/00-reglas"),
+				author,
+			),
+		).rejects.toBeInstanceOf(BrainForbidden);
+	});
+
+	it("una página común sigue escribiéndose con editor", async () => {
+		const provider = inner();
+		const rules: AccessRule[] = [
+			{ path: "talento", principal: "user", userId: "ana", level: "editor" },
+		];
+		await withAccess(provider, member, rules).upsert(
+			reglas("talento/guia"),
+			author,
+		);
+		expect(provider.upsert).toHaveBeenCalled();
 	});
 });

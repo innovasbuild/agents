@@ -8,6 +8,7 @@ import {
 	BrainConflict,
 	BrainForbidden,
 	BrainNotFound,
+	BrainReservedSlug,
 	BrainValidation,
 } from "@/lib/brain/core/errors";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
@@ -228,5 +229,22 @@ describe("savePage", () => {
 			/No se pudo guardar \(.+\)/,
 		);
 		spy.mockRestore();
+	});
+
+	it("una página reservada sin administrar su carpeta muestra el mensaje de a quién pedírselo", async () => {
+		const { deps: d } = deps(
+			{},
+			vi.fn(async () => {
+				throw new BrainReservedSlug(
+					"Las reglas de talento las escribe quien administra esa carpeta.",
+				);
+			}),
+		);
+		expect(await savePage({ ...input, slug: "talento/00-reglas" }, d)).toEqual({
+			ok: false,
+			code: "forbidden",
+			message:
+				"Las reglas de talento las escribe quien administra esa carpeta.",
+		});
 	});
 });

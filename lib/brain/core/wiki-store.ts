@@ -2,6 +2,7 @@
 // prueban los tests pgTAP de las funciones. Recibe el cliente por parámetro.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BrainFolder } from "./folders.ts";
+import { isRulesSlug, type RulePage } from "./rules.ts";
 import type {
 	BrainAuthor,
 	BrainPage,
@@ -10,6 +11,7 @@ import type {
 	BrainSearchInput,
 	BrainStatus,
 } from "./types.ts";
+import { RULES_LEAF } from "./types.ts";
 
 function toPage(row: Record<string, unknown>): BrainPage {
 	return {
@@ -87,6 +89,8 @@ export interface WikiStore {
 		slug: string,
 	): Promise<BrainRevision[] | null>;
 	listFolders(tenantId: string): Promise<BrainFolder[]>;
+	/** Las 00-reglas del tenant, de cualquier status (spec etapa 26 §4.2). */
+	listRulePages(tenantId: string): Promise<RulePage[]>;
 	upsert(params: UpsertParams): Promise<{ slug: string; revision: number }>;
 }
 
@@ -181,6 +185,33 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 			return ((data ?? []) as Array<{ path: string; description: string }>).map(
 				(row) => ({ path: row.path, description: row.description }),
 			);
+		},
+
+		async listRulePages(tenantId) {
+			// PostgREST corta en 1000 filas: se pagina aunque un brain tenga pocas.
+			// El like trae también x/a00-reglas; el filtro de abajo deja solo las hojas.
+			const pages: RulePage[] = [];
+			for (let from = 0; ; from += 1000) {
+				const { data, error } = await client
+					.from("brain_pages")
+					.select("slug, status, revision, body")
+					.eq("tenant_id", tenantId)
+					.like("slug", `%${RULES_LEAF}`)
+					.order("slug")
+					.range(from, from + 999);
+				if (error) throw storeError(error);
+				const rows = (data ?? []) as Array<Record<string, unknown>>;
+				for (const row of rows) {
+					if (!isRulesSlug(String(row.slug))) continue;
+					pages.push({
+						slug: String(row.slug),
+						status: row.status as BrainStatus,
+						revision: row.revision as number,
+						body: String(row.body),
+					});
+				}
+				if (rows.length < 1000) return pages;
+			}
 		},
 
 		async upsert(params) {

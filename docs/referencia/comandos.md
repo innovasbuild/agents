@@ -15,6 +15,7 @@ Los scripts de `package.json`.
 | --- | --- |
 | `brain:folders-report` | `node --env-file=.env.local scripts/brain-folders-report.mts` |
 | `brain:import` | `node --env-file=.env.local scripts/brain-import.mts` |
+| `brain:rules-report` | `node --env-file=.env.local scripts/brain-rules-report.mts` |
 | `build` | `next build` |
 | `db:reset` | `npx supabase db reset` |
 | `db:start` | `npx supabase start` |

@@ -50,7 +50,9 @@ values
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'comercial/gate', 'Vetos de eval', 'comercial', '{canon:gate}',
    E'# Vetos del tenant\n\n```gate\nveto: clientes ... (banco mundial|bid|fao)\nveto_literal: sinergia total\n```'),
   ('e7a1e7a1-0000-0000-0000-0000000000aa', 'marketing/voz-eval', 'Voz del ejecutor eval', 'marketing', '{canon:voz,executor:eval}',
-   E'# Voz\n\nTuteo rioplatense, frases cortas, sin adjetivos de venta. Firma: Eval.\n\n## Par 1\n\nBorrador: Quería contarte que ayudamos a empresas a crecer.\nEnviado: Una empresa con dos plantas sabe que coordinar entre ellas cuesta más que vender.\nPor qué: arrancar por el negocio de ellos, no por nosotros, y sin contar que lo investigamos.\n\n```gate\nmax_chars: email=900\n```')
+   E'# Voz\n\nTuteo rioplatense, frases cortas, sin adjetivos de venta. Firma: Eval.\n\n## Par 1\n\nBorrador: Quería contarte que ayudamos a empresas a crecer.\nEnviado: Una empresa con dos plantas sabe que coordinar entre ellas cuesta más que vender.\nPor qué: arrancar por el negocio de ellos, no por nosotros, y sin contar que lo investigamos.\n\n```gate\nmax_chars: email=900\n```'),
+  ('e7a1e7a1-0000-0000-0000-0000000000aa', '00-reglas', 'Instrucciones del brain', 'brain', '{}',
+   E'# Instrucciones del brain de eval\n\n- Las páginas se escriben en tercera persona.\n- Las fechas van en formato AAAA-MM-DD.')
 on conflict do nothing;
 
 -- Las páginas entran directo a brain_pages: sus carpetas se crean aparte (spec etapa 26 §3.1).

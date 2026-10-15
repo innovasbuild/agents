@@ -71,7 +71,48 @@ describe("brainContract", () => {
 			search: "brain_search",
 			read: "brain_read",
 			upsert: "brain_upsert",
+			rules: "brain_rules",
 		});
+	});
+
+	it("brain_upsert acepta rulesRevision opcional de hasta 64 caracteres", () => {
+		const base = {
+			slug: "comercial/icp",
+			title: "ICP",
+			category: "comercial",
+			status: "activo",
+			tags: [],
+			body: "x",
+			reason: "r",
+		};
+		expect(contract.upsert.input.safeParse(base).success).toBe(true);
+		expect(
+			contract.upsert.input.safeParse({
+				...base,
+				rulesRevision: "0123456789abcdef",
+			}).success,
+		).toBe(true);
+		expect(
+			contract.upsert.input.safeParse({
+				...base,
+				rulesRevision: "x".repeat(65),
+			}).success,
+		).toBe(false);
+	});
+
+	it("brain_rules recibe una ruta, también vacía para la raíz", () => {
+		expect(contract.rules.input.safeParse({ path: "" }).success).toBe(true);
+		expect(
+			contract.rules.input.safeParse({ path: "talento/personal/leo" }).success,
+		).toBe(true);
+		expect(contract.rules.input.safeParse({}).success).toBe(false);
+	});
+
+	it("las descripciones enseñan a reintentar con rulesRevision", () => {
+		expect(contract.read.description).toContain("rulesRevision");
+		expect(contract.upsert.description).toContain("rules_required");
+		expect(contract.upsert.description).toContain("00-reglas");
+		expect(contract.rules.description).toContain("aunque todavía no exista");
 	});
 });
 

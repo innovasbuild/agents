@@ -8,6 +8,7 @@ import {
 	BrainConflict,
 	BrainForbidden,
 	BrainNotFound,
+	BrainReservedSlug,
 	BrainValidation,
 } from "../errors";
 import type { BrainBinding } from "../resolve";
@@ -103,6 +104,9 @@ export async function savePage(
 		});
 		return { ok: true, slug: saved.slug, revision: saved.revision };
 	} catch (error) {
+		// Una reservada sin administrar su carpeta: el mensaje dice a quién pedírselo.
+		if (error instanceof BrainReservedSlug)
+			return { ok: false, code: "forbidden", message: error.message };
 		// Sin permiso de escritura sobre esa página (o sobre algo que no ve): la
 		// pantalla muestra lo mismo, sin confirmar si existe.
 		if (error instanceof BrainForbidden || error instanceof BrainNotFound)

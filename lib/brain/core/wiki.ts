@@ -4,14 +4,17 @@
 import type { WikiConfig } from "./config.ts";
 import { BrainConflict, BrainNotFound, BrainValidation } from "./errors.ts";
 import { categoryForPath, nearestFolder, parentPath } from "./folders.ts";
+import { checkRulesWrite, isReservedSlug, isRulesSlug } from "./rules.ts";
 import { skillPlacementOk } from "./skills/package.ts";
 import {
+	BRAIN_CATEGORY,
 	BRAIN_STATUSES,
 	type BrainPageSummary,
 	type BrainProvider,
 	type BrainWrite,
 	MAX_BODY_BYTES,
 	MAX_SLUG_LENGTH,
+	RULES_LEAF,
 	SLUG_PATTERN,
 } from "./types.ts";
 import { type WikiStore, WikiStoreError } from "./wiki-store.ts";
@@ -45,7 +48,12 @@ export function validateWrite(
 	if (!isValidSlug(write.slug)) fields.push("slug");
 	if (write.title.trim().length === 0 || write.title.length > 300)
 		fields.push("title");
-	if (!config.categories.includes(write.category)) fields.push("category");
+	// Las instrucciones del brain viven en la raíz con la categoría brain, que
+	// no es una carpeta (spec etapa 26 §4.1).
+	const rootRules =
+		write.slug === RULES_LEAF && write.category === BRAIN_CATEGORY;
+	if (!rootRules && !config.categories.includes(write.category))
+		fields.push("category");
 	// Una skill va bajo skills/ con categoría skill, y solo ella (spec 24.1 S3).
 	if (
 		!fields.includes("category") &&
@@ -71,11 +79,14 @@ export function validateWrite(
 	}
 	if (frontmatter.updated === undefined) frontmatter.updated = today;
 
-	for (const key of config.requiredFrontmatter) {
-		if (COLUMN_KEYS.has(key)) continue;
-		const value = frontmatter[key];
-		if (value === undefined || value === null || value === "")
-			fields.push(`frontmatter.${key}`);
+	// Las reservadas no llevan los campos obligatorios (spec etapa 26 §5.2).
+	if (!isReservedSlug(write.slug)) {
+		for (const key of config.requiredFrontmatter) {
+			if (COLUMN_KEYS.has(key)) continue;
+			const value = frontmatter[key];
+			if (value === undefined || value === null || value === "")
+				fields.push(`frontmatter.${key}`);
+		}
 	}
 
 	if (fields.length > 0) throw new BrainValidation(fields);
@@ -155,12 +166,16 @@ export function createWikiProvider(
 		async upsert(input, author) {
 			const isNew = input.baseRevision === undefined;
 			const nested = input.slug.includes("/");
-			// La categoría sale de la ruta (spec etapa 26 D1). Una página suelta que
-			// ya existía conserva la suya.
+			// La categoría sale de la ruta (spec etapa 26 D1). Las instrucciones
+			// del brain van en la raíz con la categoría brain (§4.1). Una página
+			// suelta que ya existía conserva la suya.
+			const rootRules = input.slug === RULES_LEAF;
 			const write = nested
 				? { ...input, category: categoryForPath(input.slug) }
-				: input;
-			if (isNew && !nested) {
+				: rootRules
+					? { ...input, category: BRAIN_CATEGORY }
+					: input;
+			if (isNew && !nested && !rootRules) {
 				throw new BrainValidation(
 					["slug"],
 					"Una página nueva va dentro de una carpeta: usá una ruta como categoria/nombre.",
@@ -182,6 +197,9 @@ export function createWikiProvider(
 				}
 			}
 			const frontmatter = validateWrite(write, config, today());
+			// Topes de una 00-reglas (spec etapa 26 §4.1), con cualquier autor.
+			if (isRulesSlug(write.slug))
+				checkRulesWrite(write, await store.listRulePages(tenantId));
 			try {
 				return await store.upsert({
 					tenantId,

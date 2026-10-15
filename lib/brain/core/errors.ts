@@ -1,13 +1,17 @@
 // Errores tipados del brain y su forma para el modelo. Sin parameter
 // properties: lo importa un script que corre con Node directo.
 
+import type { RulesCascade } from "./rules.ts";
+
 export type BrainErrorCode =
 	| "not_found"
 	| "conflict"
 	| "validation"
 	| "forbidden"
 	| "provider_unavailable"
-	| "rate_limited";
+	| "rate_limited"
+	| "rules_required"
+	| "reserved_slug";
 
 export class BrainError extends Error {
 	readonly code: BrainErrorCode;
@@ -80,6 +84,34 @@ export class BrainRateLimited extends BrainError {
 	}
 }
 
+// Escritura en una ruta con reglas sin rulesRevision o con uno viejo (spec
+// etapa 26 D9). Trae la cascada completa: quien reintenta no necesita otra lectura.
+export class BrainRulesRequired extends BrainError {
+	readonly rules: RulesCascade;
+
+	constructor(slug: string, rules: RulesCascade, stale: boolean) {
+		super(
+			"rules_required",
+			`${stale ? `Las reglas que aplican a ${slug} cambiaron desde que las leíste.` : `${slug} tiene reglas que tenés que leer antes de escribir.`} Vienen en rules: leelas, ajustá la página si hace falta y reintentá brain_upsert con rulesRevision "${rules.revision}".`,
+		);
+		this.rules = rules;
+	}
+}
+
+// 00-reglas y 00-plantilla las escribe quien administra su carpeta (spec etapa
+// 26 D10, §4.1).
+export class BrainReservedSlug extends BrainError {
+	constructor(message: string) {
+		super("reserved_slug", message);
+	}
+}
+
+export function agentReservedSlug(slug: string): BrainReservedSlug {
+	return new BrainReservedSlug(
+		`${slug} es una página reservada: las instrucciones y reglas del brain (00-reglas) y las plantillas (00-plantilla) las escribe una persona que administra esa carpeta. No la escribas vos: proponé el cambio en la conversación, con el texto completo.`,
+	);
+}
+
 export interface BrainToolError {
 	ok: false;
 	error: BrainErrorCode;
@@ -89,6 +121,7 @@ export interface BrainToolError {
 	fields?: string[];
 	retryable?: boolean;
 	retryAfterSeconds?: number;
+	rules?: RulesCascade;
 }
 
 export function toToolError(error: unknown): BrainToolError {
@@ -111,5 +144,7 @@ export function toToolError(error: unknown): BrainToolError {
 			retryable: true,
 			retryAfterSeconds: error.retryAfterSeconds,
 		};
+	if (error instanceof BrainRulesRequired)
+		return { ...base, rules: error.rules };
 	return base;
 }

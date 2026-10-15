@@ -19,6 +19,7 @@ function store(folders: string[]): WikiStore {
 		list: async () => [],
 		listRevisions: async () => null,
 		listFolders: async () => folders.map((path) => ({ path, description: "" })),
+		listRulePages: async () => [],
 		upsert: vi.fn(async (params) => ({ slug: params.slug, revision: 1 })),
 	};
 }

@@ -130,6 +130,12 @@ describe("runningToolLabel", () => {
 		expect(runningToolLabel("research_account")).toBe("Investigando la cuenta");
 	});
 
+	it("brain_rules tiene su etiqueta en castellano", () => {
+		expect(runningToolLabel("brain_rules")).toBe(
+			"Leyendo las reglas del brain",
+		);
+	});
+
 	it("nunca deja escapar el identificador crudo", () => {
 		// La UI va en rioplatense: un tool nuevo sin etiqueta cae en el genérico
 		// en vez de mostrar "tool_que_no_existe_todavia" en pantalla.

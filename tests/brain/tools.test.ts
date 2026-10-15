@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createBrainTools } from "@/lib/brain/adapters/tools";
 import type { BrainBinding } from "@/lib/brain/core/resolve";
+import type { RulePage } from "@/lib/brain/core/rules";
+import { createWikiRules, EMPTY_RULES } from "@/lib/brain/core/rules-source";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const binding: BrainBinding = {
@@ -25,10 +27,16 @@ function fakeProvider(): BrainProvider {
 	};
 }
 
+const noRules = () => EMPTY_RULES;
+
 describe("createBrainTools", () => {
 	it("con acceso de lectura devuelve solo búsqueda y lectura", () => {
 		const tools = createBrainTools(binding, "read", { provider: fakeProvider });
-		expect(Object.keys(tools).sort()).toEqual(["brain_read", "brain_search"]);
+		expect(Object.keys(tools).sort()).toEqual([
+			"brain_read",
+			"brain_rules",
+			"brain_search",
+		]);
 	});
 
 	it("con lectura y escritura suma brain_upsert, con aprobación", () => {
@@ -37,6 +45,7 @@ describe("createBrainTools", () => {
 		});
 		expect(Object.keys(tools).sort()).toEqual([
 			"brain_read",
+			"brain_rules",
 			"brain_search",
 			"brain_upsert",
 		]);
@@ -74,10 +83,19 @@ describe("createBrainTools", () => {
 			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
-		const tools = createBrainTools(binding, "read", { provider: providerFactory });
+		const tools = createBrainTools(binding, "read", {
+			provider: providerFactory,
+			rulesSource: noRules,
+		});
 
-		const searchResult = await tools.brain_search.execute({ query: "hola" }, {} as never);
-		const readResult = await tools.brain_read.execute({ slug: "a" }, {} as never);
+		const searchResult = await tools.brain_search.execute(
+			{ query: "hola" },
+			{} as never,
+		);
+		const readResult = await tools.brain_read.execute(
+			{ slug: "a" },
+			{} as never,
+		);
 
 		expect(providerFactory).toHaveBeenCalledWith(binding);
 		expect(search).toHaveBeenCalledWith({ query: "hola" });
@@ -159,6 +177,7 @@ describe("createBrainTools", () => {
 				actor: member,
 				provider: () => providerWith(upsert),
 				rules: async () => closeDireccion,
+				rulesSource: noRules,
 			});
 			expect("brain_upsert" in tools).toBe(true);
 			if (!("brain_upsert" in tools)) return;
@@ -227,6 +246,7 @@ describe("createBrainTools", () => {
 					history: async () => null,
 					upsert,
 				}),
+				rulesSource: noRules,
 			});
 			return { tools, read, upsert };
 		}
@@ -272,5 +292,208 @@ describe("createBrainTools", () => {
 			expect(result).toMatchObject({ ok: false, error: "forbidden" });
 			expect(upsert).not.toHaveBeenCalled();
 		});
+	});
+});
+
+describe("reglas en las tools del agente", () => {
+	const pageOf = (slug: string) => ({
+		slug,
+		title: slug,
+		category: "comercial",
+		status: "activo" as const,
+		tags: [],
+		frontmatter: {},
+		body: "b",
+		revision: 1,
+		updatedAt: "2026-01-01",
+	});
+	const pages: RulePage[] = [
+		{ slug: "00-reglas", status: "activo", revision: 1, body: "raíz" },
+		{
+			slug: "comercial/00-reglas",
+			status: "activo",
+			revision: 3,
+			body: "comercial",
+		},
+	];
+	const rulesSource = () =>
+		createWikiRules({
+			tenantId: "tenant-a",
+			store: { listRulePages: async () => pages, listFolders: async () => [] },
+		});
+	const ctx = { session: { id: "s1", auth: { initiator: null } } } as never;
+	const input = {
+		slug: "comercial/nueva",
+		title: "Nueva",
+		category: "comercial",
+		status: "activo" as const,
+		tags: [],
+		body: "b",
+		reason: "alta",
+	};
+
+	function setup() {
+		const upsert = vi.fn(async () => ({
+			slug: "comercial/nueva",
+			revision: 1,
+		}));
+		const providerFactory = vi.fn(() => ({
+			search: vi.fn(async () => []),
+			read: vi.fn(async (slug: string) => pageOf(slug)),
+			list: async () => [],
+			history: async () => null,
+			upsert,
+		}));
+		const tools = createBrainTools(binding, "read_write", {
+			provider: providerFactory,
+			rulesSource,
+		});
+		if (!("brain_upsert" in tools)) throw new Error("falta brain_upsert");
+		return { tools, upsert, providerFactory };
+	}
+
+	it("brain_rules devuelve la cascada completa de una ruta que no existe", async () => {
+		const { tools } = setup();
+		const result = await tools.brain_rules.execute(
+			{ path: "comercial/nueva" },
+			{} as never,
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			rules: { chain: [{ path: "" }, { path: "comercial" }] },
+		});
+	});
+
+	it("brain_read trae las reglas de la carpeta sin la raíz", async () => {
+		const { tools } = setup();
+		const result = await tools.brain_read.execute(
+			{ slug: "comercial/icp" },
+			{} as never,
+		);
+		expect(result).toMatchObject({
+			ok: true,
+			rules: { chain: [{ path: "comercial" }] },
+		});
+	});
+
+	it("brain_upsert sin rulesRevision devuelve rules_required y no escribe; el reintento entra", async () => {
+		const { tools, upsert } = setup();
+		const first = await tools.brain_upsert.execute(input, ctx);
+		expect(first).toMatchObject({ ok: false, error: "rules_required" });
+		expect(upsert).not.toHaveBeenCalled();
+		const revision = (first as { rules: { revision: string } }).rules.revision;
+		const second = await tools.brain_upsert.execute(
+			{ ...input, rulesRevision: revision },
+			ctx,
+		);
+		expect(second).toMatchObject({ ok: true });
+		expect((upsert.mock.calls[0] as unknown[])[0]).not.toHaveProperty(
+			"rulesRevision",
+		);
+	});
+
+	it("el agente no escribe una 00-plantilla ni una 00-reglas, sin armar el proveedor", async () => {
+		const { tools, upsert, providerFactory } = setup();
+		for (const slug of [
+			"comercial/00-plantilla",
+			"comercial/00-reglas",
+			"00-reglas",
+		]) {
+			const result = await tools.brain_upsert.execute({ ...input, slug }, ctx);
+			expect(result).toMatchObject({ ok: false, error: "reserved_slug" });
+			expect((result as { message: string }).message).toContain(
+				"proponé el cambio en la conversación",
+			);
+		}
+		expect(providerFactory).not.toHaveBeenCalled();
+		expect(upsert).not.toHaveBeenCalled();
+	});
+
+	describe("las reglas de skills/ no salen por las tools del agente", () => {
+		const withSkillRules = () =>
+			createWikiRules({
+				tenantId: "tenant-a",
+				store: {
+					listRulePages: async () => [
+						...pages,
+						{
+							slug: "skills/00-reglas",
+							status: "activo",
+							revision: 9,
+							body: "Secreto de skills.",
+						},
+					],
+					listFolders: async () => [],
+				},
+			});
+		function skillSetup() {
+			const upsert = vi.fn(async () => ({ slug: "skills/x", revision: 1 }));
+			const tools = createBrainTools(binding, "read_write", {
+				provider: () => ({
+					search: vi.fn(async () => []),
+					read: vi.fn(async (slug: string) => pageOf(slug)),
+					list: async () => [],
+					history: async () => null,
+					upsert,
+				}),
+				rulesSource: withSkillRules,
+			});
+			if (!("brain_upsert" in tools)) throw new Error("falta brain_upsert");
+			return { tools, upsert };
+		}
+
+		it("brain_rules y brain_read sobre skills/ responden not_found sin cuerpo de reglas", async () => {
+			const { tools } = skillSetup();
+			for (const result of [
+				await tools.brain_rules.execute({ path: "skills/x" }, {} as never),
+				await tools.brain_read.execute({ slug: "skills/x" }, {} as never),
+			]) {
+				expect(result).toMatchObject({ ok: false, error: "not_found" });
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("raíz");
+			}
+		});
+
+		it("brain_upsert sobre skills/ devuelve el error de skills, sin reglas", async () => {
+			const { tools, upsert } = skillSetup();
+			for (const slug of ["skills/x", "skills/00-reglas"]) {
+				const result = await tools.brain_upsert.execute(
+					{ ...input, slug },
+					ctx,
+				);
+				expect(result).toMatchObject({ ok: false, error: "forbidden" });
+				expect(JSON.stringify(result)).toContain("Las skills se editan");
+				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
+				expect(JSON.stringify(result)).not.toContain("raíz");
+			}
+			expect(upsert).not.toHaveBeenCalled();
+		});
+	});
+
+	it("un miembro no recibe las reglas de una ruta que no ve", async () => {
+		const tools = createBrainTools(binding, "read", {
+			actor: { userId: "ana", role: "tenant_member" },
+			provider: () => ({
+				search: vi.fn(async () => []),
+				read: vi.fn(),
+				list: async () => [],
+				history: async () => null,
+				upsert: vi.fn(),
+			}),
+			rules: async () => [
+				{
+					path: "comercial",
+					principal: "members",
+					userId: null,
+					level: "ninguno",
+				},
+			],
+			rulesSource,
+		});
+		const result = await tools.brain_rules.execute(
+			{ path: "comercial/nueva" },
+			{} as never,
+		);
+		expect(result).toMatchObject({ ok: false, error: "not_found" });
 	});
 });
