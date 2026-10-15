@@ -13,7 +13,12 @@ import {
 } from "../core/access/types.ts";
 import { withAccess } from "../core/access/with-access.ts";
 import type { BrainBinding } from "../core/resolve.ts";
-import { type RulesSource, withRulesAccess } from "../core/rules-source.ts";
+import {
+	type BrainSessionContext,
+	type RulesSource,
+	seesBrain,
+	withRulesAccess,
+} from "../core/rules-source.ts";
 import type { BrainProvider, BrainRole } from "../core/types.ts";
 import { loadAccessRules } from "./access-rules.ts";
 import { getBrainProvider } from "./provider.ts";
@@ -95,6 +100,23 @@ export async function resolveActingRules(
 	return withRulesAccess(source, (path) =>
 		resolveAccess(access.rules, access.principal, path),
 	);
+}
+
+// Lo que el arranque del chat le muestra a quien actúa (spec etapa 26 §4.3):
+// carpetas que ve, e instrucciones de la raíz solo si ve alguna parte del brain
+// (mismo criterio que el MCP). null: la persona no ve nada del brain.
+export async function resolveActingSession(
+	binding: BrainBinding,
+	actor: BrainActor | undefined,
+	deps: Pick<ActingDeps, "rules" | "rulesSource"> = {},
+): Promise<BrainSessionContext | null> {
+	const source = (deps.rulesSource ?? getBrainRules)(binding);
+	if (!actor) return source.session();
+	const access = await actingAccess(binding, actor, deps);
+	const levelOf = (path: string) =>
+		resolveAccess(access.rules, access.principal, path);
+	if (!seesBrain(access.rules, levelOf)) return null;
+	return withRulesAccess(source, levelOf).session();
 }
 
 // Proveedor y reglas con una sola carga de las reglas de acceso.

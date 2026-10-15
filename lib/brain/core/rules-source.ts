@@ -2,7 +2,7 @@
 // De dónde salen las reglas de un brain y cómo se exigen (spec etapa 26 §4.2,
 // §4.3). requireRules corre en las superficies que escriben por un modelo (MCP
 // y tools del agente): el editor web, el import y los seeds no la llaman.
-import { type Level, ROOT_PATH } from "./access/types.ts";
+import { type AccessRule, type Level, ROOT_PATH } from "./access/types.ts";
 import {
 	BrainForbidden,
 	BrainNotFound,
@@ -90,6 +90,18 @@ export function withRulesAccess(
 			};
 		},
 	};
+}
+
+// Las instrucciones de la raíz gobiernan todo el brain: le llegan a quien ve
+// alguna parte de él. Una ruta solo es visible si lo es la raíz o la ruta de
+// alguna regla (la que da el permiso), así que alcanza con mirar esas.
+export function seesBrain(
+	rules: Pick<AccessRule, "path">[],
+	levelOf: (path: string) => Level | null,
+): boolean {
+	return [ROOT_PATH, ...rules.map((rule) => rule.path)].some(
+		(path) => levelOf(path) !== null,
+	);
 }
 
 export async function requireRules(

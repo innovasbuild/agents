@@ -6,13 +6,13 @@ import {
 	type AccessRulesStore,
 	isAdminRole,
 	type Principal,
-	ROOT_PATH,
 } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
 import type { BrainBinding } from "../resolve.ts";
 import {
 	EMPTY_RULES,
 	type RulesSource,
+	seesBrain,
 	withRulesAccess,
 } from "../rules-source.ts";
 import { formatBrainSession } from "../session.ts";
@@ -211,12 +211,8 @@ async function handleBrainMcpInner(
 		deps.brainRules?.(access.binding) ?? EMPTY_RULES,
 		levelOf,
 	);
-	// Las instrucciones de la raíz gobiernan todo el brain: le llegan a quien ve
-	// alguna parte de él. Una ruta solo es visible si lo es la raíz o la ruta de
-	// alguna regla (la que da el permiso), así que alcanza con mirar esas.
-	const seesBrain = [ROOT_PATH, ...rules.map((rule) => rule.path)].some(
-		(path) => levelOf(path) !== null,
-	);
+	// Las instrucciones de la raíz le llegan a quien ve alguna parte del brain.
+	const seesSomeBrain = seesBrain(rules, levelOf);
 	// Si no se pueden leer, el servidor arranca sin el bloque: las reglas igual
 	// llegan en brain_read, brain_rules y el rechazo de brain_upsert.
 	let brainInstructions: string | null = null;
@@ -224,7 +220,7 @@ async function handleBrainMcpInner(
 		try {
 			const context = await visibleRules.session();
 			brainInstructions = formatBrainSession(
-				seesBrain ? context : { ...context, root: null },
+				seesSomeBrain ? context : { ...context, root: null },
 			);
 		} catch (error) {
 			console.error(

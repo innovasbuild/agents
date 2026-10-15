@@ -15,6 +15,7 @@ Las evals de `agents/*/evals/`. Se corren con `npm run evals`.
 | --- | --- |
 | `asistente/brain-tools` | `agents/asistente/evals/brain-tools.eval.ts` |
 | `asistente/deriva-a-outreach` | `agents/asistente/evals/deriva-a-outreach.eval.ts` |
+| `asistente/instrucciones-brain` | `agents/asistente/evals/instrucciones-brain.eval.ts` |
 | `asistente/sin-dato` | `agents/asistente/evals/sin-dato.eval.ts` |
 | `asistente/sin-otros-agentes` | `agents/asistente/evals/sin-otros-agentes.eval.ts` |
 | `asistente/smoke` | `agents/asistente/evals/smoke.eval.ts` |
