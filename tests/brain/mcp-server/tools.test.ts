@@ -11,6 +11,7 @@ import {
 	MCP_MAX_UPSERT_BODY_BYTES,
 } from "@/lib/brain/core/mcp-server/server";
 import type { SkillCatalog } from "@/lib/brain/core/skills/catalog";
+import type { DraftChange, SkillDrafts } from "@/lib/brain/core/skills/draft";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const page = {
@@ -366,6 +367,139 @@ describe("tools de skills", () => {
 			ok: false,
 			error: "not_found",
 			message: "No existe la skill.",
+		});
+	});
+});
+
+const change: DraftChange = {
+	slug: "skills/ventas/reporte",
+	name: "reporte",
+	path: "SKILL.md",
+	revision: 5,
+	state: "con_cambios",
+	reviewUrl: "https://agents.test/acme/brain/p/skills/ventas/reporte",
+	message: "El cambio quedó en el borrador.",
+};
+
+function fakeDrafts(): SkillDrafts {
+	return {
+		read: vi.fn(async () => ({ slug: change.slug, skillMd: "---\n---\n" })),
+		edit: vi.fn(async () => change),
+		writeFile: vi.fn(async () => change),
+		create: vi.fn(async () => change),
+	};
+}
+
+describe("buildBrainMcpServer · edición de skills", () => {
+	function build(skillDrafts: SkillDrafts | null, limiter = fakeLimiter()) {
+		return {
+			limiter,
+			server: buildBrainMcpServer({
+				userId: "ana",
+				categories: ["comercial"],
+				canon: false,
+				provider: fakeProvider(),
+				limiter,
+				skillDrafts,
+			}),
+		};
+	}
+
+	it("sin skillDrafts no hay tools de edición", async () => {
+		const client = await connect(build(null).server);
+		const names = (await client.listTools()).tools.map((t) => t.name);
+		expect(names.some((name) => name.startsWith("skill_"))).toBe(false);
+		expect(client.getInstructions()).toBeUndefined();
+	});
+
+	it("con skillDrafts aparecen las cuatro, con sus anotaciones y las instrucciones", async () => {
+		const client = await connect(build(fakeDrafts()).server);
+		const tools = (await client.listTools()).tools;
+		expect(tools.map((t) => t.name).sort()).toEqual([
+			"brain_read",
+			"brain_search",
+			"brain_upsert",
+			"skill_create",
+			"skill_draft_edit",
+			"skill_draft_read",
+			"skill_draft_write_file",
+		]);
+		const byName = (name: string) => tools.find((t) => t.name === name);
+		expect(byName("skill_draft_read")?.annotations?.readOnlyHint).toBe(true);
+		for (const name of [
+			"skill_draft_edit",
+			"skill_draft_write_file",
+			"skill_create",
+		]) {
+			expect(byName(name)?.annotations).toMatchObject({
+				readOnlyHint: false,
+				destructiveHint: false,
+			});
+			expect(byName(name)?.description).toMatch(/borrador/i);
+		}
+		expect(client.getInstructions()).toContain("borrador");
+	});
+
+	it("leer cuenta como lectura y escribir, como escritura; los argumentos llegan intactos", async () => {
+		const drafts = fakeDrafts();
+		const { server, limiter } = build(drafts);
+		const client = await connect(server);
+
+		const read = await client.callTool({
+			name: "skill_draft_read",
+			arguments: { skill: "reporte" },
+		});
+		expect(read.structuredContent).toMatchObject({
+			ok: true,
+			slug: change.slug,
+		});
+		expect(limiter.check).toHaveBeenLastCalledWith("read");
+
+		const edit = await client.callTool({
+			name: "skill_draft_edit",
+			arguments: { skill: "reporte", old: "a", new: "b", reason: "r" },
+		});
+		expect(edit.structuredContent).toMatchObject({ ok: true, revision: 5 });
+		expect(drafts.edit).toHaveBeenCalledWith({
+			skill: "reporte",
+			old: "a",
+			new: "b",
+			reason: "r",
+		});
+		expect(limiter.check).toHaveBeenLastCalledWith("write");
+
+		await client.callTool({
+			name: "skill_draft_write_file",
+			arguments: { skill: "reporte", path: "references/x.md", content: "x" },
+		});
+		await client.callTool({
+			name: "skill_create",
+			arguments: {
+				name: "nueva",
+				description: "d",
+				instructions: "i",
+				reason: "r",
+			},
+		});
+		expect(drafts.writeFile).toHaveBeenCalledTimes(1);
+		expect(drafts.create).toHaveBeenCalledTimes(1);
+	});
+
+	it("un error de BrainError sale con el formato de siempre y como error", async () => {
+		const drafts = fakeDrafts();
+		drafts.edit = vi.fn(async () => {
+			throw new BrainError("validation", "El fragmento no aparece.");
+		});
+		const client = await connect(build(drafts).server);
+		const result = await client.callTool({
+			name: "skill_draft_edit",
+			arguments: { skill: "reporte", old: "a", new: "b", reason: "r" },
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "validation",
+			message: "El fragmento no aparece.",
 		});
 	});
 });

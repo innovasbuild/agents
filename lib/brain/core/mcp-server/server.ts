@@ -5,6 +5,7 @@ import { z } from "zod";
 import { BRAIN_TOOL_NAMES, brainContract } from "../contract.ts";
 import { BrainError, BrainValidation, toToolError } from "../errors.ts";
 import { describeSkills, type SkillCatalog } from "../skills/catalog.ts";
+import type { SkillDrafts } from "../skills/draft.ts";
 import type { BrainProvider } from "../types.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 
@@ -16,6 +17,10 @@ export const SKILL_TOOL_NAMES = {
 	load: "skill_load",
 	file: "skill_file",
 	package: "skill_package",
+	draftRead: "skill_draft_read",
+	draftEdit: "skill_draft_edit",
+	draftWriteFile: "skill_draft_write_file",
+	create: "skill_create",
 } as const;
 
 const SKILL_INSTRUCTIONS =
@@ -26,6 +31,9 @@ const SKILL_PACKAGE_DESCRIPTION =
 
 const SKILL_LOAD_INTRO =
 	"Carga una skill de la empresa: devuelve sus instrucciones y la lista de sus archivos. Usala antes de empezar una tarea que coincida con alguna de estas skills, sin esperar a que te lo pidan. Skills disponibles:";
+
+const DRAFT_INSTRUCTIONS =
+	"Podés crear y editar skills de esta empresa con skill_create, skill_draft_edit y skill_draft_write_file. Esas tools cambian el BORRADOR, no lo que usan los demás: un administrador revisa y publica desde la plataforma. Para ver tu cambio leé el borrador con skill_draft_read (skill_load y skill_file siguen devolviendo lo publicado). Antes de editar, leé el texto con skill_draft_read y copiá el fragmento exacto. Después de cambiar algo, avisale a la persona que quedó en borrador y pasale el reviewUrl.";
 
 function result(value: Record<string, unknown>, isError = false) {
 	return {
@@ -44,11 +52,20 @@ export function buildBrainMcpServer(ctx: {
 	limiter: RateLimiter;
 	/** Skills publicadas que ve la persona; sin ninguna, no hay tools de skills. */
 	skills?: SkillCatalog | null;
+	/** Tools para crear y editar el borrador de skills; solo para quien edita. */
+	skillDrafts?: SkillDrafts | null;
 }): McpServer {
 	const skills = ctx.skills ?? null;
+	const drafts = ctx.skillDrafts ?? null;
+	const instructions = [
+		skills ? SKILL_INSTRUCTIONS : null,
+		drafts ? DRAFT_INSTRUCTIONS : null,
+	]
+		.filter((text): text is string => text !== null)
+		.join("\n\n");
 	const server = new McpServer(
 		{ name: "innovas-brain", version: "1.0.0" },
-		skills ? { instructions: SKILL_INSTRUCTIONS } : undefined,
+		instructions ? { instructions } : undefined,
 	);
 	const contract = brainContract(ctx.categories, { canon: ctx.canon });
 
@@ -172,6 +189,90 @@ export function buildBrainMcpServer(ctx: {
 				run("read", async () => ({
 					ok: true,
 					...(await skills.package(name)),
+				})),
+		);
+	}
+
+	if (drafts) {
+		const SKILL_REF = z.string().min(1).max(200);
+		const WRITES = {
+			readOnlyHint: false,
+			destructiveHint: false,
+			idempotentHint: false,
+		};
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.draftRead,
+			{
+				description:
+					"Lee el BORRADOR de una skill que podés editar (no la versión publicada): sin path devuelve el SKILL.md completo con su encabezado, la revisión, el estado de publicación y la lista de archivos; con path, un archivo de texto. La skill se nombra por nombre o por ruta completa (skills/…).",
+				inputSchema: {
+					skill: SKILL_REF,
+					path: z.string().min(1).max(200).optional(),
+				},
+				annotations: { readOnlyHint: true },
+			},
+			async (input) =>
+				run("read", async () => ({ ok: true, ...(await drafts.read(input)) })),
+		);
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.draftEdit,
+			{
+				description:
+					"Cambia el BORRADOR de una skill reemplazando un fragmento: `old` tiene que aparecer exactamente una vez y se cambia por `new`. Sin path edita el SKILL.md (encabezado o cuerpo); con path, un archivo de texto del paquete. No publica: un administrador lo hace desde la plataforma. El motivo queda en el historial cuando el cambio es en el SKILL.md.",
+				inputSchema: {
+					skill: SKILL_REF,
+					path: z.string().min(1).max(200).optional(),
+					old: z.string().min(1).max(102_400),
+					new: z.string().max(102_400),
+					reason: z.string().min(1).max(200),
+				},
+				annotations: WRITES,
+			},
+			async (input) =>
+				run("write", async () => ({ ok: true, ...(await drafts.edit(input)) })),
+		);
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.draftWriteFile,
+			{
+				description:
+					"Crea o reemplaza un archivo de texto (script, referencia, plantilla) en el BORRADOR de una skill, de hasta 256 KB. No sirve para el SKILL.md: ese se cambia con skill_draft_edit. No publica.",
+				inputSchema: {
+					skill: SKILL_REF,
+					path: z.string().min(1).max(200),
+					content: z.string().max(262_144),
+				},
+				annotations: WRITES,
+			},
+			async (input) =>
+				run("write", async () => ({
+					ok: true,
+					...(await drafts.writeFile(input)),
+				})),
+		);
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.create,
+			{
+				description:
+					"Crea una skill nueva como BORRADOR en skills/<folder>/<name> (la carpeta tiene que existir; sin folder queda directo en skills/). `description` dice cuándo conviene usarla; `instructions` es el cuerpo del SKILL.md. Nadie más la ve hasta que un administrador la publique desde la plataforma. Los archivos se agregan después con skill_draft_write_file.",
+				inputSchema: {
+					name: z.string().min(1).max(64),
+					folder: z.string().min(1).max(150).optional(),
+					title: z.string().min(1).max(300).optional(),
+					description: z.string().min(1).max(1024),
+					instructions: z.string().min(1).max(102_400),
+					compatibility: z.string().max(500).optional(),
+					reason: z.string().min(1).max(200),
+				},
+				annotations: WRITES,
+			},
+			async (input) =>
+				run("write", async () => ({
+					ok: true,
+					...(await drafts.create(input)),
 				})),
 		);
 	}
