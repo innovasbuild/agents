@@ -391,7 +391,11 @@ function fakeDrafts(): SkillDrafts {
 }
 
 describe("buildBrainMcpServer · edición de skills", () => {
-	function build(skillDrafts: SkillDrafts | null, limiter = fakeLimiter()) {
+	function build(
+		skillDrafts: SkillDrafts | null,
+		limiter = fakeLimiter(),
+		skills: SkillCatalog | null = null,
+	) {
 		return {
 			limiter,
 			server: buildBrainMcpServer({
@@ -400,6 +404,7 @@ describe("buildBrainMcpServer · edición de skills", () => {
 				canon: false,
 				provider: fakeProvider(),
 				limiter,
+				skills,
 				skillDrafts,
 			}),
 		};
@@ -433,11 +438,36 @@ describe("buildBrainMcpServer · edición de skills", () => {
 		]) {
 			expect(byName(name)?.annotations).toMatchObject({
 				readOnlyHint: false,
-				destructiveHint: false,
+				destructiveHint: name === "skill_draft_write_file",
 			});
 			expect(byName(name)?.description).toMatch(/borrador/i);
 		}
 		expect(client.getInstructions()).toContain("borrador");
+	});
+
+	it("sin skills publicadas las instrucciones no nombran skill_load ni skill_file", async () => {
+		const client = await connect(build(fakeDrafts()).server);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).toContain("skill_draft_read");
+		expect(instructions).not.toContain("skill_load");
+		expect(instructions).not.toContain("skill_file");
+	});
+
+	it("con skills publicadas las instrucciones aclaran que skill_load devuelve lo publicado", async () => {
+		const client = await connect(
+			build(fakeDrafts(), fakeLimiter(), fakeCatalog()).server,
+		);
+		const instructions = client.getInstructions() ?? "";
+		expect(instructions).toContain("skill_load");
+		expect(instructions).toContain("skill_draft_read");
+	});
+
+	it("la descripción de skill_create dice que folder es relativo a skills/", async () => {
+		const client = await connect(build(fakeDrafts()).server);
+		const create = (await client.listTools()).tools.find(
+			(t) => t.name === "skill_create",
+		);
+		expect(create?.description).toContain("sin el prefijo skills/");
 	});
 
 	it("leer cuenta como lectura y escribir, como escritura; los argumentos llegan intactos", async () => {

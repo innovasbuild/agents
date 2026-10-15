@@ -33,7 +33,11 @@ const SKILL_LOAD_INTRO =
 	"Carga una skill de la empresa: devuelve sus instrucciones y la lista de sus archivos. Usala antes de empezar una tarea que coincida con alguna de estas skills, sin esperar a que te lo pidan. Skills disponibles:";
 
 const DRAFT_INSTRUCTIONS =
-	"Podés crear y editar skills de esta empresa con skill_create, skill_draft_edit y skill_draft_write_file. Esas tools cambian el BORRADOR, no lo que usan los demás: un administrador revisa y publica desde la plataforma. Para ver tu cambio leé el borrador con skill_draft_read (skill_load y skill_file siguen devolviendo lo publicado). Antes de editar, leé el texto con skill_draft_read y copiá el fragmento exacto. Después de cambiar algo, avisale a la persona que quedó en borrador y pasale el reviewUrl.";
+	"Podés crear y editar skills de esta empresa con skill_create, skill_draft_edit y skill_draft_write_file. Esas tools cambian el BORRADOR, no lo que usan los demás: un administrador revisa y publica desde la plataforma. Para ver tu cambio leé el borrador con skill_draft_read. Antes de editar, leé el texto con skill_draft_read y copiá el fragmento exacto. Después de cambiar algo, avisale a la persona que quedó en borrador y pasale el reviewUrl.";
+
+// Solo si skill_load y skill_file están registradas: no se nombran tools que no existen.
+const DRAFT_PUBLISHED_NOTE =
+	"skill_load y skill_file siguen devolviendo lo publicado, no el borrador.";
 
 function result(value: Record<string, unknown>, isError = false) {
 	return {
@@ -59,7 +63,11 @@ export function buildBrainMcpServer(ctx: {
 	const drafts = ctx.skillDrafts ?? null;
 	const instructions = [
 		skills ? SKILL_INSTRUCTIONS : null,
-		drafts ? DRAFT_INSTRUCTIONS : null,
+		drafts
+			? [DRAFT_INSTRUCTIONS, skills ? DRAFT_PUBLISHED_NOTE : null]
+					.filter((text): text is string => text !== null)
+					.join(" ")
+			: null,
 	]
 		.filter((text): text is string => text !== null)
 		.join("\n\n");
@@ -200,6 +208,8 @@ export function buildBrainMcpServer(ctx: {
 			destructiveHint: false,
 			idempotentHint: false,
 		};
+		// Reemplaza el contenido de un archivo sin historial.
+		const OVERWRITES = { ...WRITES, destructiveHint: true };
 
 		server.registerTool(
 			SKILL_TOOL_NAMES.draftRead,
@@ -244,7 +254,7 @@ export function buildBrainMcpServer(ctx: {
 					path: z.string().min(1).max(200),
 					content: z.string().max(262_144),
 				},
-				annotations: WRITES,
+				annotations: OVERWRITES,
 			},
 			async (input) =>
 				run("write", async () => ({
@@ -257,7 +267,7 @@ export function buildBrainMcpServer(ctx: {
 			SKILL_TOOL_NAMES.create,
 			{
 				description:
-					"Crea una skill nueva como BORRADOR en skills/<folder>/<name> (la carpeta tiene que existir; sin folder queda directo en skills/). `description` dice cuándo conviene usarla; `instructions` es el cuerpo del SKILL.md. Nadie más la ve hasta que un administrador la publique desde la plataforma. Los archivos se agregan después con skill_draft_write_file.",
+					"Crea una skill nueva como BORRADOR en skills/<folder>/<name> (`folder` va sin el prefijo skills/, tiene que existir y es opcional: sin folder queda directo en skills/). `description` dice cuándo conviene usarla; `instructions` es el cuerpo del SKILL.md. Nadie más la ve hasta que un administrador la publique desde la plataforma. Los archivos se agregan después con skill_draft_write_file.",
 				inputSchema: {
 					name: z.string().min(1).max(64),
 					folder: z.string().min(1).max(150).optional(),
