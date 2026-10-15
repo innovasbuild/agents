@@ -79,6 +79,7 @@ describe("agente asistente", () => {
 		expect(state.agentFilters).toEqual(["asistente"]);
 		expect(Object.keys(tools as object).sort()).toEqual([
 			"brain_read",
+			"brain_rules",
 			"brain_search",
 		]);
 	});

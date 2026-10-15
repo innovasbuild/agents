@@ -96,12 +96,13 @@ describe("brain.ts: tools dinámicas del brain por tenant", () => {
 		expect(await resolveTools("tenant-a")).toBeNull();
 	});
 
-	it("con binding wiki expone exactamente brain_search, brain_read y brain_upsert", async () => {
+	it("con binding wiki expone exactamente brain_search, brain_read, brain_rules y brain_upsert", async () => {
 		state.bindings = [binding()];
 		const tools = await resolveTools("tenant-a");
 		expect(tools).not.toBeNull();
 		expect(Object.keys(tools as object).sort()).toEqual([
 			"brain_read",
+			"brain_rules",
 			"brain_search",
 			"brain_upsert",
 		]);
@@ -119,12 +120,13 @@ describe("brain.ts: tools dinámicas del brain por tenant", () => {
 		expect(await resolveTools("tenant-a")).toBeNull();
 	});
 
-	it("con brain read expone solo brain_search y brain_read", async () => {
+	it("con brain read expone solo brain_search, brain_read y brain_rules", async () => {
 		state.bindings = [binding()];
 		state.agentConfig = { brain: "read" };
 		const tools = await resolveTools("tenant-a");
 		expect(Object.keys(tools as object).sort()).toEqual([
 			"brain_read",
+			"brain_rules",
 			"brain_search",
 		]);
 	});
@@ -138,6 +140,7 @@ describe("brain.ts: tools dinámicas del brain por tenant", () => {
 
 		expect(tools.brain_search.approval).toBeUndefined();
 		expect(tools.brain_read.approval).toBeUndefined();
+		expect(tools.brain_rules.approval).toBeUndefined();
 		expect(tools.brain_upsert.approval).toBeDefined();
 		expect(tools.brain_upsert.approval?.request).toBeDefined();
 	});

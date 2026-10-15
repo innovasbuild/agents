@@ -40,6 +40,7 @@ export function runningToolName(
 // Un tool sin entrada acá cae en "Trabajando…", nunca muestra el id crudo.
 export const TOOL_LABELS: Record<string, string> = {
 	brain: "Leyendo el brain",
+	brain_rules: "Leyendo las reglas del brain",
 	crm_setup_outreach_properties: "Preparando el CRM",
 	crm_upsert_contact: "Escribiendo en el CRM",
 	draft_message: "Escribiendo el mensaje",

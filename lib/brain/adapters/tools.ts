@@ -5,18 +5,26 @@ import { always } from "eve/tools/approval";
 import type { AccessRule } from "../core/access/types.ts";
 import { decideBrainUpsertResponse } from "../core/approval.ts";
 import { brainContract } from "../core/contract.ts";
-import { toToolError } from "../core/errors.ts";
+import { agentReservedSlug, toToolError } from "../core/errors.ts";
 import type { BrainBinding } from "../core/resolve.ts";
+import { isReservedSlug, withoutRoot } from "../core/rules.ts";
+import { type RulesSource, requireRules } from "../core/rules-source.ts";
 import { assistantCategories } from "../core/skills/package.ts";
 import { withoutSkills } from "../core/skills/view.ts";
 import type { BrainProvider } from "../core/types.ts";
-import { type BrainActor, resolveActingProvider } from "./acting-provider.ts";
+import {
+	type BrainActor,
+	resolveActingBrain,
+	resolveActingProvider,
+	resolveActingRules,
+} from "./acting-provider.ts";
 
 // Inyección para tests más el actor (JSON). En producción solo llega `actor`.
 interface BrainToolOptions {
 	actor?: BrainActor;
 	provider?: (binding: BrainBinding) => BrainProvider;
 	rules?: (tenantId: string) => Promise<AccessRule[]>;
+	rulesSource?: (binding: BrainBinding) => RulesSource;
 }
 
 function buildBrainReadTools(
@@ -60,17 +68,34 @@ function buildBrainReadTools(
 		inputSchema: brainContract(categories).read.input,
 		execute: async ({ slug }) => {
 			try {
-				const provider = withoutSkills(
-					await resolveActingProvider(binding, deps.actor, deps),
-				);
-				return { ok: true as const, page: await provider.read(slug) };
+				const acting = await resolveActingBrain(binding, deps.actor, deps);
+				const page = await withoutSkills(acting.provider).read(slug);
+				// Después de leer: lo que no se ve ya respondió not_found.
+				return {
+					ok: true as const,
+					page,
+					rules: withoutRoot(await acting.rules.cascade(slug)),
+				};
 			} catch (error) {
 				return toToolError(error);
 			}
 		},
 	});
 
-	return { brain_search, brain_read };
+	const brain_rules = defineTool({
+		description: contract.rules.description,
+		inputSchema: brainContract(categories).rules.input,
+		execute: async ({ path }) => {
+			try {
+				const rules = await resolveActingRules(binding, deps.actor, deps);
+				return { ok: true as const, rules: await rules.cascade(path) };
+			} catch (error) {
+				return toToolError(error);
+			}
+		},
+	});
+
+	return { brain_search, brain_read, brain_rules };
 }
 
 function buildBrainUpsertTool(
@@ -82,7 +107,7 @@ function buildBrainUpsertTool(
 	// Un asistente no ve la categoría skill (spec 24.1 S6).
 	const categories = assistantCategories(binding.config.categories);
 	return defineTool({
-		description: `${contract.upsert.description} Siempre la aprueba un administrador.`,
+		description: `${contract.upsert.description} Siempre la aprueba un administrador. Vos no escribís páginas 00-reglas ni 00-plantilla: si hace falta un cambio ahí, proponelo en la conversación.`,
 		inputSchema: brainContract(categories).upsert.input,
 		approval: {
 			request: always(),
@@ -94,10 +119,11 @@ function buildBrainUpsertTool(
 			const userId =
 				initiator?.principalType === "user" ? initiator.principalId : null;
 			try {
-				const provider = withoutSkills(
-					await resolveActingProvider(binding, deps.actor, deps),
-				);
-				const result = await provider.upsert(input, {
+				// Las reglas son gobierno: las decide una persona (spec etapa 26 D10).
+				if (isReservedSlug(input.slug)) throw agentReservedSlug(input.slug);
+				const acting = await resolveActingBrain(binding, deps.actor, deps);
+				const write = await requireRules(acting.rules, input);
+				const result = await withoutSkills(acting.provider).upsert(write, {
 					kind: "agent",
 					userId,
 					sessionId: toolCtx.session.id,

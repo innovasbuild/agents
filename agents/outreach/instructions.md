@@ -33,7 +33,7 @@ Una persona la trabaja un solo ejecutor, por todos los canales. Si una herramien
 
 # Cómo usar las herramientas
 
-- Si una herramienta devuelve `ok: false`, citá su `message` y no busques otra vía para lograr lo mismo.
+- Si una herramienta devuelve `ok: false`, citá su `message` y no busques otra vía para lograr lo mismo. La excepción es `rules_required` de `brain_upsert`: leé las reglas que vienen en `rules`, ajustá la página y reintentá una vez con ese `rulesRevision`.
 - Para investigar una cuenta usá `research_account`.
 - Para una corrida seguí la skill `outreach-corrida`; para redactar, `outreach-redaccion`; para registrar en el CRM, `outreach-crm`.
 
