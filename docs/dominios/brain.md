@@ -3,7 +3,7 @@ title: Brain
 category: dominios
 status: activo
 tags: [brain, wiki, mcp, permisos, editor, canon]
-updated: 2026-10-14
+updated: 2026-10-15
 sources:
   - lib/brain/README.md
   - lib/brain/core
@@ -213,7 +213,7 @@ Cada tenant con brain `wiki` expone `/brain/[tenant]/mcp` (stateless, `@modelcon
 - En el `brain_upsert` del MCP las reglas se leen antes del limitador: un pedido que el límite va a frenar igual hace la lectura de `listRulePages`.
 - Borrar una página reservada chequea `administrador` sobre el slug de la página y no sobre su carpeta (`lib/brain/core/editor/delete.ts`). Candidato a seguimiento.
 - La aprobación de `brain_upsert` del agente (`always()`) ocurre antes de ejecutar: un `rules_required` llega después de que un administrador ya aprobó, y el reintento vuelve a pedir aprobación. Se mitiga con las descripciones y las instrucciones (leer con `brain_rules` o `brain_read` antes de escribir).
-- Pantallas (panel "Reglas que aplican", menús del árbol, insignia en la búsqueda): 26.2b.
+- Pantallas (panel "Reglas que aplican", menús del árbol, insignia en la búsqueda) y el borrado de una reservada: 26.2b, plan [2026-10-15-etapa-26-2b-reglas-editor](../superpowers/plans/2026-10-15-etapa-26-2b-reglas-editor.md).
 
 ### El canon como fuente del ICP y de los hooks (etapa 21.3a)
 
