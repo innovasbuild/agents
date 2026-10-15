@@ -4,7 +4,6 @@
 // de cliente (árbol, menú, editor). Los permisos son solo experiencia: el
 // servidor los exige igual (withAccess, delete.ts).
 import { type Level, ROOT_PATH } from "../access/types.ts";
-import { categoryForPath } from "../folders.ts";
 import {
 	folderOfPage,
 	isReservedSlug,
@@ -14,12 +13,7 @@ import {
 	rulesSlugFor,
 } from "../reserved-slugs.ts";
 import { SKILLS_PREFIX } from "../skills/package.ts";
-import {
-	BRAIN_CATEGORY,
-	MAX_SLUG_LENGTH,
-	RULES_LEAF,
-	SLUG_PATTERN,
-} from "../types.ts";
+import { MAX_SLUG_LENGTH, RULES_LEAF, SLUG_PATTERN } from "../types.ts";
 import { pageHref } from "./slug.ts";
 
 export const RULES_LOAD_ERROR =
@@ -147,14 +141,4 @@ export function entryLevel(
 	const level = levelOf(slug);
 	if (level === null || !isReservedSlug(slug)) return level;
 	return levelOf(folderOfPage(slug)) === "administrador" ? level : "lector";
-}
-
-// Categoría que se manda al guardar. Una reservada lleva la de su ruta (la que
-// guarda el proveedor): una elegida antes de escribir el slug, como skill,
-// haría que savePage la fuerce a Activo.
-export function categoryToSave(slug: string, chosen: string): string {
-	if (!isReservedSlug(slug)) return chosen;
-	return folderOfPage(slug) === ROOT_PATH
-		? BRAIN_CATEGORY
-		: categoryForPath(slug);
 }

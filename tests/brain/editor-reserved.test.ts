@@ -2,7 +2,6 @@
 import { describe, expect, it } from "vitest";
 import type { Level } from "@/lib/brain/core/access/types";
 import {
-	categoryToSave,
 	entryLevel,
 	isSkillsFolder,
 	listedInIndex,
@@ -223,22 +222,5 @@ describe("resolveNewRulesPage con las carpetas que existen", () => {
 			slug: "00-reglas",
 			title: "Instrucciones del brain",
 		});
-	});
-});
-
-describe("categoryToSave", () => {
-	it("una reservada guarda la categoría de su ruta, no la elegida", () => {
-		// Elegir skill y después escribir una 00-reglas no la fuerza a Activo.
-		expect(categoryToSave("comercial/00-reglas", "skill")).toBe("comercial");
-		expect(categoryToSave("talento/personal/00-reglas", "skill")).toBe(
-			"talento",
-		);
-		expect(categoryToSave("comercial/00-plantilla", "skill")).toBe("comercial");
-		expect(categoryToSave("00-reglas", "comercial")).toBe("brain");
-	});
-
-	it("una página común guarda la elegida", () => {
-		expect(categoryToSave("comercial/nota", "skill")).toBe("skill");
-		expect(categoryToSave("skills/x", "skill")).toBe("skill");
 	});
 });

@@ -113,7 +113,6 @@ export default async function BrainPageView({
 			<PageWorkspace
 				mode="edit"
 				tenantSlug={tenantSlug}
-				categories={ctx.categories}
 				knownTags={[...new Set(pages.flatMap((p) => p.tags))]}
 				pages={pages.map(({ slug: s, title, status }) => ({
 					slug: s,

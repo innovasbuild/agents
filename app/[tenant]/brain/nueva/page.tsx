@@ -9,8 +9,8 @@ import {
 } from "@/lib/brain/adapters/editor";
 import { editableFolders } from "@/lib/brain/core/access/tree";
 import { resolveNewPagePrefix } from "@/lib/brain/core/editor/new-page";
+import { pageCategory } from "@/lib/brain/core/editor/page-category";
 import {
-	categoryToSave,
 	resolveNewRulesPage,
 	typedFolder,
 } from "@/lib/brain/core/editor/reserved";
@@ -34,7 +34,6 @@ export default async function NewBrainPage({
 	const pages = await loadBrainPages(ctx);
 	const shared = {
 		tenantSlug,
-		categories: ctx.categories,
 		knownTags: [...new Set(pages.flatMap((p) => p.tags))],
 		pages: pages.map(({ slug, title, status }) => ({ slug, title, status })),
 	};
@@ -61,7 +60,7 @@ export default async function NewBrainPage({
 						title: target.title,
 						// La que va a guardar el proveedor: brain en la raíz, la del
 						// primer segmento en una carpeta.
-						category: categoryToSave(target.slug, ctx.categories[0]),
+						category: pageCategory(target.slug, ""),
 						status: "borrador",
 						tags: [],
 						frontmatter: {},
@@ -90,7 +89,7 @@ export default async function NewBrainPage({
 				initial={{
 					slug: prefix,
 					title: "",
-					category: ctx.categories[0],
+					category: pageCategory(prefix, ""),
 					status: "borrador",
 					tags: [],
 					frontmatter: {},
