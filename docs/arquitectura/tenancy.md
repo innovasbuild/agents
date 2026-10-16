@@ -114,7 +114,7 @@ La tabla `tenant_domains` guarda una fila por hostname: `tenant_id`, `hostname` 
 | Host | Qué pasa |
 |---|---|
 | Raíz (`PUBLIC_APP_URL`, cualquier `*.vercel.app`, `localhost` fuera de producción) | Como siempre. No consulta la base |
-| De una empresa | URLs limpias, sin el slug. `/chat` se reescribe a `/okeefe/chat`, `/login` a `/login/okeefe`, `/brain/mcp` al endpoint MCP del brain. Una URL con slug (`/okeefe/chat`) redirige (308) a la limpia. Otra empresa, `/plataforma` y `/oauth` dan 404 |
+| De una empresa | URLs limpias, sin el slug. `/chat` se reescribe a `/okeefe/chat`, `/login` a `/login/okeefe`, `/brain/mcp` al endpoint MCP del brain. Una URL con slug (`/okeefe/chat`) redirige (308) a la limpia. Sin sesión, cualquier ruta que no sea `/login`, `/brain/mcp` o `/auth/*` redirige (307) a `/login` en vez de dar 404. Otra empresa, `/plataforma` y `/oauth` dan 404 |
 | Desconocido | 404 |
 | La base no responde | 503; el error no se cachea |
 
