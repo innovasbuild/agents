@@ -652,5 +652,29 @@
 		"title": "feat: instrucciones y reglas del brain, núcleo (Etapa 26.2a)",
 		"mergedAt": "2026-10-15T02:56:13Z",
 		"headRefName": "feat/etapa-26-2a-reglas"
+	},
+	{
+		"number": 110,
+		"title": "feat: reglas en el editor web, pantallas (Etapa 26.2b)",
+		"mergedAt": "2026-10-15T17:53:51Z",
+		"headRefName": "feat/etapa-26-2b-reglas-editor"
+	},
+	{
+		"number": 111,
+		"title": "v0.4.0 docs: cierre en producción de la etapa 21.6, dominio propio por empresa",
+		"mergedAt": "2026-10-15T18:20:02Z",
+		"headRefName": "docs/etapa-21-6-cierre"
+	},
+	{
+		"number": 112,
+		"title": "feat: plataforma habilita skills en una empresa desde la consola",
+		"mergedAt": "2026-10-15T19:18:33Z",
+		"headRefName": "feat/habilitar-skills-plataforma"
+	},
+	{
+		"number": 113,
+		"title": "feat: crear y editar skills de empresa por MCP (etapa 24.5)",
+		"mergedAt": "2026-10-15T23:28:58Z",
+		"headRefName": "docs/etapa-24-5-editar-skills-mcp"
 	}
 ]
