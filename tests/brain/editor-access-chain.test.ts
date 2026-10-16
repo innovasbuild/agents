@@ -19,7 +19,12 @@ const state = vi.hoisted(() => ({
 // Cliente de sesión: lo único que usa resolveTenantAccess.
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
-		auth: { getUser: async () => ({ data: { user: state.user } }) },
+		auth: {
+			getClaims: async () => ({
+				data: state.user ? { claims: { sub: state.user.id } } : null,
+				error: null,
+			}),
+		},
 		// El chequeo del método de login (etapa 20): acá la empresa lo permite.
 		rpc: async () => ({ data: true, error: null }),
 		from: (table: string) => {
