@@ -15,6 +15,8 @@ const rows = vi.hoisted(() => ({
 	} | null,
 	/** Cuántas veces se buscó por eve_session_id: mide la escalera de reintentos. */
 	sessionLookups: 0,
+	/** Si está puesto, la consulta a memberships espera a que se libere. */
+	membershipGate: null as Promise<void> | null,
 }));
 
 vi.mock("../../lib/supabase/admin", () => ({
@@ -68,6 +70,7 @@ vi.mock("../../lib/supabase/admin", () => ({
 					}
 
 					if (table === "memberships") {
+						if (rows.membershipGate) await rows.membershipGate;
 						const row = rows.membership;
 						const matches =
 							row !== null &&
@@ -138,6 +141,7 @@ beforeEach(() => {
 		role: "tenant_member",
 	};
 	rows.sessionLookups = 0;
+	rows.membershipGate = null;
 });
 
 describe("resolveChannelContext", () => {
@@ -235,14 +239,43 @@ describe("resolveChannelContext", () => {
 			).toBeNull();
 		});
 
-		it("quien no es miembro no dispara el chequeo", async () => {
+		it("quien no es miembro: sin acceso, aunque el método esté permitido", async () => {
 			rows.membership = null;
-			const allowsLogin = vi.fn(async () => true);
 
 			expect(
 				await resolveChannelContext(
 					create(),
 					CONVERSATION.user_id,
+					async () => true,
+				),
+			).toBeNull();
+		});
+
+		it("no espera a memberships para preguntar por el método (un solo viaje)", async () => {
+			let release!: () => void;
+			rows.membershipGate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const allowsLogin = vi.fn(async () => true);
+
+			const pending = resolveChannelContext(
+				create(),
+				CONVERSATION.user_id,
+				allowsLogin,
+			);
+			await vi.waitFor(() => expect(allowsLogin).toHaveBeenCalled());
+
+			release();
+			expect((await pending)?.conversationId).toBe(CONVERSATION.id);
+		});
+
+		it("no pregunta por el método si la conversación es de otra persona", async () => {
+			const allowsLogin = vi.fn(async () => true);
+
+			expect(
+				await resolveChannelContext(
+					create(),
+					"99999999-9999-9999-9999-999999999999",
 					allowsLogin,
 				),
 			).toBeNull();
