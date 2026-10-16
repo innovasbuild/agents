@@ -167,7 +167,7 @@ Reglas comunes de los dos:
 
 Después de `verifyCaller`, `resolveChannelContext` (`lib/agents/channel-context.ts`) resuelve la conversación y chequea ownership. Son tres viajes a la base en serie en el caso feliz: la conversación (`user_id === userId`, agente de la ruta), y recién con su `tenant_id` los tres chequeos que no dependen entre sí (`memberships`, `tenant_agents` y `tenant_allows_login`), que corren juntos. Todos tienen que pasar y cualquier falla o excepción es `null`. Esa cadena está en el auth de cada request del canal, incluido el stream que abre un hilo, y la ruta `/eve/` no pasa por `proxy.ts`, así que acá no hay `getUser` previo.
 
-### Pendiente de decisión: ¿`getUser()` además de `getClaims()`?
+### Decisión: se mantiene `getUser()` además de `getClaims()`
 
 `verifyCaller` llama a `getUser()` (un viaje a `/auth/v1/user`) y después a `getClaims()` (con claves ES256 verifica la firma en local, sin red). Qué aporta cada uno:
 
@@ -176,7 +176,7 @@ Después de `verifyCaller`, `resolveChannelContext` (`lib/agents/channel-context
 
 Sin `getUser()`, un token robado o de una sesión ya cerrada seguiría abriendo el chat hasta que venza el access token (1 hora por defecto). Lo que **no** se pierde: membresía, agente habilitado y método de login se leen de la base en cada request, así que sacar o bloquear a alguien de la empresa lo corta de inmediato, con o sin `getUser()`. Lo que se pierde es solo el corte por cierre de sesión o baja del usuario en Auth.
 
-Recomendación: pasar a `getClaims()` solo, como ya hace el brain por MCP (`createOAuthClaimsVerifier`), si el vencimiento del access token se deja en 1 hora o menos. Ahorra un viaje a Supabase Auth en cada request del canal. La alternativa conservadora es dejar `getUser()` y vivir con ese costo. Hoy el código **conserva `getUser()`**: cambiarlo es una decisión de seguridad que le toca a una persona (Mati), no a este cambio. Para aplicarla alcanza con borrar el bloque de `getUser()` en `verify-caller.ts` y tomar `userId` y `email` de `claims.sub` y `claims.email`.
+Decisión (Mati, 2026-10-16): se **mantiene `getUser()`**. El chat dispara tools con efectos (Gmail, HubSpot) y pesa más cortar al instante una sesión cerrada que ahorrar un viaje a Supabase Auth. Se revisa si el TTFB medido en producción muestra que ese viaje es una parte visible; en ese caso, pasar a `getClaims()` solo, como ya hace el brain por MCP (`createOAuthClaimsVerifier`), tras confirmar que el access token vence en 1 hora o menos. Para aplicarlo alcanza con borrar el bloque de `getUser()` en `verify-caller.ts` y tomar `userId` y `email` de `claims.sub` y `claims.email`.
 
 ## Cómo se prueba
 
