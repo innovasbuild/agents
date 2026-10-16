@@ -140,18 +140,22 @@ export const loadBrainLinkIndex = cache(
 // por ctx.access: lo oculto no llega ni a la pantalla.
 export const loadBrainTree = cache(
 	async (ctx: OkEditorContext): Promise<TreeNode> => {
-		const pages = await loadBrainMeta(ctx);
-		// La marca es decoración: si la consulta falla, el árbol sigue sin ella.
-		// Las lecturas de skills (withSkillView) no se tocan: esas fallan cerradas.
-		let rows: SkillOverviewRow[] = [];
-		try {
-			rows = await ctx.skills();
-		} catch (error) {
-			console.error(
-				`brain editor: no pude leer las skills de ${ctx.tenant.slug}`,
-				error,
-			);
-		}
+		// Las tres lecturas son independientes: cada una es un viaje a la base, y
+		// en serie suman uno detrás de otro.
+		// La marca es decoración: si la consulta de skills falla, el árbol sigue
+		// sin ella. Las lecturas de skills (withSkillView) no se tocan: esas
+		// fallan cerradas.
+		const [pages, rows, folders] = await Promise.all([
+			loadBrainMeta(ctx),
+			ctx.skills().catch((error: unknown) => {
+				console.error(
+					`brain editor: no pude leer las skills de ${ctx.tenant.slug}`,
+					error,
+				);
+				return [] as SkillOverviewRow[];
+			}),
+			ctx.folders(),
+		]);
 		const pending = new Set(
 			rows
 				.filter((row) => {
@@ -173,7 +177,7 @@ export const loadBrainTree = cache(
 					: {}),
 			})),
 			ctx.access,
-			await ctx.folders(),
+			folders,
 		);
 	},
 );

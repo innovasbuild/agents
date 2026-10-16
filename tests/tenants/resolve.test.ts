@@ -53,6 +53,7 @@ describe("resolveTenantAccess", () => {
 			}
 			return { data: opts.allows ?? true, error: null };
 		});
+		const getUser = vi.fn(async () => ({ data: { user: { id: "u1" } } }));
 		vi.resetModules();
 		vi.doMock("next/navigation", () => ({
 			redirect: (url: string) => {
@@ -62,8 +63,10 @@ describe("resolveTenantAccess", () => {
 		vi.doMock("@/lib/supabase/server", () => ({
 			createServerSupabase: async () => ({
 				auth: {
-					getUser: async () => ({
-						data: { user: opts.user === false ? null : { id: "u1" } },
+					getUser,
+					getClaims: async () => ({
+						data: opts.user === false ? null : { claims: { sub: "u1" } },
+						error: null,
 					}),
 				},
 				rpc,
@@ -90,7 +93,7 @@ describe("resolveTenantAccess", () => {
 			platformOwnerSlug: () => "innovas",
 		}));
 		const { resolveTenantAccess } = await import("@/lib/tenants/resolve");
-		return { access: resolveTenantAccess("demo"), rpc };
+		return { access: resolveTenantAccess("demo"), rpc, getUser };
 	}
 
 	it("deja entrar al platform_admin del dueño a un tenant sin membership local", async () => {
@@ -140,6 +143,16 @@ describe("resolveTenantAccess", () => {
 		).access;
 
 		expect(access).toBeNull();
+	});
+
+	it("lee la identidad de los claims, sin ir a Auth: el proxy ya validó la sesión", async () => {
+		const { access, getUser } = await resolveWith({
+			ownerAdmin: false,
+			localRole: "tenant_member",
+		});
+
+		expect((await access)?.userId).toBe("u1");
+		expect(getUser).not.toHaveBeenCalled();
 	});
 
 	it("sin sesión no hay acceso", async () => {

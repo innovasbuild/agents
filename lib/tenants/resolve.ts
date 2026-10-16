@@ -68,34 +68,38 @@ export const resolveTenantAccess = cache(
 	async (slug: string): Promise<TenantAccess | null> => {
 		const supabase = await createServerSupabase();
 
-		const { data: auth } = await supabase.auth.getUser();
-		if (!auth.user) return null;
+		// La identidad sale de los claims: se verifica la firma contra el JWKS
+		// (ES256) sin viajar a Auth. proxy.ts ya hizo getUser en esta navegación
+		// (revocación y refresco), así que acá no se repite. El tenant no
+		// depende de la persona (la RLS lo filtra igual), por eso va en paralelo.
+		const [{ data: claimsData }, { data: tenant }] = await Promise.all([
+			supabase.auth.getClaims(),
+			supabase
+				.from("tenants")
+				.select("id, slug, display_name, default_model, allowed_models, brand")
+				.eq("slug", slug)
+				.eq("active", true)
+				.maybeSingle(),
+		]);
+		const userId = claimsData?.claims?.sub;
+		if (!userId || !tenant) return null;
 
-		const { data: tenant } = await supabase
-			.from("tenants")
-			.select("id, slug, display_name, default_model, allowed_models, brand")
-			.eq("slug", slug)
-			.eq("active", true)
-			.maybeSingle();
-
-		if (!tenant) return null;
-
-		const { data: membership } = await supabase
-			.from("memberships")
-			.select("role")
-			.eq("tenant_id", tenant.id)
-			.eq("user_id", auth.user.id)
-			.maybeSingle();
+		// Independientes entre sí: cada una es un viaje a la base.
+		const [{ data: membership }, ownerTenantId] = await Promise.all([
+			supabase
+				.from("memberships")
+				.select("role")
+				.eq("tenant_id", tenant.id)
+				.eq("user_id", userId)
+				.maybeSingle(),
+			platformOwnerAdminTenantId(supabase, userId),
+		]);
 
 		// El platform_admin del tenant dueño entra a cualquier tenant aunque no
 		// tenga membership ahí, y siempre gana sobre el rol local, igual que en la
 		// RLS. Si se resolviera al revés, uno que además tuviera una membership
 		// local (tenant_member, por ejemplo) se vería degradado en la UI aunque la
 		// base le siga dando acceso completo.
-		const ownerTenantId = await platformOwnerAdminTenantId(
-			supabase,
-			auth.user.id,
-		);
 		const platformAdmin = ownerTenantId !== null;
 
 		// Una fila platform_admin fuera del tenant dueño no es rol de plataforma
@@ -125,7 +129,7 @@ export const resolveTenantAccess = cache(
 			slug: tenant.slug,
 			displayName: tenant.display_name,
 			role,
-			userId: auth.user.id,
+			userId,
 			defaultModel: tenant.default_model,
 			allowedModels: tenant.allowed_models,
 			brand: brandFromRow(tenant as TenantRow),
