@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { reservedBadge } from "@/lib/brain/core/editor/reserved";
 import { pageHref } from "@/lib/brain/core/editor/slug";
-import { type BrainPage, CANON_TAGS } from "@/lib/brain/core/types";
+import { type BrainPageMeta, CANON_TAGS } from "@/lib/brain/core/types";
 
 const STATUS_LABEL = {
 	activo: "Activo",
@@ -16,7 +16,7 @@ export function PageList({
 	tenantSlug,
 	counts,
 }: {
-	pages: BrainPage[];
+	pages: BrainPageMeta[];
 	tenantSlug: string;
 	counts: Map<string, { in: number; out: number }>;
 }) {

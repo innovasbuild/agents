@@ -135,6 +135,16 @@ export function createMcpBrainProvider(
 				"este brain vive en un servidor externo y no se lista desde la plataforma",
 			);
 		},
+		async listMeta() {
+			throw new BrainProviderError(
+				"este brain vive en un servidor externo y no se lista desde la plataforma",
+			);
+		},
+		async listLinks() {
+			throw new BrainProviderError(
+				"este brain vive en un servidor externo y no se lista desde la plataforma",
+			);
+		},
 		async history() {
 			throw new BrainProviderError(
 				"este brain vive en un servidor externo y no tiene historial en la plataforma",

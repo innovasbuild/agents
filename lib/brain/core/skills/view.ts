@@ -6,7 +6,13 @@
 // copia publicada; sin versión vigente, para un lector la skill no existe.
 import { atLeast, type Level } from "../access/types.ts";
 import { BrainForbidden, BrainNotFound } from "../errors.ts";
-import type { BrainPage, BrainProvider, BrainWrite } from "../types.ts";
+import type {
+	BrainPage,
+	BrainPageMeta,
+	BrainProvider,
+	BrainWrite,
+} from "../types.ts";
+import { parseWikilinks } from "../wikilinks.ts";
 import { isSkillSlug, SKILL_CATEGORY } from "./package.ts";
 import { publishedSnapshot } from "./state.ts";
 import type { SkillOverviewRow } from "./store.ts";
@@ -60,6 +66,16 @@ export function withoutSkills(provider: BrainProvider): BrainProvider {
 		async list() {
 			return (await provider.list()).filter((page) => !isSkillSlug(page.slug));
 		},
+		async listMeta() {
+			return (await provider.listMeta()).filter(
+				(page) => !isSkillSlug(page.slug),
+			);
+		},
+		async listLinks() {
+			return (await provider.listLinks()).filter(
+				(page) => !isSkillSlug(page.slug),
+			);
+		},
 		async history(slug) {
 			return isSkillSlug(slug) ? null : provider.history(slug);
 		},
@@ -104,6 +120,23 @@ export function withSkillView(
 		};
 	};
 
+	// Lo que ve un lector de una skill sale de la copia publicada; sin ella, la
+	// skill no existe para él.
+	const publishedMeta = async (
+		page: BrainPageMeta,
+	): Promise<BrainPageMeta | null> => {
+		const snapshot = publishedSnapshot((await rows()).get(page.slug));
+		if (!snapshot) return null;
+		return {
+			...page,
+			revision: snapshot.pageRevision,
+			status: "activo",
+			tags: [],
+			title: snapshot.title,
+			updatedAt: snapshot.publishedAt,
+		};
+	};
+
 	return {
 		async search(input) {
 			// El fragmento sale del borrador: solo para quien lo puede ver.
@@ -134,6 +167,36 @@ export function withSkillView(
 				}
 				const view = await published(page);
 				if (view) out.push(view);
+			}
+			return out;
+		},
+		async listMeta() {
+			const pages = await provider.listMeta();
+			const out: BrainPageMeta[] = [];
+			for (const page of pages) {
+				if (!isSkillSlug(page.slug) || seesDraft(page.slug)) {
+					out.push(page);
+					continue;
+				}
+				const view = await publishedMeta(page);
+				if (view) out.push(view);
+			}
+			return out;
+		},
+		async listLinks() {
+			const pages = await provider.listLinks();
+			const out = pages.filter(
+				(page) => !isSkillSlug(page.slug) || seesDraft(page.slug),
+			);
+			// Para quien solo lee, los links salen del cuerpo publicado. Se arman
+			// desde las skills publicadas y no desde las filas del borrador: el
+			// borrador puede no tener links y el publicado sí.
+			for (const [slug, row] of await rows()) {
+				if (seesDraft(slug)) continue;
+				const snapshot = publishedSnapshot(row);
+				if (snapshot) {
+					out.push({ slug, links: parseWikilinks(snapshot.body) });
+				}
 			}
 			return out;
 		},

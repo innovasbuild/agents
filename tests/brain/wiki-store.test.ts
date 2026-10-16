@@ -17,6 +17,7 @@ function fakeClient(
 ) {
 	const calls: Call[] = [];
 	const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+	const selects: Array<string | undefined> = [];
 	const client = {
 		rpc: async (name: string, args: Record<string, unknown>) => {
 			rpcCalls.push({ name, args });
@@ -25,7 +26,10 @@ function fakeClient(
 		from(table: string) {
 			const filters: Record<string, unknown> = {};
 			const chain = {
-				select: () => chain,
+				select: (columns?: string) => {
+					selects.push(columns);
+					return chain;
+				},
 				eq: (column: string, value: unknown) => {
 					filters[column] = value;
 					return chain;
@@ -50,7 +54,12 @@ function fakeClient(
 			return chain;
 		},
 	};
-	return { client: client as unknown as SupabaseClient, calls, rpcCalls };
+	return {
+		client: client as unknown as SupabaseClient,
+		calls,
+		rpcCalls,
+		selects,
+	};
 }
 
 const pageRow = {
@@ -233,6 +242,54 @@ describe("createSupabaseWikiStore · errores de la base", () => {
 		message: "permiso denegado",
 		details: null,
 	};
+
+	it("listMeta no pide el cuerpo ni el frontmatter y filtra por tenant", async () => {
+		const { client, calls, selects } = fakeClient({ brain_pages: [pageRow] });
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(calls[0].filters).toEqual({ tenant_id: "tenant-a" });
+		expect(selects[0]).not.toMatch(/body|frontmatter/);
+		expect(metas).toEqual([
+			{
+				slug: "comercial/icp",
+				title: "ICP",
+				category: "comercial",
+				status: "activo",
+				tags: ["canon:icp"],
+				revision: pageRow.revision,
+				updatedAt: pageRow.updated_at,
+			},
+		]);
+		expect(metas[0]).not.toHaveProperty("body");
+	});
+
+	it("listLinks pide brain_page_links del tenant y normaliza como parseWikilinks", async () => {
+		const { client, rpcCalls } = fakeClient({
+			brain_page_links: [
+				{
+					slug: "comercial/icp",
+					links: [
+						{ target: " marketing/voz ", anchor: "#tono ", alias: " la voz " },
+						{ target: "marketing/mensajes", anchor: null, alias: null },
+						{ target: "marketing/otro", anchor: "#", alias: "" },
+					],
+				},
+			],
+		});
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(rpcCalls).toEqual([
+			{ name: "brain_page_links", args: { p_tenant_id: "tenant-a" } },
+		]);
+		expect(links).toEqual([
+			{
+				slug: "comercial/icp",
+				links: [
+					{ target: "marketing/voz", anchor: "tono", alias: "la voz" },
+					{ target: "marketing/mensajes", anchor: null, alias: null },
+					{ target: "marketing/otro", anchor: null, alias: null },
+				],
+			},
+		]);
+	});
 
 	it("list propaga el error de la base", async () => {
 		const { client } = fakeClient({}, { brain_pages: dbError });

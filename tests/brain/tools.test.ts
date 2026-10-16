@@ -22,6 +22,8 @@ function fakeProvider(): BrainProvider {
 		search: vi.fn(async () => []),
 		read: vi.fn(),
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 	};
@@ -80,6 +82,8 @@ describe("createBrainTools", () => {
 			search,
 			read,
 			list: async () => [],
+			listMeta: async () => [],
+			listLinks: async () => [],
 			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "a", revision: 1 })),
 		}));
@@ -149,6 +153,8 @@ describe("createBrainTools", () => {
 				]),
 				read: vi.fn(),
 				list: async () => [],
+				listMeta: async () => [],
+				listLinks: async () => [],
 				history: async () => null,
 				upsert,
 			};
@@ -243,6 +249,8 @@ describe("createBrainTools", () => {
 					],
 					read,
 					list: async () => [],
+					listMeta: async () => [],
+					listLinks: async () => [],
 					history: async () => null,
 					upsert,
 				}),
@@ -341,6 +349,8 @@ describe("reglas en las tools del agente", () => {
 			search: vi.fn(async () => []),
 			read: vi.fn(async (slug: string) => pageOf(slug)),
 			list: async () => [],
+			listMeta: async () => [],
+			listLinks: async () => [],
 			history: async () => null,
 			upsert,
 		}));
@@ -433,6 +443,8 @@ describe("reglas en las tools del agente", () => {
 					search: vi.fn(async () => []),
 					read: vi.fn(async (slug: string) => pageOf(slug)),
 					list: async () => [],
+					listMeta: async () => [],
+					listLinks: async () => [],
 					history: async () => null,
 					upsert,
 				}),
@@ -462,7 +474,9 @@ describe("reglas en las tools del agente", () => {
 					ctx,
 				);
 				expect(result).toMatchObject({ ok: false, error: "forbidden" });
-				expect(JSON.stringify(result)).toContain("Las skills no se editan con brain_upsert");
+				expect(JSON.stringify(result)).toContain(
+					"Las skills no se editan con brain_upsert",
+				);
 				expect(JSON.stringify(result)).not.toContain("Secreto de skills.");
 				expect(JSON.stringify(result)).not.toContain("raíz");
 			}
@@ -477,6 +491,8 @@ describe("reglas en las tools del agente", () => {
 				search: vi.fn(async () => []),
 				read: vi.fn(),
 				list: async () => [],
+				listMeta: async () => [],
+				listLinks: async () => [],
 				history: async () => null,
 				upsert: vi.fn(),
 			}),

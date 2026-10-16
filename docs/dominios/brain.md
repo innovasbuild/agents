@@ -3,7 +3,7 @@ title: Brain
 category: dominios
 status: activo
 tags: [brain, wiki, mcp, permisos, editor, canon]
-updated: 2026-10-15
+updated: 2026-10-16
 sources:
   - lib/brain/README.md
   - lib/brain/core
@@ -49,6 +49,7 @@ sources:
   - lib/brain/core/folders-report.ts
   - scripts/brain-folders-report.mts
   - supabase/migrations/20261025120000_brain_folders.sql
+  - supabase/migrations/20261027120000_brain_page_links.sql
 ---
 
 # Brain
@@ -129,6 +130,15 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 ### Búsqueda
 
 `brain_search_pages` es full-text en español sin acentos (`tsvector` generado sobre título, peso A, y cuerpo, peso B). Filtra por categoría y tag, oculta archivadas salvo `includeArchived`, y devuelve hasta 20 resultados con fragmento. Siempre va acotada al tenant que pasa el servidor; `authenticated` no la ejecuta. Un brain `mcp` delega la búsqueda al servidor remoto.
+
+### Listados sin cuerpo (índice, árbol y mapa)
+
+El árbol del layout, el índice y el mapa no necesitan el cuerpo de las páginas, que es lo que pesa. `BrainProvider` tiene dos lecturas para eso, además de `list()`:
+
+- `listMeta()`: las páginas sin `body` ni `frontmatter` (`BrainPageMeta`). Es lo que usan el árbol, los títulos, los tags y los conteos.
+- `listLinks()`: los wikilinks de cada página, extraídos en la base por `brain_page_links(p_tenant_id)` con la misma regex que `parseWikilinks`. Devuelve una fila por página con links (no por link, porque PostgREST corta en 1000 filas) y los grupos crudos; el recorte de espacios se hace en `wiki-store.ts`. Solo `service_role` la ejecuta.
+
+`loadBrainMeta` y `loadBrainLinkIndex` (`lib/brain/adapters/editor.ts`) las cachean por request; el índice sale de `buildLinkIndexFromLinks`, que da lo mismo que `buildLinkIndex` sobre los cuerpos. La página abierta es la única que lee el cuerpo, con `provider.read`. Los envoltorios cubren las dos: `withAccess` filtra por visibilidad, `withSkillView` muestra a quien solo lee la copia publicada (título, revisión y los links de su cuerpo publicado, no los del borrador), `withoutSkills` las saca, y un brain `mcp` las rechaza igual que `list()`.
 
 ### Editor y editor visual
 

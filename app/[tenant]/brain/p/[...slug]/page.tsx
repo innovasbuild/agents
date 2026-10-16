@@ -8,7 +8,8 @@ import { PublishedFiles } from "@/components/brain/skills/published-files";
 import { SkillPanel } from "@/components/brain/skills/skill-panel";
 import { Button } from "@/components/ui/button";
 import {
-	loadBrainPages,
+	loadBrainLinkIndex,
+	loadBrainMeta,
 	loadEditorContext,
 	loadPageRulesPanel,
 } from "@/lib/brain/adapters/editor";
@@ -21,7 +22,7 @@ import {
 	pageHref,
 	slugFromParams,
 } from "@/lib/brain/core/editor/slug";
-import { buildLinkIndex } from "@/lib/brain/core/links";
+import { BrainNotFound } from "@/lib/brain/core/errors";
 import { isSkillSlug } from "@/lib/brain/core/skills/package";
 import { publishedSnapshot, skillState } from "@/lib/brain/core/skills/state";
 
@@ -35,8 +36,15 @@ export default async function BrainPageView({
 	const slug = slugFromParams(segments);
 	if (!ctx || ctx.kind !== "ok" || !slug) notFound();
 
-	const pages = await loadBrainPages(ctx);
-	const page = pages.find((p) => p.slug === slug);
+	// Solo esta página trae el cuerpo; el resto es metadatos y links.
+	const [pages, index, page] = await Promise.all([
+		loadBrainMeta(ctx),
+		loadBrainLinkIndex(ctx),
+		ctx.provider.read(slug, { suggestions: false }).catch((error) => {
+			if (error instanceof BrainNotFound) return null;
+			throw error;
+		}),
+	]);
 	if (!page) {
 		const suggestions = await ctx.provider.search({
 			query: slug.split("/").pop()?.replaceAll("-", " ") ?? slug,
@@ -64,7 +72,6 @@ export default async function BrainPageView({
 		);
 	}
 
-	const index = buildLinkIndex(pages);
 	const lookup = new Map(
 		pages.map((p) => [p.slug, { title: p.title, status: p.status }]),
 	);

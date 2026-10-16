@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildLinkIndex, type LinkPage } from "@/lib/brain/core/links";
+import {
+	buildLinkIndex,
+	buildLinkIndexFromLinks,
+	type LinkPage,
+} from "@/lib/brain/core/links";
+import { parseWikilinks } from "@/lib/brain/core/wikilinks";
 
 const page = (
 	slug: string,
@@ -65,5 +70,27 @@ describe("buildLinkIndex", () => {
 		expect(index.incoming.get("c/sola")).toEqual([]);
 		expect(index.orphans).toEqual(["a/uno", "c/sola"]);
 		expect(index.broken).toEqual([]);
+	});
+});
+
+describe("buildLinkIndexFromLinks", () => {
+	it("da lo mismo que buildLinkIndex con los links ya extraídos", () => {
+		const pages = [
+			page("a/uno", "[[b/dos]] y [[b/dos#x|otra vez]] y [[c/rota]]"),
+			page("b/dos", "[[a/uno|vuelve]] [[c/tres]]"),
+			page("c/tres", "sin links"),
+			page("d/vieja", "[[c/tres]]", "archivado"),
+			page("e/sola", ""),
+		];
+		const extracted = pages
+			.map((p) => ({ slug: p.slug, links: parseWikilinks(p.body) }))
+			.filter((p) => p.links.length > 0);
+		// Sin cuerpo: solo slug y estado, y sin las páginas que no tienen links.
+		expect(
+			buildLinkIndexFromLinks(
+				pages.map(({ slug, status }) => ({ slug, status })),
+				extracted,
+			),
+		).toEqual(buildLinkIndex(pages));
 	});
 });
