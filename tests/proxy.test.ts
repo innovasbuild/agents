@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const getUser = vi.fn(async () => ({ data: { user: null } }));
+const getUser = vi.fn(
+	async (): Promise<{ data: { user: object | null } }> => ({
+		data: { user: { id: "u1" } },
+	}),
+);
 let setCookies: { name: string; value: string }[] = [];
 const createServerClient = vi.fn(
 	(
@@ -47,6 +51,7 @@ const call = (path: string, host = "ai.okeefe.com.ar") =>
 
 beforeEach(() => {
 	getUser.mockClear();
+	getUser.mockResolvedValue({ data: { user: { id: "u1" } } });
 	createServerClient.mockClear();
 	setCookies = [];
 	binding = { kind: "root" };
@@ -123,6 +128,48 @@ describe("proxy en el dominio de una empresa", () => {
 		const response = await call("/auth/callback?code=x");
 		expect(response.headers.get("x-middleware-rewrite")).toBeNull();
 		expect(response.status).toBe(200);
+	});
+});
+
+describe("proxy en el dominio de una empresa, sin sesión", () => {
+	beforeEach(() => {
+		binding = { kind: "tenant", slug: "okeefe" };
+		getUser.mockResolvedValue({ data: { user: null } });
+	});
+
+	it.each(["/", "/chat", "/brain/mapa", "/settings/usuarios"])(
+		"%s redirige (307) al login de la empresa, no da 404",
+		async (path) => {
+			const response = await call(path);
+			expect(response.status).toBe(307);
+			expect(response.headers.get("location")).toBe(
+				"https://ai.okeefe.com.ar/login",
+			);
+		},
+	);
+
+	it("el redirect conserva las cookies que Supabase limpia", async () => {
+		setCookies = [{ name: "sb-token", value: "" }];
+		const response = await call("/");
+		expect(response.status).toBe(307);
+		expect(response.cookies.get("sb-token")).toBeDefined();
+	});
+
+	it.each([
+		["/login", "/login/okeefe"],
+		["/brain/mcp", "/brain/okeefe/mcp"],
+	])("%s sigue siendo público y se reescribe", async (path, internal) => {
+		const response = await call(path);
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-middleware-rewrite")).toBe(
+			`https://ai.okeefe.com.ar${internal}`,
+		);
+	});
+
+	it("/auth/callback pasa tal cual", async () => {
+		const response = await call("/auth/callback?code=x");
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-middleware-rewrite")).toBeNull();
 	});
 });
 

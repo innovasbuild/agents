@@ -84,7 +84,28 @@ export async function proxy(request: NextRequest) {
 		},
 	);
 
-	await supabase.auth.getUser();
+	const { data: auth } = await supabase.auth.getUser();
+
+	// Sin sesión, una ruta de la empresa no tiene nada que mostrar: el layout
+	// respondería 404 (nunca 403, para no confirmar que el cliente existe). En el
+	// dominio propio eso es la raíz misma, así que se manda al login. El login y
+	// el endpoint MCP (bearer) son públicos.
+	if (
+		!auth.user &&
+		rewriteTo &&
+		pathname !== "/login" &&
+		pathname !== "/brain/mcp"
+	) {
+		const url = request.nextUrl.clone();
+		url.pathname = "/login";
+		url.search = "";
+		const redirect = NextResponse.redirect(url);
+		// Si Supabase limpió una cookie vencida, la respuesta tiene que llevarlo.
+		for (const cookie of response.cookies.getAll()) {
+			redirect.cookies.set(cookie);
+		}
+		return redirect;
+	}
 
 	return response;
 }
