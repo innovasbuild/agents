@@ -6,6 +6,8 @@ import { isRulesSlug, type RulePage } from "./rules.ts";
 import type {
 	BrainAuthor,
 	BrainPage,
+	BrainPageLinks,
+	BrainPageMeta,
 	BrainPageSummary,
 	BrainRevision,
 	BrainSearchInput,
@@ -45,6 +47,40 @@ function toRevision(row: Record<string, unknown>): BrainRevision {
 
 const PAGE_COLUMNS =
 	"slug, title, category, status, tags, frontmatter, body, revision, updated_at";
+// Sin body ni frontmatter: es lo que pesa.
+const META_COLUMNS =
+	"slug, title, category, status, tags, revision, updated_at";
+
+function toMeta(row: Record<string, unknown>): BrainPageMeta {
+	return {
+		slug: row.slug as string,
+		title: row.title as string,
+		category: row.category as string,
+		status: row.status as BrainStatus,
+		tags: (row.tags as string[] | null) ?? [],
+		revision: row.revision as number,
+		updatedAt: row.updated_at as string,
+	};
+}
+
+// Lo que devuelve brain_page_links por cada match: los grupos crudos de
+// WIKILINK_PATTERN. El recorte de espacios y el "#" del ancla se resuelven acá
+// igual que en parseWikilinks.
+function toLinks(row: Record<string, unknown>): BrainPageLinks {
+	const raw = (row.links ?? []) as Array<{
+		target: string;
+		anchor: string | null;
+		alias: string | null;
+	}>;
+	return {
+		slug: row.slug as string,
+		links: raw.map((link) => ({
+			target: link.target.trim(),
+			anchor: link.anchor ? link.anchor.slice(1).trim() || null : null,
+			alias: link.alias?.trim() || null,
+		})),
+	};
+}
 
 export class WikiStoreError extends Error {
 	readonly code: string;
@@ -84,6 +120,8 @@ export interface WikiStore {
 	): Promise<BrainPageSummary[]>;
 	read(tenantId: string, slug: string): Promise<BrainPage | null>;
 	list(tenantId: string): Promise<BrainPage[]>;
+	listMeta(tenantId: string): Promise<BrainPageMeta[]>;
+	listLinks(tenantId: string): Promise<BrainPageLinks[]>;
 	listRevisions(
 		tenantId: string,
 		slug: string,
@@ -150,6 +188,26 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 				.order("slug");
 			if (error) throw storeError(error);
 			return ((data ?? []) as Array<Record<string, unknown>>).map(toPage);
+		},
+
+		async listMeta(tenantId) {
+			const { data, error } = await client
+				.from("brain_pages")
+				.select(META_COLUMNS)
+				.eq("tenant_id", tenantId)
+				.order("slug");
+			if (error) throw storeError(error);
+			return ((data ?? []) as Array<Record<string, unknown>>).map(toMeta);
+		},
+
+		async listLinks(tenantId) {
+			// Una fila por página con links (no por link): PostgREST corta en 1000
+			// filas y un brain tiene más links que páginas.
+			const { data, error } = await client.rpc("brain_page_links", {
+				p_tenant_id: tenantId,
+			});
+			if (error) throw storeError(error);
+			return ((data ?? []) as Array<Record<string, unknown>>).map(toLinks);
 		},
 
 		async listRevisions(tenantId, slug) {

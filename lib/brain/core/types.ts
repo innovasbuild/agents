@@ -68,6 +68,24 @@ export interface BrainPage {
 	updatedAt: string;
 }
 
+// Lo que necesitan el árbol, el índice y el mapa: la página sin cuerpo ni
+// frontmatter, que son lo que pesa.
+export type BrainPageMeta = Omit<BrainPage, "body" | "frontmatter">;
+
+// Un wikilink tal como está escrito en el cuerpo: sin resolver contra las páginas.
+export interface BrainWikilink {
+	target: string;
+	anchor: string | null;
+	alias: string | null;
+}
+
+// Los wikilinks de una página, en orden de aparición. Las páginas sin links no
+// figuran.
+export interface BrainPageLinks {
+	slug: string;
+	links: BrainWikilink[];
+}
+
 export interface BrainRevision {
 	revision: number;
 	title: string;
@@ -116,6 +134,10 @@ export interface BrainProvider {
 	// (quien solo necesita saber si existe, como la ruta raw, no las usa).
 	read(slug: string, options?: { suggestions?: boolean }): Promise<BrainPage>;
 	list(): Promise<BrainPage[]>;
+	// Lo mismo que list() sin el cuerpo: para pantallas que solo muestran títulos.
+	listMeta(): Promise<BrainPageMeta[]>;
+	// Los wikilinks de cada página, sacados del cuerpo sin traerlo.
+	listLinks(): Promise<BrainPageLinks[]>;
 	history(slug: string): Promise<BrainRevision[] | null>;
 	upsert(
 		write: BrainWrite,

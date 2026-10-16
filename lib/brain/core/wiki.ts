@@ -158,6 +158,14 @@ export function createWikiProvider(
 			return store.list(tenantId);
 		},
 
+		async listMeta() {
+			return store.listMeta(tenantId);
+		},
+
+		async listLinks() {
+			return store.listLinks(tenantId);
+		},
+
 		async history(slug) {
 			if (!isValidSlug(slug)) throw new BrainValidation(["slug"]);
 			return store.listRevisions(tenantId, slug);

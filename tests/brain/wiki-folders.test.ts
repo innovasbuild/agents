@@ -17,6 +17,8 @@ function store(folders: string[]): WikiStore {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => null),
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		listRevisions: async () => null,
 		listFolders: async () => folders.map((path) => ({ path, description: "" })),
 		listRulePages: async () => [],

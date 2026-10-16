@@ -62,6 +62,18 @@ export function withAccess(
 			return (await provider.list()).filter((page) => isVisible(page.slug));
 		},
 
+		async listMeta() {
+			return (await provider.listMeta()).filter((page) => isVisible(page.slug));
+		},
+
+		// Los links de una página oculta no se ven: igual que list(), el que lee
+		// los de una visible hacia una oculta los ve como rotos.
+		async listLinks() {
+			return (await provider.listLinks()).filter((page) =>
+				isVisible(page.slug),
+			);
+		},
+
 		async history(slug) {
 			return isVisible(slug) ? provider.history(slug) : null;
 		},

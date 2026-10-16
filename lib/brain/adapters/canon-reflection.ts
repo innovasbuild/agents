@@ -13,6 +13,8 @@ export function withCanonReflection(
 		search: (input) => provider.search(input),
 		read: (slug, options) => provider.read(slug, options),
 		list: () => provider.list(),
+		listMeta: () => provider.listMeta(),
+		listLinks: () => provider.listLinks(),
 		history: (slug) => provider.history(slug),
 		async upsert(write, author) {
 			let touchesMarco = write.tags.includes(MARCO_TAG);

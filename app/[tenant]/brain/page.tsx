@@ -5,7 +5,8 @@ import { PageList } from "@/components/brain/page-list";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-	loadBrainPages,
+	loadBrainLinkIndex,
+	loadBrainMeta,
 	loadBrainTree,
 	loadEditorContext,
 } from "@/lib/brain/adapters/editor";
@@ -17,7 +18,6 @@ import {
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
 import { listedInIndex } from "@/lib/brain/core/editor/reserved";
-import { buildLinkIndex } from "@/lib/brain/core/links";
 import {
 	BRAIN_STATUSES,
 	type BrainStatus,
@@ -45,8 +45,10 @@ export default async function BrainIndexPage({
 	if (!ctx) notFound();
 	if (ctx.kind !== "ok") return <BrainNotice kind={ctx.kind} />;
 
-	const pages = await loadBrainPages(ctx);
-	const index = buildLinkIndex(pages);
+	const [pages, index] = await Promise.all([
+		loadBrainMeta(ctx),
+		loadBrainLinkIndex(ctx),
+	]);
 	const status = BRAIN_STATUSES.includes(estado as BrainStatus)
 		? (estado as BrainStatus)
 		: null;

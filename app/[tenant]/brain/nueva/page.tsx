@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { PageWorkspace } from "@/components/brain/editor/page-workspace";
 import {
-	loadBrainPages,
+	loadBrainMeta,
 	loadBrainTree,
 	loadEditorContext,
 	loadNewPageRulesPanel,
@@ -31,7 +31,7 @@ export default async function NewBrainPage({
 	// permiso real lo decide withAccess al guardar.
 	const folders = editableFolders(await loadBrainTree(ctx));
 	if (folders.length === 0) notFound();
-	const pages = await loadBrainPages(ctx);
+	const pages = await loadBrainMeta(ctx);
 	const shared = {
 		tenantSlug,
 		knownTags: [...new Set(pages.flatMap((p) => p.tags))],

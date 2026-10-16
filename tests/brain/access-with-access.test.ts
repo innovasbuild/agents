@@ -52,6 +52,20 @@ function fakeProvider() {
 			return pageOf(slug);
 		}),
 		list: vi.fn(async () => SLUGS.map(pageOf)),
+		listMeta: vi.fn(async () =>
+			SLUGS.map(pageOf).map(
+				({ body: _body, frontmatter: _fm, ...meta }) => meta,
+			),
+		),
+		// Cada página enlaza a la siguiente de la lista.
+		listLinks: vi.fn(async () =>
+			SLUGS.map((slug, i) => ({
+				slug,
+				links: [
+					{ target: SLUGS[(i + 1) % SLUGS.length], alias: null, anchor: null },
+				],
+			})),
+		),
 		history: vi.fn(async (slug: string) => (SLUGS.includes(slug) ? [] : null)),
 		upsert: vi.fn(async (write: { slug: string; baseRevision?: number }) => ({
 			slug: write.slug,
@@ -187,6 +201,18 @@ describe("withAccess · list", () => {
 	});
 });
 
+describe("withAccess · listMeta y listLinks", () => {
+	it("listMeta devuelve solo lo visible", async () => {
+		const pages = await withAccess(fakeProvider(), ana, RULES).listMeta();
+		expect(pages.map((p) => p.slug)).toEqual(["comercial/icp", "otros/x"]);
+	});
+
+	it("listLinks no devuelve los links de una página oculta", async () => {
+		const links = await withAccess(fakeProvider(), ana, RULES).listLinks();
+		expect(links.map((p) => p.slug)).toEqual(["comercial/icp", "otros/x"]);
+	});
+});
+
 describe("withAccess · upsert", () => {
 	it("actualizar una página oculta es not_found", async () => {
 		const provider = fakeProvider();
@@ -264,6 +290,8 @@ describe("withAccess · páginas reservadas", () => {
 			search: vi.fn(async () => []),
 			read: vi.fn(),
 			list: async () => [],
+			listMeta: async () => [],
+			listLinks: async () => [],
 			history: async () => null,
 			upsert: vi.fn(async () => ({ slug: "x", revision: 1 })),
 		};

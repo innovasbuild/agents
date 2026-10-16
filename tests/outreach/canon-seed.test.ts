@@ -13,6 +13,8 @@ function brain(upsert: BrainProvider["upsert"]): BrainProvider {
 			throw new Error("no existe");
 		},
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		history: async () => null,
 		upsert,
 	};
