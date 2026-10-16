@@ -59,6 +59,14 @@ export const loadEditorContext = cache(
 	async (tenantSlug: string): Promise<EditorContext | null> => {
 		const tenant = await resolveTenantAccess(tenantSlug);
 		if (!tenant) return null;
+		// Un miembro común lee las reglas junto con el binding: no dependen entre
+		// sí y en serie suman dos viajes. Si no hay brain wiki, la lectura se
+		// descarta, y su falla con ella: por eso el catch vacío (el await de más
+		// abajo sigue viendo el rechazo y corta la página cuando sí hay brain).
+		const rulesRead = isAdminRole(tenant.role)
+			? null
+			: accessRulesStore().load(tenant.id);
+		rulesRead?.catch(() => undefined);
 		const binding = await resolveBrainBinding(tenant.id, loadTenantBindings);
 		if (!binding) return { kind: "no-brain", tenant };
 		if (binding.provider !== "wiki") return { kind: "external", tenant };
@@ -70,9 +78,7 @@ export const loadEditorContext = cache(
 		};
 		// Solo un miembro común depende de las reglas; si no se pueden cargar la
 		// excepción corta la página: se falla cerrado.
-		const rules = isAdminRole(tenant.role)
-			? []
-			: await accessRulesStore().load(tenant.id);
+		const rules = rulesRead ? await rulesRead : [];
 		const access = (path: string) => resolveAccess(rules, principal, path);
 
 		// Sin la categoría no puede existir una página de skill: no se consulta.

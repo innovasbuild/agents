@@ -81,6 +81,13 @@ Detalles que importan:
 
 Las altas de membresía solo existen como funciones `security definer`: `authenticated` no puede insertar ni cambiar `user_id` o `tenant_id` en `memberships`, solo el `role` ([#80](https://github.com/innovasbuild/agents/pull/80)). Un tenant_admin ya no puede meter a un usuario ajeno en su empresa.
 
+## Orden de las lecturas en una pantalla del cliente
+
+`resolveTenantAccess` resuelve el tenant y el usuario en paralelo, después membresía y dueño de plataforma en paralelo, y recién después `allowsLogin`. Cada escalón depende del anterior y no se reordena: el acceso se decide siempre igual. Lo que sí se superpone es lo que no decide acceso:
+
+- El layout llama a `prefetchEnabledAgentsWithAccess()` antes de resolver. Con ese pedido, `resolveTenantAccess` dispara `loadEnabledAgents(tenant.id)` apenas conoce el id y el menú no espera a que termine el chequeo del método. Si el acceso falla o redirige, esa lectura se descarta (corre con la sesión de la persona, así que la RLS no le devuelve nada a quien no es miembro). Las acciones y los route handlers no hacen el pedido y no pagan la consulta.
+- `loadEditorContext` lee las reglas de un miembro común junto con el binding del brain. Un administrador nunca las lee. Con brain wiki, una falla de reglas corta la página; sin brain o con un brain externo, el resultado y su falla se descartan. El costo es una lectura de reglas sin uso para un miembro común de una empresa sin brain wiki, en paralelo y sin latencia extra.
+
 ## Ingreso por dominio
 
 Una empresa puede ser **solo por invitación** o **abierta a todo su dominio**. Está en la tabla `tenants`:
