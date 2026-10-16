@@ -132,33 +132,45 @@ export async function resolveChannelContext(
 	if (conversation.agent !== agent) return null;
 	if (conversation.user_id !== userId) return null;
 
-	const { data: membership } = await admin
-		.from("memberships")
-		.select("role")
-		.eq("tenant_id", conversation.tenant_id)
-		.eq("user_id", userId)
-		.maybeSingle();
+	const { tenant_id: tenantId, agent: conversationAgent } = conversation;
 
+	// Los tres chequeos dependen de la conversación y no entre sí: van juntos,
+	// un viaje a la base en vez de tres en serie (esta cadena corre en el auth
+	// de cada request del canal, incluido el stream que abre un hilo). Ninguno
+	// afloja nada: el resultado solo sale si los tres pasan, y la conversación
+	// ya probó ser de esta persona (`user_id === userId`), así que preguntar el
+	// método por su empresa no le muestra nada que no sea suyo.
+	const [membershipResult, tenantAgentResult, loginAllowed] = await Promise.all(
+		[
+			admin
+				.from("memberships")
+				.select("role")
+				.eq("tenant_id", tenantId)
+				.eq("user_id", userId)
+				.maybeSingle(),
+			admin
+				.from("tenant_agents")
+				.select("enabled")
+				.eq("tenant_id", tenantId)
+				.eq("agent", conversationAgent)
+				.maybeSingle(),
+			// El método con el que se abrió la sesión tiene que estar permitido en
+			// la empresa de esta conversación (spec etapa 20, L10). Falla cerrado.
+			(async () => {
+				try {
+					return await allowsLogin(tenantId);
+				} catch (error) {
+					console.error("canal del chat: no pude chequear el método", error);
+					return false;
+				}
+			})(),
+		],
+	);
+
+	const membership = membershipResult.data;
 	if (!membership) return null;
-
-	const { data: tenantAgent } = await admin
-		.from("tenant_agents")
-		.select("enabled")
-		.eq("tenant_id", conversation.tenant_id)
-		.eq("agent", conversation.agent)
-		.maybeSingle();
-
-	if (!tenantAgent?.enabled) return null;
-
-	// El método con el que se abrió la sesión tiene que estar permitido en la
-	// empresa de esta conversación (spec etapa 20, L10). Último chequeo: solo
-	// se pregunta por alguien que ya probó ser miembro. Falla cerrado.
-	try {
-		if (!(await allowsLogin(conversation.tenant_id))) return null;
-	} catch (error) {
-		console.error("canal del chat: no pude chequear el método", error);
-		return null;
-	}
+	if (!tenantAgentResult.data?.enabled) return null;
+	if (!loginAllowed) return null;
 
 	return {
 		tenantId: conversation.tenant_id,

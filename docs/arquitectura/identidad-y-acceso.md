@@ -3,7 +3,7 @@ title: Identidad y acceso
 category: arquitectura
 status: activo
 tags: [auth, supabase, oauth, mcp, login, memberships]
-updated: 2026-10-14
+updated: 2026-10-16
 sources:
   - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
   - lib/tenants/host.ts
@@ -19,6 +19,7 @@ sources:
   - proxy.ts
   - lib/auth
   - lib/agents/mcp-channel-auth.ts
+  - lib/agents/channel-context.ts
   - lib/tenants/login-check.ts
   - lib/tenants/login-check-server.ts
   - app/auth
@@ -163,6 +164,19 @@ Reglas comunes de los dos:
 ## `verify-caller`: el chat del dashboard
 
 `verifyCaller` (`lib/auth/verify-caller.ts`) autentica al navegador en el canal de eve (`agents/outreach/channels/eve.ts`), fuera del scope de request de Next: arma una sesión de Supabase a mano desde el header `cookie`. Devuelve `null` ante cualquier falla, para que eve pase al siguiente autenticador, y **rechaza los tokens con `client_id`**: un token del emisor OAuth sirve para el brain por MCP, no para abrir el chat ([#51](https://github.com/innovasbuild/agents/pull/51)). Devuelve también `allowsLogin(tenantId)`, ligado a la sesión de esa persona.
+
+Después de `verifyCaller`, `resolveChannelContext` (`lib/agents/channel-context.ts`) resuelve la conversación y chequea ownership. Son tres viajes a la base en serie en el caso feliz: la conversación (`user_id === userId`, agente de la ruta), y recién con su `tenant_id` los tres chequeos que no dependen entre sí (`memberships`, `tenant_agents` y `tenant_allows_login`), que corren juntos. Todos tienen que pasar y cualquier falla o excepción es `null`. Esa cadena está en el auth de cada request del canal, incluido el stream que abre un hilo, y la ruta `/eve/` no pasa por `proxy.ts`, así que acá no hay `getUser` previo.
+
+### Pendiente de decisión: ¿`getUser()` además de `getClaims()`?
+
+`verifyCaller` llama a `getUser()` (un viaje a `/auth/v1/user`) y después a `getClaims()` (con claves ES256 verifica la firma en local, sin red). Qué aporta cada uno:
+
+- `getClaims()` prueba que el token es nuestro, no venció y qué `client_id` trae. No consulta nada.
+- `getUser()` agrega que la sesión sigue viva del lado de Supabase: si la persona cerró sesión, si se borró o se bloqueó al usuario, el token deja de servir antes de vencer.
+
+Sin `getUser()`, un token robado o de una sesión ya cerrada seguiría abriendo el chat hasta que venza el access token (1 hora por defecto). Lo que **no** se pierde: membresía, agente habilitado y método de login se leen de la base en cada request, así que sacar o bloquear a alguien de la empresa lo corta de inmediato, con o sin `getUser()`. Lo que se pierde es solo el corte por cierre de sesión o baja del usuario en Auth.
+
+Recomendación: pasar a `getClaims()` solo, como ya hace el brain por MCP (`createOAuthClaimsVerifier`), si el vencimiento del access token se deja en 1 hora o menos. Ahorra un viaje a Supabase Auth en cada request del canal. La alternativa conservadora es dejar `getUser()` y vivir con ese costo. Hoy el código **conserva `getUser()`**: cambiarlo es una decisión de seguridad que le toca a una persona (Mati), no a este cambio. Para aplicarla alcanza con borrar el bloque de `getUser()` en `verify-caller.ts` y tomar `userId` y `email` de `claims.sub` y `claims.email`.
 
 ## Cómo se prueba
 
