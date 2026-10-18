@@ -25,6 +25,8 @@ function provider(previousTags: string[] | null): BrainProvider {
 			return { tags: previousTags } as BrainPage;
 		},
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		history: async () => null,
 		upsert: vi.fn(async () => ({ slug: "comercial/hooks", revision: 2 })),
 	};

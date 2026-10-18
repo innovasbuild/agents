@@ -40,6 +40,8 @@ function brainWith(pages: BrainPage[]): BrainProvider {
 			return found;
 		},
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		history: async () => null,
 		upsert: async () => {
 			throw new Error("no se usa");
@@ -104,6 +106,8 @@ describe("loadCanon", () => {
 				throw new Error("x");
 			},
 			list: async () => [],
+			listMeta: async () => [],
+			listLinks: async () => [],
 			history: async () => null,
 			upsert: async () => {
 				throw new Error("x");

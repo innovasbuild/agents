@@ -19,6 +19,8 @@ function store(rules: RulePage[] = []): WikiStore {
 		search: vi.fn(async () => []),
 		read: vi.fn(async () => null),
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		listRevisions: async () => null,
 		listFolders: async () => [
 			{ path: "talento", description: "" },

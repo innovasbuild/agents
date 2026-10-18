@@ -1,6 +1,6 @@
 // Conexiones entre páginas del brain, calculadas al leer (spec editor §4.2).
 // Pura: recibe las páginas del tenant ya cargadas.
-import type { BrainStatus } from "./types";
+import type { BrainPageLinks, BrainStatus } from "./types";
 import { parseWikilinks } from "./wikilinks";
 
 export interface LinkPage {
@@ -10,6 +10,9 @@ export interface LinkPage {
 	status: BrainStatus;
 	body: string;
 }
+
+// Lo que el índice necesita de una página: sin cuerpo.
+export type LinkNode = Pick<LinkPage, "slug" | "status">;
 
 export interface OutgoingLink {
 	target: string;
@@ -27,7 +30,20 @@ export interface LinkIndex {
 }
 
 export function buildLinkIndex(pages: LinkPage[]): LinkIndex {
+	return buildLinkIndexFromLinks(
+		pages,
+		pages.map((p) => ({ slug: p.slug, links: parseWikilinks(p.body) })),
+	);
+}
+
+// Igual que buildLinkIndex pero con los links ya extraídos (brain_page_links
+// los saca en la base): evita traer el cuerpo de todas las páginas.
+export function buildLinkIndexFromLinks(
+	pages: LinkNode[],
+	pageLinks: BrainPageLinks[],
+): LinkIndex {
 	const bySlug = new Map(pages.map((p) => [p.slug, p]));
+	const linksOf = new Map(pageLinks.map((p) => [p.slug, p.links]));
 	const outgoing = new Map<string, OutgoingLink[]>();
 	const incomingSets = new Map<string, Set<string>>(
 		pages.map((p) => [p.slug, new Set()]),
@@ -37,7 +53,7 @@ export function buildLinkIndex(pages: LinkPage[]): LinkIndex {
 	for (const source of pages) {
 		const seen = new Set<string>();
 		const links: OutgoingLink[] = [];
-		for (const link of parseWikilinks(source.body)) {
+		for (const link of linksOf.get(source.slug) ?? []) {
 			if (seen.has(link.target)) continue;
 			seen.add(link.target);
 			const target = bySlug.get(link.target);

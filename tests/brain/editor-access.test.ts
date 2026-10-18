@@ -61,6 +61,11 @@ const raw = {
 		page("comercial/icp"),
 		page("direccion/presupuesto"),
 	]),
+	listMeta: vi.fn(async () => [
+		page("comercial/icp"),
+		page("direccion/presupuesto"),
+	]),
+	listLinks: vi.fn(async () => []),
 	history: vi.fn(async () => null),
 	upsert: vi.fn(),
 } satisfies BrainProvider;

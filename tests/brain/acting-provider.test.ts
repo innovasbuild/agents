@@ -33,6 +33,16 @@ function raw(): BrainProvider {
 		search: vi.fn(async () => []),
 		read: vi.fn(),
 		list: vi.fn(async () => [page("comercial/icp"), page("direccion/x")]),
+		listMeta: vi.fn(async () =>
+			["comercial/icp", "direccion/x"].map((slug) => {
+				const { body: _body, frontmatter: _frontmatter, ...meta } = page(slug);
+				return meta;
+			}),
+		),
+		listLinks: vi.fn(async () => [
+			{ slug: "direccion/x", links: [] },
+			{ slug: "comercial/icp", links: [] },
+		]),
 		history: vi.fn(async () => null),
 		upsert: vi.fn(),
 	};

@@ -24,6 +24,8 @@ function brain(body: string | Error): BrainProvider {
 		},
 		read: async () => page,
 		list: async () => [],
+		listMeta: async () => [],
+		listLinks: async () => [],
 		history: async () => null,
 		upsert: async () => {
 			throw new Error("no se usa");

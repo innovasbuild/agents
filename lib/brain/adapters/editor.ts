@@ -22,13 +22,18 @@ import {
 	type RulesPanelView,
 } from "../core/editor/rules-panel";
 import type { BrainFolder } from "../core/folders";
+import { buildLinkIndexFromLinks, type LinkIndex } from "../core/links";
 import { resolveBrainBinding } from "../core/resolve";
 import type { RulesSource } from "../core/rules-source";
 import { SKILL_CATEGORY } from "../core/skills/package";
 import { skillState } from "../core/skills/state";
 import type { SkillOverviewRow } from "../core/skills/store";
 import { withSkillView } from "../core/skills/view";
-import type { BrainPage, BrainProvider, BrainRevision } from "../core/types";
+import type {
+	BrainPageMeta,
+	BrainProvider,
+	BrainRevision,
+} from "../core/types";
 import { createSupabaseWikiStore } from "../core/wiki-store";
 import { accessRulesStore } from "./access-rules";
 import { getBrainProvider } from "./provider";
@@ -118,8 +123,23 @@ export const loadEditorContext = cache(
 
 // cache() compara por identidad: loadEditorContext devuelve el mismo objeto
 // durante todo el request, así que la lista se lee una sola vez.
-export const loadBrainPages = cache(
-	async (ctx: OkEditorContext): Promise<BrainPage[]> => ctx.provider.list(),
+// Sin el cuerpo de las páginas: el árbol, el índice y el mapa no lo usan y es lo
+// que pesa. El cuerpo de una página se lee con ctx.provider.read.
+export const loadBrainMeta = cache(
+	async (ctx: OkEditorContext): Promise<BrainPageMeta[]> =>
+		ctx.provider.listMeta(),
+);
+
+// Conexiones entre las páginas visibles. Los links salen de la base ya
+// extraídos; con el mismo filtro de permisos que las páginas.
+export const loadBrainLinkIndex = cache(
+	async (ctx: OkEditorContext): Promise<LinkIndex> => {
+		const [pages, links] = await Promise.all([
+			loadBrainMeta(ctx),
+			ctx.provider.listLinks(),
+		]);
+		return buildLinkIndexFromLinks(pages, links);
+	},
 );
 
 // El árbol sale de lo que el proveedor envuelto ya dejó ver, filtrado otra vez
@@ -132,7 +152,7 @@ export const loadBrainTree = cache(
 		// sin ella. Las lecturas de skills (withSkillView) no se tocan: esas
 		// fallan cerradas.
 		const [pages, rows, folders] = await Promise.all([
-			loadBrainPages(ctx),
+			loadBrainMeta(ctx),
 			ctx.skills().catch((error: unknown) => {
 				console.error(
 					`brain editor: no pude leer las skills de ${ctx.tenant.slug}`,
