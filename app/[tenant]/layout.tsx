@@ -13,7 +13,10 @@ import { brandStyle } from "@/lib/brand/contrast";
 import { tenantMetadata } from "@/lib/tenants/brand-metadata";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { visibleNav } from "@/lib/tenants/nav";
-import { resolveTenantAccess } from "@/lib/tenants/resolve";
+import {
+	prefetchEnabledAgentsWithAccess,
+	resolveTenantAccess,
+} from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 
 function brandLogoUrl(path: string | undefined): string | null {
@@ -28,6 +31,7 @@ export async function generateMetadata({
 }: {
 	params: Promise<{ tenant: string }>;
 }): Promise<Metadata> {
+	prefetchEnabledAgentsWithAccess();
 	const tenant = await resolveTenantAccess((await params).tenant);
 	if (!tenant) return {};
 	return tenantMetadata({
@@ -44,6 +48,9 @@ export default async function TenantLayout({
 	params: Promise<{ tenant: string }>;
 }) {
 	const { tenant: slug } = await params;
+	// Antes de resolver: así la lista de agentes arranca junto con el chequeo
+	// de acceso y no detrás (ver resolve.ts).
+	prefetchEnabledAgentsWithAccess();
 	const tenant = await resolveTenantAccess(slug);
 
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.

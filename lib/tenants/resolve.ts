@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { allowsLogin, methodLanding } from "@/lib/tenants/login-check";
 import {
 	platformOwnerAdminTenantId,
@@ -56,6 +57,18 @@ export function brandFromRow(row: Pick<TenantRow, "brand">): TenantBrand {
 	};
 }
 
+// Pedido del layout, por request: su menú necesita los agentes habilitados, y
+// la lista solo depende del id del tenant, no de que el acceso se resuelva. Con
+// el pedido en pie, resolveTenantAccess dispara la lectura apenas conoce el id
+// y no recién cuando termina de chequear membresía y método. Las acciones y
+// los route handlers no lo piden, así que no pagan una consulta que no usan.
+const layoutRequest = cache(() => ({ enabledAgents: false }));
+
+/** Lo llama el layout antes de resolver el acceso; sin llamarla no cambia nada. */
+export function prefetchEnabledAgentsWithAccess(): void {
+	layoutRequest().enabledAgents = true;
+}
+
 /**
  * Traduce un slug de la URL a tenant y rol del usuario logueado. Devuelve
  * `null` si no hay sesión, si el slug no existe o si el usuario no es
@@ -83,6 +96,12 @@ export const resolveTenantAccess = cache(
 		]);
 		const userId = claimsData?.claims?.sub;
 		if (!userId || !tenant) return null;
+
+		// Solo calienta el cache de loadEnabledAgents, que no rechaza (devuelve
+		// null si falla). El acceso se decide más abajo igual que sin esto: si
+		// falla o redirige, el resultado de la lectura se descarta. La RLS la
+		// filtra con la sesión de la persona, así que un no miembro no ve nada.
+		if (layoutRequest().enabledAgents) void loadEnabledAgents(tenant.id);
 
 		// Independientes entre sí: cada una es un viaje a la base.
 		const [{ data: membership }, ownerTenantId] = await Promise.all([
