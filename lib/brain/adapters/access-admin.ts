@@ -47,6 +47,14 @@ export function manageDeps(): ManageDeps {
 			if (error) throw new Error(`No pude leer las páginas: ${error.message}`);
 			return (data ?? []).map((row) => row.slug as string);
 		},
+		async folderPaths(tenantId) {
+			const { data, error } = await createAdminClient()
+				.from("brain_folders")
+				.select("path")
+				.eq("tenant_id", tenantId);
+			if (error) throw new Error(`No pude leer las carpetas: ${error.message}`);
+			return (data ?? []).map((row) => row.path as string);
+		},
 	};
 }
 

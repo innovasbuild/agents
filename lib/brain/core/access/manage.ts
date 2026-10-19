@@ -37,6 +37,8 @@ export interface ManageDeps {
 	memberRole(tenantId: string, userId: string): Promise<BrainRole | null>;
 	// Slugs de todas las páginas del tenant: sirven para saber si una carpeta existe.
 	pagePaths(tenantId: string): Promise<string[]>;
+	// Carpetas guardadas (brain_folders): una carpeta vacía también existe.
+	folderPaths(tenantId: string): Promise<string[]>;
 }
 
 const fail = (code: FailureCode, message: string) =>
@@ -126,10 +128,14 @@ async function authorize(
 	}
 
 	if (path !== ROOT_PATH) {
-		const slugs = await deps.pagePaths(actor.tenantId);
+		const [slugs, folders] = await Promise.all([
+			deps.pagePaths(actor.tenantId),
+			deps.folderPaths(actor.tenantId),
+		]);
 		const exists =
-			slugs.some((s) => s === path || s.startsWith(`${path}/`)) ||
-			rules.some((r) => r.path === path || r.path.startsWith(`${path}/`));
+			[...slugs, ...folders].some(
+				(s) => s === path || s.startsWith(`${path}/`),
+			) || rules.some((r) => r.path === path || r.path.startsWith(`${path}/`));
 		if (!exists) return fail("not_found", "No encontrado.");
 	}
 

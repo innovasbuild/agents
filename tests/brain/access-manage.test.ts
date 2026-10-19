@@ -27,6 +27,7 @@ function setup(opts: {
 	userId?: string;
 	roles?: Record<string, BrainRole>;
 	paths?: string[];
+	folders?: string[];
 }) {
 	const rules = opts.rules ?? [members("", "lector")];
 	const set = vi.fn(async () => {});
@@ -42,6 +43,7 @@ function setup(opts: {
 			(opts.roles ?? { ana: "tenant_member", beto: "tenant_member" })[id] ??
 			null,
 		pagePaths: async () => opts.paths ?? ["comercial/icp", "legal/contrato"],
+		folderPaths: async () => opts.folders ?? [],
 	};
 	return { deps, set, remove };
 }
@@ -321,6 +323,18 @@ describe("changeAccess", () => {
 		expect(await changeAccess("i", grant({ path: "A/B" }), deps)).toMatchObject(
 			{ code: "invalid" },
 		);
+	});
+
+	it("una carpeta guardada sin páginas ni reglas se puede compartir, y también sus subcarpetas vacías", async () => {
+		const { deps, set } = setup({ folders: ["nueva", "nueva/sub"] });
+		expect(await changeAccess("i", grant({ path: "nueva" }), deps)).toEqual({
+			ok: true,
+		});
+		expect(await changeAccess("i", grant({ path: "nueva/sub" }), deps)).toEqual(
+			{ ok: true },
+		);
+		expect(set).toHaveBeenCalledTimes(2);
+		expect(await loadShareView("i", "nueva", deps)).toMatchObject({ ok: true });
 	});
 
 	it("si las reglas no se pueden cargar, lanza: falla cerrada", async () => {
