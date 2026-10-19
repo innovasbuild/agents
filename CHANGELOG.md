@@ -2,6 +2,21 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.4.1] - 2026-10-19
+
+### Added
+
+- Chat nuevo. Al entrar al chat aparece "¿En qué trabajamos?" con un compositor donde elegís el agente (el Asistente u Outreach, si la empresa tiene los dos), el modelo y adjuntás un archivo con el botón **+**, y escribís el mensaje. El agente y el modelo se cambian ahí mismo, ya no en la barra lateral.
+
+### Changed
+
+- "Nuevo chat" pasó arriba de la lista de hilos y lleva a esa pantalla inicial. El hilo se crea recién cuando enviás el primer mensaje, y mientras estés en un chat nuevo el botón queda deshabilitado.
+- En un hilo abierto, el agente y el modelo se ven en el compositor como datos fijos (eve los fija al abrir la sesión). Se sacó el aviso de arriba que lo explicaba.
+
+### Fixed
+
+- Tocar "Hilo nuevo" varias veces ya no deja una pila de hilos vacíos en la lista.
+
 ## [0.4.0] - 2026-10-15
 
 ### Added
