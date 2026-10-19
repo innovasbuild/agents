@@ -3,7 +3,7 @@ title: Agentes eve
 category: dominios
 status: activo
 tags: [eve, agente, outreach, asistente, tools, mcp, chat, aprobaciones]
-updated: 2026-10-14
+updated: 2026-10-19
 sources:
   - agents/outreach/agent.ts
   - agents/outreach/instructions.md
@@ -26,6 +26,8 @@ sources:
   - lib/agents/eve
   - lib/agents/assistant-instructions.ts
   - lib/agents/chat-agents.ts
+  - lib/agents/chat-composer.ts
+  - app/[tenant]/chat/composer.tsx
   - lib/agents/catalog.ts
   - lib/agents/session-store.ts
   - lib/agents/mcp-channel-auth.ts
@@ -152,7 +154,8 @@ Verificado en `agents/outreach/tools/*.ts`: solo `crm_setup_outreach_properties`
 
 - Un hilo pertenece a un agente: `conversations.agent` se fija al crearlo (`createConversation(tenantId, slug, model, agent)`) y no cambia. La acción rechaza un agente que no esté en el catálogo, que no sea de chat o que no esté habilitado en la empresa.
 - Cada agente tiene su ruta (`/eve/<agente>/v1/*`) y `resolveChannelContext(request, userId, allowsLogin, agent)` rechaza una conversación cuyo agente no es el de la ruta: de lo contrario se abriría una sesión de un agente colgada del hilo de otro.
-- El selector aparece al abrir un hilo nuevo solo si hay más de un agente de chat habilitado (`chatAgents` en `lib/tenants/home.ts`, `availableChatAgents` en `lib/agents/chat-agents.ts`). Con uno solo no hay nada que elegir ni que rotular. Queda elegido el agente del hilo más reciente (`defaultChatAgent`) o, si no hay hilos, el primero del catálogo; también cae en el primer agente disponible cuando el agente del último hilo ya no está habilitado.
+- El chat arranca en la pantalla "¿En qué trabajamos?": un compositor (`app/[tenant]/chat/composer.tsx`) con adjuntar, agente, modelo y enviar. El hilo **se crea al enviar el primer mensaje**, no al tocar "Nuevo chat": el botón queda deshabilitado mientras no haya un hilo abierto, así que no se acumulan hilos vacíos. En un hilo abierto el agente y el modelo quedan fijos (eve los fija al abrir la sesión).
+- El selector de agente del compositor aparece en el chat nuevo solo si hay más de un agente de chat habilitado (`chatAgents` en `lib/tenants/home.ts`, `availableChatAgents` en `lib/agents/chat-agents.ts`). Con uno solo no hay nada que elegir ni que rotular. Queda elegido el agente del hilo más reciente (`defaultChatAgent`) o, si no hay hilos, el primero del catálogo; también cae en el primer agente disponible cuando el agente del último hilo ya no está habilitado.
 - Los hilos de un agente deshabilitado no se listan: el canal rechazaría su sesión, así que ni el historial se puede abrir.
 - El indicador de actividad y los adjuntos sirven a cualquier agente; las tarjetas de mail y de cola solo aparecen con las tools de outreach.
 

@@ -3,7 +3,7 @@
 import type { UserContent } from "ai";
 import type { EveMessage, EveMessagePart } from "eve/client";
 import { useEveAgent } from "eve/react";
-import { EllipsisIcon, FileIcon, PaperclipIcon, XIcon } from "lucide-react";
+import { EllipsisIcon, SquarePenIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
 	type ChangeEvent,
@@ -33,7 +33,6 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
 	type PendingInputRequest,
 	pendingInputRequests,
@@ -47,6 +46,7 @@ import {
 	deleteConversation,
 	renameConversation,
 } from "./actions";
+import { Composer } from "./composer";
 
 interface Thread {
 	id: string;
@@ -66,6 +66,37 @@ interface AgentOption {
 // tarjetas del hilo: viaja por contexto y no como prop de cada componente,
 // porque la usan piezas que están a tres niveles del ChatClient.
 const SignatureContext = createContext<string | null>(null);
+
+// El primer mensaje de un chat nuevo se manda recién cuando existe el hilo: el
+// hilo se crea al enviar y no al tocar "Nuevo chat" (así no quedan hilos
+// vacíos). Vive fuera de React para que sobreviva al remontado de la pantalla
+// al navegar al hilo recién creado.
+const firstMessages = new Map<string, { text: string; file: File | null }>();
+
+function useAttachment() {
+	const [file, setFile] = useState<File | null>(null);
+	const [fileError, setFileError] = useState<string | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	function onFileChange(event: ChangeEvent<HTMLInputElement>) {
+		const picked = event.target.files?.[0] ?? null;
+		if (picked && picked.size > MAX_ATTACHMENT_BYTES) {
+			setFileError("El archivo pesa más de 15 MB: elegí uno más chico.");
+			setFile(null);
+			return;
+		}
+		setFileError(null);
+		setFile(picked);
+	}
+
+	function clear() {
+		setFile(null);
+		setFileError(null);
+		if (fileInputRef.current) fileInputRef.current.value = "";
+	}
+
+	return { file, fileError, fileInputRef, onFileChange, clear };
+}
 
 export function ChatClient({
 	active,
@@ -91,6 +122,12 @@ export function ChatClient({
 	const router = useRouter();
 	const [model, setModel] = useState(defaultModel);
 	const [agent, setAgent] = useState(defaultAgent);
+	const [text, setText] = useState("");
+	const attachment = useAttachment();
+	const [creating, setCreating] = useState(false);
+	// El estado se actualiza recién en el próximo render: el ref corta un segundo
+	// envío que llegue antes y evita crear dos hilos.
+	const creatingRef = useRef(false);
 	const [openError, setOpenError] = useState<string | null>(null);
 	// Si el agente elegido se deshabilitó con la página abierta, vale el default.
 	const selected = agents.some((a) => a.id === agent) ? agent : defaultAgent;
@@ -99,116 +136,112 @@ export function ChatClient({
 	const agentName = (id: string) =>
 		agents.find((option) => option.id === id)?.name ?? null;
 
+	// El hilo ya existe y la pantalla pasó a él: el compositor del chat nuevo
+	// queda limpio para la próxima vez.
+	const activeId = active?.id ?? null;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: solo al cambiar de hilo
+	useEffect(() => {
+		if (activeId === null) return;
+		creatingRef.current = false;
+		setCreating(false);
+		setText("");
+		attachment.clear();
+	}, [activeId]);
+
+	// Si el hilo se creó pero la pantalla no llega a abrirlo (la lectura de hilos
+	// falló, el agente se deshabilitó entre medio), el compositor no se queda
+	// trabado: a los 10 segundos se libera y avisa.
+	useEffect(() => {
+		if (!creating || activeId !== null) return;
+		const timer = setTimeout(() => {
+			creatingRef.current = false;
+			setCreating(false);
+			setOpenError("No se pudo abrir el chat. Probá de nuevo.");
+		}, 10_000);
+		return () => clearTimeout(timer);
+	}, [creating, activeId]);
+
+	async function startChat() {
+		if (creatingRef.current) return;
+		creatingRef.current = true;
+		const message = text.trim();
+		setCreating(true);
+		setOpenError(null);
+		try {
+			const id = await createConversation(tenantId, slug, model, selected);
+			if (!id) {
+				setOpenError("No se pudo abrir el chat. Probá de nuevo.");
+				creatingRef.current = false;
+				setCreating(false);
+				return;
+			}
+			firstMessages.set(id, { text: message, file: attachment.file });
+			router.push(`/${slug}/chat?hilo=${id}`);
+		} catch {
+			setOpenError("No se pudo abrir el chat. Probá de nuevo.");
+			creatingRef.current = false;
+			setCreating(false);
+		}
+	}
+
 	return (
 		<SignatureContext value={signature}>
 			<div className="grid gap-6 md:grid-cols-[240px_1fr] md:gap-8">
 				{/* min-w-0: un hijo de grid nace con min-width:auto, así que el track
-			    se estira al min-content de los títulos (que van con truncate, o
-			    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
-			    empujaba el ⋯ fuera de la pantalla. */}
+				    se estira al min-content de los títulos (que van con truncate, o
+				    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
+				    empujaba el ⋯ fuera de la pantalla. */}
 				<aside className="min-w-0 space-y-4">
-					<div className="space-y-2">
-						{showAgents ? (
-							<>
-								<label
-									className="block text-muted-foreground text-sm"
-									htmlFor="agente"
-								>
-									Agente del hilo nuevo
-								</label>
-								<select
-									className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-									id="agente"
-									onChange={(event) => setAgent(event.target.value)}
-									value={selected}
-								>
-									{agents.map((option) => (
-										<option key={option.id} value={option.id}>
-											{option.name}
-										</option>
-									))}
-								</select>
-							</>
-						) : null}
-						<label
-							className="block text-muted-foreground text-sm"
-							htmlFor="modelo"
-						>
-							Modelo del hilo nuevo
-						</label>
-						<select
-							className="h-9 w-full rounded-md border border-input bg-card px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-							id="modelo"
-							onChange={(event) => setModel(event.target.value)}
-							value={model}
-						>
-							{allowedModels.map((option) => (
-								<option key={option} value={option}>
-									{option}
-								</option>
-							))}
-						</select>
-						<Button
-							className="w-full"
-							onClick={async () => {
-								try {
-									const id = await createConversation(
-										tenantId,
-										slug,
-										model,
-										selected,
-									);
-									if (id) {
-										setOpenError(null);
-										router.push(`/${slug}/chat?hilo=${id}`);
-									} else {
-										setOpenError(
-											"No se pudo abrir el hilo. Recargá la página.",
-										);
-									}
-								} catch {
-									setOpenError("No se pudo abrir el hilo. Recargá la página.");
-								}
-							}}
-							type="button"
-						>
-							Hilo nuevo
-						</Button>
-						{openError ? (
-							<p className="text-destructive text-sm" role="alert">
-								{openError}
-							</p>
-						) : null}
-					</div>
+					{/* Deshabilitado mientras ya estás en un chat nuevo: el hilo se crea
+					    al enviar, así que tocarlo de nuevo no puede abrir otro vacío. */}
+					<Button
+						className="w-full justify-start bg-muted hover:bg-muted/60"
+						disabled={active === null}
+						onClick={() => router.push(`/${slug}/chat`)}
+						type="button"
+						variant="ghost"
+					>
+						<SquarePenIcon />
+						Nuevo chat
+					</Button>
 
-					<ul className="space-y-0.5">
-						{threads.map((thread) => {
-							const isActive = thread.id === active?.id;
-							return (
-								<li
-									className={`flex items-center rounded-md transition-colors hover:bg-muted ${
-										isActive ? "bg-muted font-medium" : ""
-									}`}
-									key={thread.id}
-								>
-									<a
-										className={`min-w-0 flex-1 truncate rounded-md py-2 pl-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-											isActive ? "" : "text-muted-foreground"
-										}`}
-										href={`/${slug}/chat?hilo=${thread.id}`}
-									>
-										{threadTitle(thread)}
-										{showAgents && agentName(thread.agent) ? (
-											<span className="block truncate font-normal text-muted-foreground text-xs">
-												{agentName(thread.agent)}
-											</span>
-										) : null}
-									</a>
-									<ThreadMenu isActive={isActive} slug={slug} thread={thread} />
-								</li>
-							);
-						})}
-					</ul>
+					{threads.length > 0 ? (
+						<div className="space-y-1">
+							<p className="px-3 text-muted-foreground text-xs">Recientes</p>
+							<ul className="space-y-0.5">
+								{threads.map((thread) => {
+									const isActive = thread.id === active?.id;
+									return (
+										<li
+											className={`flex items-center rounded-md transition-colors hover:bg-muted ${
+												isActive ? "bg-muted font-medium" : ""
+											}`}
+											key={thread.id}
+										>
+											<a
+												className={`min-w-0 flex-1 truncate rounded-md py-2 pl-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+													isActive ? "" : "text-muted-foreground"
+												}`}
+												href={`/${slug}/chat?hilo=${thread.id}`}
+											>
+												{threadTitle(thread)}
+												{showAgents && agentName(thread.agent) ? (
+													<span className="block truncate font-normal text-muted-foreground text-xs">
+														{agentName(thread.agent)}
+													</span>
+												) : null}
+											</a>
+											<ThreadMenu
+												isActive={isActive}
+												slug={slug}
+												thread={thread}
+											/>
+										</li>
+									);
+								})}
+							</ul>
+						</div>
+					) : null}
 				</aside>
 
 				{active ? (
@@ -221,10 +254,54 @@ export function ChatClient({
 						/>
 					</Fragment>
 				) : (
-					<div className="flex min-h-64 min-w-0 items-center justify-center rounded-lg border border-dashed p-8 text-center">
-						<p className="text-muted-foreground">
-							Elegí un hilo o abrí uno nuevo.
-						</p>
+					<div className="flex min-h-[60vh] min-w-0 flex-col items-center justify-center gap-6 pb-16">
+						<h1 className="text-3xl leading-tight">¿En qué trabajamos?</h1>
+						<div className="w-full max-w-[760px] space-y-2">
+							<Composer
+								agent={
+									showAgents
+										? {
+												label: agentName(selected) ?? selected,
+												options: agents.map((option) => ({
+													value: option.id,
+													label: option.name,
+												})),
+												value: selected,
+												onChange: setAgent,
+											}
+										: null
+								}
+								autoFocus
+								blocked={creating}
+								file={attachment.file}
+								fileError={attachment.fileError}
+								fileInputRef={attachment.fileInputRef}
+								model={{
+									label: model,
+									...(allowedModels.length > 1
+										? {
+												options: allowedModels.map((option) => ({
+													value: option,
+													label: option,
+												})),
+												value: model,
+												onChange: setModel,
+											}
+										: {}),
+								}}
+								onClearFile={attachment.clear}
+								onFileChange={attachment.onFileChange}
+								onSubmit={() => void startChat()}
+								onTextChange={setText}
+								placeholder="Escribí un mensaje para el agente"
+								text={text}
+							/>
+							{openError ? (
+								<p className="text-destructive text-sm" role="alert">
+									{openError}
+								</p>
+							) : null}
+						</div>
 					</div>
 				)}
 			</div>
@@ -367,26 +444,7 @@ function Thread({
 	thread: Thread;
 }) {
 	const [text, setText] = useState("");
-	const [file, setFile] = useState<File | null>(null);
-	const [fileError, setFileError] = useState<string | null>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
-		const picked = event.target.files?.[0] ?? null;
-		if (picked && picked.size > MAX_ATTACHMENT_BYTES) {
-			setFileError("El archivo pesa más de 15 MB: elegí uno más chico.");
-			setFile(null);
-			return;
-		}
-		setFileError(null);
-		setFile(picked);
-	}
-
-	function clearFile() {
-		setFile(null);
-		setFileError(null);
-		if (fileInputRef.current) fileInputRef.current.value = "";
-	}
+	const attachment = useAttachment();
 
 	// eve_session_id lo ata únicamente bind-session.ts (hook server-side de
 	// eve), de forma asíncrona cuando arranca la sesión con
@@ -481,19 +539,53 @@ function Thread({
 	// reanudando, para no mandarla dos veces.
 	const canAnswer = !isBusy && !isResuming;
 
-	return (
-		<section className="min-w-0 space-y-6">
-			<p className="text-muted-foreground text-sm">
-				{agentName ? (
-					<>
-						Agente: <span className="text-foreground">{agentName}</span>.{" "}
-					</>
-				) : null}
-				Modelo del hilo: <code>{thread.model ?? "el default del cliente"}</code>
-				. eve fija el modelo al abrir la sesión: para usar otro, abrí un hilo
-				nuevo.
-			</p>
+	async function send(message: string, attached: File | null, steer: boolean) {
+		const options = steer ? ({ turnPolicy: "steer" } as const) : undefined;
+		if (!attached) {
+			await agent.send(message, options);
+			return;
+		}
+		const content: UserContent = [
+			...(message.length > 0 ? [{ type: "text", text: message } as const] : []),
+			{
+				type: "file",
+				data: await fileToDataUrl(attached),
+				mediaType: attached.type || "application/octet-stream",
+				filename: attached.name,
+			},
+		];
+		await agent.send(content, options);
+	}
 
+	function submit() {
+		const message = text.trim();
+		void send(message, attachment.file, isBusy);
+		if (!thread.title && message)
+			void renameConversation(thread.id, message, slug);
+		setText("");
+		attachment.clear();
+	}
+
+	// El chat nuevo crea el hilo al enviar y deja acá el primer mensaje: se manda
+	// una sola vez, al montar el hilo recién creado. Va en un timer y no directo:
+	// en desarrollo React monta, desmonta y vuelve a montar, y el desmontaje
+	// simulado de useEveAgent aborta un turno ya iniciado. El cleanup cancela el
+	// timer del primer montaje y el segundo lo reprograma, así sale una sola vez.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: solo al montar
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			const first = firstMessages.get(thread.id);
+			if (!first) return;
+			firstMessages.delete(thread.id);
+			void send(first.text, first.file, false);
+			if (!thread.title && first.text)
+				void renameConversation(thread.id, first.text, slug);
+		}, 0);
+		return () => clearTimeout(timer);
+	}, []);
+
+	return (
+		<section className="mx-auto w-full min-w-0 max-w-[760px] space-y-6">
 			<div className="space-y-4">
 				{agent.data.messages.map((message) =>
 					message.role === "user" ? (
@@ -622,116 +714,33 @@ function Thread({
 			{agent.status === "error" ? (
 				<p className="text-destructive text-sm" role="alert">
 					No se pudo completar el último pedido. Recargá la página; si el aviso
-					sigue, el hilo quedó trabado: abrí un hilo nuevo para seguir.
+					sigue, el hilo quedó trabado: abrí un chat nuevo para seguir.
 				</p>
 			) : null}
 
-			<form
-				className="sticky bottom-0 space-y-2 border-t bg-background py-4"
-				onSubmit={(event) => {
-					event.preventDefault();
-					const message = text.trim();
-					if ((message.length === 0 && !file) || isInputBlocked) return;
-
-					const options = isBusy
-						? ({ turnPolicy: "steer" } as const)
-						: undefined;
-					const attachment = file;
-					void (async () => {
-						if (!attachment) {
-							await agent.send(message, options);
-							return;
-						}
-						const content: UserContent = [
-							...(message.length > 0
-								? [{ type: "text", text: message } as const]
-								: []),
-							{
-								type: "file",
-								data: await fileToDataUrl(attachment),
-								mediaType: attachment.type || "application/octet-stream",
-								filename: attachment.name,
-							},
-						];
-						await agent.send(content, options);
-					})();
-
-					if (!thread.title && message)
-						void renameConversation(thread.id, message, slug);
-					setText("");
-					clearFile();
-				}}
-			>
-				{file ? (
-					<p className="flex items-center gap-2 text-muted-foreground text-sm">
-						<FileIcon aria-hidden="true" className="size-4 shrink-0" />
-						<span className="truncate">{file.name}</span>
-						<button
-							aria-label="Quitar archivo adjunto"
-							className="text-muted-foreground hover:text-foreground"
-							onClick={clearFile}
-							type="button"
-						>
-							<XIcon className="size-3.5" />
-						</button>
-					</p>
-				) : null}
-				{fileError ? (
-					<p className="text-destructive text-sm" role="alert">
-						{fileError}
-					</p>
-				) : null}
-				<div className="flex gap-2">
-					<input
-						className="sr-only"
-						disabled={isInputBlocked}
-						onChange={handleFileChange}
-						ref={fileInputRef}
-						tabIndex={-1}
-						type="file"
-					/>
-					<Button
-						aria-label="Adjuntar archivo"
-						disabled={isInputBlocked}
-						onClick={() => fileInputRef.current?.click()}
-						size="icon"
-						type="button"
-						variant="outline"
-					>
-						<PaperclipIcon />
-					</Button>
-					<Textarea
-						aria-label="Mensaje para el agente"
-						className="max-h-60 min-h-9 resize-none py-1.5"
-						disabled={isInputBlocked}
-						onChange={(event) => setText(event.target.value)}
-						onKeyDown={(event) => {
-							// Enter envía; Shift+Enter deja el salto de línea.
-							if (
-								event.key !== "Enter" ||
-								event.shiftKey ||
-								event.nativeEvent.isComposing
-							)
-								return;
-							event.preventDefault();
-							event.currentTarget.form?.requestSubmit();
-						}}
-						rows={1}
-						placeholder={
-							pendingRequests.length > 0
-								? "Respondé la tarjeta pendiente para seguir"
-								: "Escribí un mensaje para el agente"
-						}
-						value={text}
-					/>
-					<Button
-						disabled={isInputBlocked || (text.trim().length === 0 && !file)}
-						type="submit"
-					>
-						Enviar
-					</Button>
-				</div>
-			</form>
+			<div className="sticky bottom-0 bg-background py-4">
+				<Composer
+					agent={agentName ? { label: agentName } : null}
+					blocked={isInputBlocked}
+					file={attachment.file}
+					fileError={attachment.fileError}
+					fileInputRef={attachment.fileInputRef}
+					model={{
+						label: thread.model ?? "el default del cliente",
+						hint: "eve fija el modelo al abrir la sesión: para usar otro, abrí un chat nuevo.",
+					}}
+					onClearFile={attachment.clear}
+					onFileChange={attachment.onFileChange}
+					onSubmit={submit}
+					onTextChange={setText}
+					placeholder={
+						pendingRequests.length > 0
+							? "Respondé la tarjeta pendiente para seguir"
+							: "Escribí un mensaje para el agente"
+					}
+					text={text}
+				/>
+			</div>
 		</section>
 	);
 }
