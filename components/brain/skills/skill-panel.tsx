@@ -69,6 +69,10 @@ export function SkillPanel({
 
 	const endpoint = `/${tenantSlug}/brain/skills/files`;
 	const publishable = state.kind !== "publicada" || state.dirty;
+	// Una subida a la vez: un zip que reemplaza borra lo que el paquete no
+	// trae, y publicar congela lo que haya. Ninguno corre a mitad de un lote.
+	const looseBlocked = uploadingLoose || uploadingZip;
+	const busy = isPending || uploadingLoose;
 
 	async function post(file: File, filePath: string) {
 		const form = new FormData();
@@ -81,7 +85,7 @@ export function SkillPanel({
 
 	// Un pedido por archivo, de a uno: la ruta del servidor decide cada uno.
 	async function sendLoose(entries: LooseEntry[]) {
-		if (uploadingLoose) return;
+		if (looseBlocked) return;
 		setMessage(null);
 		setSummary(null);
 		if (entries.length === 0) {
@@ -117,7 +121,7 @@ export function SkillPanel({
 	async function onDrop(event: React.DragEvent) {
 		event.preventDefault();
 		setDragging(false);
-		if (uploadingLoose) return;
+		if (looseBlocked) return;
 		try {
 			await sendLoose(await collectDropped(event.dataTransfer.items));
 		} catch {
@@ -169,7 +173,7 @@ export function SkillPanel({
 							<Button
 								type="button"
 								size="sm"
-								disabled={isPending}
+								disabled={busy}
 								onClick={() => setPublishing(true)}
 							>
 								Revisar y publicar
@@ -180,7 +184,7 @@ export function SkillPanel({
 								type="button"
 								size="sm"
 								variant="outline"
-								disabled={isPending}
+								disabled={busy}
 								onClick={() => {
 									const note = askNote(
 										"¿Por qué se retira? Queda en el registro.",
@@ -257,7 +261,7 @@ export function SkillPanel({
 					}`}
 					onDragOver={(e) => {
 						e.preventDefault();
-						if (!uploadingLoose) setDragging(true);
+						if (!looseBlocked) setDragging(true);
 					}}
 					onDragLeave={() => setDragging(false)}
 					onDrop={onDrop}
@@ -268,7 +272,7 @@ export function SkillPanel({
 							type="button"
 							size="sm"
 							variant="outline"
-							disabled={isPending || uploadingLoose}
+							disabled={isPending || looseBlocked}
 							onClick={() => filesInput.current?.click()}
 						>
 							Elegir archivos…
@@ -277,7 +281,7 @@ export function SkillPanel({
 							type="button"
 							size="sm"
 							variant="outline"
-							disabled={isPending || uploadingLoose}
+							disabled={isPending || looseBlocked}
 							onClick={() => folderInput.current?.click()}
 						>
 							Elegir carpeta…
@@ -352,7 +356,7 @@ export function SkillPanel({
 					type="button"
 					size="sm"
 					variant="outline"
-					disabled={isPending}
+					disabled={busy}
 					onClick={() => setUploadingZip(true)}
 				>
 					Subir paquete (zip)…
@@ -385,7 +389,7 @@ export function SkillPanel({
 										type="button"
 										size="sm"
 										variant="ghost"
-										disabled={isPending}
+										disabled={busy}
 										onClick={() => {
 											const note = askNote(
 												`¿Por qué se republica la v${row.version}? Queda en el registro.`,
