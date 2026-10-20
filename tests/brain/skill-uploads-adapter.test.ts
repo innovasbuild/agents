@@ -152,11 +152,13 @@ const ID = "lx1abc.Rnd_m-1.ventas~cuentas";
 const who = { tenantId: "t1", userId: "u1" };
 
 describe("uploadStaging.issue", () => {
-	it("firma exactamente imports/<tenant>/<persona>/<id>.zip con upsert en skill-packages", async () => {
+	// Sin upsert: una vez subido, el zip que la persona aprobó en la vista
+	// previa no se puede cambiar con la misma URL.
+	it("firma exactamente imports/<tenant>/<persona>/<id>.zip sin upsert en skill-packages", async () => {
 		const out = await uploadStaging().issue({ ...who, uploadId: ID });
 		expect(store.buckets).toContain("skill-packages");
 		expect(store.signed).toEqual([
-			{ path: `imports/t1/u1/${ID}.zip`, upsert: true },
+			{ path: `imports/t1/u1/${ID}.zip`, upsert: false },
 		]);
 		expect(out).toEqual({
 			url: `https://ref.supabase.co/upload/sign/imports/t1/u1/${ID}.zip?token=tk`,

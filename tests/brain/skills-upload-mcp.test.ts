@@ -123,6 +123,7 @@ describe("skill_upload_link", () => {
 		});
 		expect(link.url).toBe(`https://storage.test/t1/ana/${uploadId}`);
 		expect(link.message).toContain("skill_import");
+		expect(link.message).toContain("una sola subida");
 	});
 
 	it("normaliza la carpeta: el prefijo skills/ y las barras de los extremos no cuentan", async () => {

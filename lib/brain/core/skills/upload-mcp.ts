@@ -126,7 +126,7 @@ export function createSkillUploads(deps: SkillUploadsDeps): SkillUploads {
 				contentType: "application/zip",
 				maxBytes: MAX_ZIP_BYTES,
 				expiresIn,
-				message: `Subí el zip con un PUT a url, con Content-Type: application/zip y hasta 4 MB, antes de que venza (${expiresIn} segundos). Después llamá a skill_import con este uploadId para ver la vista previa.`,
+				message: `Subí el zip con un PUT a url, con Content-Type: application/zip y hasta 4 MB, antes de que venza (${expiresIn} segundos). La URL acepta una sola subida: para mandar otro zip, pedí un link nuevo. Después llamá a skill_import con este uploadId para ver la vista previa.`,
 			};
 		},
 

@@ -91,9 +91,11 @@ export function uploadStaging(): UploadStaging {
 			const path = stagingPath(i);
 			await sweepOldUploads(bucket(), i.tenantId, i.userId);
 			// El vencimiento real lo impone parseUploadId con la hora del id: la
-			// URL firmada de Supabase dura más y no se puede acortar.
+			// URL firmada de Supabase dura más y no se puede acortar. Sin upsert:
+			// el zip que la persona aprobó en la vista previa no se cambia después
+			// con la misma URL; cada link es un uploadId nuevo.
 			const { data, error } = await bucket().createSignedUploadUrl(path, {
-				upsert: true,
+				upsert: false,
 			});
 			if (error || !data) {
 				throw new Error(

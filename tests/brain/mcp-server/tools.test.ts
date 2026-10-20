@@ -806,6 +806,7 @@ describe("buildBrainMcpServer · subir skills desde un zip", () => {
 			"skill_upload_link",
 		);
 		expect(link).toContain("ejecutar código");
+		expect(link).toContain("una sola subida");
 		expect(link).toContain("ventas, rrhh");
 		const root = await describeOf(fakeUploads([""]), "skill_upload_link");
 		expect(root).not.toContain("solo en estas carpetas");
