@@ -1,6 +1,8 @@
-// Colores del grafo tomados de los tokens del tema (spec 26.4, D5). Los tokens
-// pueden venir en oklch y Sigma solo entiende hex o rgb: se pintan en un canvas
-// de 1×1 y se lee el píxel, que el navegador ya devuelve en sRGB.
+// Colores del grafo tomados de los tokens del tema (spec 26.4, D5): la paleta de
+// categorías sale de --graph-1…8; aristas, etiquetas, fantasmas y fondo, de
+// --border, --foreground, --destructive y --background. Los tokens pueden venir
+// en oklch (o lab, compilados) y Sigma solo entiende hex o rgb: se pintan en un
+// canvas de 1×1 y se lee el píxel, que el navegador ya devuelve en sRGB.
 
 export interface GraphTheme {
 	palette: string[];
@@ -10,13 +12,9 @@ export interface GraphTheme {
 	background: string;
 }
 
-const PALETTE_TOKENS = [
-	"--chart-1",
-	"--chart-2",
-	"--chart-3",
-	"--chart-4",
-	"--chart-5",
-];
+// Tokens propios del grafo (app/globals.css): --chart-* es gris en los dos
+// temas y comparte el rojo de --destructive, que marca los links rotos.
+const PALETTE_TOKENS = Array.from({ length: 8 }, (_, i) => `--graph-${i + 1}`);
 
 let probe: CanvasRenderingContext2D | null = null;
 
