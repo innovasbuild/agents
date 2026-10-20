@@ -788,6 +788,16 @@ describe("buildBrainMcpServer · subir skills desde un zip", () => {
 		expect(names).not.toContain("skill_import");
 	});
 
+	it("las instrucciones nombran la subida solo si están las tools", async () => {
+		const withUploads = await connect(build(fakeUploads()).server);
+		const instructions = withUploads.getInstructions() ?? "";
+		expect(instructions).toContain("skill_upload_link");
+		expect(instructions).toContain("skill_import");
+		expect(instructions).toContain("BORRADOR");
+		const without = await connect(build(null).server);
+		expect(without.getInstructions() ?? "").not.toContain("skill_upload_link");
+	});
+
 	it("con skillUploads se listan las dos", async () => {
 		const client = await connect(build(fakeUploads()).server);
 		const names = (await client.listTools()).tools.map((t) => t.name).sort();

@@ -92,6 +92,9 @@ function uploadableNote(folders: string[]): string {
 	return ` Vos podés subir solo en estas carpetas, y tenés que pasar una en folder: ${shown}.`;
 }
 
+const UPLOAD_INSTRUCTIONS =
+	"Si la persona te pasa una skill en un zip y tu entorno puede ejecutar código, subila con skill_upload_link y skill_import: mostrale la vista previa antes de confirmar. Queda en el BORRADOR: un administrador la publica desde la plataforma.";
+
 const UPLOAD_LINK_DESCRIPTION =
 	'Prepara la subida de una skill desde un zip (SKILL.md con name y description, más scripts y archivos; hasta 4 MB) a una carpeta de skills/: devuelve un uploadId y una URL para subir el zip con un PUT, que vence en 10 minutos. La URL acepta una sola subida: para mandar otro zip, pedí un link nuevo. Después llamá a skill_import con el uploadId. Sirve solo si tu entorno puede ejecutar código y subir un archivo por HTTP; si no puede, decile a la persona que suba el zip desde la plataforma. `folder` va sin el prefijo skills/ ("" es directo en skills/). Si ya hay una skill con ese name en la carpeta, la reemplaza. Todo queda en BORRADOR: un administrador lo publica desde la plataforma.';
 
@@ -139,6 +142,7 @@ export function buildBrainMcpServer(ctx: {
 					.filter((text): text is string => text !== null)
 					.join(" ")
 			: null,
+		uploads ? UPLOAD_INSTRUCTIONS : null,
 		manage ? MANAGE_INSTRUCTIONS : null,
 	]
 		.filter((text): text is string => Boolean(text))
