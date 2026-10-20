@@ -1,7 +1,7 @@
 // Lógica pura del mapa de conexiones del brain que corre en el cliente (spec 26.4:
 // D4 tamaño, D5 color, D7 filtros, D11 posición inicial, D14 grado fijo). Se
 // importa desde un Client Component: sin node:*, sin react ni next/*.
-import type { GraphNode, GraphPayload } from "./graph";
+import { GRAPH_STATUSES, type GraphNode, type GraphPayload } from "./graph";
 
 // Vecinos distintos de cada nodo sobre las aristas. Se calcula una vez y queda
 // fijo: no cambia al activar filtros (D14).
@@ -64,6 +64,21 @@ export function categoryColors(base: string[], count: number): string[] {
 	});
 }
 
+// Lleva `color` hacia `toward` en la proporción `amount` (0 = igual, 1 = toward).
+// Atenúa las archivadas mezclándolas con el fondo, sin depender de la
+// transparencia del lienzo (D5).
+export function fadeColor(
+	color: string,
+	toward: string,
+	amount: number,
+): string {
+	const from = parseColor(color);
+	const to = parseColor(toward);
+	const t = Math.min(Math.max(amount, 0), 1);
+	const out = [0, 1, 2].map((i) => Math.round(from[i] + (to[i] - from[i]) * t));
+	return `rgb(${out.join(", ")})`;
+}
+
 // FNV-1a de 32 bits sobre las unidades UTF-16 del texto.
 function fnv1a(text: string): number {
 	let hash = 0x811c9dc5;
@@ -80,6 +95,58 @@ export function seedPosition(slug: string): { x: number; y: number } {
 	const angle = (fnv1a(slug) / 2 ** 32) * 2 * Math.PI;
 	const radius = Math.sqrt(fnv1a(`${slug}\u0001`) / 2 ** 32);
 	return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+}
+
+export interface GraphNodeAttributes {
+	index: number; // posición en payload.nodes
+	label: string;
+	x: number;
+	y: number;
+	size: number;
+	category: number;
+	archived: boolean;
+}
+
+const ARCHIVED = GRAPH_STATUSES.indexOf("archivado");
+
+// Entradas para `graph.import()` de graphology: clave = slug, posición sembrada
+// (D11), tamaño por grado fijo (D4). El color lo pone quien dibuja, porque
+// depende del tema.
+export function toGraphData(payload: Pick<GraphPayload, "nodes" | "edges">): {
+	nodes: Array<{ key: string; attributes: GraphNodeAttributes }>;
+	edges: Array<{ source: string; target: string }>;
+} {
+	const degree = degrees(payload);
+	const maxDegree = degree.reduce((max, d) => Math.max(max, d), 0);
+	const nodes = payload.nodes.map(([slug, title, category, status], i) => ({
+		key: slug,
+		attributes: {
+			index: i,
+			label: title || slug,
+			...seedPosition(slug),
+			size: nodeSize(degree[i], maxDegree),
+			category,
+			archived: status === ARCHIVED,
+		},
+	}));
+	const edges: Array<{ source: string; target: string }> = [];
+	for (const [a, b] of payload.edges) {
+		const source = payload.nodes[a]?.[0];
+		const target = payload.nodes[b]?.[0];
+		if (source === undefined || target === undefined || a === b) continue;
+		edges.push({ source, target });
+	}
+	return { nodes, edges };
+}
+
+// Tiempo de layout acotado (spec §2.1 a): el spike midió 6 s hasta asentar con
+// 1.000 nodos y 20–21 s con 10.000. Entre medio se interpola; por encima queda
+// en el tope de 10.000, aunque no termine de asentar.
+export function layoutBudgetMs(nodeCount: number): number {
+	const [n0, t0, n1, t1] = [1_000, 6_000, 10_000, 21_000];
+	if (!(nodeCount > n0)) return t0;
+	if (nodeCount >= n1) return t1;
+	return Math.round(t0 + ((t1 - t0) * (nodeCount - n0)) / (n1 - n0));
 }
 
 // Búsqueda en anchura sin dirección; incluye al nodo de inicio.

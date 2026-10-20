@@ -1,7 +1,9 @@
 // Value: protects=la lógica pura del mapa de conexiones (grado fijo, tamaño por raíz cuadrada, colores por categoría sin
-//   colisión, posición sembrada, vecindario a N saltos, filtros combinados con Y, búsqueda sin tildes y fecha es-AR).
-// fails_when=el tamaño no es monótono o se sale del rango, dos categorías dan el mismo color, el vecindario cruza más saltos
-//   de los pedidos, un filtro se combina con O en vez de Y, o "Politica" deja de encontrar "Política".
+//   colisión, atenuado de archivadas, entradas de graphology, tope del layout, posición sembrada, vecindario a N saltos,
+//   filtros combinados con Y, búsqueda sin tildes y fecha es-AR) y que el componente de Sigma no arrastre node:*.
+// fails_when=el tamaño no es monótono o se sale del rango, dos categorías dan el mismo color, una arista apunta a un
+//   slug que no existe o es un autoenlace, el layout deja de tener tope, el vecindario cruza más saltos de los pedidos,
+//   un filtro se combina con O en vez de Y, o "Politica" deja de encontrar "Política".
 // why_new=el cliente de Sigma (26.4b) depende de estas funciones y no tenían cobertura; seam=none
 
 import { describe, expect, it } from "vitest";
@@ -9,12 +11,15 @@ import type { GraphNode, GraphPayload } from "@/lib/brain/core/graph";
 import {
 	categoryColors,
 	degrees,
+	fadeColor,
 	formatEditDate,
 	type GraphFilters,
+	layoutBudgetMs,
 	matchesText,
 	neighborhood,
 	nodeSize,
 	seedPosition,
+	toGraphData,
 	visibleNodes,
 } from "@/lib/brain/core/graph-view";
 import { nodeBuiltins } from "./client-safe";
@@ -129,6 +134,87 @@ describe("categoryColors", () => {
 			"rgb(128, 128, 128)",
 		]);
 		expect(categoryColors(base, 0)).toEqual([]);
+	});
+});
+
+describe("fadeColor", () => {
+	it("mezcla hacia el destino en la proporción pedida", () => {
+		expect(fadeColor("#000000", "rgb(200, 100, 50)", 0.5)).toBe(
+			"rgb(100, 50, 25)",
+		);
+	});
+
+	it("0 deja el color y 1 da el destino; fuera de rango se acota", () => {
+		expect(fadeColor("#112233", "#ffffff", 0)).toBe("rgb(17, 34, 51)");
+		expect(fadeColor("#112233", "#ffffff", 1)).toBe("rgb(255, 255, 255)");
+		expect(fadeColor("#112233", "#ffffff", 7)).toBe("rgb(255, 255, 255)");
+		expect(fadeColor("#112233", "#ffffff", -1)).toBe("rgb(17, 34, 51)");
+	});
+
+	it("entiende rgba (ignora la transparencia)", () => {
+		expect(fadeColor("rgba(10, 20, 30, 0.5)", "#000000", 0)).toBe(
+			"rgb(10, 20, 30)",
+		);
+	});
+});
+
+describe("toGraphData", () => {
+	const payload = {
+		nodes: [
+			node("hub", { title: "Hub" }),
+			node("hoja", { category: 1, status: 2 }),
+			node("otra", { title: "" }),
+			node("sola"),
+		],
+		edges: [
+			[0, 1],
+			[0, 2],
+			[2, 2],
+			[0, 9],
+		] as Array<[number, number]>,
+	};
+
+	it("una entrada por nodo con clave = slug, título como etiqueta y posición sembrada", () => {
+		const { nodes } = toGraphData(payload);
+		expect(nodes.map((n) => n.key)).toEqual(["hub", "hoja", "otra", "sola"]);
+		expect(nodes[0].attributes.label).toBe("Hub");
+		expect(nodes[2].attributes.label).toBe("otra");
+		expect(nodes[0].attributes).toMatchObject({
+			index: 0,
+			...seedPosition("hub"),
+		});
+		expect(nodes[1].attributes).toMatchObject({ category: 1, archived: true });
+		expect(nodes[0].attributes.archived).toBe(false);
+	});
+
+	it("el hub es más grande que la hoja y la sola queda en el mínimo", () => {
+		const { nodes } = toGraphData(payload);
+		const size = (i: number) => nodes[i].attributes.size;
+		expect(size(0)).toBe(nodeSize(2, 2));
+		expect(size(0)).toBeGreaterThan(size(1));
+		expect(size(3)).toBe(nodeSize(0, 2));
+	});
+
+	it("aristas por slug, sin autoenlaces ni índices fuera de rango", () => {
+		expect(toGraphData(payload).edges).toEqual([
+			{ source: "hub", target: "hoja" },
+			{ source: "hub", target: "otra" },
+		]);
+	});
+});
+
+describe("layoutBudgetMs", () => {
+	it("6 s hasta 1.000 nodos y 21 s desde 10.000 (spike §2.1)", () => {
+		expect(layoutBudgetMs(0)).toBe(6_000);
+		expect(layoutBudgetMs(1_000)).toBe(6_000);
+		expect(layoutBudgetMs(10_000)).toBe(21_000);
+		expect(layoutBudgetMs(20_000)).toBe(21_000);
+	});
+
+	it("crece entre medio", () => {
+		const mid = layoutBudgetMs(5_500);
+		expect(mid).toBe(13_500);
+		expect(layoutBudgetMs(3_000)).toBeLessThan(mid);
 	});
 });
 
@@ -283,5 +369,9 @@ describe("formatEditDate", () => {
 describe("graph-view en el cliente", () => {
 	it("no arrastra node:* ni builtins de Node", () => {
 		expect(nodeBuiltins("lib/brain/core/graph-view.ts")).toEqual([]);
+	});
+
+	it("el componente del grafo tampoco", () => {
+		expect(nodeBuiltins("components/brain/graph/brain-graph.tsx")).toEqual([]);
 	});
 });
