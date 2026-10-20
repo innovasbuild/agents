@@ -149,6 +149,9 @@ function storeError(error: PostgrestLikeError): WikiStoreError {
 // PostgREST corta cada respuesta en max_rows (1000 en config.toml): se pagina
 // de a PAGE_SIZE y se avanza por las filas recibidas, no por PAGE_SIZE, así
 // sigue completo si el servidor corta más abajo. Corta en la respuesta vacía.
+// Con offset, una inserción concurrente antes del offset repite la última fila
+// de la página anterior: se descartan las filas con un `slug` ya visto (gana la
+// primera aparición, el orden se conserva).
 const PAGE_SIZE = 1000;
 
 async function fetchAllPages(
@@ -158,12 +161,17 @@ async function fetchAllPages(
 	) => PromiseLike<{ data: unknown; error: PostgrestLikeError | null }>,
 ): Promise<Array<Record<string, unknown>>> {
 	const all: Array<Record<string, unknown>> = [];
+	const seen = new Set<unknown>();
 	for (let from = 0; ; ) {
 		const { data, error } = await fetchPage(from, from + PAGE_SIZE - 1);
 		if (error) throw storeError(error);
 		const rows = (data ?? []) as Array<Record<string, unknown>>;
 		if (rows.length === 0) return all;
-		all.push(...rows);
+		for (const row of rows) {
+			if (seen.has(row.slug)) continue;
+			seen.add(row.slug);
+			all.push(row);
+		}
 		from += rows.length;
 	}
 }

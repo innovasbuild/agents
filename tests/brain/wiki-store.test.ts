@@ -13,13 +13,20 @@ type Call = { table: string; filters: Record<string, unknown> };
 // max_rows de supabase/config.toml), con o sin range. `ranges` y `orders`
 // guardan, por consulta que terminó, el rango pedido y la columna de orden;
 // `rpcRanges` y `rpcOrders` hacen lo mismo con las llamadas a rpc.
+// `afterQuery(n)` corre después de resolver la consulta número n (de a una, entre
+// tablas y rpc) y puede mutar `rows` o `errors` para simular lo que pasa entre dos
+// páginas (una inserción concurrente, una falla de la base).
 type DbError = { code: string; message: string; details: string | null };
 
 function fakeClient(
 	rows: Record<string, Array<Record<string, unknown>>>,
 	errors: Record<string, DbError> = {},
-	{ maxRows = 1000 }: { maxRows?: number } = {},
+	{
+		maxRows = 1000,
+		afterQuery,
+	}: { maxRows?: number; afterQuery?: (queryNumber: number) => void } = {},
 ) {
+	let queries = 0;
 	const calls: Call[] = [];
 	const ranges: Array<[number, number] | null> = [];
 	const orders: Array<string | null> = [];
@@ -52,6 +59,7 @@ function fakeClient(
 						Math.min(to + 1, from + maxRows),
 					);
 					resolve({ data, error: errors[name] ?? null });
+					afterQuery?.(++queries);
 				},
 			};
 			return chain;
@@ -98,6 +106,7 @@ function fakeClient(
 						data: errors[table] ? null : data,
 						error: errors[table] ?? null,
 					});
+					afterQuery?.(++queries);
 				},
 			};
 			return chain;
@@ -278,6 +287,93 @@ describe("createSupabaseWikiStore.listLinks · paginado", () => {
 		await expect(
 			createSupabaseWikiStore(client).listLinks("tenant-a"),
 		).rejects.toMatchObject({ code: "42501" });
+	});
+});
+
+const dbError: DbError = {
+	code: "42501",
+	message: "permiso denegado",
+	details: null,
+};
+
+// Value: protects=listMeta y listLinks no devuelven un slug dos veces ni pierden el orden cuando una inserción concurrente corre las filas entre dos páginas,
+//   y propagan el error de la base venga en la primera página o en una posterior.
+// fails_when=fetchAllPages deja de deduplicar por slug (el árbol y el índice reciben una página repetida) o se traga el error de una página posterior.
+// why_new=con paginación por offset, una fila insertada antes del offset repite la última fila de la página anterior; seam=none
+describe("createSupabaseWikiStore · paginado con cambios y errores entre páginas", () => {
+	it("listMeta no repite el slug que una inserción concurrente corre a la página siguiente", async () => {
+		const rows = pagesRows(1500);
+		const { client } = fakeClient(
+			{ brain_pages: rows },
+			{},
+			{
+				// Se inserta una fila al principio: la fila 999 pasa a la posición 1000.
+				afterQuery: (n) => {
+					if (n === 1) rows.unshift({ ...pageRow, slug: "a/recien-insertada" });
+				},
+			},
+		);
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		const slugs = metas.map((m) => m.slug);
+		expect(new Set(slugs).size).toBe(slugs.length);
+		expect(slugs).toHaveLength(1500);
+		expect(slugs.slice(0, 1000)).toEqual(pagesRows(1000).map((r) => r.slug));
+		expect(slugs[1000]).toBe("p/01000");
+	});
+
+	it("listLinks no repite el slug que una inserción concurrente corre a la página siguiente", async () => {
+		const rows = linksRows(1500);
+		const { client } = fakeClient(
+			{ brain_page_links: rows },
+			{},
+			{
+				afterQuery: (n) => {
+					if (n === 1)
+						rows.unshift({ slug: "a/recien-insertada", links: rows[0].links });
+				},
+			},
+		);
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		const slugs = links.map((l) => l.slug);
+		expect(new Set(slugs).size).toBe(slugs.length);
+		expect(slugs).toHaveLength(1500);
+		expect(slugs.slice(0, 1000)).toEqual(linksRows(1000).map((r) => r.slug));
+		expect(slugs[1000]).toBe("p/01000");
+	});
+
+	it("listMeta propaga el error de la primera página", async () => {
+		const { client } = fakeClient({}, { brain_pages: dbError });
+		await expect(
+			createSupabaseWikiStore(client).listMeta("tenant-a"),
+		).rejects.toBeInstanceOf(WikiStoreError);
+	});
+
+	it("listMeta propaga el error de una página posterior", async () => {
+		const errors: Record<string, DbError> = {};
+		const { client } = fakeClient({ brain_pages: pagesRows(2500) }, errors, {
+			afterQuery: (n) => {
+				if (n === 1) errors.brain_pages = dbError;
+			},
+		});
+		await expect(
+			createSupabaseWikiStore(client).listMeta("tenant-a"),
+		).rejects.toMatchObject({ code: "42501" });
+	});
+
+	it("listLinks propaga el error de una página posterior", async () => {
+		const errors: Record<string, DbError> = {};
+		const { client } = fakeClient(
+			{ brain_page_links: linksRows(2500) },
+			errors,
+			{
+				afterQuery: (n) => {
+					if (n === 1) errors.brain_page_links = dbError;
+				},
+			},
+		);
+		const result = createSupabaseWikiStore(client).listLinks("tenant-a");
+		await expect(result).rejects.toBeInstanceOf(WikiStoreError);
+		await expect(result).rejects.toMatchObject({ code: "42501" });
 	});
 });
 
