@@ -186,7 +186,13 @@ export function UploadDialogBody({
 						accept=".zip,application/zip"
 						disabled={busy}
 						className="block w-full"
-						onChange={(e) => choose(e.target.files?.[0])}
+						onChange={(e) => {
+							const chosen = e.target.files?.[0];
+							// El archivo ya está en `choose`: se vacía el campo para que
+							// elegir la misma ruta otra vez (corregida) vuelva a disparar.
+							e.target.value = "";
+							choose(chosen);
+						}}
 					/>
 					<p className="text-muted-foreground text-xs">
 						Un .zip de hasta 4 MB con el SKILL.md adentro. El name del SKILL.md

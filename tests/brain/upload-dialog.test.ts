@@ -67,9 +67,24 @@ function open(target: UploadTarget) {
 	});
 }
 
+// Como el navegador: elegir la misma ruta otra vez no dispara `change` salvo
+// que el campo se haya vaciado (value = "").
 async function pick(file: File) {
 	const input = document.querySelector<HTMLInputElement>('input[type="file"]');
 	if (!input) throw new Error("falta el campo del archivo");
+	if (!Object.hasOwn(input, "selectedPath")) {
+		let path = "";
+		Object.defineProperty(input, "selectedPath", { value: true });
+		Object.defineProperty(input, "value", {
+			get: () => path,
+			set: (next: string) => {
+				path = String(next);
+			},
+			configurable: true,
+		});
+	}
+	if (input.value === file.name) return;
+	input.value = file.name;
 	Object.defineProperty(input, "files", { value: [file], configurable: true });
 	await act(async () => {
 		input.dispatchEvent(new Event("change", { bubbles: true }));
@@ -209,6 +224,31 @@ describe("UploadDialog", () => {
 		expect(items).toEqual(["Falta el name.", "Sobra un archivo."]);
 		expect(button("Crear la skill")?.disabled).toBe(true);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it("elegir el mismo zip otra vez, corregido, vuelve a pedir la vista previa", async () => {
+		fetchMock
+			.mockReturnValueOnce(
+				reply(
+					{
+						ok: false,
+						code: "validation",
+						message: "Falta el name.",
+						problems: ["Falta el name."],
+					},
+					422,
+				),
+			)
+			.mockReturnValueOnce(reply(preview()));
+		open({ kind: "folder", folder: "ventas" });
+		await pick(zip("cotizar.zip"));
+		expect(text()).toContain("Falta el name.");
+
+		await pick(zip("cotizar.zip"));
+
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(text()).toContain("Crea una skill nueva");
+		expect(text()).not.toContain("Falta el name.");
 	});
 
 	it("si el servidor no contesta JSON, avisa sin romper", async () => {
