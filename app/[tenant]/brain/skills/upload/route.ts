@@ -4,7 +4,7 @@ import { unzipOrProblem } from "@/lib/brain/adapters/skill-zip";
 import { filesDeps } from "@/lib/brain/adapters/skills";
 import { resolveBrainBinding } from "@/lib/brain/core/resolve";
 import type { FilesDeps } from "@/lib/brain/core/skills/files";
-import { isSameOrigin } from "@/lib/brain/core/skills/http";
+import { checkRequestGuards, statusFor } from "@/lib/brain/core/skills/http";
 import {
 	MAX_ZIP_BYTES,
 	normalizeSkillFolder,
@@ -23,17 +23,6 @@ import { loadTenantBindings } from "@/lib/connectors/bindings";
 // No es una server action porque esas tienen tope de 2 MB. El permiso lo
 // decide core/skills/upload.ts.
 
-const TENANT = /^[a-z0-9-]{1,63}$/;
-const STATUS: Record<SkillFailure["code"], number> = {
-	not_found: 404,
-	forbidden: 403,
-	conflict: 409,
-	validation: 422,
-	unsupported: 422,
-	name_taken: 409,
-};
-// El formulario multipart agrega unos bytes alrededor del archivo.
-const MAX_REQUEST_BYTES = MAX_ZIP_BYTES + 65_536;
 const NOT_FOUND = "No encontrado.";
 
 function refuse(status: number, message: string): Response {
@@ -41,7 +30,7 @@ function refuse(status: number, message: string): Response {
 }
 
 function failed(result: SkillFailure & { problems?: string[] }): Response {
-	return Response.json(result, { status: STATUS[result.code] });
+	return Response.json(result, { status: statusFor(result.code) });
 }
 
 export async function POST(
@@ -49,21 +38,13 @@ export async function POST(
 	{ params }: { params: Promise<{ tenant: string }> },
 ) {
 	const { tenant } = await params;
-	if (!TENANT.test(tenant)) return refuse(404, NOT_FOUND);
-	// Un route handler no trae el chequeo de origen de las server actions.
-	if (
-		!isSameOrigin(request.headers.get("origin"), request.headers.get("host"))
-	) {
-		return refuse(403, "Origen no permitido.");
-	}
-	// Sin Content-Length no hay cómo acotar lo que se va a leer.
-	const length = request.headers.get("content-length");
-	if (length === null || !/^\d+$/.test(length)) {
-		return refuse(411, "Falta el tamaño del pedido.");
-	}
-	if (Number(length) > MAX_REQUEST_BYTES) {
-		return refuse(413, "El zip supera los 4 MB.");
-	}
+	const refused = checkRequestGuards(
+		request,
+		tenant,
+		MAX_ZIP_BYTES,
+		"El zip supera los 4 MB.",
+	);
+	if (refused) return refused;
 
 	try {
 		const deps = filesDeps();
@@ -109,21 +90,20 @@ async function handleUpload(
 	const folder = form.get("folder");
 	const slug = form.get("slug");
 	// Exactamente un destino: la carpeta (puede ser "") o la skill.
+	let target: UploadTarget | null = null;
+	if (typeof slug === "string" && folder === null) {
+		target = { kind: "skill", slug };
+	} else if (typeof folder === "string" && slug === null) {
+		target = { kind: "folder", folder: normalizeSkillFolder(folder) };
+	}
 	if (
 		(action !== "preview" && action !== "confirm") ||
 		!(file instanceof File) ||
-		(folder === null) === (slug === null) ||
-		(folder !== null && typeof folder !== "string") ||
-		(slug !== null && typeof slug !== "string")
+		!target
 	) {
 		return refuse(400, "Pedido inválido.");
 	}
 	if (file.size > MAX_ZIP_BYTES) return refuse(413, "El zip supera los 4 MB.");
-
-	const target: UploadTarget =
-		typeof slug === "string"
-			? { kind: "skill", slug }
-			: { kind: "folder", folder: normalizeSkillFolder(folder as string) };
 
 	const entries = unzipOrProblem(new Uint8Array(await file.arrayBuffer()));
 	if ("error" in entries) {

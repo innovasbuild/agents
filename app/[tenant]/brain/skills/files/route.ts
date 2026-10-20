@@ -6,7 +6,12 @@ import {
 	putSkillFile,
 	readSkillFile,
 } from "@/lib/brain/core/skills/files";
-import { fileHeaders, isSameOrigin } from "@/lib/brain/core/skills/http";
+import {
+	checkRequestGuards,
+	fileHeaders,
+	isTenantSlug,
+	statusFor,
+} from "@/lib/brain/core/skills/http";
 import { MAX_FILE_BYTES } from "@/lib/brain/core/skills/package";
 import type { SkillFailure } from "@/lib/brain/core/skills/publish";
 
@@ -14,24 +19,12 @@ import type { SkillFailure } from "@/lib/brain/core/skills/publish";
 // §6). No es una server action porque esas tienen tope de 2 MB. El permiso lo
 // decide core/skills/files.ts.
 
-const TENANT = /^[a-z0-9-]{1,63}$/;
-const STATUS: Record<SkillFailure["code"], number> = {
-	not_found: 404,
-	forbidden: 403,
-	conflict: 409,
-	validation: 422,
-	unsupported: 422,
-	name_taken: 409,
-};
-// El formulario multipart agrega unos bytes alrededor del archivo.
-const MAX_REQUEST_BYTES = MAX_FILE_BYTES + 65_536;
-
 function refuse(status: number, message: string): Response {
 	return Response.json({ ok: false, message }, { status });
 }
 
 function failed(result: SkillFailure): Response {
-	return Response.json(result, { status: STATUS[result.code] });
+	return Response.json(result, { status: statusFor(result.code) });
 }
 
 export async function GET(
@@ -45,7 +38,7 @@ export async function GET(
 	const rawVersion = query.get("version");
 	const version = rawVersion === null ? undefined : Number(rawVersion);
 	if (
-		!TENANT.test(tenant) ||
+		!isTenantSlug(tenant) ||
 		!slug ||
 		!path ||
 		(version !== undefined && (!Number.isInteger(version) || version < 1))
@@ -71,21 +64,13 @@ export async function POST(
 	{ params }: { params: Promise<{ tenant: string }> },
 ) {
 	const { tenant } = await params;
-	if (!TENANT.test(tenant)) return refuse(404, "No encontrado.");
-	// Un route handler no trae el chequeo de origen de las server actions.
-	if (
-		!isSameOrigin(request.headers.get("origin"), request.headers.get("host"))
-	) {
-		return refuse(403, "Origen no permitido.");
-	}
-	// Sin Content-Length no hay cómo acotar lo que se va a leer.
-	const length = request.headers.get("content-length");
-	if (length === null || !/^\d+$/.test(length)) {
-		return refuse(411, "Falta el tamaño del pedido.");
-	}
-	if (Number(length) > MAX_REQUEST_BYTES) {
-		return refuse(413, "El archivo supera los 4 MB.");
-	}
+	const refused = checkRequestGuards(
+		request,
+		tenant,
+		MAX_FILE_BYTES,
+		"El archivo supera los 4 MB.",
+	);
+	if (refused) return refused;
 
 	const deps = filesDeps();
 	// Lo más barato primero: quien no es miembro no hace trabajar al servidor.
