@@ -47,6 +47,19 @@ const DRAFT_INSTRUCTIONS =
 const DRAFT_PUBLISHED_NOTE =
 	"skill_load y skill_file siguen devolviendo lo publicado, no el borrador.";
 
+const MAX_LISTED_FOLDERS = 20;
+
+// Quien solo administra carpetas puntuales de skills no puede crear directo en
+// skills/: se le dice dónde sí, en la descripción de la tool.
+function creatableNote(folders: string[] | undefined): string {
+	if (!folders || folders.includes("")) return "";
+	if (folders.length === 0) {
+		return " No tenés carpetas donde crear skills nuevas.";
+	}
+	const shown = folders.slice(0, MAX_LISTED_FOLDERS).join(", ");
+	return ` Vos podés crear solo en estas carpetas, y tenés que pasar una en folder: ${shown}.`;
+}
+
 function result(value: Record<string, unknown>, isError = false) {
 	return {
 		content: [{ type: "text" as const, text: JSON.stringify(value) }],
@@ -317,8 +330,7 @@ export function buildBrainMcpServer(ctx: {
 		server.registerTool(
 			SKILL_TOOL_NAMES.create,
 			{
-				description:
-					"Crea una skill nueva como BORRADOR en skills/<folder>/<name> (`folder` va sin el prefijo skills/, tiene que existir y es opcional: sin folder queda directo en skills/). `description` dice cuándo conviene usarla; `instructions` es el cuerpo del SKILL.md. Nadie más la ve hasta que un administrador la publique desde la plataforma. Los archivos se agregan después con skill_draft_write_file.",
+				description: `Crea una skill nueva como BORRADOR en skills/<folder>/<name> (\`folder\` va sin el prefijo skills/, tiene que existir y es opcional: sin folder queda directo en skills/). \`description\` dice cuándo conviene usarla; \`instructions\` es el cuerpo del SKILL.md. Nadie más la ve hasta que un administrador la publique desde la plataforma. Los archivos se agregan después con skill_draft_write_file.${creatableNote(drafts.creatableFolders)}`,
 				inputSchema: {
 					name: z.string().min(1).max(64),
 					folder: z.string().min(1).max(150).optional(),

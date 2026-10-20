@@ -1516,4 +1516,140 @@ describe("handleBrainMcp · edición de skills", () => {
 		expect(result.isError).toBe(true);
 		expect(result.structuredContent).toMatchObject({ error: "not_found" });
 	});
+
+	describe("un miembro que no es admin del tenant, con administración sobre una carpeta de skills", () => {
+		const folderAdmin = {
+			rules: {
+				load: async () => [
+					{
+						path: "skills/ventas",
+						principal: "user" as const,
+						userId: "ana",
+						level: "administrador" as const,
+					},
+				],
+			},
+		};
+		const memberDeps = (extra: Partial<BrainMcpDeps> = {}) =>
+			deps({
+				...withSkillCategory,
+				...folderAdmin,
+				skills: skillsDeps(),
+				...extra,
+			});
+
+		it("ve las cuatro tools", async () => {
+			const client = await connect("ana", memberDeps());
+			expect(await names(client)).toEqual([...BRAIN_TOOLS, ...DRAFT_TOOLS]);
+		});
+
+		it("la descripción de skill_create le dice en qué carpeta puede crear", async () => {
+			const client = await connect("ana", memberDeps());
+			const tool = (await client.listTools()).tools.find(
+				(t) => t.name === "skill_create",
+			);
+			expect(tool?.description).toContain(
+				"tenés que pasar una en folder: ventas",
+			);
+		});
+
+		it("sin folder el rechazo le dice a dónde ir, y no guarda", async () => {
+			const d = memberDeps();
+			const client = await connect("ana", d);
+			const result = await client.callTool({
+				name: "skill_create",
+				arguments: {
+					name: "nueva",
+					description: "Armar algo.",
+					instructions: "# Pasos\n",
+					reason: "alta",
+				},
+			});
+			expect(result.isError).toBe(true);
+			expect(result.structuredContent).toMatchObject({
+				error: "forbidden",
+				message: expect.stringContaining("Podés crear en: ventas"),
+			});
+			expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+		});
+
+		it("crea una skill en su carpeta, con el permiso de la carpeta y ella como autora", async () => {
+			const d = memberDeps();
+			const client = await connect("ana", d);
+			const result = await client.callTool({
+				name: "skill_create",
+				arguments: {
+					name: "nueva",
+					folder: "ventas",
+					description: "Armar algo.",
+					instructions: "# Pasos\n",
+					reason: "alta",
+				},
+			});
+			expect(result.structuredContent).toMatchObject({
+				ok: true,
+				slug: "skills/ventas/nueva",
+			});
+			expect(d.providerInstance.upsert).toHaveBeenCalledWith(
+				expect.objectContaining({ slug: "skills/ventas/nueva" }),
+				{ kind: "user", userId: "ana" },
+			);
+		});
+
+		it("no crea fuera de su carpeta", async () => {
+			const d = memberDeps();
+			const client = await connect("ana", d);
+			const result = await client.callTool({
+				name: "skill_create",
+				arguments: {
+					name: "nueva",
+					folder: "rrhh",
+					description: "Armar algo.",
+					instructions: "# Pasos\n",
+					reason: "alta",
+				},
+			});
+			expect(result.isError).toBe(true);
+			expect(result.structuredContent).toMatchObject({ error: "forbidden" });
+			expect(d.providerInstance.upsert).not.toHaveBeenCalled();
+		});
+
+		it("lee, edita y escribe archivos de una skill de su carpeta", async () => {
+			const provider = fakeProvider();
+			provider.read = vi.fn(async () => skillPage);
+			provider.upsert = vi.fn(async () => ({ slug: SKILL_SLUG, revision: 4 }));
+			const client = await connect(
+				"ana",
+				memberDeps({ provider: () => provider }),
+			);
+			const read = await client.callTool({
+				name: "skill_draft_read",
+				arguments: { skill: "reporte" },
+			});
+			expect(read.structuredContent).toMatchObject({
+				ok: true,
+				slug: SKILL_SLUG,
+			});
+			const edited = await client.callTool({
+				name: "skill_draft_edit",
+				arguments: {
+					skill: "reporte",
+					old: "Uno.",
+					new: "Uno y dos.",
+					reason: "r",
+				},
+			});
+			expect(edited.structuredContent).toMatchObject({ ok: true, revision: 4 });
+			const file = await client.callTool({
+				name: "skill_draft_write_file",
+				arguments: {
+					skill: "reporte",
+					path: "references/guia.md",
+					content: "# Guía\n",
+				},
+			});
+			expect(file.structuredContent).toMatchObject({ ok: true });
+			expect(editStore.putFile).toHaveBeenCalled();
+		});
+	});
 });

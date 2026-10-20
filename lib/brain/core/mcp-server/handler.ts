@@ -25,6 +25,7 @@ import {
 } from "../skills/catalog.ts";
 import {
 	canEditSkills,
+	creatableSkillFolders,
 	createSkillDrafts,
 	type SkillDrafts,
 } from "../skills/draft.ts";
@@ -307,6 +308,7 @@ async function handleBrainMcpInner(
 			if (canEditSkills(rules, principal, await overview())) {
 				skillDrafts = createSkillDrafts({
 					tenantSlug: slug,
+					creatableFolders: creatableSkillFolders(rules, principal),
 					levelOf: (path) => resolveAccess(rules, principal, path),
 					reviewUrl: (skillSlug) =>
 						skillReviewUrl(deps.publicUrl, slug, skillSlug, deps.tenantHost),

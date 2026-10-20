@@ -53,9 +53,13 @@ export interface SkillDraftDeps {
 	files: FilesDeps;
 	levelOf(path: string): Level | null;
 	reviewUrl(slug: string): string;
+	/** Carpetas (relativas a skills/) donde la persona puede crear; "" es directo bajo skills/. */
+	creatableFolders?: string[];
 }
 
 export interface SkillDrafts {
+	/** Dónde puede crear skills esta persona, para decírselo al asistente. */
+	creatableFolders?: string[];
 	read(input: {
 		skill: string;
 		path?: string;
@@ -239,6 +243,45 @@ export function canEditSkills(
 	);
 }
 
+// Las carpetas (relativas a skills/) donde esta persona puede crear una skill:
+// "" es directo bajo skills/. Quien edita todo skills/ (un administrador de la
+// empresa, o un editor general) no necesita listarlas. Quien solo tiene reglas
+// sobre carpetas puntuales tiene que pasar `folder`, y el asistente no puede
+// adivinar cuál: por eso se le dice.
+export function creatableSkillFolders(
+	rules: AccessRule[],
+	principal: Principal,
+): string[] {
+	const edits = (path: string) =>
+		atLeast(resolveAccess(rules, principal, path), "editor");
+	if (edits(`${SKILLS_PREFIX}x`)) return [""];
+	const found = new Set<string>();
+	for (const rule of rules) {
+		if (rule.path.startsWith(SKILLS_PREFIX) && edits(rule.path)) {
+			found.add(rule.path.slice(SKILLS_PREFIX.length));
+		}
+	}
+	// Una carpeta dentro de otra ya incluida no suma.
+	return [...found]
+		.filter(
+			(folder) =>
+				![...found].some(
+					(other) => other !== folder && folder.startsWith(`${other}/`),
+				),
+		)
+		.sort();
+}
+
+function forbiddenCreate(folders: string[] | undefined): string {
+	const base = "Necesitás ser editor de esa carpeta para crear una skill ahí.";
+	const named = (folders ?? []).filter((folder) => folder !== "");
+	if (folders && folders.length === 0) {
+		return `${base} No tenés carpetas donde crear skills nuevas; sí podés editar las que ya administrás.`;
+	}
+	if (named.length === 0) return base;
+	return `${base} Podés crear en: ${named.join(", ")} (pasá una en folder, sin el prefijo skills/).`;
+}
+
 export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 	const { files, tenantSlug } = deps;
 
@@ -293,6 +336,7 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 	}
 
 	return {
+		creatableFolders: deps.creatableFolders,
 		async read({ skill, path }) {
 			const { actor, row } = await resolve(skill);
 			const base = {
@@ -477,7 +521,7 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 			if (!atLeast(deps.levelOf(slug), "editor")) {
 				throw new BrainError(
 					"forbidden",
-					"Necesitás ser editor de esa carpeta para crear una skill ahí.",
+					forbiddenCreate(deps.creatableFolders),
 				);
 			}
 			let saved: { revision: number };

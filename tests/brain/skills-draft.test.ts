@@ -5,6 +5,7 @@ import { BrainConflict, BrainValidation } from "@/lib/brain/core/errors";
 import { visibleSkills } from "@/lib/brain/core/skills/catalog";
 import {
 	canEditSkills,
+	creatableSkillFolders,
 	createSkillDrafts,
 } from "@/lib/brain/core/skills/draft";
 import type { FilesDeps } from "@/lib/brain/core/skills/files";
@@ -70,6 +71,7 @@ function setup(
 		current?: SkillOverviewRow["current"];
 		saveError?: unknown;
 		twin?: boolean;
+		creatableFolders?: string[];
 	} = {},
 ) {
 	const rules = opts.rules ?? EDITOR;
@@ -185,6 +187,7 @@ function setup(
 		files: filesDeps,
 		levelOf: (path) => resolveAccess(rules, principal, path),
 		reviewUrl: (slug) => `https://agents.test/acme/brain/p/${slug}`,
+		creatableFolders: opts.creatableFolders,
 	});
 	return {
 		drafts,
@@ -930,6 +933,110 @@ describe("skill_create", () => {
 		).rejects.toMatchObject({
 			code: "validation",
 			message: expect.stringContaining("No existe la carpeta"),
+		});
+	});
+});
+
+describe("creatableSkillFolders", () => {
+	const member: Principal = {
+		kind: "user",
+		userId: "x",
+		role: "tenant_member",
+	};
+	const own = (path: string, level: AccessRule["level"]): AccessRule => ({
+		path,
+		principal: "user",
+		userId: "x",
+		level,
+	});
+
+	it("quien edita todo skills/ crea directo, sin listar carpetas", () => {
+		expect(creatableSkillFolders(EDITOR, member)).toEqual([""]);
+		const admin: Principal = {
+			kind: "user",
+			userId: "x",
+			role: "tenant_admin",
+		};
+		expect(creatableSkillFolders([], admin)).toEqual([""]);
+	});
+
+	it("con administración sobre carpetas puntuales lista solo esas, sin el prefijo", () => {
+		const rules = [
+			members("", "lector"),
+			own("skills/ventas", "administrador"),
+			own("skills/rrhh/legajos", "editor"),
+			own("comercial", "administrador"),
+		];
+		expect(creatableSkillFolders(rules, member)).toEqual([
+			"rrhh/legajos",
+			"ventas",
+		]);
+	});
+
+	it("una subcarpeta de otra ya incluida no suma", () => {
+		const rules = [
+			members("", "lector"),
+			own("skills/ventas", "administrador"),
+			own("skills/ventas/mayoristas", "administrador"),
+		];
+		expect(creatableSkillFolders(rules, member)).toEqual(["ventas"]);
+	});
+
+	it("un lector, o quien tiene 'ninguno', no lista nada", () => {
+		expect(creatableSkillFolders(LECTOR, member)).toEqual([]);
+		expect(
+			creatableSkillFolders(
+				[members("", "lector"), own("skills/ventas", "ninguno")],
+				member,
+			),
+		).toEqual([]);
+	});
+});
+
+describe("skill_create · el rechazo le dice al asistente dónde sí puede crear", () => {
+	const input = {
+		name: "nueva",
+		description: "Armar algo.",
+		instructions: "# Pasos\n",
+		reason: "alta",
+	};
+	const rules = [
+		members("", "lector"),
+		members("skills/ventas", "administrador"),
+	];
+
+	it("sin folder, el error nombra las carpetas donde sí", async () => {
+		const { drafts, save } = setup({
+			rules,
+			creatableFolders: ["ventas"],
+		});
+		await expect(drafts.create(input)).rejects.toMatchObject({
+			code: "forbidden",
+			message: expect.stringContaining("Podés crear en: ventas"),
+		});
+		expect(save).not.toHaveBeenCalled();
+		await drafts.create({ ...input, folder: "ventas" });
+		expect(save).toHaveBeenCalledTimes(1);
+	});
+
+	it("sin carpetas donde crear, lo dice", async () => {
+		const { drafts } = setup({ rules: LECTOR, creatableFolders: [] });
+		await expect(drafts.create(input)).rejects.toMatchObject({
+			code: "forbidden",
+			message: expect.stringContaining("No tenés carpetas donde crear"),
+		});
+	});
+
+	it("quien edita todo skills/ recibe el mensaje de siempre", async () => {
+		const { drafts } = setup({
+			rules: [members("", "editor"), members("skills/rrhh", "ninguno")],
+			creatableFolders: [""],
+		});
+		await expect(
+			drafts.create({ ...input, folder: "rrhh" }),
+		).rejects.toMatchObject({
+			code: "forbidden",
+			message: "Necesitás ser editor de esa carpeta para crear una skill ahí.",
 		});
 	});
 });
