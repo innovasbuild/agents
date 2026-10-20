@@ -462,6 +462,7 @@ export function PageWorkspace({
 					value={body}
 					pages={pages}
 					invalid={!!fieldError("body")}
+					unsaved={dirty}
 					onBaseline={(markdown) => {
 						setBaseline(markdown);
 						setSerialized(markdown);

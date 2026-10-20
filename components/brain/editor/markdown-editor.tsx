@@ -2,6 +2,7 @@
 
 import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,6 +31,8 @@ export interface MarkdownEditorProps {
 	pages: PageRef[];
 	disabled?: boolean;
 	invalid?: boolean;
+	// La página tiene cambios sin guardar: un link del brain se abre en otra pestaña.
+	unsaved?: boolean;
 	// La serialización del contenido tal como cargó (una vez, al crearse el editor).
 	onBaseline: (markdown: string) => void;
 	// La serialización (visual) o el texto (código) después de cada cambio.
@@ -43,6 +46,7 @@ export function MarkdownEditor({
 	pages,
 	disabled,
 	invalid,
+	unsaved,
 	onBaseline,
 	onChange,
 }: MarkdownEditorProps) {
@@ -68,6 +72,9 @@ export function MarkdownEditor({
 	);
 	const onChangeRef = useRef(onChange);
 	onChangeRef.current = onChange;
+	const unsavedRef = useRef(unsaved);
+	unsavedRef.current = unsaved;
+	const router = useRouter();
 
 	const detectQuery = useCallback(
 		(ed: NonNullable<ReturnType<typeof useEditor>>) => {
@@ -97,20 +104,39 @@ export function MarkdownEditor({
 				"aria-label": "Contenido de la página",
 				...(invalid ? { "aria-invalid": "true" } : {}),
 			},
-			// Cmd/Ctrl + clic en un link del brain lo abre en otra pestaña.
-			handleClickOn: (_view, _pos, node, _nodePos, event) => {
-				if (node.type.name === "wikiLink" && (event.metaKey || event.ctrlKey)) {
-					window.open(
-						pageHref(tenantSlug, String(node.attrs.target)),
-						"_blank",
-						"noopener",
-					);
+			// Un clic en un link lo abre, sin esperar a que se pueda editar: un link
+			// de la web va a otra pestaña; uno del brain navega en esta, salvo con
+			// Cmd/Ctrl o con cambios sin guardar, que van a otra pestaña para no
+			// perderlos (la navegación del router no avisa al salir).
+			handleClick: (_view, _pos, event) => {
+				if (event.button !== 0 || event.shiftKey || event.altKey) return false;
+				const target = event.target instanceof Element ? event.target : null;
+				const wiki = target?.closest<HTMLElement>("[data-wikilink]");
+				if (wiki?.dataset.wikilink) {
+					const href = pageHref(tenantSlug, wiki.dataset.wikilink);
+					if (event.metaKey || event.ctrlKey || unsavedRef.current) {
+						window.open(href, "_blank", "noopener");
+					} else {
+						router.push(href);
+					}
 					return true;
 				}
-				return false;
+				const anchor = target?.closest<HTMLAnchorElement>("a[href]");
+				const href = anchor?.getAttribute("href");
+				if (!href) return false;
+				try {
+					const url = new URL(href, window.location.href);
+					if (!["http:", "https:", "mailto:"].includes(url.protocol)) {
+						return false;
+					}
+					window.open(url.href, "_blank", "noopener,noreferrer");
+					return true;
+				} catch {
+					return false;
+				}
 			},
 		}),
-		[tenantSlug, invalid],
+		[tenantSlug, invalid, router],
 	);
 
 	const editor = useEditor({

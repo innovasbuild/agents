@@ -214,3 +214,20 @@ describe("anchor y alias pegados", () => {
 		).toBe("[[123|456]]");
 	});
 });
+
+describe("tocar el editor no ensucia la página", () => {
+	it("el párrafo vacío que Tiptap agrega tras una lista final no cambia el markdown", () => {
+		const editor = new Editor({
+			extensions: buildExtensions({
+				titleFor: () => undefined,
+				exists: () => true,
+			}),
+			content: "## Relacionado\n\n- [[a]]\n- [[b]]",
+			contentType: "markdown",
+		});
+		const base = editor.getMarkdown();
+		editor.commands.setTextSelection(3);
+		expect(editor.getMarkdown()).toBe(base);
+		editor.destroy();
+	});
+});
