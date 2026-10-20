@@ -1,9 +1,11 @@
 // Value: protects=la lógica pura del mapa de conexiones (grado fijo, tamaño por raíz cuadrada, colores por categoría sin
 //   colisión, atenuado de archivadas, entradas de graphology, tope del layout, posición sembrada, vecindario a N saltos,
-//   filtros combinados con Y, búsqueda sin tildes y fecha es-AR) y que el componente de Sigma no arrastre node:*.
+//   filtros combinados con Y, búsqueda sin tildes, fecha es-AR y dónde cae el popover) y que los componentes del grafo
+//   no arrastren node:*.
 // fails_when=el tamaño no es monótono o se sale del rango, dos categorías dan el mismo color, una arista apunta a un
 //   slug que no existe o es un autoenlace, el layout deja de tener tope, el vecindario cruza más saltos de los pedidos,
-//   un filtro se combina con O en vez de Y, o "Politica" deja de encontrar "Política".
+//   un filtro se combina con O en vez de Y, "Politica" deja de encontrar "Política", o el popover se sale del
+//   contenedor.
 // why_new=el cliente de Sigma (26.4b) depende de estas funciones y no tenían cobertura; seam=none
 
 import { describe, expect, it } from "vitest";
@@ -18,6 +20,7 @@ import {
 	matchesText,
 	neighborhood,
 	nodeSize,
+	popoverPosition,
 	seedPosition,
 	toGraphData,
 	visibleNodes,
@@ -382,6 +385,49 @@ describe("formatEditDate", () => {
 	});
 });
 
+describe("popoverPosition", () => {
+	const card = { width: 200, height: 100 };
+	const box = { width: 1000, height: 800 };
+
+	it("centra la tarjeta debajo del nodo, separada por el hueco", () => {
+		expect(popoverPosition({ x: 500, y: 300 }, card, box)).toEqual({
+			left: 400,
+			top: 320,
+		});
+	});
+
+	it("si no entra abajo, va arriba del nodo", () => {
+		expect(popoverPosition({ x: 500, y: 750 }, card, box)).toEqual({
+			left: 400,
+			top: 630,
+		});
+	});
+
+	it("en los bordes queda adentro del contenedor, con el margen", () => {
+		expect(popoverPosition({ x: 5, y: 300 }, card, box).left).toBe(8);
+		expect(popoverPosition({ x: 995, y: 300 }, card, box).left).toBe(792);
+		expect(popoverPosition({ x: 500, y: -50 }, card, box).top).toBe(8);
+		expect(popoverPosition({ x: 500, y: 2000 }, card, box).top).toBe(692);
+	});
+
+	it("nunca se sale del contenedor, aunque el nodo esté afuera", () => {
+		for (const x of [-500, 0, 3, 500, 997, 1500])
+			for (const y of [-500, 0, 5, 400, 795, 1500]) {
+				const { left, top } = popoverPosition({ x, y }, card, box);
+				expect(left).toBeGreaterThanOrEqual(8);
+				expect(left + card.width).toBeLessThanOrEqual(box.width - 8);
+				expect(top).toBeGreaterThanOrEqual(8);
+				expect(top + card.height).toBeLessThanOrEqual(box.height - 8);
+			}
+	});
+
+	it("con un contenedor más chico que la tarjeta, la arrima al margen de arriba a la izquierda", () => {
+		expect(
+			popoverPosition({ x: 100, y: 100 }, card, { width: 150, height: 90 }),
+		).toEqual({ left: 8, top: 8 });
+	});
+});
+
 describe("graph-view en el cliente", () => {
 	it("no arrastra node:* ni builtins de Node", () => {
 		expect(nodeBuiltins("lib/brain/core/graph-view.ts")).toEqual([]);
@@ -389,5 +435,8 @@ describe("graph-view en el cliente", () => {
 
 	it("el componente del grafo tampoco", () => {
 		expect(nodeBuiltins("components/brain/graph/brain-graph.tsx")).toEqual([]);
+		expect(nodeBuiltins("components/brain/graph/graph-popover.tsx")).toEqual(
+			[],
+		);
 	});
 });

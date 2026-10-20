@@ -1,9 +1,10 @@
 "use client";
 
-// Mapa de conexiones del brain dibujado con Sigma (spec 26.4: D3, D4, D5, D11,
-// D16). Pide el payload compacto, arma el grafo con graphology, corre
-// ForceAtlas2 en un worker y dibuja con WebGL. Ocupa el alto y el ancho de su
-// contenedor. Quien lo monte lo carga con next/dynamic y ssr: false.
+// Mapa de conexiones del brain dibujado con Sigma (spec 26.4: D3, D4, D5, D6,
+// D7, D11, D16). Pide el payload compacto, arma el grafo con graphology, corre
+// ForceAtlas2 en un worker y dibuja con WebGL. Un clic en un nodo abre su
+// popover; pasar el mouse resalta al nodo y sus vecinos. Ocupa el alto y el
+// ancho de su contenedor. Quien lo monte lo carga con next/dynamic y ssr: false.
 
 import Graph from "graphology";
 import { inferSettings } from "graphology-layout-forceatlas2";
@@ -12,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import Sigma, { DEFAULT_STYLES } from "sigma";
 import { Button } from "@/components/ui/button";
+import { pageHref } from "@/lib/brain/core/editor/slug";
 import type { GraphPayload } from "@/lib/brain/core/graph";
 import {
 	categoryColors,
@@ -20,6 +22,7 @@ import {
 	layoutBudgetMs,
 	toGraphData,
 } from "@/lib/brain/core/graph-view";
+import { GraphPopover } from "./graph-popover";
 import { readGraphTheme, watchColorScheme } from "./graph-theme";
 
 type NodeAttributes = GraphNodeAttributes & { color?: string };
@@ -36,10 +39,16 @@ type LoadState =
 const ARCHIVED_FADE = 0.65;
 // Tras soltar el mouse o la última rueda, cuánto espera el layout para seguir.
 const RESUME_AFTER_MS = 400;
+// Con el mouse sobre un nodo, cuánto se mezcla el resto con el fondo (D7).
+const HOVER_FADE = 0.8;
+// Y cuánto se acerca al fondo el color de etiqueta en las aristas resaltadas.
+const LIT_EDGE_FADE = 0.45;
 
 export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 	const [state, setState] = useState<LoadState>({ kind: "loading" });
 	const [attempt, setAttempt] = useState(0);
+	// Nodo con el popover abierto (D6).
+	const [selected, setSelected] = useState<string | null>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 	// Instancias vivas, para lo que se monte encima (popover, filtros).
 	const sigmaRef = useRef<Sigma<NodeAttributes, EdgeAttributes> | null>(null);
@@ -85,6 +94,18 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 		});
 
 		let theme = readGraphTheme(container);
+		// Colores del resaltado (D7). Los atenuados se memorizan por color (son
+		// unos pocos) para no volver a parsear en cada nodo; cambian con el tema.
+		let dimmed = new Map<string, string>();
+		let litEdge = fadeColor(theme.label, theme.background, LIT_EDGE_FADE);
+		const dim = (color: string) => {
+			let out = dimmed.get(color);
+			if (out === undefined) {
+				out = fadeColor(color, theme.background, HOVER_FADE);
+				dimmed.set(color, out);
+			}
+			return out;
+		};
 		const paint = () => {
 			const colors = categoryColors(theme.palette, payload.categories.length);
 			graph.updateEachNodeAttributes(
@@ -124,6 +145,12 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 					sharedGestureAppleWheelMessage: "Usá ⌘ + rueda para hacer zoom",
 					sharedGestureTouchMessage: "Usá dos dedos para mover el mapa",
 				},
+				// Resaltado con el estado de Sigma 4 (isHighlighted) y reglas de
+				// estilo, no con nodeReducer/edgeReducer: en 4.0.3 un reducer
+				// apaga el refresco en el lugar (refreshNodeState) y copia el
+				// objeto de cada nodo en cada actualización, también mientras
+				// corre el layout. Con estados, Sigma reescribe su caché sin
+				// asignar.
 				styles: {
 					nodes: [
 						DEFAULT_STYLES.nodes,
@@ -131,8 +158,30 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 							labelColor: () => theme.label,
 							backdropColor: () => theme.background,
 						},
+						{
+							when: (_, node, graphState) =>
+								graphState.hasHighlighted && !node.isHighlighted,
+							// biome-ignore lint/suspicious/noThenProperty: así escribe Sigma 4 una regla condicional.
+							then: {
+								color: (attributes) => dim(attributes.color ?? theme.label),
+								labelVisibility: "hidden",
+							},
+						},
 					],
-					edges: DEFAULT_STYLES.edges,
+					edges: [
+						DEFAULT_STYLES.edges,
+						{
+							when: (_, edge, graphState) =>
+								graphState.hasHighlighted && !edge.isHighlighted,
+							// biome-ignore lint/suspicious/noThenProperty: así escribe Sigma 4 una regla condicional.
+							then: { visibility: "hidden" },
+						},
+						{
+							whenState: "isHighlighted",
+							// biome-ignore lint/suspicious/noThenProperty: así escribe Sigma 4 una regla condicional.
+							then: { color: () => litEdge },
+						},
+					],
 				},
 			});
 		} catch (error) {
@@ -145,9 +194,38 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 
 		const stopWatching = watchColorScheme(() => {
 			theme = readGraphTheme(container);
+			dimmed = new Map();
+			litEdge = fadeColor(theme.label, theme.background, LIT_EDGE_FADE);
 			paint();
 			sigma.refresh();
 		});
+
+		// Hover (D7): el nodo y sus vecinos quedan resaltados y el resto se
+		// atenúa. Vecinos con graph.neighbors: O(grado), sin recorrer el grafo.
+		let litNodes: string[] = [];
+		let litEdges: string[] = [];
+		const unlight = () => {
+			if (litNodes.length > 0)
+				sigma.setNodesState(litNodes, { isHighlighted: false });
+			if (litEdges.length > 0)
+				sigma.setEdgesState(litEdges, { isHighlighted: false });
+			litNodes = [];
+			litEdges = [];
+		};
+		const light = ({ node }: { node: string }) => {
+			unlight();
+			litNodes = graph.neighbors(node);
+			litNodes.push(node);
+			litEdges = graph.edges(node);
+			sigma.setNodesState(litNodes, { isHighlighted: true });
+			sigma.setEdgesState(litEdges, { isHighlighted: true });
+		};
+		const select = ({ node }: { node: string }) => setSelected(node);
+		const deselect = () => setSelected(null);
+		sigma.on("enterNode", light);
+		sigma.on("leaveNode", unlight);
+		sigma.on("clickNode", select);
+		sigma.on("clickStage", deselect);
 
 		// Layout acotado en tiempo y en pausa mientras la persona mueve el mapa
 		// (spec §2.1 a: con la CPU 4× más lenta, corriendo baja a 13 fps).
@@ -208,6 +286,11 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 			clearTimeout(stopTimer);
 			clearTimeout(resumeTimer);
 			stopWatching();
+			sigma.off("enterNode", light);
+			sigma.off("leaveNode", unlight);
+			sigma.off("clickNode", select);
+			sigma.off("clickStage", deselect);
+			setSelected(null);
 			mouse.off("mousedown", press);
 			mouse.off("mouseup", release);
 			mouse.off("wheel", interact);
@@ -220,14 +303,36 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 		};
 	}, [payload]);
 
+	const sigma = sigmaRef.current;
+	const graph = graphRef.current;
+	const popoverFor = selected && graph?.hasNode(selected) ? selected : null;
+
 	return (
-		<div className="relative h-full w-full bg-background">
+		// tabIndex -1: el popover devuelve acá el foco cuando se cierra con Esc.
+		<div
+			tabIndex={-1}
+			className="relative h-full w-full bg-background outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2"
+		>
 			<div
 				ref={containerRef}
 				role="img"
 				aria-label="Mapa de conexiones del brain"
 				className="absolute inset-0"
 			/>
+			{sigma && graph && payload && popoverFor && (
+				<NodePopover
+					sigma={sigma}
+					graph={graph}
+					node={popoverFor}
+					title={graph.getNodeAttribute(popoverFor, "label")}
+					updatedAt={
+						payload.nodes[graph.getNodeAttribute(popoverFor, "index")]?.[4] ??
+						""
+					}
+					href={pageHref(tenantSlug, popoverFor)}
+					onClose={() => setSelected(null)}
+				/>
+			)}
 			{state.kind === "loading" && (
 				<Overlay role="status">
 					<p className="text-muted-foreground">Cargando el mapa…</p>
@@ -254,6 +359,50 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 			)}
 		</div>
 	);
+}
+
+// Sigue al nodo en pantalla: se reubica después de cada cuadro (cámara que se
+// mueve o layout que lo corre). Solo se vuelve a dibujar este popover, no el
+// grafo. Si el nodo deja de existir, se cierra.
+function NodePopover({
+	sigma,
+	graph,
+	node,
+	onClose,
+	...card
+}: {
+	sigma: Sigma<NodeAttributes, EdgeAttributes>;
+	graph: BrainGraphData;
+	node: string;
+	title: string;
+	updatedAt: string;
+	href: string;
+	onClose: () => void;
+}) {
+	const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
+	const closeRef = useRef(onClose);
+	closeRef.current = onClose;
+
+	useEffect(() => {
+		const follow = () => {
+			if (!graph.hasNode(node)) {
+				closeRef.current();
+				return;
+			}
+			const { x, y } = sigma.graphToViewport(graph.getNodeAttributes(node));
+			setAnchor((prev) =>
+				prev && prev.x === x && prev.y === y ? prev : { x, y },
+			);
+		};
+		follow();
+		sigma.on("afterRender", follow);
+		return () => {
+			sigma.off("afterRender", follow);
+		};
+	}, [sigma, graph, node]);
+
+	if (!anchor) return null;
+	return <GraphPopover {...card} x={anchor.x} y={anchor.y} onClose={onClose} />;
 }
 
 function Overlay({

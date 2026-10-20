@@ -244,3 +244,34 @@ export function formatEditDate(iso: string): string {
 		editDate.formatToParts(date).find((p) => p.type === type)?.value ?? "";
 	return `${part("day")} ${part("month").replace(/\.$/, "")} ${part("year")}`;
 }
+
+type Point = { x: number; y: number };
+type Size = { width: number; height: number };
+
+const clamp = (value: number, min: number, max: number) =>
+	Math.max(min, Math.min(value, max));
+
+// Dónde va la tarjeta del popover (D6), en píxeles del contenedor: centrada
+// debajo del nodo; si abajo no entra, arriba; y siempre adentro del contenedor,
+// a `margin` del borde, aunque el nodo haya quedado fuera de la vista.
+export function popoverPosition(
+	anchor: Point,
+	card: Size,
+	box: Size,
+	{ gap = 20, margin = 8 }: { gap?: number; margin?: number } = {},
+): { left: number; top: number } {
+	const below = anchor.y + gap;
+	const above = anchor.y - gap - card.height;
+	const top =
+		below + card.height > box.height - margin && above >= margin
+			? above
+			: below;
+	return {
+		left: clamp(
+			anchor.x - card.width / 2,
+			margin,
+			box.width - card.width - margin,
+		),
+		top: clamp(top, margin, box.height - card.height - margin),
+	};
+}
