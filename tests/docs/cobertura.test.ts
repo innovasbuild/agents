@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { SIN_DOCUMENTAR } from "../../docs/_meta/cobertura.ts";
 import { inventory, type Surface } from "../../scripts/docs/inventory.ts";
 import {
+	type MergedPr,
+	mergedPrsFromGit,
 	parsePrTable,
 	parseSpecTable,
 	splitPagesAndReason,
@@ -90,14 +92,20 @@ describe("cobertura de la wiki", () => {
 		expect(problems, problems.join("\n")).toEqual([]);
 	});
 
-	it("7 · todo PR del snapshot tiene fila y los feat: nombran páginas o un motivo", async () => {
-		const snapshot: { number: number; title: string }[] = JSON.parse(
+	it("7 · todo PR mergeado (snapshot o historial de git) tiene fila y los feat: nombran páginas o un motivo", async () => {
+		const snapshot: MergedPr[] = JSON.parse(
 			await readFile("docs/_meta/prs.json", "utf8"),
 		);
+		// El historial no se atrasa aunque nadie corra `npm run docs:prs`: un PR
+		// mergeado sin fila falla acá. El snapshot manda en los títulos.
+		const merged = new Map<number, MergedPr>(
+			mergedPrsFromGit(ROOT).map((pr) => [pr.number, pr]),
+		);
+		for (const pr of snapshot) merged.set(pr.number, pr);
 		const rows = parsePrTable(await readFile(PRS_TABLE, "utf8"));
 		const byNumber = new Map(rows.map((row) => [row.number, row]));
 		const problems: string[] = [];
-		for (const pr of snapshot) {
+		for (const pr of [...merged.values()].sort((a, b) => a.number - b.number)) {
 			const row = byNumber.get(pr.number);
 			if (!row) {
 				problems.push(

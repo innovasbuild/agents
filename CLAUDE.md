@@ -17,6 +17,7 @@ Si falta: STOP y pedir instalación.
 - La wiki vive en `docs/` y arranca en `docs/README.md`. Cómo mantenerla: `docs/guias/documentar.md`.
 - `docs/referencia/` se regenera con `npm run docs:sync` y no se edita a mano.
 - Una tool, nodo, workflow, tabla, ruta, proveedor, variable de entorno, spec o PR nuevo hace fallar `npm run docs:check` hasta que tenga página o una exclusión con motivo en `docs/_meta/cobertura.ts`. No se debilita el test.
+- Todo PR, lo abra `/ship` o no, deja su fila en `docs/decisiones/prs.md` antes de mergearse: commit extra en la misma rama, con el número que devuelve `gh pr create`. `docs:check` exige la fila de todo PR ya mergeado (lo lee del historial de git), así que el que la olvida frena al PR siguiente.
 - Una etapa no se cierra sin `/docs-wiki` en verde.
 
 ## Orquestación (leer docs/arquitectura/orquestacion.md antes de crear un nodo, workflow o agente)

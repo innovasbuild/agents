@@ -1,4 +1,5 @@
 // Parsers de las tablas de decisiones/ (spec etapa 25 §4.1b y §4.3).
+import { execFileSync } from "node:child_process";
 import { extractLinks, isExternal, resolveLink } from "./wiki.ts";
 
 /** Filas de datos de la primera tabla markdown del texto, celdas ya recortadas. */
@@ -89,4 +90,51 @@ export function splitPagesAndReason(
 			.replace(/\s+/g, " ")
 			.trim(),
 	};
+}
+
+export interface MergedPr {
+	number: number;
+	title: string;
+}
+
+const MERGE_SUBJECT = /^Merge pull request #(\d+)\b/;
+
+/**
+ * PR mergeados que muestra `git log --merges --format=%s%x1f%b%x1e`. GitHub
+ * pone el número en el asunto del merge y el título del PR en la primera línea
+ * del cuerpo. Los demás merges (de ramas, de main en una rama) no cuentan.
+ */
+export function parseMergeLog(log: string): MergedPr[] {
+	const prs: MergedPr[] = [];
+	for (const record of log.split("\x1e")) {
+		const [subject = "", body = ""] = record.replace(/^\n+/, "").split("\x1f");
+		const match = MERGE_SUBJECT.exec(subject.trim());
+		if (!match) continue;
+		const title =
+			body
+				.split("\n")
+				.map((line) => line.trim())
+				.find((line) => line.length > 0) ?? "";
+		prs.push({ number: Number(match[1]), title });
+	}
+	return prs;
+}
+
+/**
+ * Los PR mergeados que registra el historial de git, sin red ni credenciales.
+ * Es la fuente que no se atrasa: el snapshot de docs/_meta/prs.json solo se
+ * actualiza cuando alguien corre `npm run docs:prs`. Fuera de un repo, o sin
+ * git, no devuelve nada y manda el snapshot.
+ */
+export function mergedPrsFromGit(cwd: string): MergedPr[] {
+	try {
+		const log = execFileSync(
+			"git",
+			["log", "--merges", "--format=%s%x1f%b%x1e"],
+			{ cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: "pipe" },
+		);
+		return parseMergeLog(log);
+	} catch {
+		return [];
+	}
 }
