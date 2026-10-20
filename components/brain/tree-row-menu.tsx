@@ -18,6 +18,7 @@ import { historyHref } from "@/lib/brain/core/editor/slug";
 
 export type FolderMenuItem =
 	| "new-subfolder"
+	| "upload-skill"
 	| "describe"
 	| "rules"
 	| "delete-folder"
@@ -28,6 +29,8 @@ export type FolderMenuItem =
 // crear adentro. Borrar una de primer nivel pide administrar la raíz; con
 // contenido, el ítem queda deshabilitado con el motivo (spec etapa 26 §3.2).
 // Las reglas (26.2): la raíz abre las instrucciones del brain; skills/ no tiene.
+// Subir una skill (24.6) crea una página, no una subcarpeta: se ofrece en toda
+// carpeta de skills/, también en una implícita.
 export function folderMenuItems(
 	node: TreeNode,
 	rootLevel: Level | null,
@@ -35,8 +38,11 @@ export function folderMenuItems(
 ): FolderMenuItem[] {
 	if (node.level !== "administrador" || !isFolderNode(node)) return [];
 	if (node.path === "") return ["new-subfolder", "rules"];
-	if (node.folder === null) return [];
-	const items: FolderMenuItem[] = ["new-subfolder", "describe"];
+	if (node.folder === null)
+		return isSkillsFolder(node.path) ? ["upload-skill"] : [];
+	const items: FolderMenuItem[] = ["new-subfolder"];
+	if (isSkillsFolder(node.path)) items.push("upload-skill");
+	items.push("describe");
 	if (!isSkillsFolder(node.path)) items.push("rules");
 	if (node.path.includes("/") || rootLevel === "administrador")
 		items.push(
@@ -57,6 +63,7 @@ export function TreeRowMenu({
 	onShare,
 	onDelete,
 	onNewFolder,
+	onUploadSkill,
 	onDescribe,
 	onDeleteFolder,
 	deleteBlockedReason,
@@ -68,6 +75,7 @@ export function TreeRowMenu({
 	onShare: () => void;
 	onDelete: () => void;
 	onNewFolder: () => void;
+	onUploadSkill: () => void;
 	onDescribe: () => void;
 	onDeleteFolder: () => void;
 	deleteBlockedReason: string | null;
@@ -124,6 +132,17 @@ export function TreeRowMenu({
 				onSelect={onNewFolder}
 			>
 				{node.path === "" ? "Nueva carpeta…" : "Nueva subcarpeta…"}
+			</DropdownMenuItem>,
+		);
+	}
+	if (folderItems.includes("upload-skill")) {
+		items.push(
+			<DropdownMenuItem
+				key="upload-skill"
+				className="min-h-11 lg:min-h-0"
+				onSelect={onUploadSkill}
+			>
+				Subir skill…
 			</DropdownMenuItem>,
 		);
 	}

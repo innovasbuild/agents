@@ -17,6 +17,7 @@ import {
 } from "@/lib/brain/core/skills/state";
 import { PublishDialog } from "./publish-dialog";
 import { formatSize } from "./published-files";
+import { UploadDialog } from "./upload-dialog";
 
 export interface SkillVersionRow {
 	id: number;
@@ -49,10 +50,10 @@ export function SkillPanel({
 	const router = useRouter();
 	const pathId = useId();
 	const fileInput = useRef<HTMLInputElement>(null);
-	const zipInput = useRef<HTMLInputElement>(null);
 	const [path, setPath] = useState("");
 	const [message, setMessage] = useState<string | null>(null);
 	const [publishing, setPublishing] = useState(false);
+	const [uploadingZip, setUploadingZip] = useState(false);
 	const [isPending, startTransition] = useTransition();
 
 	const endpoint = `/${tenantSlug}/brain/skills/files`;
@@ -72,7 +73,6 @@ export function SkillPanel({
 			}
 			setPath("");
 			if (fileInput.current) fileInput.current.value = "";
-			if (zipInput.current) zipInput.current.value = "";
 			router.refresh();
 		} catch {
 			setMessage("No se pudo subir. Probá de nuevo.");
@@ -88,25 +88,6 @@ export function SkillPanel({
 		const form = new FormData();
 		form.set("slug", slug);
 		form.set("path", path.trim() || file.name);
-		form.set("file", file);
-		startTransition(() => upload(form));
-	}
-
-	function importZip() {
-		const file = zipInput.current?.files?.[0];
-		if (!file) {
-			setMessage("Elegí un zip.");
-			return;
-		}
-		if (
-			!window.confirm(
-				"Importar reemplaza el texto y los archivos del borrador por los del paquete. No publica nada.",
-			)
-		)
-			return;
-		const form = new FormData();
-		form.set("slug", slug);
-		form.set("kind", "zip");
 		form.set("file", file);
 		startTransition(() => upload(form));
 	}
@@ -262,22 +243,20 @@ export function SkillPanel({
 			</div>
 
 			<div className="space-y-2">
-				<h3 className="font-medium">Importar un paquete</h3>
-				<input
-					ref={zipInput}
-					type="file"
-					accept=".zip,application/zip"
-					aria-label="Zip del paquete"
-				/>
+				<h3 className="font-medium">Paquete</h3>
 				<Button
 					type="button"
 					size="sm"
 					variant="outline"
 					disabled={isPending}
-					onClick={importZip}
+					onClick={() => setUploadingZip(true)}
 				>
-					Importar zip
+					Subir paquete (zip)…
 				</Button>
+				<p className="text-muted-foreground">
+					Reemplaza el texto y los archivos del borrador. Antes ves qué trae y
+					no publica nada.
+				</p>
 			</div>
 
 			{versions.length > 0 && (
@@ -330,6 +309,13 @@ export function SkillPanel({
 			)}
 
 			{message && <p className="text-destructive">{message}</p>}
+			{uploadingZip && (
+				<UploadDialog
+					tenantSlug={tenantSlug}
+					target={{ kind: "skill", slug }}
+					onClose={() => setUploadingZip(false)}
+				/>
+			)}
 			{publishing && (
 				<PublishDialog
 					tenantSlug={tenantSlug}

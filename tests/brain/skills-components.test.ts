@@ -6,6 +6,7 @@ import {
 	SkillPanel,
 	type SkillPanelProps,
 } from "@/components/brain/skills/skill-panel";
+import { UploadDialogBody } from "@/components/brain/skills/upload-dialog";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 vi.mock("@/app/[tenant]/brain/skill-actions", () => ({
@@ -52,6 +53,29 @@ describe("PublishedFiles", () => {
 	});
 });
 
+describe("UploadDialogBody", () => {
+	const render = (target: Parameters<typeof UploadDialogBody>[0]["target"]) =>
+		renderToStaticMarkup(
+			createElement(UploadDialogBody, {
+				tenantSlug: "acme",
+				target,
+				onClose() {},
+			}),
+		);
+
+	it("al abrir pide un .zip y avisa del tope de 4 MB", () => {
+		const html = render({ kind: "folder", folder: "ventas" });
+		expect(html).toContain('type="file"');
+		expect(html).toContain("accept=");
+		expect(html).toContain(".zip");
+		expect(html).toContain("4 MB");
+		expect(html).toContain("Cancelar");
+		// Todavía no hay nada para confirmar.
+		expect(html).not.toContain("Revisando");
+		expect(html).not.toContain("Subiendo");
+	});
+});
+
 describe("SkillPanel", () => {
 	const props: SkillPanelProps = {
 		tenantSlug: "acme",
@@ -72,6 +96,16 @@ describe("SkillPanel", () => {
 	};
 	const render = (over: Partial<SkillPanelProps>) =>
 		renderToStaticMarkup(createElement(SkillPanel, { ...props, ...over }));
+
+	it("el zip se sube con el diálogo nuevo, no con el bloque viejo", () => {
+		const html = render({});
+		expect(html).toContain("Subir paquete (zip)…");
+		expect(html).not.toContain("Zip del paquete");
+		expect(html).not.toContain("Importar zip");
+		// La subida de archivos sueltos sigue como estaba (la rehace la tarea 6).
+		expect(html).toContain("Subir archivo");
+		expect(html).toContain("Ruta dentro del paquete");
+	});
 
 	it("un administrador ve publicar, retirar y republicar", () => {
 		const html = render({});
