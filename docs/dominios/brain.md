@@ -59,6 +59,7 @@ sources:
   - scripts/brain-folders-report.mts
   - supabase/migrations/20261025120000_brain_folders.sql
   - supabase/migrations/20261027120000_brain_page_links.sql
+  - supabase/migrations/20261028120000_brain_page_links_keyset.sql
 ---
 
 # Brain
@@ -146,9 +147,9 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 El árbol del layout, el índice y el mapa no necesitan el cuerpo de las páginas, que es lo que pesa. `BrainProvider` tiene dos lecturas para eso, además de `list()`:
 
 - `listMeta()`: las páginas sin `body` ni `frontmatter` (`BrainPageMeta`). Es lo que usan el árbol, los títulos, los tags y los conteos.
-- `listLinks()`: los wikilinks de cada página, extraídos en la base por `brain_page_links(p_tenant_id)` con la misma regex que `parseWikilinks`. Devuelve una fila por página con links (no por link, porque PostgREST corta en 1000 filas) y los grupos crudos; el recorte de espacios se hace en `wiki-store.ts`. Solo `service_role` la ejecuta.
+- `listLinks()`: los wikilinks de cada página, extraídos en la base por `brain_page_links_after(p_tenant_id, p_after, p_limit)` con la misma regex que `parseWikilinks`. Devuelve una fila por página con `[[` en el cuerpo (no por link, porque PostgREST corta en 1000 filas) y los grupos crudos; el recorte de espacios se hace en `wiki-store.ts`. Solo `service_role` la ejecuta. Pagina por keyset: la base elige primero la tanda (`slug > p_after`, a lo sumo `p_limit`, con el índice único `(tenant_id, slug)`) y recién después corre la regex sobre esas filas, así que cada llamada cuesta lo mismo sea cual sea el tamaño del brain. Una página con `[[` sin ningún link válido vuelve con `links` nulo para que el cursor avance, y `listLinks` la descarta. La función anterior, `brain_page_links(p_tenant_id)`, sigue en la base hasta que este código esté en producción; paginada por offset volvía a extraer los links de todos los cuerpos en cada llamada (spec 26.4 §2.1 (c)).
 
-`list`, `listMeta` y `listLinks` paginan (`PAGE_SIZE` 1.000, ordenadas por `slug`, que es único por empresa): piden de a 1.000 filas, avanzan por las que recibieron y cortan con una respuesta vacía, para no truncar los brains de más de 1.000 páginas con el `max_rows` de PostgREST (`supabase/config.toml`). `list` trae las páginas completas, con cuerpo: la limpieza al borrar una carpeta y la administración por MCP dejaban de ver lo que pasaba la fila 1.000.
+`list`, `listMeta` y `listLinks` paginan (`PAGE_SIZE` 1.000, ordenadas por `slug`, que es único por empresa): piden de a 1.000 filas y cortan con una respuesta vacía, para no truncar los brains de más de 1.000 páginas con el `max_rows` de PostgREST (`supabase/config.toml`). `list` y `listMeta` avanzan por offset (las filas recibidas); `listLinks`, con el último slug recibido como `p_after`. `list` trae las páginas completas, con cuerpo: la limpieza al borrar una carpeta y la administración por MCP dejaban de ver lo que pasaba la fila 1.000.
 
 `loadBrainMeta` y `loadBrainLinkIndex` (`lib/brain/adapters/editor.ts`) las cachean por request; el índice sale de `buildLinkIndexFromLinks`, que da lo mismo que `buildLinkIndex` sobre los cuerpos. La página abierta es la única que lee el cuerpo, con `provider.read`. Los envoltorios cubren las dos: `withAccess` filtra por visibilidad, `withSkillView` muestra a quien solo lee la copia publicada (título, revisión y los links de su cuerpo publicado, no los del borrador), `withoutSkills` las saca, y un brain `mcp` las rechaza igual que `list()`.
 
@@ -352,7 +353,7 @@ Un zip se sube en un paso a la carpeta de `skills/` que elige la persona, por la
 | Endpoint MCP | `tests/brain/mcp-server/` (acceso, handler, límites, producción, tools de skills) |
 | Canon como fuente | `tests/brain/canon-reflection.test.ts` y `tests/outreach/canon.test.ts` |
 | Reglas en el editor (26.2b) | `tests/brain/editor-reserved.test.ts`, `editor-rules-panel.test.ts`, `rules-panel.test.ts`, `rules-panel-hook.test.ts`, `reserved-notice.test.ts`, `page-list.test.ts`, `editor-page-category.test.ts`, `editor-new-page.test.ts`, `editor-adapter.test.ts`, `editor-delete.test.ts`, `rules-actions.test.ts`, `tree-row-menu.test.ts`, `access-tree.test.ts`, `wiki-folders.test.ts`. `tests/brain/client-safe.ts` es el seguidor de imports de cliente |
-| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`, `37_brain_folders`. Corren con `npm run db:test` (necesita Docker) |
+| Base | pgTAP en `supabase/tests/`: `08_brain_tables`, `09_brain_upsert`, `10_brain_search`, `18_brain_mcp_usage`, `21_brain_access_rules`, `22_brain_access_rule_fns`, `23_brain_delete_page`, `24_brain_rules_membership_cleanup`, `31_outreach_marco_reflect`, `34_brain_skills`, `37_brain_folders`, `39_brain_page_links`, `40_brain_page_links_after`. Corren con `npm run db:test` (necesita Docker) |
 
 ## 5. Decisiones
 
