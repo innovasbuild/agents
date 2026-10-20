@@ -63,7 +63,7 @@ function toMeta(row: Record<string, unknown>): BrainPageMeta {
 	};
 }
 
-// Lo que devuelve brain_page_links por cada match: los grupos crudos de
+// Lo que devuelve brain_page_links_after por cada match: los grupos crudos de
 // WIKILINK_PATTERN. El recorte de espacios y el "#" del ancla se resuelven acá
 // igual que en parseWikilinks.
 function toLinks(row: Record<string, unknown>): BrainPageLinks {
@@ -176,6 +176,28 @@ async function fetchAllPages(
 	}
 }
 
+// Hermano de fetchAllPages para un rpc con keyset: pide las filas con slug
+// mayor que el último recibido (null la primera vez) y corta en la respuesta
+// vacía. Avanzar por el slug y no por PAGE_SIZE lo deja completo si max_rows
+// corta más abajo, y una página insertada antes del cursor no corre las
+// siguientes, así que no hace falta descartar repetidos.
+async function fetchAllAfter(
+	fetchPage: (
+		after: string | null,
+	) => PromiseLike<{ data: unknown; error: PostgrestLikeError | null }>,
+): Promise<Array<Record<string, unknown>>> {
+	const all: Array<Record<string, unknown>> = [];
+	let after: string | null = null;
+	for (;;) {
+		const { data, error } = await fetchPage(after);
+		if (error) throw storeError(error);
+		const rows = (data ?? []) as Array<Record<string, unknown>>;
+		if (rows.length === 0) return all;
+		all.push(...rows);
+		after = rows[rows.length - 1].slug as string;
+	}
+}
+
 export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 	return {
 		async search(tenantId, input) {
@@ -235,15 +257,20 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 		},
 
 		async listLinks(tenantId) {
-			// Una fila por página con links (no por link). El rpc recibe solo el
-			// tenant, así que se pagina desde el cliente, igual que listMeta.
-			const rows = await fetchAllPages((from, to) =>
+			// Una fila por página con "[[" (no por link), por keyset: la base acota
+			// la tanda antes de extraer los links. Las que no tienen ningún link
+			// válido vuelven con links nulo para que el cursor avance; acá se
+			// descartan.
+			const rows = await fetchAllAfter((after) =>
 				client
-					.rpc("brain_page_links", { p_tenant_id: tenantId })
-					.order("slug")
-					.range(from, to),
+					.rpc("brain_page_links_after", {
+						p_tenant_id: tenantId,
+						p_after: after,
+						p_limit: PAGE_SIZE,
+					})
+					.order("slug"),
 			);
-			return rows.map(toLinks);
+			return rows.filter((row) => row.links != null).map(toLinks);
 		},
 
 		async listRevisions(tenantId, slug) {
