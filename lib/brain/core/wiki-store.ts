@@ -211,13 +211,15 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 		},
 
 		async list(tenantId) {
-			const { data, error } = await client
-				.from("brain_pages")
-				.select(PAGE_COLUMNS)
-				.eq("tenant_id", tenantId)
-				.order("slug");
-			if (error) throw storeError(error);
-			return ((data ?? []) as Array<Record<string, unknown>>).map(toPage);
+			const rows = await fetchAllPages((from, to) =>
+				client
+					.from("brain_pages")
+					.select(PAGE_COLUMNS)
+					.eq("tenant_id", tenantId)
+					.order("slug")
+					.range(from, to),
+			);
+			return rows.map(toPage);
 		},
 
 		async listMeta(tenantId) {
