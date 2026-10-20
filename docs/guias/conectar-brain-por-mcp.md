@@ -133,7 +133,7 @@ Cosas a saber:
 Si **administrás una carpeta** de `skills/` (o la empresa), tu asistente tiene dos tools más para subir una skill entera desde un zip, en un paso. Aparecen solo para quien administra al menos una carpeta de skills y solo si la empresa tiene habilitada la categoría `skill`. Un editor que no administra carpetas no las ve y sigue con `skill_create` y `skill_draft_*`. Si las llama sin permiso, recibe lo mismo que ante una carpeta que no existe.
 
 - `skill_upload_link` (`{ folder }`): prepara la subida a una carpeta de skills. `folder` va relativa a `skills/` (`ventas`, no `skills/ventas`; vacía es directo en `skills/`). Devuelve un `uploadId`, una URL para subir el zip con un `PUT` y cuánto falta para que venza.
-- `skill_import` (`{ uploadId, confirm? }`): lee el zip que subiste. Sin `confirm` devuelve la **vista previa** y no guarda nada; con `confirm: true` guarda la skill en el borrador y devuelve el link a su pantalla.
+- `skill_import` (`{ uploadId, confirm?, expectedMode?, expectedSlug? }`): lee el zip que subiste. Sin `confirm` devuelve la **vista previa** y no guarda nada; con `confirm: true` guarda la skill en el borrador y devuelve el link a su pantalla. Al confirmar, el asistente pasa en `expectedMode` y `expectedSlug` el `mode` y el `slug` de la vista previa: si cambiaron mientras tanto (por ejemplo, alguien creó esa skill), no guarda nada y hay que volver a mirar la vista previa.
 
 El flujo:
 
@@ -151,7 +151,7 @@ Cosas a saber:
 - Crear una skill nueva pide administrar la carpeta destino; reemplazar una existente, ser editor de esa skill.
 - Cada subida confirmada deja un evento `brain.skill_imported` con la persona, el canal (`mcp`), la skill, si creó o reemplazó y cuántos archivos.
 - `skill_upload_link` y `skill_import` con `confirm` cuentan como escrituras en el límite por minuto; `skill_import` sin `confirm`, como lectura.
-- El `PUT` crudo con ese `Content-Type` se verificó contra el Supabase local (acepta el zip y un segundo `PUT` a la misma URL lo sobrescribe); todavía falta confirmarlo en producción, así que si tu cliente recibe un rechazo al subir, avisá. El flujo completo de `skill_import` con un cliente real tampoco se probó todavía. El detalle del diseño está en [el dominio brain](../dominios/brain.md).
+- El `PUT` crudo con ese `Content-Type` se verificó contra el Supabase local (acepta el zip). La URL acepta **una sola subida**: un segundo `PUT` a la misma URL se rechaza, así el zip que aprobaste en la vista previa no cambia después; para mandar otro zip hace falta un link nuevo; todavía falta confirmarlo en producción, así que si tu cliente recibe un rechazo al subir, avisá. El flujo completo de `skill_import` con un cliente real tampoco se probó todavía. El detalle del diseño está en [el dominio brain](../dominios/brain.md).
 
 ## Si algo falla
 
