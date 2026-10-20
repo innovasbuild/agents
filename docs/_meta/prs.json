@@ -676,5 +676,83 @@
 		"title": "feat: crear y editar skills de empresa por MCP (etapa 24.5)",
 		"mergedAt": "2026-10-15T23:28:58Z",
 		"headRefName": "docs/etapa-24-5-editar-skills-mcp"
+	},
+	{
+		"number": 114,
+		"title": "docs: filas de los PR 110 a 113 en la wiki",
+		"mergedAt": "2026-10-16T15:08:47Z",
+		"headRefName": "docs/filas-pr-110-113"
+	},
+	{
+		"number": 115,
+		"title": "fix: latencia en wiki, chat y conversaciones (región, auth en paralelo, loading)",
+		"mergedAt": "2026-10-16T15:37:20Z",
+		"headRefName": "perf/latencia-region-auth-loading"
+	},
+	{
+		"number": 116,
+		"title": "perf: auth del canal de eve en menos viajes a la base",
+		"mergedAt": "2026-10-16T15:44:07Z",
+		"headRefName": "perf/canal-auth-paralelo"
+	},
+	{
+		"number": 117,
+		"title": "perf: listados del brain sin el cuerpo de las páginas",
+		"mergedAt": "2026-10-18T22:22:23Z",
+		"headRefName": "perf/brain-listados-sin-body"
+	},
+	{
+		"number": 118,
+		"title": "fix: sin sesión, el dominio de una empresa redirige al login en vez de dar 404",
+		"mergedAt": "2026-10-16T15:48:47Z",
+		"headRefName": "fix/tenant-sin-sesion-login"
+	},
+	{
+		"number": 119,
+		"title": "perf: agentes habilitados junto con el acceso y reglas del editor junto con el binding",
+		"mergedAt": "2026-10-18T22:05:11Z",
+		"headRefName": "claude/perf-layout-paralelo-e0f95d"
+	},
+	{
+		"number": 120,
+		"title": "fix: compartir una carpeta vacía del brain",
+		"mergedAt": "2026-10-19T22:13:21Z",
+		"headRefName": "fix/compartir-carpeta-vacia"
+	},
+	{
+		"number": 121,
+		"title": "v0.4.1 feat: chat nuevo con compositor y el hilo se crea al enviar",
+		"mergedAt": "2026-10-19T23:42:52Z",
+		"headRefName": "feat/chat-nuevo-compositor"
+	},
+	{
+		"number": 122,
+		"title": "fix: skill_create le dice a quien administra carpetas puntuales dónde puede crear",
+		"mergedAt": "2026-10-20T12:50:43Z",
+		"headRefName": "fix/mcp-skills-administrador-de-carpeta"
+	},
+	{
+		"number": 123,
+		"title": "v0.4.2 feat: barra lateral más clara en chat y brain",
+		"mergedAt": "2026-10-20T12:51:01Z",
+		"headRefName": "feat/sidebar-mas-clara"
+	},
+	{
+		"number": 124,
+		"title": "feat: quien administra una carpeta crea carpetas y borra páginas por MCP",
+		"mergedAt": "2026-10-20T13:22:48Z",
+		"headRefName": "fix/mcp-skills-administrador-de-carpeta"
+	},
+	{
+		"number": 125,
+		"title": "fix: los links del editor del brain se abren con un clic y tocar el editor no ensucia la página",
+		"mergedAt": "2026-10-20T14:40:51Z",
+		"headRefName": "fix/editor-links-navegables"
+	},
+	{
+		"number": 126,
+		"title": "v0.5.0 feat: subir una skill desde un zip, por la web y por MCP (etapa 24.6)",
+		"mergedAt": "2026-10-20T16:45:20Z",
+		"headRefName": "feat/etapa-24-6-subir-skills"
 	}
 ]

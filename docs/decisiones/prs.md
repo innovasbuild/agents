@@ -3,7 +3,7 @@ title: Decisiones por PR
 category: decisiones
 status: activo
 tags: [decisiones, pr]
-updated: 2026-10-14
+updated: 2026-10-20
 ---
 
 # Decisiones por PR
@@ -127,4 +127,16 @@ Las specs están en [README.md](README.md).
 | [111](https://github.com/innovasbuild/agents/pull/111) | 2026-10-15 | v0.4.0 docs: cierre en producción de la etapa 21.6, dominio propio por empresa | [Dominio propio de un cliente](../guias/dominio-de-un-cliente.md) · [Tenancy](../arquitectura/tenancy.md) · cierre de la 21.6 registrado en [Decisiones](README.md) |
 | [112](https://github.com/innovasbuild/agents/pull/112) | 2026-10-15 | feat: plataforma habilita skills en una empresa desde la consola | [Brain](../dominios/brain.md) · [Plataforma y settings por empresa](../dominios/plataforma.md) |
 | [113](https://github.com/innovasbuild/agents/pull/113) | 2026-10-15 | feat: crear y editar skills de empresa por MCP (etapa 24.5) | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
+| [114](https://github.com/innovasbuild/agents/pull/114) | 2026-10-16 | docs: filas de los PR 110 a 113 en la wiki | registro de las filas 110 a 113 en esta misma tabla; sin código ni contrato nuevo |
+| [115](https://github.com/innovasbuild/agents/pull/115) | 2026-10-16 | fix: latencia en wiki, chat y conversaciones (región, auth en paralelo, loading) | ajuste de rendimiento (región de las funciones en `vercel.json`, auth en paralelo y pantallas de carga); sin cambio de contrato |
+| [116](https://github.com/innovasbuild/agents/pull/116) | 2026-10-16 | perf: auth del canal de eve en menos viajes a la base | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
+| [117](https://github.com/innovasbuild/agents/pull/117) | 2026-10-18 | perf: listados del brain sin el cuerpo de las páginas | [Brain](../dominios/brain.md) |
+| [118](https://github.com/innovasbuild/agents/pull/118) | 2026-10-16 | fix: sin sesión, el dominio de una empresa redirige al login en vez de dar 404 | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) · [Tenancy](../arquitectura/tenancy.md) |
+| [119](https://github.com/innovasbuild/agents/pull/119) | 2026-10-18 | perf: agentes habilitados junto con el acceso y reglas del editor junto con el binding | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
+| [120](https://github.com/innovasbuild/agents/pull/120) | 2026-10-19 | fix: compartir una carpeta vacía del brain | fix sin cambio de contrato: compartir una carpeta vacía del brain |
+| [121](https://github.com/innovasbuild/agents/pull/121) | 2026-10-19 | v0.4.1 feat: chat nuevo con compositor y el hilo se crea al enviar | [Agentes eve](../dominios/agentes-eve.md) |
+| [122](https://github.com/innovasbuild/agents/pull/122) | 2026-10-20 | fix: skill_create le dice a quien administra carpetas puntuales dónde puede crear | [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
+| [123](https://github.com/innovasbuild/agents/pull/123) | 2026-10-20 | v0.4.2 feat: barra lateral más clara en chat y brain | cambio visual de la barra lateral de chat y brain; sin contrato ni modelo nuevo |
+| [124](https://github.com/innovasbuild/agents/pull/124) | 2026-10-20 | feat: quien administra una carpeta crea carpetas y borra páginas por MCP | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
+| [125](https://github.com/innovasbuild/agents/pull/125) | 2026-10-20 | fix: los links del editor del brain se abren con un clic y tocar el editor no ensucia la página | fix sin cambio de contrato: los links del editor del brain se abren con un clic |
 | [126](https://github.com/innovasbuild/agents/pull/126) | 2026-10-20 | v0.5.0 feat: subir una skill desde un zip, por la web y por MCP (etapa 24.6) | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
