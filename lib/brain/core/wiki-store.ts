@@ -191,13 +191,23 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 		},
 
 		async listMeta(tenantId) {
-			const { data, error } = await client
-				.from("brain_pages")
-				.select(META_COLUMNS)
-				.eq("tenant_id", tenantId)
-				.order("slug");
-			if (error) throw storeError(error);
-			return ((data ?? []) as Array<Record<string, unknown>>).map(toMeta);
+			// PostgREST corta cada respuesta en max_rows (1000 en config.toml): se
+			// pagina y se avanza por las filas recibidas, no por 1000, así sigue
+			// completo si el servidor corta más abajo. Corta en la respuesta vacía.
+			const metas: BrainPageMeta[] = [];
+			for (let from = 0; ; ) {
+				const { data, error } = await client
+					.from("brain_pages")
+					.select(META_COLUMNS)
+					.eq("tenant_id", tenantId)
+					.order("slug")
+					.range(from, from + 999);
+				if (error) throw storeError(error);
+				const rows = (data ?? []) as Array<Record<string, unknown>>;
+				if (rows.length === 0) return metas;
+				for (const row of rows) metas.push(toMeta(row));
+				from += rows.length;
+			}
 		},
 
 		async listLinks(tenantId) {

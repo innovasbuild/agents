@@ -7,15 +7,21 @@ import {
 
 type Call = { table: string; filters: Record<string, unknown> };
 
-// Imita la cadena de PostgREST: select/eq/order devuelven la cadena, y la
+// Imita la cadena de PostgREST: select/eq/order/range devuelven la cadena, y la
 // cadena es "esperable" (devuelve todas las filas) o termina en maybeSingle.
+// Corta cada respuesta en maxRows como hace el servidor (1000 por defecto, el
+// max_rows de supabase/config.toml), con o sin range. `ranges` y `orders`
+// guardan, por consulta que terminó, el rango pedido y la columna de orden.
 type DbError = { code: string; message: string; details: string | null };
 
 function fakeClient(
 	rows: Record<string, Array<Record<string, unknown>>>,
 	errors: Record<string, DbError> = {},
+	{ maxRows = 1000 }: { maxRows?: number } = {},
 ) {
 	const calls: Call[] = [];
+	const ranges: Array<[number, number] | null> = [];
+	const orders: Array<string | null> = [];
 	const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 	const selects: Array<string | undefined> = [];
 	const client = {
@@ -25,6 +31,8 @@ function fakeClient(
 		},
 		from(table: string) {
 			const filters: Record<string, unknown> = {};
+			let range: [number, number] | null = null;
+			let orderBy: string | null = null;
 			const chain = {
 				select: (columns?: string) => {
 					selects.push(columns);
@@ -34,7 +42,14 @@ function fakeClient(
 					filters[column] = value;
 					return chain;
 				},
-				order: () => chain,
+				order: (column: string) => {
+					orderBy = column;
+					return chain;
+				},
+				range: (from: number, to: number) => {
+					range = [from, to];
+					return chain;
+				},
 				maybeSingle: async () => {
 					calls.push({ table, filters: { ...filters } });
 					return {
@@ -45,8 +60,15 @@ function fakeClient(
 				// biome-ignore lint/suspicious/noThenProperty: la cadena de PostgREST es esperable
 				then: (resolve: (value: unknown) => void) => {
 					calls.push({ table, filters: { ...filters } });
+					ranges.push(range);
+					orders.push(orderBy);
+					const [from, to] = range ?? [0, Number.POSITIVE_INFINITY];
+					const data = (rows[table] ?? []).slice(
+						from,
+						Math.min(to + 1, from + maxRows),
+					);
 					resolve({
-						data: errors[table] ? null : (rows[table] ?? []),
+						data: errors[table] ? null : data,
 						error: errors[table] ?? null,
 					});
 				},
@@ -59,7 +81,16 @@ function fakeClient(
 		calls,
 		rpcCalls,
 		selects,
+		ranges,
+		orders,
 	};
+}
+
+function pagesRows(count: number) {
+	return Array.from({ length: count }, (_, i) => ({
+		...pageRow,
+		slug: `p/${String(i).padStart(5, "0")}`,
+	}));
 }
 
 const pageRow = {
@@ -93,6 +124,64 @@ describe("createSupabaseWikiStore.list", () => {
 				revision: 3,
 				updatedAt: "2026-10-01T00:00:00Z",
 			},
+		]);
+	});
+});
+
+// Value: protects=listMeta devuelve todas las paginas del tenant aunque PostgREST corte cada respuesta en max_rows,
+//   y no depende de que max_rows sea 1000 (avanza por las filas recibidas y corta en la respuesta vacia).
+// fails_when=listMeta vuelve a un select sin paginar (trunca en 1000) o corta cuando una respuesta viene corta.
+// why_new=un brain de mas de 1.000 paginas llegaba truncado al arbol, al indice y al mapa; seam=none
+describe("createSupabaseWikiStore.listMeta · paginado", () => {
+	it("listMeta devuelve 1.001 páginas", async () => {
+		const { client } = fakeClient({ brain_pages: pagesRows(1001) });
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(metas).toHaveLength(1001);
+		expect(metas[1000].slug).toBe("p/01000");
+	});
+
+	it("listMeta devuelve 2.500 páginas", async () => {
+		const { client } = fakeClient({ brain_pages: pagesRows(2500) });
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(metas).toHaveLength(2500);
+		expect(new Set(metas.map((m) => m.slug)).size).toBe(2500);
+	});
+
+	it("listMeta sigue completo si el servidor corta en 500 por respuesta", async () => {
+		const { client } = fakeClient(
+			{ brain_pages: pagesRows(1200) },
+			{},
+			{ maxRows: 500 },
+		);
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(metas).toHaveLength(1200);
+		expect(new Set(metas.map((m) => m.slug)).size).toBe(1200);
+	});
+
+	it("listMeta con exactamente 1.000 páginas hace una consulta más y termina", async () => {
+		const { client, calls } = fakeClient({ brain_pages: pagesRows(1000) });
+		const metas = await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(metas).toHaveLength(1000);
+		expect(calls).toHaveLength(2);
+	});
+
+	it("listMeta pide siempre order por slug y filtra por tenant", async () => {
+		const { client, calls, orders, ranges } = fakeClient({
+			brain_pages: pagesRows(1001),
+		});
+		await createSupabaseWikiStore(client).listMeta("tenant-a");
+		expect(calls.length).toBeGreaterThan(1);
+		for (const call of calls) {
+			expect(call).toEqual({
+				table: "brain_pages",
+				filters: { tenant_id: "tenant-a" },
+			});
+		}
+		expect(orders.every((column) => column === "slug")).toBe(true);
+		expect(ranges).toEqual([
+			[0, 999],
+			[1000, 1999],
+			[1001, 2000],
 		]);
 	});
 });
