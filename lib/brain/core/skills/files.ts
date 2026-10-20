@@ -23,6 +23,7 @@ import { WikiStoreError } from "../wiki-store.ts";
 import {
 	isSkillSlug,
 	isValidFilePath,
+	isValidSkillName,
 	MAX_COMPATIBILITY,
 	MAX_DESCRIPTION,
 	MAX_FILE_BYTES,
@@ -56,6 +57,7 @@ export interface PackageEntry {
 }
 
 export interface ParsedSkillMd {
+	name: string;
 	description: string;
 	compatibility: string;
 	license: string;
@@ -86,6 +88,7 @@ export function parseSkillMd(text: string): ParsedSkillMd | null {
 	const str = (value: unknown) =>
 		typeof value === "string" ? value.trim() : "";
 	return {
+		name: str(fields.name),
 		description: str(fields.description),
 		compatibility: str(fields.compatibility),
 		license: str(fields.license),
@@ -128,12 +131,22 @@ export function planImport(
 		skill = parseSkillMd(new TextDecoder().decode(skillMd.bytes));
 		if (!skill) {
 			problems.push("SKILL.md no tiene un encabezado YAML válido.");
-		} else if (skill.description.length === 0) {
-			problems.push("SKILL.md no trae description.");
-		} else if (skill.description.length > MAX_DESCRIPTION) {
-			problems.push("La description de SKILL.md supera los 1024 caracteres.");
-		} else if (skill.compatibility.length > MAX_COMPATIBILITY) {
-			problems.push("El campo compatibility supera los 500 caracteres.");
+		} else {
+			if (skill.name.length === 0) {
+				problems.push("SKILL.md no trae name.");
+			} else if (!isValidSkillName(skill.name)) {
+				problems.push(
+					"El name de SKILL.md no es válido: usá minúsculas, dígitos y guiones, hasta 64 caracteres.",
+				);
+			}
+			if (skill.description.length === 0) {
+				problems.push("SKILL.md no trae description.");
+			} else if (skill.description.length > MAX_DESCRIPTION) {
+				problems.push("La description de SKILL.md supera los 1024 caracteres.");
+			}
+			if (skill.compatibility.length > MAX_COMPATIBILITY) {
+				problems.push("El campo compatibility supera los 500 caracteres.");
+			}
 		}
 	}
 

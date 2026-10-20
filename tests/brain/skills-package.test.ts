@@ -6,7 +6,11 @@ import {
 	checkPublishable,
 	isSkillSlug,
 	isValidFilePath,
+	isValidSkillFolder,
+	isValidSkillName,
 	MAX_FILE_BYTES,
+	MAX_ZIP_BYTES,
+	normalizeSkillFolder,
 	skillName,
 	skillPlacementOk,
 } from "@/lib/brain/core/skills/package";
@@ -155,5 +159,40 @@ describe("checkPublishable", () => {
 		});
 		expect(result.problems).toEqual([]);
 		expect(result.warnings).toEqual(["long_body"]);
+	});
+});
+
+describe("nombre y carpeta de una skill", () => {
+	it.each(["facturacion", "a-1", "x".repeat(64)])(
+		"acepta el nombre %s",
+		(name) => {
+			expect(isValidSkillName(name)).toBe(true);
+		},
+	);
+
+	it.each(["", "Ventas", "a b", "a/b", "..", "-a", "a--b", "x".repeat(65)])(
+		"rechaza el nombre %j",
+		(name) => {
+			expect(isValidSkillName(name)).toBe(false);
+		},
+	);
+
+	it("normaliza la carpeta: recorta espacios y barras y descarta skills/", () => {
+		expect(normalizeSkillFolder("/skills/ventas/")).toBe("ventas");
+		expect(normalizeSkillFolder("  ventas/q1  ")).toBe("ventas/q1");
+		expect(normalizeSkillFolder("skills")).toBe("");
+		expect(normalizeSkillFolder(undefined)).toBe("");
+	});
+
+	it("valida la carpeta: vacía o tramos de nombre válido", () => {
+		expect(isValidSkillFolder("")).toBe(true);
+		expect(isValidSkillFolder("ventas/q1")).toBe(true);
+		expect(isValidSkillFolder("Ventas")).toBe(false);
+		expect(isValidSkillFolder("ventas//q1")).toBe(false);
+	});
+
+	it("el tope del zip es el del archivo: 4 MB", () => {
+		expect(MAX_ZIP_BYTES).toBe(4_194_304);
+		expect(MAX_ZIP_BYTES).toBe(MAX_FILE_BYTES);
 	});
 });

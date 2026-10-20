@@ -6,6 +6,7 @@ export const MAX_SKILL_NAME = 64;
 export const MAX_DESCRIPTION = 1024;
 export const MAX_COMPATIBILITY = 500;
 export const MAX_FILE_BYTES = 4_194_304;
+export const MAX_ZIP_BYTES = MAX_FILE_BYTES;
 export const MAX_PACKAGE_BYTES = 20_971_520;
 export const MAX_PACKAGE_FILES = 50;
 export const MAX_FILE_PATH = 200;
@@ -28,6 +29,26 @@ export function isSkillSlug(slug: string): boolean {
 
 export function skillName(slug: string): string {
 	return slug.slice(slug.lastIndexOf("/") + 1);
+}
+
+const SKILL_NAME_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+export function isValidSkillName(name: string): boolean {
+	return name.length <= MAX_SKILL_NAME && SKILL_NAME_PATTERN.test(name);
+}
+
+// La carpeta es relativa a skills/: se recortan espacios y barras de los
+// extremos y un "skills/" al principio se descarta. "" es directo bajo skills/.
+export function normalizeSkillFolder(raw: string | undefined): string {
+	return (raw ?? "")
+		.trim()
+		.replace(/^\/+|\/+$/g, "")
+		.replace(/^skills(\/|$)/, "")
+		.replace(/^\/+|\/+$/g, "");
+}
+
+export function isValidSkillFolder(folder: string): boolean {
+	return folder === "" || folder.split("/").every(isValidSkillName);
 }
 
 export function isValidFilePath(path: string): boolean {

@@ -11,7 +11,7 @@ import {
 	type Principal,
 } from "../access/types.ts";
 import { BrainConflict, BrainError, BrainNotFound } from "../errors.ts";
-import { type BrainPage, MAX_SLUG_LENGTH, SLUG_PATTERN } from "../types.ts";
+import { type BrainPage, MAX_SLUG_LENGTH } from "../types.ts";
 import { MAX_READABLE_BYTES } from "./catalog.ts";
 import {
 	type FilesDeps,
@@ -24,9 +24,11 @@ import { looksLikeText } from "./http.ts";
 import {
 	isSkillSlug,
 	isValidFilePath,
+	isValidSkillFolder,
+	isValidSkillName,
 	MAX_COMPATIBILITY,
 	MAX_DESCRIPTION,
-	MAX_SKILL_NAME,
+	normalizeSkillFolder,
 	SKILLS_PREFIX,
 	skillName,
 } from "./package.ts";
@@ -482,21 +484,14 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 			const actor = await files.actor(tenantSlug);
 			if (!actor) throw notFound(input.name);
 			const name = input.name.trim();
-			// La carpeta es relativa a skills/: un "skills/" al principio se descarta.
-			const folder = input.folder
-				?.trim()
-				.replace(/^\/+|\/+$/g, "")
-				.replace(/^skills(\/|$)/, "")
-				.replace(/^\/+|\/+$/g, "");
+			const folder = normalizeSkillFolder(input.folder);
 			const slug = folder
 				? `${SKILLS_PREFIX}${folder}/${name}`
 				: `${SKILLS_PREFIX}${name}`;
 			if (
-				name.length === 0 ||
-				name.length > MAX_SKILL_NAME ||
-				name.includes("/") ||
-				slug.length > MAX_SLUG_LENGTH ||
-				!SLUG_PATTERN.test(slug)
+				!isValidSkillName(name) ||
+				!isValidSkillFolder(folder) ||
+				slug.length > MAX_SLUG_LENGTH
 			) {
 				throw invalid(
 					"El nombre y la carpeta usan minúsculas, dígitos y guiones (la carpeta puede tener subniveles separados por /). El nombre llega a 64 caracteres.",

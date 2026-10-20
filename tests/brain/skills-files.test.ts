@@ -159,6 +159,7 @@ const HIDDEN = { rules: [members("", "lector"), members("skills", "ninguno")] };
 describe("parseSkillMd", () => {
 	it("separa el encabezado del cuerpo", () => {
 		expect(parseSkillMd(SKILL_MD)).toEqual({
+			name: "facturacion",
 			description: "Usar para emitir y validar facturas.",
 			compatibility: "Python 3",
 			license: "",
@@ -210,6 +211,30 @@ describe("planImport", () => {
 		]);
 		if (!plan.ok) throw new Error(plan.problems.join(" "));
 		expect(plan.files.map((f) => f.path)).toEqual(["scripts/__init__.py"]);
+	});
+
+	it("reúne todos los problemas de SKILL.md: sin name ni description", () => {
+		const plan = planImport([
+			{ path: "SKILL.md", bytes: bytes("---\nlicense: MIT\n---\nc") },
+		]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems).toEqual([
+			"SKILL.md no trae name.",
+			"SKILL.md no trae description.",
+		]);
+	});
+
+	it("rechaza un name con mayúsculas o espacios", () => {
+		const plan = planImport([
+			{
+				path: "SKILL.md",
+				bytes: bytes("---\nname: Ventas Uno\ndescription: x\n---\nc"),
+			},
+		]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems).toEqual([
+			"El name de SKILL.md no es válido: usá minúsculas, dígitos y guiones, hasta 64 caracteres.",
+		]);
 	});
 
 	it("rechaza un SKILL.md sin descripción y más de 50 archivos", () => {
