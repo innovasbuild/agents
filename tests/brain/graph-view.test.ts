@@ -195,6 +195,22 @@ describe("toGraphData", () => {
 		expect(size(3)).toBe(nodeSize(0, 2));
 	});
 
+	it("un link mutuo sale como dos entradas (las fusiona graph.import con merge)", () => {
+		const mutual = toGraphData({
+			nodes: [node("a"), node("b")],
+			edges: [
+				[0, 1],
+				[1, 0],
+			],
+		});
+		expect(mutual.edges).toEqual([
+			{ source: "a", target: "b" },
+			{ source: "b", target: "a" },
+		]);
+		// El grado cuenta vecinos distintos: el par mutuo no agranda el nodo.
+		expect(mutual.nodes[0].attributes.size).toBe(nodeSize(1, 1));
+	});
+
 	it("aristas por slug, sin autoenlaces ni índices fuera de rango", () => {
 		expect(toGraphData(payload).edges).toEqual([
 			{ source: "hub", target: "hoja" },

@@ -57,6 +57,7 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 				});
 				if (!response.ok) throw new Error(`HTTP ${response.status}`);
 				const payload = (await response.json()) as GraphPayload;
+				if (controller.signal.aborted) return;
 				setState(
 					payload.nodes.length === 0
 						? { kind: "empty" }
@@ -82,7 +83,6 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 			multi: false,
 			allowSelfLoops: false,
 		});
-		graph.import(toGraphData(payload), true);
 
 		let theme = readGraphTheme(container);
 		const paint = () => {
@@ -104,10 +104,13 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 				{ attributes: ["color"] },
 			);
 		};
-		paint();
 
+		// Un payload mal formado o un WebGL que no arranca terminan en el aviso con
+		// "Reintentar", no en un subárbol roto.
 		let sigma: Sigma<NodeAttributes, EdgeAttributes>;
 		try {
+			graph.import(toGraphData(payload), true);
+			paint();
 			sigma = new Sigma(graph, container, {
 				settings: {
 					// Sin esto, en Sigma 4 el tamaño es en coordenadas del grafo y los
@@ -133,7 +136,7 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 				},
 			});
 		} catch (error) {
-			console.error("brain-graph: Sigma no pudo arrancar", error);
+			console.error("brain-graph: no pude armar el mapa", error);
 			setState({ kind: "error" });
 			return;
 		}
@@ -156,18 +159,21 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 		let stopTimer: ReturnType<typeof setTimeout> | undefined;
 		let resumeTimer: ReturnType<typeof setTimeout> | undefined;
 
+		// Se cumplió el tope: se corta para siempre y se libera el worker.
+		const finish = () => {
+			if (since !== null) layout.stop();
+			since = null;
+			clearTimeout(stopTimer);
+			spent = budget;
+			layout.kill();
+		};
 		const pause = () => {
 			if (since === null) return;
 			layout.stop();
 			spent += performance.now() - since;
 			since = null;
 			clearTimeout(stopTimer);
-		};
-		// Se cumplió el tope: se corta para siempre y se libera el worker.
-		const finish = () => {
-			pause();
-			spent = budget;
-			layout.kill();
+			if (spent >= budget) finish();
 		};
 		const run = () => {
 			if (since !== null || spent >= budget) return;
@@ -216,9 +222,14 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 
 	return (
 		<div className="relative h-full w-full bg-background">
-			<div ref={containerRef} className="absolute inset-0" />
+			<div
+				ref={containerRef}
+				role="img"
+				aria-label="Mapa de conexiones del brain"
+				className="absolute inset-0"
+			/>
 			{state.kind === "loading" && (
-				<Overlay>
+				<Overlay role="status">
 					<p className="text-muted-foreground">Cargando el mapa…</p>
 				</Overlay>
 			)}
@@ -234,7 +245,7 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 				</Overlay>
 			)}
 			{state.kind === "error" && (
-				<Overlay>
+				<Overlay role="alert">
 					<p>No pudimos cargar el mapa</p>
 					<Button variant="outline" onClick={() => setAttempt((n) => n + 1)}>
 						Reintentar
@@ -245,9 +256,18 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 	);
 }
 
-function Overlay({ children }: { children: React.ReactNode }) {
+function Overlay({
+	role,
+	children,
+}: {
+	role?: "status" | "alert";
+	children: React.ReactNode;
+}) {
 	return (
-		<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center">
+		<div
+			role={role}
+			className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-center"
+		>
 			{children}
 		</div>
 	);

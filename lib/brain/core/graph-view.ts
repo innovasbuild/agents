@@ -129,6 +129,8 @@ export function toGraphData(payload: Pick<GraphPayload, "nodes" | "edges">): {
 			archived: status === ARCHIVED,
 		},
 	}));
+	// Un link mutuo (a→b y b→a) sale como dos entradas: graph.import(..., true)
+	// las fusiona en una sola arista no dirigida.
 	const edges: Array<{ source: string; target: string }> = [];
 	for (const [a, b] of payload.edges) {
 		const source = payload.nodes[a]?.[0];
