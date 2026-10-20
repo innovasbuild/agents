@@ -49,12 +49,18 @@ async function post(
 	file: File,
 	action: "preview" | "confirm",
 	target: UploadTarget,
+	expected?: UploadPreview,
 ): Promise<Reply> {
 	const form = new FormData();
 	form.set("action", action);
 	form.set("file", file);
 	if (target.kind === "folder") form.set("folder", target.folder);
 	else form.set("slug", target.slug);
+	// Lo que vio la persona: si cambió desde la vista previa, no se escribe.
+	if (expected) {
+		form.set("expectedMode", expected.mode);
+		form.set("expectedSlug", expected.slug);
+	}
 	try {
 		const response = await fetch(url, { method: "POST", body: form });
 		return (await response.json()) as Reply;
@@ -127,7 +133,13 @@ export function UploadDialogBody({
 	async function confirm(preview: UploadPreview) {
 		if (!file.current) return;
 		setStep({ kind: "uploading", preview });
-		const reply = await post(endpoint, file.current, "confirm", target);
+		const reply = await post(
+			endpoint,
+			file.current,
+			"confirm",
+			target,
+			preview,
+		);
 		if (!reply.ok) {
 			setStep({ kind: "refused", failure: reply });
 			return;

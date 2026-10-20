@@ -67,6 +67,8 @@ export interface SkillUploads {
 	import: (i: {
 		uploadId: string;
 		confirm?: boolean;
+		expectedMode?: "crear" | "reemplazar";
+		expectedSlug?: string;
 	}) => Promise<Record<string, unknown>>;
 }
 
@@ -77,7 +79,8 @@ const NO_UPLOAD =
 const EXPIRED = "El link venció, pedí otro con skill_upload_link.";
 const ZIP_TOO_BIG = "El zip supera los 4 MB.";
 const CONFIRM_HINT =
-	"Esto es solo la vista previa: no se guardó nada. Mostrásela a la persona y, si está de acuerdo, llamá de nuevo a skill_import con el mismo uploadId y confirm: true. La skill queda en el borrador.";
+	"Esto es solo la vista previa: no se guardó nada. Mostrásela a la persona y, si está de acuerdo, llamá de nuevo a skill_import con el mismo uploadId, confirm: true, expectedMode con el mode y expectedSlug con el slug de esta vista previa: si algo cambió mientras tanto, no se guarda y hay que volver a mirar la vista previa. La skill queda en el borrador.";
+const HALF_EXPECTED = "expectedMode y expectedSlug van juntos, o ninguno.";
 
 const invalid = (message: string) => new BrainError("validation", message);
 const notFound = (message: string) => new BrainError("not_found", message);
@@ -127,7 +130,9 @@ export function createSkillUploads(deps: SkillUploadsDeps): SkillUploads {
 			};
 		},
 
-		import: async ({ uploadId, confirm }) => {
+		import: async ({ uploadId, confirm, expectedMode, expectedSlug }) => {
+			if ((expectedMode === undefined) !== (expectedSlug === undefined))
+				throw invalid(HALF_EXPECTED);
 			const parsed = parseUploadId(uploadId, Date.now());
 			if (parsed === null) throw notFound(NO_UPLOAD);
 			if (parsed === "expired") throw invalid(EXPIRED);
@@ -159,6 +164,9 @@ export function createSkillUploads(deps: SkillUploadsDeps): SkillUploads {
 				target,
 				entries,
 				files,
+				expectedMode && expectedSlug !== undefined
+					? { mode: expectedMode, slug: expectedSlug }
+					: undefined,
 			);
 			if (!result.ok) failure(result);
 			// Ya se escribió: ni el borrado ni el registro cambian el resultado. Un

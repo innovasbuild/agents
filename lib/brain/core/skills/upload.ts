@@ -47,6 +47,12 @@ export interface UploadPreview {
 
 export type UploadFailure = SkillFailure & { problems?: string[] };
 
+/** Lo que mostró la vista previa: si al confirmar cambió, no se escribe. */
+export interface UploadExpectation {
+	mode: "crear" | "reemplazar";
+	slug: string;
+}
+
 export interface UploadResult {
 	ok: true;
 	mode: "crear" | "reemplazar";
@@ -224,10 +230,19 @@ export async function commitSkillUpload(
 	target: UploadTarget,
 	entries: PackageEntry[],
 	deps: FilesDeps,
+	expect?: UploadExpectation,
 ): Promise<UploadResult | UploadFailure> {
 	const planned = await planUpload(tenantSlug, target, entries, deps);
 	if (!planned.ok) return planned;
 	const { actor, mode, slug, name, skill } = planned;
+	// Alguien creó o movió la skill entre la vista previa y la confirmación: un
+	// «crear» no se vuelve «reemplazar» en silencio.
+	if (expect && (expect.mode !== mode || expect.slug !== slug)) {
+		return skillFail(
+			"conflict",
+			`Cambió desde la vista previa (ahora «${mode}»). Volvé a abrir la vista previa.`,
+		);
+	}
 
 	if (mode === "crear") {
 		try {

@@ -848,6 +848,32 @@ describe("buildBrainMcpServer · subir skills desde un zip", () => {
 		expect(limiter.check).toHaveBeenCalledTimes(3);
 	});
 
+	it("skill_import pasa expectedMode y expectedSlug al servicio", async () => {
+		const uploads = fakeUploads();
+		const client = await connect(build(uploads).server);
+		await client.callTool({
+			name: "skill_import",
+			arguments: {
+				uploadId: "u1",
+				confirm: true,
+				expectedMode: "crear",
+				expectedSlug: "skills/ventas/reporte",
+			},
+		});
+		expect(uploads.import).toHaveBeenLastCalledWith({
+			uploadId: "u1",
+			confirm: true,
+			expectedMode: "crear",
+			expectedSlug: "skills/ventas/reporte",
+		});
+		const bad = await client.callTool({
+			name: "skill_import",
+			arguments: { uploadId: "u1", confirm: true, expectedMode: "borrar" },
+		});
+		expect(bad.isError).toBe(true);
+		expect(uploads.import).toHaveBeenCalledTimes(1);
+	});
+
 	it("un BrainError del import sale con el formato de siempre", async () => {
 		const uploads = fakeUploads();
 		uploads.import = vi.fn(async () => {

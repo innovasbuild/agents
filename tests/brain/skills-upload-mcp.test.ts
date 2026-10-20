@@ -13,7 +13,7 @@ import {
 	uploadableSkillFolders,
 } from "@/lib/brain/core/skills/upload-mcp";
 import type { BrainRole } from "@/lib/brain/core/types";
-import { bytes, members, setup } from "./skills-fixtures";
+import { bytes, members, setup, skillRow } from "./skills-fixtures";
 
 const ADMIN = [members("skills/ventas", "administrador")];
 const SLUG = "skills/ventas/facturacion";
@@ -183,6 +183,9 @@ describe("skill_import", () => {
 			warnings: [],
 		});
 		expect(preview.confirmHint).toContain("confirm");
+		// El asistente devuelve lo que mostró: si cambió, no se escribe.
+		expect(preview.confirmHint).toContain("expectedMode");
+		expect(preview.confirmHint).toContain("expectedSlug");
 		expect(b.save).not.toHaveBeenCalled();
 		expect(b.putFile).not.toHaveBeenCalled();
 		expect(b.staging.remove).not.toHaveBeenCalled();
@@ -223,6 +226,50 @@ describe("skill_import", () => {
 			mode: "crear",
 			files: 2,
 		});
+	});
+
+	it("con expectedMode y expectedSlug distintos de lo que hay ahora: conflicto y nada escrito", async () => {
+		const b = build();
+		const uploadId = await linked(b);
+		// Alguien creó la skill entre la vista previa y la confirmación.
+		b.rows.push(skillRow(SLUG, "p9", null));
+		await expect(
+			b.uploads.import({
+				uploadId,
+				confirm: true,
+				expectedMode: "crear",
+				expectedSlug: SLUG,
+			}),
+		).rejects.toMatchObject({
+			code: "conflict",
+			message:
+				"Cambió desde la vista previa (ahora «reemplazar»). Volvé a abrir la vista previa.",
+		});
+		expect(b.save).not.toHaveBeenCalled();
+		expect(b.putFile).not.toHaveBeenCalled();
+		expect(b.record).not.toHaveBeenCalled();
+		expect(b.objects.size).toBe(1);
+	});
+
+	it("expectedMode sin expectedSlug es un error de validación", async () => {
+		const b = build();
+		const uploadId = await linked(b);
+		await expect(
+			b.uploads.import({ uploadId, confirm: true, expectedMode: "crear" }),
+		).rejects.toMatchObject({ code: "validation" });
+		expect(b.save).not.toHaveBeenCalled();
+	});
+
+	it("con expectedMode y expectedSlug iguales escribe", async () => {
+		const b = build();
+		const uploadId = await linked(b);
+		const result = await b.uploads.import({
+			uploadId,
+			confirm: true,
+			expectedMode: "crear",
+			expectedSlug: SLUG,
+		});
+		expect(result).toMatchObject({ ok: true, mode: "crear", slug: SLUG });
 	});
 
 	it("si borrar el zip o registrar falla, igual devuelve ok", async () => {

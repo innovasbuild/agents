@@ -96,7 +96,7 @@ const UPLOAD_LINK_DESCRIPTION =
 	'Prepara la subida de una skill desde un zip (SKILL.md con name y description, más scripts y archivos; hasta 4 MB) a una carpeta de skills/: devuelve un uploadId y una URL para subir el zip con un PUT, que vence en 10 minutos. Después llamá a skill_import con el uploadId. Sirve solo si tu entorno puede ejecutar código y subir un archivo por HTTP; si no puede, decile a la persona que suba el zip desde la plataforma. `folder` va sin el prefijo skills/ ("" es directo en skills/). Si ya hay una skill con ese name en la carpeta, la reemplaza. Todo queda en BORRADOR: un administrador lo publica desde la plataforma.';
 
 const IMPORT_DESCRIPTION =
-	"Lee el zip que subiste con el link de skill_upload_link. Sin confirm devuelve la vista previa (si crea o reemplaza, la ruta, los archivos y los avisos) y no guarda nada: mostrásela a la persona. Con confirm: true guarda la skill en el BORRADOR, no la publica, y devuelve el reviewUrl para pasarle a la persona.";
+	"Lee el zip que subiste con el link de skill_upload_link. Sin confirm devuelve la vista previa (si crea o reemplaza, la ruta, los archivos y los avisos) y no guarda nada: mostrásela a la persona. Con confirm: true guarda la skill en el BORRADOR, no la publica, y devuelve el reviewUrl para pasarle a la persona. Al confirmar pasá expectedMode y expectedSlug con el mode y el slug de la vista previa: si cambió mientras tanto, no guarda nada.";
 
 function result(value: Record<string, unknown>, isError = false) {
 	return {
@@ -492,6 +492,8 @@ export function buildBrainMcpServer(ctx: {
 				inputSchema: {
 					uploadId: z.string().min(1).max(300),
 					confirm: z.boolean().optional(),
+					expectedMode: z.enum(["crear", "reemplazar"]).optional(),
+					expectedSlug: z.string().min(1).max(300).optional(),
 				},
 				// Con confirm puede reemplazar el borrador de una skill existente.
 				annotations: {

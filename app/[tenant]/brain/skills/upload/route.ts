@@ -14,6 +14,7 @@ import type { SkillFailure } from "@/lib/brain/core/skills/publish";
 import {
 	commitSkillUpload,
 	previewSkillUpload,
+	type UploadExpectation,
 	type UploadTarget,
 } from "@/lib/brain/core/skills/upload";
 import { loadTenantBindings } from "@/lib/connectors/bindings";
@@ -103,6 +104,8 @@ async function handleUpload(
 	) {
 		return refuse(400, "Pedido inválido.");
 	}
+	const expected = readExpectation(form);
+	if (expected === "invalid") return refuse(400, "Pedido inválido.");
 	if (file.size > MAX_ZIP_BYTES) return refuse(413, "El zip supera los 4 MB.");
 
 	const entries = unzipOrProblem(new Uint8Array(await file.arrayBuffer()));
@@ -118,7 +121,13 @@ async function handleUpload(
 		return preview.ok ? Response.json(preview) : failed(preview);
 	}
 
-	const result = await commitSkillUpload(tenant, target, entries, deps);
+	const result = await commitSkillUpload(
+		tenant,
+		target,
+		entries,
+		deps,
+		expected ?? undefined,
+	);
 	if (!result.ok) return failed(result);
 	revalidatePath(`/${tenant}/brain`, "layout");
 	try {
@@ -135,4 +144,20 @@ async function handleUpload(
 		console.error("skills: no pude registrar la subida", error);
 	}
 	return Response.json(result);
+}
+
+// Lo que mostró la vista previa (expectedMode y expectedSlug): los dos o
+// ninguno. Si al confirmar cambió, el servicio no escribe.
+function readExpectation(form: FormData): UploadExpectation | null | "invalid" {
+	const mode = form.get("expectedMode");
+	const slug = form.get("expectedSlug");
+	if (mode === null && slug === null) return null;
+	if (
+		(mode !== "crear" && mode !== "reemplazar") ||
+		typeof slug !== "string" ||
+		slug.length === 0
+	) {
+		return "invalid";
+	}
+	return { mode, slug };
 }

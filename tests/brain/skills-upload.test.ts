@@ -462,6 +462,43 @@ describe("commitSkillUpload", () => {
 		});
 	});
 
+	describe("expect: lo que mostró la vista previa", () => {
+		const CHANGED =
+			"Cambió desde la vista previa (ahora «reemplazar»). Volvé a abrir la vista previa.";
+
+		it("si el modo cambió: conflict y nada escrito", async () => {
+			const { deps: d, save, putFile } = deps({ rows: existing() });
+			const result = await commitSkillUpload("acme", FOLDER, pkg(), d, {
+				mode: "crear",
+				slug: VENTAS,
+			});
+			expect(result).toEqual({ ok: false, code: "conflict", message: CHANGED });
+			expect(save).not.toHaveBeenCalled();
+			expect(putFile).not.toHaveBeenCalled();
+		});
+
+		it("si la ruta cambió: conflict y nada escrito", async () => {
+			const { deps: d, save } = deps();
+			const result = await commitSkillUpload("acme", FOLDER, pkg(), d, {
+				mode: "crear",
+				slug: "skills/ventas/otra",
+			});
+			expect(result).toMatchObject({ ok: false, code: "conflict" });
+			expect(result.ok ? "" : result.message).toContain("«crear»");
+			expect(save).not.toHaveBeenCalled();
+		});
+
+		it("si coincide: escribe como siempre", async () => {
+			const { deps: d } = deps({ rows: existing() });
+			expect(
+				await commitSkillUpload("acme", FOLDER, pkg(), d, {
+					mode: "reemplazar",
+					slug: VENTAS,
+				}),
+			).toMatchObject({ ok: true, mode: "reemplazar", slug: VENTAS });
+		});
+	});
+
 	it("sin permiso para crear: not_found y nada escrito", async () => {
 		const { deps: d, save } = deps({
 			rules: [members("skills/ventas", "editor")],

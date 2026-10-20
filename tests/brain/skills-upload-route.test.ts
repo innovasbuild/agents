@@ -275,6 +275,43 @@ describe("confirmación", () => {
 		});
 	});
 
+	it("pasa al servicio el modo y la ruta que mostró la vista previa", async () => {
+		await POST(
+			send({
+				action: "confirm",
+				expectedMode: "crear",
+				expectedSlug: "skills/ventas/reporte",
+			}),
+			params,
+		);
+		expect(state.commitSkillUpload).toHaveBeenCalledWith(
+			"acme",
+			{ kind: "folder", folder: "ventas" },
+			expect.anything(),
+			expect.anything(),
+			{ mode: "crear", slug: "skills/ventas/reporte" },
+		);
+	});
+
+	it("sin esos campos confirma como antes", async () => {
+		await POST(send({ action: "confirm" }), params);
+		expect(state.commitSkillUpload.mock.calls[0]?.[4]).toBeUndefined();
+	});
+
+	it.each([
+		["solo el modo", { expectedMode: "crear" }],
+		["solo la ruta", { expectedSlug: "skills/ventas/reporte" }],
+		[
+			"un modo desconocido",
+			{ expectedMode: "borrar", expectedSlug: "skills/ventas/reporte" },
+		],
+		["una ruta vacía", { expectedMode: "crear", expectedSlug: "" }],
+	])("con %s responde 400 sin escribir", async (_name, fields) => {
+		const response = await POST(send({ action: "confirm", ...fields }), params);
+		expect(response.status).toBe(400);
+		expect(state.commitSkillUpload).not.toHaveBeenCalled();
+	});
+
 	it("un fallo del servicio no revalida ni registra", async () => {
 		state.commitSkillUpload.mockResolvedValue({
 			ok: false,

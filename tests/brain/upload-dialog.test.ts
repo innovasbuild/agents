@@ -166,6 +166,10 @@ describe("UploadDialog", () => {
 		expect(first[1].get("file")).toBe(second[1].get("file"));
 		expect(second[1].get("folder")).toBe("ventas");
 		expect(second[1].has("slug")).toBe(false);
+		// Lo que mostró la vista previa: si cambió, el servidor no escribe.
+		expect(first[1].has("expectedMode")).toBe(false);
+		expect(second[1].get("expectedMode")).toBe("crear");
+		expect(second[1].get("expectedSlug")).toBe("skills/ventas/cotizar");
 		expect(refresh).toHaveBeenCalled();
 		expect(text()).toContain("Quedó en borrador");
 		expect(
