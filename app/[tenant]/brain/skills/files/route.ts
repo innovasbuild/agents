@@ -1,10 +1,8 @@
 import { revalidatePath } from "next/cache";
-import { unzipPackage, ZipRejected } from "@/lib/brain/adapters/skill-zip";
 import { filesDeps } from "@/lib/brain/adapters/skills";
 import {
 	authorizeSkillEdit,
 	type FilesDeps,
-	importSkillPackage,
 	putSkillFile,
 	readSkillFile,
 } from "@/lib/brain/core/skills/files";
@@ -12,7 +10,7 @@ import { fileHeaders, isSameOrigin } from "@/lib/brain/core/skills/http";
 import { MAX_FILE_BYTES } from "@/lib/brain/core/skills/package";
 import type { SkillFailure } from "@/lib/brain/core/skills/publish";
 
-// Subida, importación y lectura de los archivos de una skill (spec etapa 24.1
+// Subida y lectura de los archivos de una skill (spec etapa 24.1
 // §6). No es una server action porque esas tienen tope de 2 MB. El permiso lo
 // decide core/skills/files.ts.
 
@@ -126,20 +124,6 @@ async function handleUpload(
 	const allowed = await authorizeSkillEdit(tenant, slug, deps);
 	if (!allowed.ok) return failed(allowed);
 	const bytes = new Uint8Array(await file.arrayBuffer());
-
-	if (form.get("kind") === "zip") {
-		let entries: ReturnType<typeof unzipPackage>;
-		try {
-			entries = unzipPackage(bytes);
-		} catch (error) {
-			if (error instanceof ZipRejected) return refuse(422, error.message);
-			throw error;
-		}
-		const result = await importSkillPackage(tenant, slug, entries, deps);
-		if (!result.ok) return failed(result);
-		revalidatePath(`/${tenant}/brain`, "layout");
-		return Response.json(result);
-	}
 
 	if (typeof path !== "string") return refuse(400, "Falta la ruta.");
 	const result = await putSkillFile(tenant, slug, { path, bytes }, deps);

@@ -4,7 +4,6 @@ const state = vi.hoisted(() => ({
 	actor: vi.fn(async () => ({ tenantId: "t", userId: "u", role: "member" })),
 	filesDeps: vi.fn(() => ({ actor: state.actor })),
 	authorizeSkillEdit: vi.fn(async () => ({ ok: true })),
-	importSkillPackage: vi.fn(),
 	putSkillFile: vi.fn(async () => ({ ok: true, filesDigest: "d" })),
 	readSkillFile: vi.fn(),
 }));
@@ -13,7 +12,6 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/brain/adapters/skills", () => ({ filesDeps: state.filesDeps }));
 vi.mock("@/lib/brain/core/skills/files", () => ({
 	authorizeSkillEdit: state.authorizeSkillEdit,
-	importSkillPackage: state.importSkillPackage,
 	putSkillFile: state.putSkillFile,
 	readSkillFile: state.readSkillFile,
 }));
@@ -89,18 +87,15 @@ describe("POST: lo barato primero", () => {
 		expect(read).not.toHaveBeenCalled();
 	});
 
-	it("quien no puede editar la skill no hace descomprimir el zip", async () => {
+	it("quien no puede editar la skill no llega a guardar el archivo", async () => {
 		state.authorizeSkillEdit.mockResolvedValueOnce({
 			ok: false,
 			code: "forbidden",
 			message: "x",
 		} as never);
-		const response = await POST(
-			upload(SAME, { kind: "zip", file: new File(["no es zip"], "p.zip") }),
-			params,
-		);
+		const response = await POST(upload(SAME), params);
 		expect(response.status).toBe(403);
-		expect(state.importSkillPackage).not.toHaveBeenCalled();
+		expect(state.putSkillFile).not.toHaveBeenCalled();
 	});
 
 	it("un fallo de Storage responde en castellano sin internos", async () => {
