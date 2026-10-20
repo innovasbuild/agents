@@ -66,7 +66,23 @@ La pantalla **Conectar** también trae los pasos para ChatGPT (Configuración �
 - `brain_read`: leer una página completa con su revisión.
 - `brain_upsert`: crear o actualizar una página. Hace falta nivel editor sobre esa carpeta o página; sin eso responde que no tenés permiso. Para actualizar, primero leela y pasá su revisión; si alguien la cambió en el medio, vas a recibir un conflicto y tenés que volver a leerla.
 
-Las tres tools del brain aparecen siempre en la lista. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
+Las tres tools del brain aparecen siempre en la lista.
+
+### Crear carpetas y borrar páginas (si administrás una carpeta)
+
+Si sos administrador de la empresa, o administrador de alguna carpeta del brain, tu asistente tiene dos tools más. A los demás no les aparecen.
+
+- `brain_folder_create`: crea carpetas, hasta 20 por llamada, padre primero (pasá también las intermedias que falten, como `marketing/marca` antes de `marketing/marca/identidad-visual`). Cada una exige que administres la carpeta de arriba; el permiso se hereda, así que quien administra `marketing` crea todo lo que cuelga de ahí. Cada carpeta informa su resultado y las que fallan no frenan a las demás.
+- `brain_delete`: **borra** páginas, sin papelera ni deshacer. Con `slug` borra una página; con `folder` borra las páginas de esa carpeta (no la carpeta), y las de sus subcarpetas solo con `includeSubfolders: true`. Los links que apuntaban a lo borrado quedan como texto, igual que al borrar desde la web.
+
+Cómo se cuida el borrado:
+
+- Solo borra lo que administrás. Lo demás vuelve en `skipped` con el motivo, y lo que no ves ni se nombra.
+- En un borrado por carpeta quedan afuera `00-reglas` y `00-plantilla`: se borran nombrándolas por su ruta. Las skills no se borran por MCP.
+- Hasta 50 páginas por llamada; si hay más, la respuesta trae `remaining` y el asistente sigue con el mismo `folder`.
+- La descripción de la tool le indica al asistente que la use solo si pediste el borrado nombrando la página o la carpeta («borrá la página X», «borrá todas las páginas de la carpeta Y»), y el cliente la marca como destructiva para que pida confirmación.
+
+Si `brain_upsert` falla porque la carpeta no existe y administrás la de arriba, el mensaje le dice al asistente que la cree con `brain_folder_create`. Una página que no podés ver no aparece en la búsqueda y responde "no encontrada" al leerla.
 
 Por defecto hay un límite de 60 lecturas y 10 escrituras por minuto por persona (cada brain puede tener otros valores, entre 1 y 1000, en su configuración). Si lo pasás, la respuesta dice cuántos segundos esperar. Un pedido de más de 1 MiB se rechaza con 413.
 

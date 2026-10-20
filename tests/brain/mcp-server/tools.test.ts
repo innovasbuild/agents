@@ -4,7 +4,11 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it, vi } from "vitest";
-import { BrainError, BrainNotFound } from "@/lib/brain/core/errors";
+import {
+	BrainError,
+	BrainNotFound,
+	BrainValidation,
+} from "@/lib/brain/core/errors";
 import type { RateLimiter } from "@/lib/brain/core/mcp-server/rate-limit";
 import {
 	buildBrainMcpServer,
@@ -742,5 +746,96 @@ describe("buildBrainMcpServer · edición de skills", () => {
 			error: "validation",
 			message: "El fragmento no aparece.",
 		});
+	});
+});
+
+describe("buildBrainMcpServer · carpetas y borrado", () => {
+	const manage = {
+		createFolders: vi.fn(async () => ({ results: [] })),
+		delete: vi.fn(async () => ({ deleted: [], skipped: [], remaining: 0 })),
+	};
+	const build = (withManage: boolean, provider = fakeProvider()) =>
+		buildBrainMcpServer({
+			userId: "belisario",
+			categories: ["marketing"],
+			canon: false,
+			provider,
+			limiter: fakeLimiter(),
+			manage: withManage ? manage : null,
+		});
+
+	it("las tools aparecen solo con manage, y el borrado se marca destructivo", async () => {
+		const sin = await connect(build(false));
+		expect((await sin.listTools()).tools.map((t) => t.name)).not.toContain(
+			"brain_delete",
+		);
+		const con = await connect(build(true));
+		const tools = (await con.listTools()).tools;
+		expect(tools.map((t) => t.name)).toEqual(
+			expect.arrayContaining(["brain_delete", "brain_folder_create"]),
+		);
+		expect(
+			tools.find((t) => t.name === "brain_delete")?.annotations
+				?.destructiveHint,
+		).toBe(true);
+	});
+
+	it("cuenta una escritura y pasa la entrada tal cual", async () => {
+		const limiter = fakeLimiter();
+		const server = buildBrainMcpServer({
+			userId: "belisario",
+			categories: ["marketing"],
+			canon: false,
+			provider: fakeProvider(),
+			limiter,
+			manage,
+		});
+		const client = await connect(server);
+		await client.callTool({
+			name: "brain_delete",
+			arguments: { folder: "marketing", includeSubfolders: true },
+		});
+		expect(limiter.check).toHaveBeenCalledWith("write");
+		expect(manage.delete).toHaveBeenCalledWith({
+			folder: "marketing",
+			includeSubfolders: true,
+		});
+	});
+
+	it("brain_upsert, si falta la carpeta y administra, le dice cómo crearla", async () => {
+		const provider = fakeProvider();
+		provider.upsert = vi.fn(async () => {
+			throw new BrainValidation(
+				["folder"],
+				"No existe la carpeta marketing/marca. Pedile a un administrador que la cree.",
+			);
+		});
+		const upsert = {
+			slug: "marketing/marca/logo",
+			title: "Logo",
+			category: "marketing",
+			status: "activo",
+			tags: [],
+			body: "x",
+			reason: "r",
+		};
+		const con = await connect(build(true, provider));
+		const result = await con.callTool({
+			name: "brain_upsert",
+			arguments: upsert,
+		});
+		expect(result.isError).toBe(true);
+		const message = (result.structuredContent as { message: string }).message;
+		expect(message).toContain("No existe la carpeta marketing/marca.");
+		expect(message).toContain("brain_folder_create");
+
+		const sin = await connect(build(false, provider));
+		const plain = await sin.callTool({
+			name: "brain_upsert",
+			arguments: upsert,
+		});
+		expect(
+			(plain.structuredContent as { message: string }).message,
+		).not.toContain("brain_folder_create");
 	});
 });
