@@ -156,6 +156,7 @@ describe("createSupabaseWikiStore.list", () => {
 		const pages = await createSupabaseWikiStore(client).list("tenant-a");
 		expect(calls).toEqual([
 			{ table: "brain_pages", filters: { tenant_id: "tenant-a" } },
+			{ table: "brain_pages", filters: { tenant_id: "tenant-a" } },
 		]);
 		expect(pages).toEqual([
 			{
@@ -228,6 +229,74 @@ describe("createSupabaseWikiStore.listMeta · paginado", () => {
 			[1000, 1999],
 			[1001, 2000],
 		]);
+	});
+});
+
+// Value: protects=list devuelve todas las paginas del tenant, con cuerpo, aunque PostgREST corte cada respuesta en max_rows,
+//   y no depende de que max_rows sea 1000 (avanza por las filas recibidas y corta en la respuesta vacia).
+// fails_when=list vuelve a un select sin paginar (trunca en 1000) o repite un slug que una insercion concurrente corrio de pagina.
+// why_new=la limpieza al borrar una carpeta y la administracion por MCP dejaban de ver las paginas pasada la fila 1.000; seam=none
+describe("createSupabaseWikiStore.list · paginado", () => {
+	it("list devuelve 1.001 páginas con su cuerpo", async () => {
+		const { client } = fakeClient({ brain_pages: pagesRows(1001) });
+		const pages = await createSupabaseWikiStore(client).list("tenant-a");
+		expect(pages).toHaveLength(1001);
+		expect(pages[1000].slug).toBe("p/01000");
+		expect(pages[1000].body).toBe("cuerpo");
+	});
+
+	it("list devuelve 2.500 páginas", async () => {
+		const { client } = fakeClient({ brain_pages: pagesRows(2500) });
+		const pages = await createSupabaseWikiStore(client).list("tenant-a");
+		expect(pages).toHaveLength(2500);
+		expect(new Set(pages.map((p) => p.slug)).size).toBe(2500);
+	});
+
+	it("list sigue completo si el servidor corta en 500 por respuesta", async () => {
+		const { client } = fakeClient(
+			{ brain_pages: pagesRows(1200) },
+			{},
+			{ maxRows: 500 },
+		);
+		const pages = await createSupabaseWikiStore(client).list("tenant-a");
+		expect(pages).toHaveLength(1200);
+		expect(new Set(pages.map((p) => p.slug)).size).toBe(1200);
+	});
+
+	it("list pide siempre order por slug y filtra por tenant", async () => {
+		const { client, calls, orders, ranges } = fakeClient({
+			brain_pages: pagesRows(1001),
+		});
+		await createSupabaseWikiStore(client).list("tenant-a");
+		for (const call of calls) {
+			expect(call).toEqual({
+				table: "brain_pages",
+				filters: { tenant_id: "tenant-a" },
+			});
+		}
+		expect(orders.every((column) => column === "slug")).toBe(true);
+		expect(ranges).toEqual([
+			[0, 999],
+			[1000, 1999],
+			[1001, 2000],
+		]);
+	});
+
+	it("list no repite el slug que una inserción concurrente corre a la página siguiente", async () => {
+		const rows = pagesRows(1500);
+		const { client } = fakeClient(
+			{ brain_pages: rows },
+			{},
+			{
+				afterQuery: (n) => {
+					if (n === 1) rows.unshift({ ...pageRow, slug: "a/recien-insertada" });
+				},
+			},
+		);
+		const pages = await createSupabaseWikiStore(client).list("tenant-a");
+		const slugs = pages.map((p) => p.slug);
+		expect(new Set(slugs).size).toBe(slugs.length);
+		expect(slugs).toHaveLength(1500);
 	});
 });
 
@@ -357,6 +426,18 @@ describe("createSupabaseWikiStore · paginado con cambios y errores entre págin
 		});
 		await expect(
 			createSupabaseWikiStore(client).listMeta("tenant-a"),
+		).rejects.toMatchObject({ code: "42501" });
+	});
+
+	it("list propaga el error de una página posterior", async () => {
+		const errors: Record<string, DbError> = {};
+		const { client } = fakeClient({ brain_pages: pagesRows(2500) }, errors, {
+			afterQuery: (n) => {
+				if (n === 1) errors.brain_pages = dbError;
+			},
+		});
+		await expect(
+			createSupabaseWikiStore(client).list("tenant-a"),
 		).rejects.toMatchObject({ code: "42501" });
 	});
 
