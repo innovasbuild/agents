@@ -754,5 +754,11 @@
 		"title": "v0.5.0 feat: subir una skill desde un zip, por la web y por MCP (etapa 24.6)",
 		"mergedAt": "2026-10-20T16:45:20Z",
 		"headRefName": "feat/etapa-24-6-subir-skills"
+	},
+	{
+		"number": 127,
+		"title": "docs: filas de los PR 114 a 125 en la wiki y prs.json refrescado",
+		"mergedAt": "2026-10-20T20:44:43Z",
+		"headRefName": "docs/filas-prs-114-125"
 	}
 ]
