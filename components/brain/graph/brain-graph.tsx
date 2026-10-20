@@ -170,6 +170,10 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 					],
 					edges: [
 						DEFAULT_STYLES.edges,
+						// D7 dice "atenúa el resto"; para las aristas se eligió
+						// ocultar las que no tocan al nodo, por legibilidad: con
+						// cientos de aristas tenues de fondo, las del vecindario no
+						// se distinguen.
 						{
 							when: (_, edge, graphState) =>
 								graphState.hasHighlighted && !edge.isHighlighted,
@@ -308,17 +312,18 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 	const popoverFor = selected && graph?.hasNode(selected) ? selected : null;
 
 	return (
-		// tabIndex -1: el popover devuelve acá el foco cuando se cierra con Esc.
+		// tabIndex -1: el popover devuelve acá el foco cuando se cierra con Esc,
+		// así que el nombre accesible va acá (group) y no en el canvas: un
+		// segundo nombre igual en un hijo role="img" se anunciaría dos veces. El
+		// canvas no se recorre con teclado (D12): la alternativa es la Lista.
+		// biome-ignore lint/a11y/useSemanticElements: <fieldset> es de formularios; esto es un grupo con nombre.
 		<div
+			role="group"
+			aria-label="Mapa de conexiones del brain"
 			tabIndex={-1}
 			className="relative h-full w-full bg-background outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2"
 		>
-			<div
-				ref={containerRef}
-				role="img"
-				aria-label="Mapa de conexiones del brain"
-				className="absolute inset-0"
-			/>
+			<div ref={containerRef} className="absolute inset-0" />
 			{sigma && graph && payload && popoverFor && (
 				<NodePopover
 					sigma={sigma}
@@ -361,14 +366,14 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 	);
 }
 
-// Sigue al nodo en pantalla: se reubica después de cada cuadro (cámara que se
-// mueve o layout que lo corre). Solo se vuelve a dibujar este popover, no el
-// grafo. Si el nodo deja de existir, se cierra.
+// Une el popover con Sigma. En React vive solo qué nodo está abierto: seguirlo
+// en pantalla (cámara que se mueve o layout que lo corre) lo hace el popover
+// por ref después de cada cuadro (`afterRender`), sin re-render. Si el nodo
+// deja de existir, `anchor` da null y el popover se cierra.
 function NodePopover({
 	sigma,
 	graph,
 	node,
-	onClose,
 	...card
 }: {
 	sigma: Sigma<NodeAttributes, EdgeAttributes>;
@@ -379,30 +384,22 @@ function NodePopover({
 	href: string;
 	onClose: () => void;
 }) {
-	const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(null);
-	const closeRef = useRef(onClose);
-	closeRef.current = onClose;
-
-	useEffect(() => {
-		const follow = () => {
-			if (!graph.hasNode(node)) {
-				closeRef.current();
-				return;
+	return (
+		<GraphPopover
+			{...card}
+			anchor={() =>
+				graph.hasNode(node)
+					? sigma.graphToViewport(graph.getNodeAttributes(node))
+					: null
 			}
-			const { x, y } = sigma.graphToViewport(graph.getNodeAttributes(node));
-			setAnchor((prev) =>
-				prev && prev.x === x && prev.y === y ? prev : { x, y },
-			);
-		};
-		follow();
-		sigma.on("afterRender", follow);
-		return () => {
-			sigma.off("afterRender", follow);
-		};
-	}, [sigma, graph, node]);
-
-	if (!anchor) return null;
-	return <GraphPopover {...card} x={anchor.x} y={anchor.y} onClose={onClose} />;
+			subscribe={(onFrame) => {
+				sigma.on("afterRender", onFrame);
+				return () => {
+					sigma.off("afterRender", onFrame);
+				};
+			}}
+		/>
+	);
 }
 
 function Overlay({
