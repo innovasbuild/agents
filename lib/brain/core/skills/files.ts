@@ -178,14 +178,15 @@ type Context = {
 	row: SkillOverviewRow;
 };
 
-// Quién es, qué nivel tiene sobre la skill y cuál es su fila. Lo que no ve
-// responde not_found, igual que lo que no existe.
-async function context(
+// Quién es y qué nivel tiene sobre cualquier ruta del brain, con proveedor
+// `wiki`. Sin persona o sin brain responde not_found.
+export async function skillAccess(
 	tenantSlug: string,
-	slug: string,
 	deps: FilesDeps,
-): Promise<Context | SkillFailure> {
-	if (!isSkillSlug(slug)) return skillFail("not_found", NOT_FOUND);
+): Promise<
+	| { ok: true; actor: SkillActor; levelOf(path: string): Level | null }
+	| SkillFailure
+> {
 	const actor = await deps.actor(tenantSlug);
 	if (!actor) return skillFail("not_found", NOT_FOUND);
 	const binding = await deps.binding(actor.tenantId);
@@ -206,7 +207,25 @@ async function context(
 		userId: actor.userId,
 		role: actor.role,
 	};
-	const level = resolveAccess(rules, principal, slug);
+	return {
+		ok: true,
+		actor,
+		levelOf: (path) => resolveAccess(rules, principal, path),
+	};
+}
+
+// Quién es, qué nivel tiene sobre la skill y cuál es su fila. Lo que no ve
+// responde not_found, igual que lo que no existe.
+async function context(
+	tenantSlug: string,
+	slug: string,
+	deps: FilesDeps,
+): Promise<Context | SkillFailure> {
+	if (!isSkillSlug(slug)) return skillFail("not_found", NOT_FOUND);
+	const access = await skillAccess(tenantSlug, deps);
+	if (!access.ok) return access;
+	const { actor } = access;
+	const level = access.levelOf(slug);
 	if (level === null) return skillFail("not_found", NOT_FOUND);
 	const row = (await deps.store.overview(actor.tenantId)).find(
 		(item) => item.slug === slug,
@@ -217,7 +236,7 @@ async function context(
 
 const MAX_PROBLEMS_SHOWN = 10;
 
-function problemsMessage(problems: string[]): string {
+export function problemsMessage(problems: string[]): string {
 	const shown = problems.slice(0, MAX_PROBLEMS_SHOWN).join(" ");
 	const rest = problems.length - MAX_PROBLEMS_SHOWN;
 	return rest > 0 ? `${shown} y ${rest} más.` : shown;
