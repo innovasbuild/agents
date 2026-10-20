@@ -2,6 +2,18 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.5.0] - 2026-10-20
+
+### Added
+
+- Subir una skill desde un zip. En cada carpeta de `skills/`, quien la administra tiene **Subir skill…** en el menú: elige el zip, ve una vista previa (nombre, descripción, archivos, si crea una skill nueva o reemplaza el borrador, y todos los problemas juntos) y confirma. Sirve para una skill nueva y para actualizar una existente, y todo queda como borrador hasta que un administrador de la empresa lo publica. El zip llega hasta 4 MB y el `SKILL.md` tiene que traer `name`.
+- Por MCP, quien administra una carpeta de skills tiene dos tools nuevas, `skill_upload_link` y `skill_import`, para subir el zip desde un cliente que pueda ejecutar código (Claude Code, Codex, Cursor): pide un link de un solo uso, sube el zip, mira la vista previa y confirma.
+- En el panel de una skill se arrastran archivos sueltos o una carpeta entera, sin indicar la ruta de cada uno. Al terminar dice cuántos subieron y por qué falló cada uno que no pudo. El botón **Subir paquete (zip)…** reemplaza al viejo "Importar zip" y usa la misma vista previa.
+
+### Changed
+
+- Confirmar una subida ya no pisa en silencio otra cosa: si entre la vista previa y la confirmación alguien creó esa skill, la confirmación avisa y pide volver a abrir la vista previa. El panel de la skill no deja publicar, retirar ni reemplazar por zip mientras se sube un lote de archivos sueltos.
+
 ## [0.4.2] - 2026-10-20
 
 ### Changed
