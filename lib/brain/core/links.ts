@@ -36,7 +36,7 @@ export function buildLinkIndex(pages: LinkPage[]): LinkIndex {
 	);
 }
 
-// Igual que buildLinkIndex pero con los links ya extraídos (brain_page_links
+// Igual que buildLinkIndex pero con los links ya extraídos (brain_page_links_after
 // los saca en la base): evita traer el cuerpo de todas las páginas.
 export function buildLinkIndexFromLinks(
 	pages: LinkNode[],
