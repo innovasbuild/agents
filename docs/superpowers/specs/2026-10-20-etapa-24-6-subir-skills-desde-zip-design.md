@@ -58,7 +58,7 @@ La lógica vive en un servicio puro en `lib/brain/core/skills/` (permiso, destin
 |---|---|---|
 | Administra la carpeta X de `skills/` | "Subir skill" en X; crea y actualiza | `skill_upload_link` y `skill_import` para X |
 | Administra la empresa | En todas las carpetas | En todas |
-| Es editor (no administrador) de X | No ve el botón; puede actualizar una skill existente donde edita, desde su panel | Igual: solo actualizar |
+| Es editor (no administrador) de X | No ve el botón de la carpeta; puede actualizar una skill existente donde edita, desde su panel | Ninguna tool de subida (criterio de cierre 5); edita el borrador con `skill_draft_*` |
 | Es lector, o no tiene reglas bajo `skills/` | Nada | Ninguna tool |
 | Categoría `skill` no habilitada, o proveedor que no es `wiki` | Nada | Ninguna tool |
 
