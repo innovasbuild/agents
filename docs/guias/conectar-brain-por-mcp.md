@@ -95,7 +95,7 @@ Las skills se publican desde la plataforma; cómo, está en [el dominio brain](.
 
 Si sos administrador o editor (de una carpeta de skills o de una skill), tu asistente tiene cuatro tools más. Aparecen solo para quien puede editar algo bajo `skills/`, y solo si la empresa tiene habilitada la categoría `skill`:
 
-- `skill_create`: crea una skill nueva como **borrador**, en `skills/<carpeta>/<nombre>`. La `carpeta` es opcional: sin ella la skill queda directo bajo `skills/`. Va relativa a `skills/` (`ventas`, no `skills/ventas`) y tiene que existir.
+- `skill_create`: crea una skill nueva como **borrador**, en `skills/<carpeta>/<nombre>`. La `carpeta` es opcional: sin ella la skill queda directo bajo `skills/`. Va relativa a `skills/` (`ventas`, no `skills/ventas`) y tiene que existir. Si solo administrás o editás carpetas puntuales de skills (no todo `skills/`), tenés que pasar una de esas en `folder`: la descripción de la tool y el mensaje de rechazo le dicen a tu asistente cuáles son.
 - `skill_draft_read`: lee el borrador (el `SKILL.md` completo, su revisión, su estado y sus archivos) o un archivo de texto.
 - `skill_draft_edit`: cambia el borrador reemplazando un fragmento que aparece una sola vez, en el `SKILL.md` o en un archivo de texto.
 - `skill_draft_write_file`: crea o reemplaza un archivo de texto del paquete.

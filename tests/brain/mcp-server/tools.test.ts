@@ -576,6 +576,32 @@ function fakeDrafts(): SkillDrafts {
 }
 
 describe("buildBrainMcpServer · edición de skills", () => {
+	it("la descripción de skill_create dice dónde puede crear quien administra carpetas puntuales", async () => {
+		const describe = async (creatableFolders?: string[]) => {
+			const drafts = { ...fakeDrafts(), creatableFolders };
+			const client = await connect(
+				buildBrainMcpServer({
+					userId: "ana",
+					categories: ["comercial"],
+					canon: false,
+					provider: fakeProvider(),
+					limiter: fakeLimiter(),
+					skillDrafts: drafts,
+				}),
+			);
+			return (
+				(await client.listTools()).tools.find((t) => t.name === "skill_create")
+					?.description ?? ""
+			);
+		};
+		expect(await describe(["ventas", "rrhh"])).toContain(
+			"solo en estas carpetas, y tenés que pasar una en folder: ventas, rrhh",
+		);
+		expect(await describe([])).toContain("No tenés carpetas donde crear");
+		expect(await describe([""])).not.toContain("solo en estas carpetas");
+		expect(await describe(undefined)).not.toContain("solo en estas carpetas");
+	});
+
 	function build(
 		skillDrafts: SkillDrafts | null,
 		limiter = fakeLimiter(),
