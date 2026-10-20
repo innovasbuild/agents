@@ -47,13 +47,17 @@ function Choice({
 	const content = (
 		<>
 			{icon ? <BotIcon aria-hidden /> : null}
-			<span className="max-w-48 truncate">{choice.label}</span>
+			<span className="max-w-48 truncate" title={choice.label}>
+				{variant === "ghost"
+					? choice.label.replace(/^[^/]+\//, "")
+					: choice.label}
+			</span>
 		</>
 	);
 	if (!choice.options || !choice.onChange) {
 		return (
 			<span
-				className="inline-flex h-8 items-center gap-1.5 px-2.5 text-muted-foreground text-sm"
+				className="inline-flex h-8 min-w-0 items-center gap-1.5 px-2.5 text-muted-foreground text-sm"
 				title={choice.hint}
 			>
 				{content}
@@ -67,7 +71,7 @@ function Choice({
 					aria-label={label}
 					className={
 						variant === "ghost"
-							? "text-muted-foreground"
+							? "min-w-0 shrink! text-muted-foreground"
 							: "bg-muted hover:bg-muted/60"
 					}
 					size="sm"
