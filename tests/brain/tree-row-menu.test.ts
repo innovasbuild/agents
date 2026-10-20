@@ -115,9 +115,10 @@ describe("folderMenuItems", () => {
 			),
 		).not.toContain("upload-skill");
 	});
-	// Subir una skill crea una página, no una subcarpeta: no pide la fila de la
-	// carpeta, así que una implícita también la ofrece (y solo eso).
-	it("una carpeta implícita bajo skills/ ofrece subir una skill", () => {
+	// wiki.upsert rechaza una página nueva cuyo padre es una subcarpeta sin fila
+	// en brain_folders: una carpeta implícita bajo skills/ no puede recibir la
+	// skill. Solo skills/ misma, cuyas páginas cuelgan de la raíz, queda exenta.
+	it("una subcarpeta implícita de skills/ no ofrece subir una skill", () => {
 		expect(
 			folderMenuItems(
 				node({
@@ -125,6 +126,20 @@ describe("folderMenuItems", () => {
 					name: "ventas",
 					folder: null,
 					children: [node({ path: "skills/ventas/cotizar" })],
+				}),
+				"administrador",
+				null,
+			),
+		).toEqual([]);
+	});
+	it("skills/ implícita sí ofrece subir una skill, y solo eso", () => {
+		expect(
+			folderMenuItems(
+				node({
+					path: "skills",
+					name: "skills",
+					folder: null,
+					children: [node({ path: "skills/ventas" })],
 				}),
 				"administrador",
 				null,

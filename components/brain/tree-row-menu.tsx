@@ -29,8 +29,10 @@ export type FolderMenuItem =
 // crear adentro. Borrar una de primer nivel pide administrar la raíz; con
 // contenido, el ítem queda deshabilitado con el motivo (spec etapa 26 §3.2).
 // Las reglas (26.2): la raíz abre las instrucciones del brain; skills/ no tiene.
-// Subir una skill (24.6) crea una página, no una subcarpeta: se ofrece en toda
-// carpeta de skills/, también en una implícita.
+// Subir una skill (24.6) crea una página, y wiki.upsert rechaza una página nueva
+// cuyo padre es una subcarpeta sin fila: se ofrece en las carpetas de skills/
+// con fila. Solo skills/ misma queda exenta cuando es implícita, porque sus
+// páginas cuelgan de la raíz y la base no pide fila para el primer nivel.
 export function folderMenuItems(
 	node: TreeNode,
 	rootLevel: Level | null,
@@ -39,7 +41,7 @@ export function folderMenuItems(
 	if (node.level !== "administrador" || !isFolderNode(node)) return [];
 	if (node.path === "") return ["new-subfolder", "rules"];
 	if (node.folder === null)
-		return isSkillsFolder(node.path) ? ["upload-skill"] : [];
+		return node.path === "skills" ? ["upload-skill"] : [];
 	const items: FolderMenuItem[] = ["new-subfolder"];
 	if (isSkillsFolder(node.path)) items.push("upload-skill");
 	items.push("describe");
