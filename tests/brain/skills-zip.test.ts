@@ -1,11 +1,12 @@
 import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import {
+	unzipOrProblem,
 	unzipPackage,
 	ZipRejected,
 	zipPackage,
 } from "@/lib/brain/adapters/skill-zip";
-import { MAX_FILE_BYTES } from "@/lib/brain/core/skills/package";
+import { MAX_FILE_BYTES, MAX_ZIP_BYTES } from "@/lib/brain/core/skills/package";
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -224,5 +225,31 @@ describe("zipPackage", () => {
 	it("el mismo contenido da el mismo zip", () => {
 		const entries = [{ path: "a.txt", bytes: bytes("hola") }];
 		expect(zipPackage(entries)).toEqual(zipPackage(entries));
+	});
+});
+
+describe("unzipOrProblem", () => {
+	it("devuelve las entradas de un zip válido", () => {
+		const entries = [{ path: "r/a.txt", bytes: bytes("hola") }];
+		expect(unzipOrProblem(zipPackage(entries))).toEqual(entries);
+	});
+
+	it("convierte un zip inválido en un error, sin lanzar", () => {
+		expect(unzipOrProblem(bytes("esto no es un zip, ni cerca"))).toEqual({
+			error: "El archivo no es un zip válido.",
+		});
+	});
+
+	it("rechaza un zip más largo que el tope antes de leer nada", () => {
+		const zip = new Uint8Array(MAX_ZIP_BYTES + 1);
+		// Si leyera el directorio central, bytes en cero darían "no es un zip válido".
+		expect(unzipOrProblem(zip)).toEqual({ error: "El zip supera los 4 MB." });
+		expect(() => unzipPackage(zip)).toThrow(ZipRejected);
+	});
+
+	it("un zip justo en el tope sí se lee", () => {
+		expect(unzipOrProblem(new Uint8Array(MAX_ZIP_BYTES))).toEqual({
+			error: "El archivo no es un zip válido.",
+		});
 	});
 });

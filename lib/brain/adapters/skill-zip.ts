@@ -13,6 +13,7 @@ import {
 	MAX_FILE_BYTES,
 	MAX_PACKAGE_BYTES,
 	MAX_PACKAGE_FILES,
+	MAX_ZIP_BYTES,
 } from "../core/skills/package.ts";
 
 export class ZipRejected extends Error {
@@ -24,6 +25,7 @@ export class ZipRejected extends Error {
 
 const TOO_BIG =
 	"El paquete supera los límites: 50 archivos, 4 MB por archivo y 20 MB en total.";
+const ZIP_TOO_BIG = "El zip supera los 4 MB.";
 const INVALID = "El archivo no es un zip válido.";
 
 const EOCD_SIG = 0x06054b50;
@@ -173,12 +175,27 @@ function extract(zip: Uint8Array, member: Member): Uint8Array {
 }
 
 export function unzipPackage(zip: Uint8Array): PackageEntry[] {
+	if (zip.length > MAX_ZIP_BYTES) throw new ZipRejected(ZIP_TOO_BIG);
 	const members = readMembers(zip);
 	checkDeclared(members, zip.length);
 	return members.map((member) => ({
 		path: member.name,
 		bytes: extract(zip, member),
 	}));
+}
+
+// Para quien recibe el zip de afuera (subida web, MCP): un zip malo es un
+// problema para mostrarle a la persona, no una excepción. Lo que no sea
+// ZipRejected es un bug y se propaga.
+export function unzipOrProblem(
+	zip: Uint8Array,
+): PackageEntry[] | { error: string } {
+	try {
+		return unzipPackage(zip);
+	} catch (e) {
+		if (e instanceof ZipRejected) return { error: e.message };
+		throw e;
+	}
 }
 
 const UTF8_NAMES = 0x0800;
