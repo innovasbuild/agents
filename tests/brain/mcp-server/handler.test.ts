@@ -1652,4 +1652,99 @@ describe("handleBrainMcp · edición de skills", () => {
 			expect(editStore.putFile).toHaveBeenCalled();
 		});
 	});
+
+	describe("subir una skill desde un zip", () => {
+		const UPLOAD_TOOLS = ["skill_import", "skill_upload_link"];
+		const upload = () => ({
+			staging: {
+				issue: vi.fn(async () => ({
+					url: "https://storage.test/subida",
+					expiresIn: 600,
+				})),
+				read: vi.fn(async () => null),
+				remove: vi.fn(async () => {}),
+			},
+			unzip: vi.fn(() => ({ error: "no se usa" })),
+			record: vi.fn(async () => {}),
+		});
+		const anaRule = (path: string, level: "editor" | "administrador") => ({
+			rules: {
+				load: async () => [
+					{ path, principal: "user" as const, userId: "ana", level },
+				],
+			},
+		});
+
+		it("quien administra una carpeta de skills ve las dos tools", async () => {
+			const client = await connect(
+				"ana",
+				deps({
+					...withSkillCategory,
+					...anaRule("skills/ventas", "administrador"),
+					skills: skillsDeps({ upload: upload() }),
+				}),
+			);
+			expect(await names(client)).toEqual(
+				[...BRAIN_TOOLS, ...DRAFT_TOOLS, ...UPLOAD_TOOLS].sort(),
+			);
+		});
+
+		it("un editor, un lector o quien no tiene reglas bajo skills/ no las ven", async () => {
+			for (const extra of [
+				anaRule("skills/ventas", "editor"),
+				anaRule("comercial", "administrador"),
+				{},
+			]) {
+				const client = await connect(
+					"ana",
+					deps({
+						...withSkillCategory,
+						...extra,
+						skills: skillsDeps({ upload: upload() }),
+					}),
+				);
+				const listed = await names(client);
+				expect(listed).not.toContain("skill_upload_link");
+				expect(listed).not.toContain("skill_import");
+			}
+		});
+
+		it("sin la categoría skill, o sin dependencias de subida, no existen", async () => {
+			const sinCategoria = await connect(
+				"admin",
+				deps({ skills: skillsDeps({ upload: upload() }) }),
+			);
+			expect(await names(sinCategoria)).toEqual(BRAIN_TOOLS);
+			const sinUpload = await connect(
+				"admin",
+				deps({ ...withSkillCategory, skills: skillsDeps() }),
+			);
+			expect(await names(sinUpload)).toEqual([...BRAIN_TOOLS, ...DRAFT_TOOLS]);
+		});
+
+		it("el link se pide con el tenant y la persona del pedido", async () => {
+			const deps_ = upload();
+			const client = await connect(
+				"ana",
+				deps({
+					...withSkillCategory,
+					...anaRule("skills/ventas", "administrador"),
+					skills: skillsDeps({ upload: deps_ }),
+				}),
+			);
+			const result = await client.callTool({
+				name: "skill_upload_link",
+				arguments: { folder: "ventas" },
+			});
+			expect(result.structuredContent).toMatchObject({
+				ok: true,
+				url: "https://storage.test/subida",
+			});
+			expect(deps_.staging.issue).toHaveBeenCalledWith({
+				tenantId: "tenant-a",
+				userId: "ana",
+				uploadId: (result.structuredContent as { uploadId: string }).uploadId,
+			});
+		});
+	});
 });

@@ -29,10 +29,17 @@ import {
 	createSkillDrafts,
 	type SkillDrafts,
 } from "../skills/draft.ts";
-import type { BlobStore } from "../skills/files.ts";
+import type { BlobStore, FilesDeps } from "../skills/files.ts";
 import { assistantCategories, SKILL_CATEGORY } from "../skills/package.ts";
 import type { PackageLink, PackageRequest } from "../skills/package-link.ts";
 import type { SkillOverviewRow, SkillStore } from "../skills/store.ts";
+import {
+	createSkillUploads,
+	type SkillUploads,
+	type SkillUploadsDeps,
+	type UploadStaging,
+	uploadableSkillFolders,
+} from "../skills/upload-mcp.ts";
 import { withoutSkills } from "../skills/view.ts";
 import type { BrainProvider } from "../types.ts";
 import {
@@ -63,6 +70,12 @@ export interface McpSkillsDeps {
 	issue(request: Omit<PackageRequest, "channel">): Promise<PackageLink>;
 	/** Para crear y editar el borrador (spec 24.5). Sin esto no hay esas tools. */
 	edit?: { store: SkillStore; blobs: BlobStore };
+	/** Para subir una skill desde un zip (spec 24.6). Sin esto no hay esas tools. */
+	upload?: {
+		staging: UploadStaging;
+		unzip: SkillUploadsDeps["unzip"];
+		record: SkillUploadsDeps["record"];
+	};
 }
 
 export interface BrainMcpDeps {
@@ -297,7 +310,9 @@ async function handleBrainMcpInner(
 	}
 
 	// Solo quien puede editar algo bajo skills/, con la categoría habilitada.
+	// Subir un zip, además, solo quien administra alguna carpeta de skills/.
 	let skillDrafts: SkillDrafts | null = null;
+	let skillUploads: SkillUploads | null = null;
 	const editDeps = deps.skills.edit;
 	if (
 		editDeps &&
@@ -306,39 +321,56 @@ async function handleBrainMcpInner(
 	) {
 		try {
 			if (canEditSkills(rules, principal, await overview())) {
+				const files: FilesDeps = {
+					actor: async () => ({
+						tenantId: access.tenantId,
+						userId: access.userId,
+						role: access.role,
+					}),
+					binding: async () => ({ provider: "wiki" }),
+					rules: { load: async () => rules },
+					page: async (_tenantId, skillSlug) => {
+						try {
+							return await accessProvider.read(skillSlug, {
+								suggestions: false,
+							});
+						} catch (error) {
+							if (error instanceof BrainNotFound) return null;
+							throw error;
+						}
+					},
+					save: (_actor, write) =>
+						accessProvider.upsert(write, {
+							kind: "user",
+							userId: access.userId,
+						}),
+					store: editDeps.store,
+					blobs: editDeps.blobs,
+				};
+				const levelOf = (path: string) => resolveAccess(rules, principal, path);
+				const reviewUrl = (skillSlug: string) =>
+					skillReviewUrl(deps.publicUrl, slug, skillSlug, deps.tenantHost);
 				skillDrafts = createSkillDrafts({
 					tenantSlug: slug,
 					creatableFolders: creatableSkillFolders(rules, principal),
-					levelOf: (path) => resolveAccess(rules, principal, path),
-					reviewUrl: (skillSlug) =>
-						skillReviewUrl(deps.publicUrl, slug, skillSlug, deps.tenantHost),
-					files: {
-						actor: async () => ({
-							tenantId: access.tenantId,
-							userId: access.userId,
-							role: access.role,
-						}),
-						binding: async () => ({ provider: "wiki" }),
-						rules: { load: async () => rules },
-						page: async (_tenantId, skillSlug) => {
-							try {
-								return await accessProvider.read(skillSlug, {
-									suggestions: false,
-								});
-							} catch (error) {
-								if (error instanceof BrainNotFound) return null;
-								throw error;
-							}
-						},
-						save: (_actor, write) =>
-							accessProvider.upsert(write, {
-								kind: "user",
-								userId: access.userId,
-							}),
-						store: editDeps.store,
-						blobs: editDeps.blobs,
-					},
+					levelOf,
+					reviewUrl,
+					files,
 				});
+				const upload = deps.skills.upload;
+				const uploadableFolders = uploadableSkillFolders(rules, principal);
+				if (upload && uploadableFolders.length > 0) {
+					skillUploads = createSkillUploads({
+						tenantSlug: slug,
+						files,
+						levelOf,
+						uploadableFolders,
+						staging: upload.staging,
+						unzip: upload.unzip,
+						reviewUrl,
+						record: upload.record,
+					});
+				}
 			}
 		} catch (error) {
 			console.error("brain mcp: no pude armar la edición de skills", error);
@@ -352,6 +384,7 @@ async function handleBrainMcpInner(
 		provider,
 		skills,
 		skillDrafts,
+		skillUploads,
 		rules: visibleRules,
 		brainInstructions,
 		limiter: createRateLimiter({

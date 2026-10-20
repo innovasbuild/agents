@@ -100,7 +100,7 @@ const encoder = new TextEncoder();
 // Igual que MCP_MAX_UPSERT_BODY_BYTES de server.ts.
 export const MAX_DRAFT_BODY_BYTES = 102_400;
 
-const DRAFT_NOTE =
+export const DRAFT_NOTE =
 	"El cambio quedó en el borrador: todavía no lo ven los demás. Un administrador lo publica desde la plataforma.";
 
 const invalid = (message: string) => new BrainError("validation", message);
@@ -249,13 +249,15 @@ export function canEditSkills(
 // "" es directo bajo skills/. Quien edita todo skills/ (un administrador de la
 // empresa, o un editor general) no necesita listarlas. Quien solo tiene reglas
 // sobre carpetas puntuales tiene que pasar `folder`, y el asistente no puede
-// adivinar cuál: por eso se le dice.
+// adivinar cuál: por eso se le dice. `min` es el nivel que hace falta: subir un
+// zip pide administrador (spec 24.6 D4).
 export function creatableSkillFolders(
 	rules: AccessRule[],
 	principal: Principal,
+	min: Level = "editor",
 ): string[] {
 	const edits = (path: string) =>
-		atLeast(resolveAccess(rules, principal, path), "editor");
+		atLeast(resolveAccess(rules, principal, path), min);
 	if (edits(`${SKILLS_PREFIX}x`)) return [""];
 	const found = new Set<string>();
 	for (const rule of rules) {
