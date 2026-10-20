@@ -94,6 +94,27 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 
 ## Entrega 26.4b · Grafo (PR 2)
 
+### Task 3b: Migración keyset de `brain_page_links` (decisión (i) de la spec §2.1 (c))
+
+Primera tarea de la 26.4b. La spec dejó la decisión (i)/(ii)/(iii) abierta para Matías; se ejecuta (i), la recomendada, como ruling del controlador (2026-10-20): la migración **se escribe en la rama pero no se aplica a ninguna base compartida ni a producción**, y es reversible hasta que Matías la apruebe. Antes de tocar SQL, cargar el skill `supabase-postgres-best-practices` (regla del repo).
+
+**Archivos:**
+- Crear: `supabase/migrations/20261028120000_brain_page_links_keyset.sql`
+- Modificar: `lib/brain/core/wiki-store.ts` (`listLinks`, ~líneas 227-237 y el helper `fetchAllPages`, ~líneas 149-169)
+- Probar: `tests/brain/wiki-store.test.ts`, `supabase/tests/39_brain_page_links.test.sql` (o un archivo pgTAP nuevo si es más limpio)
+- Modificar: la spec §2.1 (c) y el roadmap (entrada 26.4), para dejar escrito que se ejecuta la salida (i) y qué falta.
+
+**Interfaces:**
+- Consume: la función actual `public.brain_page_links(p_tenant_id uuid)` (migración `20261027120000_brain_page_links.sql`, se conserva sin tocar) y `PAGE_SIZE`.
+- Produce: `public.brain_page_links_after(p_tenant_id uuid, p_after text, p_limit int) returns table (slug text, links jsonb)`: las páginas del tenant con `slug > p_after` (`p_after` nulo o vacío = desde el principio) que tienen `[[` en el cuerpo, ordenadas por `slug`, **a lo sumo `p_limit`**, aplicando la extracción de wikilinks **solo a esas filas** (primero se acota y recién después se corre la regexp, para que el costo de cada llamada no dependa del tamaño del brain). Mismos permisos que la función vieja: se revoca a `public`, `anon` y `authenticated` y se concede a `service_role`; `language sql stable security invoker set search_path = ''`. La función vieja queda hasta que el código nuevo esté en producción (un retiro posterior es otra migración, fuera de esta tarea). `listLinks(tenantId)` sigue devolviendo `BrainPageLinks[]` y la misma normalización (`toLinks`).
+
+- [ ] **Paso 1: tests que fallan** (`tests/brain/wiki-store.test.ts`; el cliente falso ya tiene `maxRows` y ganchos): `listLinks llama brain_page_links_after con p_after nulo la primera vez y el último slug recibido después`; `listLinks devuelve las filas de 2.500 páginas`; `listLinks sigue completo si el servidor corta en 500`; `listLinks corta con una respuesta vacía`; `listLinks no repite slugs`; `listLinks propaga un error de la primera página y de una posterior`; y el test existente de normalización sigue verde.
+- [ ] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/wiki-store.test.ts` → FAIL.
+- [ ] **Paso 3: migración y código.** Escribir la migración; cambiar `listLinks` a un bucle keyset (`p_after` = último slug de la respuesta anterior, `p_limit` = `PAGE_SIZE`, corte con respuesta vacía; helper privado hermano de `fetchAllPages`, sin duplicar su lógica de errores). Con keyset ya no hace falta el descarte de slugs repetidos en este camino.
+- [ ] **Paso 4: prueba en base.** Con Supabase local arriba, `npm run db:test` (hace `db reset` de la base local; esto es una base de desarrollo en la máquina de Matías) con un caso pgTAP: orden por slug, `p_limit`, `p_after`, solo páginas con links, y que `authenticated` no puede ejecutar la función. Medir el costo: sembrar 10.000 y 20.000 páginas con links en un tenant de prueba y cronometrar `listLinks` completo; **debe ser lineal** (la spec midió 4,25 s a 10.000 y 15 s a 20.000 con la función vieja). Borrar lo sembrado.
+- [ ] **Paso 5: docs.** En la spec §2.1 (c) y en el roadmap escribir: se ejecuta la salida (i); la migración está escrita y probada en local, **no aplicada**; orden de despliegue **migración antes que el código** (`npx supabase migration list` antes de `db push`, porque `db push` aplica todas las pendientes); los tiempos medidos antes y después. Si la función vieja ya no tiene usos en el código, anotarlo como retiro pendiente.
+- [ ] **Paso 6:** `npm run typecheck`, `npx vitest run tests/brain tests/docs`, `npm run docs:check`; **commit:** `feat: listLinks pagina por keyset con brain_page_links_after`.
+
 ### Task 4: Instalar dependencias
 
 **Archivos:** `package.json`, `package-lock.json`.
