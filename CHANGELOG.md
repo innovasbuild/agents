@@ -2,6 +2,16 @@
 
 Formato [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/). Lo mantiene `/ship`: una entrada por PR. El detalle de cada etapa está en [docs/producto/roadmap.md](docs/producto/roadmap.md) y las decisiones en [docs/decisiones/prs.md](docs/decisiones/prs.md).
 
+## [0.4.2] - 2026-10-20
+
+### Changed
+
+- La barra lateral del chat y del brain ahora es un panel de un crema apenas más claro que el fondo, con borde y esquinas redondeadas, para que se separe del contenido principal.
+
+### Fixed
+
+- En el celular, el selector de agente y el de modelo del compositor del chat ya no se pisan: el agente se lee completo y el modelo cede espacio. El modelo se muestra sin el prefijo del proveedor (por ejemplo `claude-sonnet-5`); el nombre completo sigue en el menú.
+
 ## [0.4.1] - 2026-10-19
 
 ### Added
