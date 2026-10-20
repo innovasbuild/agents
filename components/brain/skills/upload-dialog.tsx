@@ -182,10 +182,8 @@ export function UploadDialogBody({
 
 	const preview =
 		step.kind === "review" || step.kind === "uploading" ? step.preview : null;
-	// Con problemas no hay vista previa: el rótulo sigue al destino.
-	const replacing = preview
-		? preview.mode === "reemplazar"
-		: target.kind === "skill";
+	// El campo se vacía al elegir: el nombre y el peso dicen qué zip se revisó.
+	const chosen = preview || step.kind === "refused" ? file.current : null;
 
 	return (
 		<>
@@ -220,6 +218,11 @@ export function UploadDialogBody({
 				{step.kind === "checking" && (
 					<p role="status" className="text-muted-foreground">
 						Revisando…
+					</p>
+				)}
+				{chosen && (
+					<p className="break-all text-muted-foreground">
+						{chosen.name} · {formatSize(chosen.size)}
 					</p>
 				)}
 				{step.kind === "refused" && <Problems failure={step.failure} />}
@@ -266,14 +269,13 @@ export function UploadDialogBody({
 				<Button variant="outline" onClick={onClose} disabled={busy}>
 					Cancelar
 				</Button>
-				{(preview || step.kind === "refused") && (
-					<Button
-						disabled={busy || !preview}
-						onClick={() => preview && confirm(preview)}
-					>
+				{/* Con problemas no hay vista previa ni nada que confirmar: elegir
+				    otro zip vuelve a pedirla. */}
+				{preview && (
+					<Button disabled={busy} onClick={() => confirm(preview)}>
 						{step.kind === "uploading"
 							? "Subiendo…"
-							: replacing
+							: preview.mode === "reemplazar"
 								? "Reemplazar el borrador"
 								: "Crear la skill"}
 					</Button>

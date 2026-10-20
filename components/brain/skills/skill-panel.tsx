@@ -263,7 +263,12 @@ export function SkillPanel({
 						e.preventDefault();
 						if (!looseBlocked) setDragging(true);
 					}}
-					onDragLeave={() => setDragging(false)}
+					onDragLeave={(e) => {
+						// Pasar de la zona a uno de sus botones también dispara dragleave.
+						if (e.currentTarget.contains(e.relatedTarget as Node | null))
+							return;
+						setDragging(false);
+					}}
 					onDrop={onDrop}
 				>
 					<p>Arrastrá archivos o una carpeta</p>
@@ -271,6 +276,7 @@ export function SkillPanel({
 						<Button
 							type="button"
 							size="sm"
+							className="min-h-11 lg:min-h-0"
 							variant="outline"
 							disabled={isPending || looseBlocked}
 							onClick={() => filesInput.current?.click()}
@@ -280,6 +286,7 @@ export function SkillPanel({
 						<Button
 							type="button"
 							size="sm"
+							className="min-h-11 lg:min-h-0"
 							variant="outline"
 							disabled={isPending || looseBlocked}
 							onClick={() => folderInput.current?.click()}
@@ -355,6 +362,7 @@ export function SkillPanel({
 				<Button
 					type="button"
 					size="sm"
+					className="min-h-11 lg:min-h-0"
 					variant="outline"
 					disabled={busy}
 					onClick={() => setUploadingZip(true)}

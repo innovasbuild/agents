@@ -96,4 +96,37 @@ describe("SkillPanel · una subida a la vez", () => {
 		expect(button("Elegir archivos…").disabled).toBe(true);
 		expect(button("Elegir carpeta…").disabled).toBe(true);
 	});
+
+	it("los tres botones de subida tienen un blanco táctil de 44 px en el teléfono", () => {
+		for (const label of [
+			"Elegir archivos…",
+			"Elegir carpeta…",
+			"Subir paquete (zip)…",
+		]) {
+			const classes = button(label).classList;
+			expect(classes.contains("min-h-11")).toBe(true);
+			expect(classes.contains("lg:min-h-0")).toBe(true);
+		}
+	});
+
+	it("salir de la zona hacia un hijo no apaga el resaltado; salir afuera sí", async () => {
+		const zone = button("Elegir archivos…").closest("div.border-dashed");
+		if (!(zone instanceof HTMLElement)) throw new Error("falta la zona");
+		const fire = (type: string, relatedTarget: EventTarget | null = null) =>
+			act(async () => {
+				zone.dispatchEvent(
+					new MouseEvent(type, {
+						bubbles: true,
+						cancelable: true,
+						relatedTarget,
+					}),
+				);
+			});
+		await fire("dragover");
+		expect(zone.className).toContain("border-foreground");
+		await fire("dragleave", button("Elegir archivos…"));
+		expect(zone.className).toContain("border-foreground");
+		await fire("dragleave", document.body);
+		expect(zone.className).not.toContain("border-foreground");
+	});
 });

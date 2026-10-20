@@ -152,6 +152,8 @@ describe("UploadDialog", () => {
 		expect(text()).toContain("Arma cotizaciones.");
 		expect(text()).toContain("2 archivos · 3 KB");
 		expect(text()).toContain("Crea una skill nueva");
+		// El campo se vacía al elegir: el nombre y el peso dicen qué zip es.
+		expect(text()).toContain("cotizar.zip · 10 B");
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 
 		await click("Crear la skill");
@@ -226,7 +228,10 @@ describe("UploadDialog", () => {
 			(li) => li.textContent,
 		);
 		expect(items).toEqual(["Falta el name.", "Sobra un archivo."]);
-		expect(button("Crear la skill")?.disabled).toBe(true);
+		expect(text()).toContain("cotizar.zip · 10 B");
+		// Sin vista previa no hay nada que confirmar: solo Cancelar.
+		expect(button("Crear la skill")).toBeUndefined();
+		expect(button("Cancelar")?.disabled).toBe(false);
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -253,6 +258,48 @@ describe("UploadDialog", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		expect(text()).toContain("Crea una skill nueva");
 		expect(text()).not.toContain("Falta el name.");
+	});
+
+	it("mientras confirma muestra qué zip sube", async () => {
+		fetchMock
+			.mockReturnValueOnce(reply(preview()))
+			.mockReturnValueOnce(new Promise(() => {}));
+		open({ kind: "folder", folder: "ventas" });
+		await pick(zip("cotizar.zip", 2048));
+		await click("Crear la skill");
+		expect(button("Subiendo…")?.disabled).toBe(true);
+		expect(text()).toContain("cotizar.zip · 2 KB");
+	});
+
+	it("un conflicto al confirmar se muestra y no refresca ni dice que quedó en borrador", async () => {
+		const message =
+			"Cambió desde la vista previa (ahora «reemplazar»). Volvé a abrir la vista previa.";
+		fetchMock
+			.mockReturnValueOnce(reply(preview()))
+			.mockReturnValueOnce(
+				reply({ ok: false, code: "conflict", message }, 409),
+			);
+		open({ kind: "folder", folder: "ventas" });
+		await pick(zip());
+		await click("Crear la skill");
+		expect(document.querySelector('[role="alert"]')?.textContent).toBe(message);
+		expect(refresh).not.toHaveBeenCalled();
+		expect(text()).not.toContain("Quedó en borrador");
+		expect(button("Crear la skill")).toBeUndefined();
+	});
+
+	it("una confirmación 200 sin revisión avisa con el mensaje de red", async () => {
+		fetchMock
+			.mockReturnValueOnce(reply(preview()))
+			.mockReturnValueOnce(reply({ ok: true }));
+		open({ kind: "folder", folder: "ventas" });
+		await pick(zip());
+		await click("Crear la skill");
+		expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+			"No se pudo subir. Probá de nuevo.",
+		);
+		expect(refresh).not.toHaveBeenCalled();
+		expect(text()).not.toContain("Quedó en borrador");
 	});
 
 	it("si el servidor no contesta JSON, avisa sin romper", async () => {
