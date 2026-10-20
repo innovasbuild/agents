@@ -2,6 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const issuePackageLink = vi.fn();
 const deps = { marker: "package-link-deps" };
+const { stagingMarker, recordSkillImport, unzipOrProblem } = vi.hoisted(() => ({
+	stagingMarker: { marker: "upload-staging" },
+	recordSkillImport: vi.fn(),
+	unzipOrProblem: vi.fn(),
+}));
 
 vi.mock("@/lib/brain/core/skills/package-link", () => ({
 	issuePackageLink: (...args: unknown[]) => issuePackageLink(...args),
@@ -9,6 +14,11 @@ vi.mock("@/lib/brain/core/skills/package-link", () => ({
 vi.mock("@/lib/brain/adapters/skill-packages", () => ({
 	packageLinkDeps: () => deps,
 }));
+vi.mock("@/lib/brain/adapters/skill-uploads", () => ({
+	uploadStaging: () => stagingMarker,
+	recordSkillImport,
+}));
+vi.mock("@/lib/brain/adapters/skill-zip", () => ({ unzipOrProblem }));
 vi.mock("@/lib/brain/adapters/mcp-supabase", () => ({
 	supabaseClaimsVerifier: vi.fn(),
 	supabaseAccessStore: vi.fn(),
@@ -124,6 +134,18 @@ describe("productionDeps().skills.issue", () => {
 			{ ...request, channel: "mcp" },
 			deps,
 		);
+	});
+});
+
+describe("productionDeps().skills.upload", () => {
+	it("cablea el staging, el descompresor y el registro de la subida", () => {
+		vi.stubEnv("PUBLIC_APP_URL", "https://agentes.innov.as");
+		vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ref.supabase.co");
+		expect(productionDeps().skills.upload).toEqual({
+			staging: stagingMarker,
+			unzip: unzipOrProblem,
+			record: recordSkillImport,
+		});
 	});
 });
 

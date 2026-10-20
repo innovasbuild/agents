@@ -22,6 +22,8 @@ import { getBrainProvider } from "./provider.ts";
 import { getBrainRules } from "./rules.ts";
 import { packageLinkDeps } from "./skill-packages.ts";
 import { blobStore, skillStore } from "./skill-storage.ts";
+import { recordSkillImport, uploadStaging } from "./skill-uploads.ts";
+import { unzipOrProblem } from "./skill-zip.ts";
 
 let memoized:
 	| Pick<BrainMcpDeps, "verify" | "store" | "hit" | "rules">
@@ -71,6 +73,12 @@ function skillsDeps(): McpSkillsDeps {
 			issuePackageLink({ ...request, channel: "mcp" }, packageLinkDeps()),
 		// Para crear y editar el borrador desde un asistente (spec 24.5).
 		edit: { store: skillStore(), blobs: blobStore() },
+		// Para subir una skill desde un zip (spec 24.6).
+		upload: {
+			staging: uploadStaging(),
+			unzip: unzipOrProblem,
+			record: recordSkillImport,
+		},
 	};
 }
 
