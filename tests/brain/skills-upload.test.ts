@@ -402,6 +402,66 @@ describe("commitSkillUpload", () => {
 		});
 	});
 
+	// Value: protects=un conflicto al importar justo despues del alta llega como conflict, no como 404 ni como ok; fails_when=commitSkillUpload traga o reetiqueta los fallos del import que no son forbidden; why_new=los tests del alta cubren saveError en el primer save, ninguno falla el segundo; seam=none; no_claim=carrera real entre dos personas (el save es un doble)
+	it("crear: si alguien guarda entre el alta y la importacion, vuelve conflict", async () => {
+		const { deps: d, save } = deps();
+		const original = save.getMockImplementation();
+		let calls = 0;
+		save.mockImplementation(async (actor, write) => {
+			calls += 1;
+			if (calls === 2) throw new BrainConflict(VENTAS, 1);
+			return original?.(actor, write) as never;
+		});
+		const result = await commitSkillUpload("acme", FOLDER, pkg(), d);
+		expect(result).toMatchObject({ ok: false, code: "conflict" });
+		expect(save).toHaveBeenCalledTimes(2);
+	});
+
+	describe("una skill oculta en una carpeta que la persona administra", () => {
+		const SECRET = "skills/ventas/secret";
+		const hidden = () => {
+			const setupResult = deps({
+				rows: existing(SECRET),
+				rules: [...ADMIN, members(SECRET, "ninguno")],
+			});
+			// Como la base: dar de alta (sin baseRevision) una ruta que ya existe
+			// choca con la clave única.
+			const original = setupResult.save.getMockImplementation();
+			setupResult.save.mockImplementation(async (actor, write) => {
+				if (
+					write.baseRevision === undefined &&
+					setupResult.rows.some((row) => row.slug === write.slug)
+				) {
+					throw new BrainConflict(write.slug, null);
+				}
+				return original?.(actor, write) as never;
+			});
+			return setupResult;
+		};
+
+		it("la vista previa no la distingue de un nombre libre", async () => {
+			const { deps: d } = hidden();
+			const secret = await previewSkillUpload("acme", FOLDER, pkg("secret"), d);
+			const nueva = await previewSkillUpload("acme", FOLDER, pkg("nueva"), d);
+			expect(secret).toMatchObject({ ok: true, mode: "crear", warnings: [] });
+			expect(nueva).toMatchObject({ ok: true, mode: "crear", warnings: [] });
+			if (!secret.ok || !nueva.ok) throw new Error("tenían que andar");
+			const { slug: _s, name: _n, ...secretRest } = secret;
+			const { slug: _s2, name: _n2, ...nuevaRest } = nueva;
+			expect(secretRest).toEqual(nuevaRest);
+		});
+
+		it("confirmar no la pisa: conflicto y nada escrito", async () => {
+			const { deps: d, save, putFile, removeFile } = hidden();
+			const result = await commitSkillUpload("acme", FOLDER, pkg("secret"), d);
+			expect(result).toMatchObject({ ok: false, code: "conflict" });
+			expect(save).toHaveBeenCalledTimes(1);
+			expect(save.mock.calls[0][1].baseRevision).toBeUndefined();
+			expect(putFile).not.toHaveBeenCalled();
+			expect(removeFile).not.toHaveBeenCalled();
+		});
+	});
+
 	it("sin permiso para crear: not_found y nada escrito", async () => {
 		const { deps: d, save } = deps({
 			rules: [members("skills/ventas", "editor")],

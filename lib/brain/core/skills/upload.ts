@@ -127,7 +127,13 @@ async function planUpload(
 		return skillFail("validation", SLUG_TOO_LONG);
 	const name = skillName(slug);
 
-	const mode = rows.some((row) => row.slug === slug) ? "reemplazar" : "crear";
+	// Una fila que la persona no ve cuenta como libre: la vista previa dice
+	// «crear» igual que ante un nombre sin fila, y el alta choca después con el
+	// conflicto de siempre. Nunca se reemplaza lo que no se ve.
+	const mode =
+		rows.some((row) => row.slug === slug) && levelOf(slug) !== null
+			? "reemplazar"
+			: "crear";
 	// Crear pide administrar la carpeta destino; reemplazar, editar la skill.
 	const [path, needed]: [string, Level] =
 		mode === "crear"

@@ -140,7 +140,7 @@ export function TreeRowMenu({
 	if (folderItems.includes("upload-skill")) {
 		items.push(
 			<DropdownMenuItem
-				key="upload-skill"
+				key="upload"
 				className="min-h-11 lg:min-h-0"
 				onSelect={onUploadSkill}
 			>
