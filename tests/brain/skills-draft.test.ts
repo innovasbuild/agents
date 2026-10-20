@@ -991,6 +991,46 @@ describe("creatableSkillFolders", () => {
 			),
 		).toEqual([]);
 	});
+
+	describe("con mínimo administrador (subir un zip)", () => {
+		const min = "administrador" as const;
+
+		it("un editor de la carpeta no lista nada", () => {
+			expect(
+				creatableSkillFolders([own("skills/ventas", "editor")], member, min),
+			).toEqual([]);
+		});
+
+		it("un administrador de la carpeta la lista", () => {
+			expect(
+				creatableSkillFolders(
+					[own("skills/ventas", "administrador")],
+					member,
+					min,
+				),
+			).toEqual(["ventas"]);
+		});
+
+		it("un administrador de skills sube directo", () => {
+			expect(
+				creatableSkillFolders([own("skills", "administrador")], member, min),
+			).toEqual([""]);
+		});
+
+		it("una carpeta dentro de otra ya incluida no suma", () => {
+			expect(
+				creatableSkillFolders(
+					[
+						own("skills/ventas", "administrador"),
+						own("skills/ventas/q1", "administrador"),
+						own("skills/rrhh", "editor"),
+					],
+					member,
+					min,
+				),
+			).toEqual(["ventas"]);
+		});
+	});
 });
 
 describe("skill_create · el rechazo le dice al asistente dónde sí puede crear", () => {

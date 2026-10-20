@@ -27,6 +27,7 @@ Las páginas y los endpoints de `app/`.
 | `/[tenant]/brain/raw/[...slug]` | endpoint | `app/[tenant]/brain/raw/[...slug]/route.ts` |
 | `/[tenant]/brain/skills/files` | endpoint | `app/[tenant]/brain/skills/files/route.ts` |
 | `/[tenant]/brain/skills/package` | endpoint | `app/[tenant]/brain/skills/package/route.ts` |
+| `/[tenant]/brain/skills/upload` | endpoint | `app/[tenant]/brain/skills/upload/route.ts` |
 | `/[tenant]/chat` | página | `app/[tenant]/chat/page.tsx` |
 | `/[tenant]/cola` | página | `app/[tenant]/cola/page.tsx` |
 | `/[tenant]/conectar` | página | `app/[tenant]/conectar/page.tsx` |

@@ -1,8 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import type { AccessRule } from "@/lib/brain/core/access/types";
+import { describe, expect, it } from "vitest";
 import { BrainConflict, BrainNotFound } from "@/lib/brain/core/errors";
 import {
-	type FilesDeps,
 	importSkillPackage,
 	parseSkillMd,
 	planImport,
@@ -13,145 +11,16 @@ import {
 	sha256Hex,
 } from "@/lib/brain/core/skills/files";
 import { MAX_FILE_BYTES } from "@/lib/brain/core/skills/package";
-import type { SkillAct, SkillOverviewRow } from "@/lib/brain/core/skills/store";
-import type { BrainPage, BrainRole, BrainWrite } from "@/lib/brain/core/types";
 import { WikiStoreError } from "@/lib/brain/core/wiki-store";
-
-const SLUG = "skills/admin/facturacion";
-const bytes = (text: string) => new TextEncoder().encode(text);
-const SKILL_MD = `---
-name: facturacion
-description: Usar para emitir y validar facturas.
-compatibility: Python 3
----
-
-# Facturación
-
-Pasos.
-`;
-
-const page: BrainPage = {
-	slug: SLUG,
-	title: "Facturación",
-	category: "skill",
-	status: "activo",
-	tags: ["finanzas"],
-	frontmatter: { description: "vieja", updated: "2026-10-01" },
-	body: "viejo",
-	revision: 4,
-	updatedAt: "2026-10-11T00:00:00Z",
-};
-
-const published = [{ path: "scripts/calc.py", sha256: "pub", size: 3 }];
-const draftFiles = [
-	{ path: "scripts/calc.py", sha256: "draft", size: 3 },
-	{ path: "references/nuevo.md", sha256: "solo-borrador", size: 3 },
-];
-const oldAct: SkillAct = {
-	id: 1,
-	action: "publicar",
-	version: 1,
-	pageRevision: 2,
-	title: "F",
-	description: "d",
-	body: "b",
-	manifest: [{ path: "scripts/viejo.py", sha256: "v1", size: 3 }],
-	digest: "dg",
-	note: "n",
-	republishedFrom: null,
-	actorUserId: null,
-	createdAt: "2026-10-01T00:00:00Z",
-};
-
-const members = (path: string, level: AccessRule["level"]): AccessRule => ({
-	path,
-	principal: "members",
-	userId: null,
-	level,
-});
-
-function setup(
-	opts: {
-		role?: BrainRole;
-		rules?: AccessRule[];
-		current?: SkillOverviewRow["current"];
-		putError?: unknown;
-		saveError?: unknown;
-		files?: { path: string; sha256: string; size: number }[];
-	} = {},
-) {
-	const blobs = new Map<string, Uint8Array>([
-		["t1/pub", bytes("publicado")],
-		["t1/draft", bytes("borrador")],
-		["t1/solo-borrador", bytes("nuevo")],
-		["t1/v1", bytes("viejo")],
-	]);
-	const calls: string[] = [];
-	const putFile = vi.fn(async (p: { path: string }) => {
-		if (opts.putError) throw opts.putError;
-		calls.push(`put:${p.path}`);
-		return "digest-nuevo";
-	});
-	const removeFile = vi.fn(async (p: { path: string }) => {
-		calls.push(`remove:${p.path}`);
-		return "digest-nuevo";
-	});
-	const save = vi.fn(async (_actor: unknown, _write: BrainWrite) => {
-		if (opts.saveError) throw opts.saveError;
-		calls.push("save");
-		return { revision: 5 };
-	});
-	const deps: FilesDeps = {
-		actor: async () => ({
-			tenantId: "t1",
-			userId: "ana",
-			role: opts.role ?? "tenant_member",
-		}),
-		binding: async () => ({ provider: "wiki" }),
-		rules: { load: async () => opts.rules ?? [members("", "editor")] },
-		page: async () => page,
-		save,
-		store: {
-			overview: async () => [
-				{
-					pageId: "p1",
-					slug: SLUG,
-					revision: 4,
-					draftFilesDigest: "fd",
-					current:
-						opts.current === undefined
-							? {
-									action: "publicar",
-									version: 2,
-									pageRevision: 3,
-									filesDigest: "fdp",
-									title: "F",
-									description: "d",
-									body: "b",
-									frontmatter: {},
-									manifest: published,
-									digest: "dg",
-									publishedAt: "2026-10-10T00:00:00Z",
-								}
-							: opts.current,
-				},
-			],
-			files: async () => opts.files ?? draftFiles,
-			acts: async () => [oldAct],
-			putFile,
-			removeFile,
-			publish: vi.fn(),
-			withdraw: vi.fn(),
-		},
-		blobs: {
-			put: vi.fn(async (tenantId, sha, data) => {
-				blobs.set(`${tenantId}/${sha}`, data);
-			}),
-			get: async (tenantId, sha) => blobs.get(`${tenantId}/${sha}`) ?? null,
-		},
-	};
-	return { deps, putFile, removeFile, save, calls, blobs };
-}
+import {
+	bytes,
+	members,
+	published,
+	SKILL_MD,
+	SLUG,
+	setup,
+	setupCurrent,
+} from "./skills-fixtures";
 
 const LECTOR = { rules: [members("", "lector")] };
 const HIDDEN = { rules: [members("", "lector"), members("skills", "ninguno")] };
@@ -159,6 +28,7 @@ const HIDDEN = { rules: [members("", "lector"), members("skills", "ninguno")] };
 describe("parseSkillMd", () => {
 	it("separa el encabezado del cuerpo", () => {
 		expect(parseSkillMd(SKILL_MD)).toEqual({
+			name: "facturacion",
 			description: "Usar para emitir y validar facturas.",
 			compatibility: "Python 3",
 			license: "",
@@ -210,6 +80,30 @@ describe("planImport", () => {
 		]);
 		if (!plan.ok) throw new Error(plan.problems.join(" "));
 		expect(plan.files.map((f) => f.path)).toEqual(["scripts/__init__.py"]);
+	});
+
+	it("reúne todos los problemas de SKILL.md: sin name ni description", () => {
+		const plan = planImport([
+			{ path: "SKILL.md", bytes: bytes("---\nlicense: MIT\n---\nc") },
+		]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems).toEqual([
+			"SKILL.md no trae name.",
+			"SKILL.md no trae description.",
+		]);
+	});
+
+	it("rechaza un name con mayúsculas o espacios", () => {
+		const plan = planImport([
+			{
+				path: "SKILL.md",
+				bytes: bytes("---\nname: Ventas Uno\ndescription: x\n---\nc"),
+			},
+		]);
+		if (plan.ok) throw new Error("tenía que fallar");
+		expect(plan.problems).toEqual([
+			"El name de SKILL.md no es válido: usá minúsculas, dígitos y guiones, hasta 64 caracteres.",
+		]);
 	});
 
 	it("rechaza un SKILL.md sin descripción y más de 50 archivos", () => {
@@ -412,22 +306,6 @@ describe("readSkillFile", () => {
 		).toBe("not_found");
 	});
 });
-
-function setupCurrent(): NonNullable<SkillOverviewRow["current"]> {
-	return {
-		action: "publicar",
-		version: 2,
-		pageRevision: 3,
-		filesDigest: "fdp",
-		title: "F",
-		description: "d",
-		body: "b",
-		frontmatter: {},
-		manifest: published,
-		digest: "dg",
-		publishedAt: "2026-10-10T00:00:00Z",
-	};
-}
 
 describe("importSkillPackage", () => {
 	const entries = [

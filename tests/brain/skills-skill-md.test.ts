@@ -17,6 +17,7 @@ describe("renderSkillMd", () => {
 		expect(md.startsWith("---\nname: reporte\n")).toBe(true);
 		expect(md).not.toContain("otra");
 		expect(parseSkillMd(md)).toEqual({
+			name: "reporte",
 			description: "Arma el reporte.",
 			compatibility: "",
 			license: "",
@@ -33,6 +34,7 @@ describe("renderSkillMd", () => {
 			body: "cuerpo",
 		});
 		expect(parseSkillMd(md)).toEqual({
+			name: "a",
 			description,
 			compatibility: "Python 3: sí",
 			license: "MIT",

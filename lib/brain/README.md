@@ -190,9 +190,15 @@ su propio repo.
   handler no trae el chequeo de las server actions) y autoriza en orden: origen, `Content-Length` y miembro del
   tenant se chequean antes de leer el cuerpo; después viene el parseo del
   formulario (acotado por el tope de tamaño), el chequeo de editor sobre ese
-  slug y recién entonces se descomprime o se escribe algo.
+  slug y recién entonces se escribe algo. Este `POST` sube un archivo suelto
+  (4 MB como mucho); el zip entra por `skills/upload` (24.6, más abajo).
 - El zip se lee en `adapters/skill-zip.ts`, que recorre el directorio central
   a mano e infla con `node:zlib` (`fflate` es solo devDependency de los tests).
+  `unzipPackage` rechaza antes de nada un zip de más de 4 MB (`MAX_ZIP_BYTES`) y
+  lanza `ZipRejected` ante cualquier problema; quien recibe el zip de afuera
+  (la subida web y el MCP) usa `unzipOrProblem`, que devuelve el mensaje como
+  `{ error }` en lugar de lanzar y deja pasar lo que no sea `ZipRejected`, que
+  es un bug.
   Antes de descomprimir descarta carpetas, `__MACOSX/` y `.DS_Store`, y
   rechaza zip64, cifrado, métodos distintos de 0 y 8, nombres repetidos,
   entradas que se superponen o cuyo comprimido suma más que el zip, y topes
@@ -221,6 +227,21 @@ su propio repo.
   devuelve ese link, y `app/[tenant]/brain/skills/package/route.ts` ya no sirve
   el zip: redirige (302) al link de 60 s, con `publishedSkillFor` decidiendo el
   permiso.
+- **Subir una skill desde un zip (24.6).** `core/skills/upload.ts` (puro)
+  tiene `previewSkillUpload` y `commitSkillUpload`: reciben el zip ya
+  descomprimido y un destino (`{ kind: "folder" }` o `{ kind: "skill" }`),
+  corren `planImport` (que ahora exige `name` en el `SKILL.md`, válido y de
+  hasta 64 caracteres), deciden si crea o reemplaza y avisan sin bloquear de un
+  nombre repetido o de un `name` distinto del de la skill. La vista previa no
+  escribe; confirmar vuelve a planificar todo, permiso incluido, y escribe
+  siempre en el borrador. Crear pide `administrador` sobre la carpeta destino;
+  reemplazar, `editor` de la skill; todo lo demás responde `not_found`.
+  `core/skills/upload-mcp.ts` arma las tools `skill_upload_link` y
+  `skill_import` sobre el mismo servicio, con el almacenamiento de preparación,
+  el descompresor y el registro inyectados; `upload-id.ts` arma y lee el
+  `uploadId`. `adapters/skill-uploads.ts` pone el objeto de preparación en el
+  bucket `skill-packages` y el evento `brain.skill_imported`; la web entra por
+  `app/[tenant]/brain/skills/upload/route.ts`. No hay migración.
 - Habilitar skills en una empresa es agregar `skill` a las categorías de su
   brain desde la consola de plataforma.
 

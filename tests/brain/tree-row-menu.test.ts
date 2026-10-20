@@ -8,6 +8,7 @@ import {
 	visibleTree,
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
+import type { Level } from "@/lib/brain/core/access/types";
 import { rulesEntryHref } from "@/lib/brain/core/editor/reserved";
 import { nodeBuiltins } from "./client-safe";
 
@@ -80,14 +81,70 @@ describe("folderMenuItems", () => {
 				"administrador",
 				null,
 			),
-		).toEqual(["new-subfolder", "describe", "delete-folder"]);
+		).toEqual(["new-subfolder", "upload-skill", "describe", "delete-folder"]);
 		expect(
 			folderMenuItems(
 				node({ path: "skills/ventas", name: "ventas" }),
 				"administrador",
 				null,
 			),
-		).toEqual(["new-subfolder", "describe", "delete-folder"]);
+		).toEqual(["new-subfolder", "upload-skill", "describe", "delete-folder"]);
+	});
+	it("subir una skill es de quien administra una carpeta de skills", () => {
+		const items = (over: Partial<TreeNode>, rootLevel: Level | null = null) =>
+			folderMenuItems(node(over), rootLevel, null);
+		expect(items({ path: "skills", name: "skills" })).toContain("upload-skill");
+		expect(items({ path: "skills/ventas", name: "ventas" })).toContain(
+			"upload-skill",
+		);
+		expect(
+			items({ path: "skills/ventas", name: "ventas", level: "editor" }),
+		).not.toContain("upload-skill");
+		expect(items({ path: "ventas", name: "ventas" })).not.toContain(
+			"upload-skill",
+		);
+		// Una carpeta que solo empieza igual no es de skills.
+		expect(
+			items({ path: "skills-viejas", name: "skills-viejas" }),
+		).not.toContain("upload-skill");
+		expect(
+			folderMenuItems(
+				node({ path: "", name: "", folder: null }),
+				"administrador",
+				null,
+			),
+		).not.toContain("upload-skill");
+	});
+	// wiki.upsert rechaza una página nueva cuyo padre es una subcarpeta sin fila
+	// en brain_folders: una carpeta implícita bajo skills/ no puede recibir la
+	// skill. Solo skills/ misma, cuyas páginas cuelgan de la raíz, queda exenta.
+	it("una subcarpeta implícita de skills/ no ofrece subir una skill", () => {
+		expect(
+			folderMenuItems(
+				node({
+					path: "skills/ventas",
+					name: "ventas",
+					folder: null,
+					children: [node({ path: "skills/ventas/cotizar" })],
+				}),
+				"administrador",
+				null,
+			),
+		).toEqual([]);
+	});
+	it("skills/ implícita sí ofrece subir una skill, y solo eso", () => {
+		expect(
+			folderMenuItems(
+				node({
+					path: "skills",
+					name: "skills",
+					folder: null,
+					children: [node({ path: "skills/ventas" })],
+				}),
+				"administrador",
+				null,
+			),
+		).toEqual(["upload-skill"]);
 	});
 	it("con contenido, borrar aparece deshabilitado", () => {
 		expect(
@@ -130,5 +187,8 @@ describe("frontera de cliente", () => {
 	it("el menú y el árbol no arrastran node:*", () => {
 		expect(nodeBuiltins("components/brain/tree-row-menu.tsx")).toEqual([]);
 		expect(nodeBuiltins("components/brain/brain-tree.tsx")).toEqual([]);
+		expect(nodeBuiltins("components/brain/skills/upload-dialog.tsx")).toEqual(
+			[],
+		);
 	});
 });

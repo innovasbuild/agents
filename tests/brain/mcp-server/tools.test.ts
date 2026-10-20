@@ -17,6 +17,7 @@ import {
 import { createWikiRules, EMPTY_RULES } from "@/lib/brain/core/rules-source";
 import type { SkillCatalog } from "@/lib/brain/core/skills/catalog";
 import type { DraftChange, SkillDrafts } from "@/lib/brain/core/skills/draft";
+import type { SkillUploads } from "@/lib/brain/core/skills/upload-mcp";
 import type { BrainProvider } from "@/lib/brain/core/types";
 
 const page = {
@@ -745,6 +746,159 @@ describe("buildBrainMcpServer · edición de skills", () => {
 			ok: false,
 			error: "validation",
 			message: "El fragmento no aparece.",
+		});
+	});
+});
+
+function fakeUploads(uploadableFolders = ["ventas"]): SkillUploads {
+	return {
+		uploadableFolders,
+		link: vi.fn(async () => ({
+			ok: true,
+			uploadId: "u1",
+			url: "https://storage.test/u1",
+		})),
+		import: vi.fn(async () => ({ ok: true, slug: "skills/ventas/reporte" })),
+	};
+}
+
+describe("buildBrainMcpServer · subir skills desde un zip", () => {
+	function build(skillUploads: SkillUploads | null, limiter = fakeLimiter()) {
+		return {
+			limiter,
+			server: buildBrainMcpServer({
+				userId: "ana",
+				categories: ["comercial"],
+				canon: false,
+				provider: fakeProvider(),
+				limiter,
+				skillUploads,
+			}),
+		};
+	}
+	const describeOf = async (uploads: SkillUploads, name: string) =>
+		(await (await connect(build(uploads).server)).listTools()).tools.find(
+			(t) => t.name === name,
+		)?.description ?? "";
+
+	it("sin skillUploads no existen las tools", async () => {
+		const client = await connect(build(null).server);
+		const names = (await client.listTools()).tools.map((t) => t.name);
+		expect(names).not.toContain("skill_upload_link");
+		expect(names).not.toContain("skill_import");
+	});
+
+	it("las instrucciones nombran la subida solo si están las tools", async () => {
+		const withUploads = await connect(build(fakeUploads()).server);
+		const instructions = withUploads.getInstructions() ?? "";
+		expect(instructions).toContain("skill_upload_link");
+		expect(instructions).toContain("skill_import");
+		expect(instructions).toContain("BORRADOR");
+		const without = await connect(build(null).server);
+		expect(without.getInstructions() ?? "").not.toContain("skill_upload_link");
+	});
+
+	it("con skillUploads se listan las dos", async () => {
+		const client = await connect(build(fakeUploads()).server);
+		const names = (await client.listTools()).tools.map((t) => t.name).sort();
+		expect(names).toEqual([
+			"brain_read",
+			"brain_search",
+			"brain_upsert",
+			"skill_import",
+			"skill_upload_link",
+		]);
+	});
+
+	it("la descripción de skill_upload_link dice que hace falta ejecutar código y lista las carpetas", async () => {
+		const link = await describeOf(
+			fakeUploads(["ventas", "rrhh"]),
+			"skill_upload_link",
+		);
+		expect(link).toContain("ejecutar código");
+		expect(link).toContain("una sola subida");
+		expect(link).toContain("ventas, rrhh");
+		const root = await describeOf(fakeUploads([""]), "skill_upload_link");
+		expect(root).not.toContain("solo en estas carpetas");
+		const many = Array.from({ length: 25 }, (_, i) => `c${i}`);
+		const capped = await describeOf(fakeUploads(many), "skill_upload_link");
+		expect(capped).toContain("c19");
+		expect(capped).not.toContain("c20");
+	});
+
+	it("link e import con confirm cuentan como escritura; import sin confirm, como lectura", async () => {
+		const uploads = fakeUploads();
+		const { server, limiter } = build(uploads);
+		const client = await connect(server);
+
+		const link = await client.callTool({
+			name: "skill_upload_link",
+			arguments: { folder: "ventas" },
+		});
+		expect(link.structuredContent).toMatchObject({ ok: true, uploadId: "u1" });
+		expect(uploads.link).toHaveBeenCalledWith({ folder: "ventas" });
+		expect(limiter.check).toHaveBeenLastCalledWith("write");
+
+		await client.callTool({
+			name: "skill_import",
+			arguments: { uploadId: "u1" },
+		});
+		expect(uploads.import).toHaveBeenLastCalledWith({ uploadId: "u1" });
+		expect(limiter.check).toHaveBeenLastCalledWith("read");
+
+		const done = await client.callTool({
+			name: "skill_import",
+			arguments: { uploadId: "u1", confirm: true },
+		});
+		expect(done.structuredContent).toMatchObject({ ok: true });
+		expect(uploads.import).toHaveBeenLastCalledWith({
+			uploadId: "u1",
+			confirm: true,
+		});
+		expect(limiter.check).toHaveBeenLastCalledWith("write");
+		expect(limiter.check).toHaveBeenCalledTimes(3);
+	});
+
+	it("skill_import pasa expectedMode y expectedSlug al servicio", async () => {
+		const uploads = fakeUploads();
+		const client = await connect(build(uploads).server);
+		await client.callTool({
+			name: "skill_import",
+			arguments: {
+				uploadId: "u1",
+				confirm: true,
+				expectedMode: "crear",
+				expectedSlug: "skills/ventas/reporte",
+			},
+		});
+		expect(uploads.import).toHaveBeenLastCalledWith({
+			uploadId: "u1",
+			confirm: true,
+			expectedMode: "crear",
+			expectedSlug: "skills/ventas/reporte",
+		});
+		const bad = await client.callTool({
+			name: "skill_import",
+			arguments: { uploadId: "u1", confirm: true, expectedMode: "borrar" },
+		});
+		expect(bad.isError).toBe(true);
+		expect(uploads.import).toHaveBeenCalledTimes(1);
+	});
+
+	it("un BrainError del import sale con el formato de siempre", async () => {
+		const uploads = fakeUploads();
+		uploads.import = vi.fn(async () => {
+			throw new BrainError("not_found", "No encontré ese zip.");
+		});
+		const client = await connect(build(uploads).server);
+		const result = await client.callTool({
+			name: "skill_import",
+			arguments: { uploadId: "u1", confirm: true },
+		});
+		expect(result.isError).toBe(true);
+		expect(result.structuredContent).toMatchObject({
+			ok: false,
+			error: "not_found",
 		});
 	});
 });

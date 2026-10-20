@@ -13,6 +13,7 @@ import { withoutRoot } from "../rules.ts";
 import { type RulesSource, requireRules } from "../rules-source.ts";
 import { describeSkills, type SkillCatalog } from "../skills/catalog.ts";
 import type { SkillDrafts } from "../skills/draft.ts";
+import type { SkillUploads } from "../skills/upload-mcp.ts";
 import { rejectSkillWrite } from "../skills/view.ts";
 import {
 	type BrainProvider,
@@ -35,6 +36,8 @@ export const SKILL_TOOL_NAMES = {
 	draftEdit: "skill_draft_edit",
 	draftWriteFile: "skill_draft_write_file",
 	create: "skill_create",
+	uploadLink: "skill_upload_link",
+	import: "skill_import",
 } as const;
 
 const SKILL_INSTRUCTIONS =
@@ -81,6 +84,23 @@ function creatableNote(folders: string[] | undefined): string {
 	return ` Vos podés crear solo en estas carpetas, y tenés que pasar una en folder: ${shown}.`;
 }
 
+// Lo mismo para subir un zip: quien administra carpetas puntuales tiene que
+// pasar una en folder.
+function uploadableNote(folders: string[]): string {
+	if (folders.length === 0 || folders.includes("")) return "";
+	const shown = folders.slice(0, MAX_LISTED_FOLDERS).join(", ");
+	return ` Vos podés subir solo en estas carpetas, y tenés que pasar una en folder: ${shown}.`;
+}
+
+const UPLOAD_INSTRUCTIONS =
+	"Si la persona te pasa una skill en un zip y tu entorno puede ejecutar código, subila con skill_upload_link y skill_import: mostrale la vista previa antes de confirmar. Queda en el BORRADOR: un administrador la publica desde la plataforma.";
+
+const UPLOAD_LINK_DESCRIPTION =
+	'Prepara la subida de una skill desde un zip (SKILL.md con name y description, más scripts y archivos; hasta 4 MB) a una carpeta de skills/: devuelve un uploadId y una URL para subir el zip con un PUT, que vence en 10 minutos. La URL acepta una sola subida: para mandar otro zip, pedí un link nuevo. Después llamá a skill_import con el uploadId. Sirve solo si tu entorno puede ejecutar código y subir un archivo por HTTP; si no puede, decile a la persona que suba el zip desde la plataforma. `folder` va sin el prefijo skills/ ("" es directo en skills/). Si ya hay una skill con ese name en la carpeta, la reemplaza. Todo queda en BORRADOR: un administrador lo publica desde la plataforma.';
+
+const IMPORT_DESCRIPTION =
+	"Lee el zip que subiste con el link de skill_upload_link. Sin confirm devuelve la vista previa (si crea o reemplaza, la ruta, los archivos y los avisos) y no guarda nada: mostrásela a la persona. Con confirm: true guarda la skill en el BORRADOR, no la publica, y devuelve el reviewUrl para pasarle a la persona. Al confirmar pasá expectedMode y expectedSlug con el mode y el slug de la vista previa: si cambió mientras tanto, no guarda nada.";
+
 function result(value: Record<string, unknown>, isError = false) {
 	return {
 		content: [{ type: "text" as const, text: JSON.stringify(value) }],
@@ -100,6 +120,8 @@ export function buildBrainMcpServer(ctx: {
 	skills?: SkillCatalog | null;
 	/** Tools para crear y editar el borrador de skills; solo para quien edita. */
 	skillDrafts?: SkillDrafts | null;
+	/** Tools para subir una skill desde un zip; solo para quien administra una carpeta de skills. */
+	skillUploads?: SkillUploads | null;
 	/** Reglas que ve la persona (spec etapa 26 §4.3). Sin esto, ni brain_rules ni rules en brain_read. */
 	rules?: RulesSource | null;
 	/** Instrucciones del brain y carpetas, para el campo instructions. */
@@ -109,6 +131,7 @@ export function buildBrainMcpServer(ctx: {
 }): McpServer {
 	const skills = ctx.skills ?? null;
 	const drafts = ctx.skillDrafts ?? null;
+	const uploads = ctx.skillUploads ?? null;
 	const rules = ctx.rules ?? null;
 	const manage = ctx.manage ?? null;
 	const instructions = [
@@ -119,6 +142,7 @@ export function buildBrainMcpServer(ctx: {
 					.filter((text): text is string => text !== null)
 					.join(" ")
 			: null,
+		uploads ? UPLOAD_INSTRUCTIONS : null,
 		manage ? MANAGE_INSTRUCTIONS : null,
 	]
 		.filter((text): text is string => Boolean(text))
@@ -445,6 +469,45 @@ export function buildBrainMcpServer(ctx: {
 					ok: true,
 					...(await drafts.create(input)),
 				})),
+		);
+	}
+
+	if (uploads) {
+		// Sin `.import(`: el guardia de frontera lo lee como un import dinámico.
+		const importUpload = uploads.import;
+		server.registerTool(
+			SKILL_TOOL_NAMES.uploadLink,
+			{
+				description: `${UPLOAD_LINK_DESCRIPTION}${uploadableNote(uploads.uploadableFolders)}`,
+				inputSchema: { folder: z.string().max(150) },
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: false,
+					idempotentHint: false,
+				},
+			},
+			async (input) => run("write", () => uploads.link(input)),
+		);
+
+		server.registerTool(
+			SKILL_TOOL_NAMES.import,
+			{
+				description: IMPORT_DESCRIPTION,
+				inputSchema: {
+					uploadId: z.string().min(1).max(300),
+					confirm: z.boolean().optional(),
+					expectedMode: z.enum(["crear", "reemplazar"]).optional(),
+					expectedSlug: z.string().min(1).max(300).optional(),
+				},
+				// Con confirm puede reemplazar el borrador de una skill existente.
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: true,
+					idempotentHint: false,
+				},
+			},
+			async (input) =>
+				run(input.confirm ? "write" : "read", () => importUpload(input)),
 		);
 	}
 

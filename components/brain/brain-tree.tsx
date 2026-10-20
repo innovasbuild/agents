@@ -8,6 +8,7 @@ import { DeletePageDialog } from "@/components/brain/delete-page-dialog";
 import { FolderDeleteDialog } from "@/components/brain/folder-delete-dialog";
 import { FolderDialog } from "@/components/brain/folder-dialog";
 import { ShareDialog } from "@/components/brain/share-dialog";
+import { UploadDialog } from "@/components/brain/skills/upload-dialog";
 import { TreeRowMenu } from "@/components/brain/tree-row-menu";
 import {
 	folderDeleteBlocks,
@@ -16,6 +17,7 @@ import {
 	withoutArchived,
 } from "@/lib/brain/core/access/tree";
 import { pageHref } from "@/lib/brain/core/editor/slug";
+import { SKILLS_PREFIX } from "@/lib/brain/core/skills/package";
 
 // El plegado vive en localStorage por tenant (§7.1). Puede fallar (ventana
 // privada, datos bloqueados): se envuelve y la pantalla anda igual.
@@ -80,6 +82,8 @@ export function BrainTree({
 		| { kind: "describe"; path: string; description: string }
 	>(null);
 	const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
+	// Carpeta de skills/ donde se sube, relativa a skills/ ("" = directo en skills/).
+	const [uploadingTo, setUploadingTo] = useState<string | null>(null);
 	useEffect(() => {
 		const saved = readOpen(storageKey);
 		if (saved) setOpen(saved);
@@ -180,6 +184,9 @@ export function BrainTree({
 						onNewFolder={() =>
 							setFolderDialog({ kind: "create", parent: node.path })
 						}
+						onUploadSkill={() =>
+							setUploadingTo(node.path.slice(SKILLS_PREFIX.length))
+						}
 						onDescribe={() =>
 							setFolderDialog({
 								kind: "describe",
@@ -220,6 +227,7 @@ export function BrainTree({
 					onShare={() => setSharing({ path: "", name: "Brain" })}
 					onDelete={() => {}}
 					onNewFolder={() => setFolderDialog({ kind: "create", parent: "" })}
+					onUploadSkill={() => {}}
 					onDescribe={() => {}}
 					onDeleteFolder={() => {}}
 					deleteBlockedReason={null}
@@ -259,6 +267,13 @@ export function BrainTree({
 					tenantSlug={tenantSlug}
 					mode={folderDialog}
 					onClose={() => setFolderDialog(null)}
+				/>
+			)}
+			{uploadingTo !== null && (
+				<UploadDialog
+					tenantSlug={tenantSlug}
+					target={{ kind: "folder", folder: uploadingTo }}
+					onClose={() => setUploadingTo(null)}
 				/>
 			)}
 			{deletingFolder !== null && (

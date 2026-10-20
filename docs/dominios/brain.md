@@ -3,7 +3,7 @@ title: Brain
 category: dominios
 status: activo
 tags: [brain, wiki, mcp, permisos, editor, canon]
-updated: 2026-10-16
+updated: 2026-10-20
 sources:
   - lib/brain/README.md
   - lib/brain/core
@@ -46,6 +46,15 @@ sources:
   - docs/superpowers/plans/2026-10-14-etapa-26-1a-carpetas.md
   - lib/brain/core/folders.ts
   - lib/brain/core/skills/draft.ts
+  - lib/brain/core/skills/upload.ts
+  - lib/brain/core/skills/upload-mcp.ts
+  - lib/brain/core/skills/upload-id.ts
+  - lib/brain/adapters/skill-uploads.ts
+  - app/[tenant]/brain/skills/upload/route.ts
+  - components/brain/skills/upload-dialog.tsx
+  - components/brain/skills/loose-files.ts
+  - docs/superpowers/specs/2026-10-20-etapa-24-6-subir-skills-desde-zip-design.md
+  - docs/superpowers/plans/2026-10-20-etapa-24-6-subir-skills-desde-zip.md
   - lib/brain/core/folders-report.ts
   - scripts/brain-folders-report.mts
   - supabase/migrations/20261025120000_brain_folders.sql
@@ -81,7 +90,7 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `lib/brain/core/editor/` | Lógica del editor: guardado, slug, entrada por permiso, borrado, autocompletado de `[[` |
 | `lib/brain/core/mcp-server/` | Endpoint MCP: acceso, handler, servidor, límites por minuto |
 | `lib/brain/core/import/` | Núcleo puro del import de una bóveda de markdown |
-| `lib/brain/core/skills/` | Skills de empresa: reglas del paquete, estados, qué ve cada uno (`withoutSkills`, `withSkillView`), publicar, archivos e importación |
+| `lib/brain/core/skills/` | Skills de empresa: reglas del paquete, estados, qué ve cada uno (`withoutSkills`, `withSkillView`), publicar, archivos y subida de un zip |
 | `lib/brain/core/skills/catalog.ts`, `skill-md.ts` | Catálogo de skills publicadas para el MCP y armado del `SKILL.md` del zip |
 | `lib/brain/adapters/skill-zip.ts`, `skills.ts` | Lector y escritor de zip, Storage de archivos y armado de dependencias de las skills |
 | `lib/brain/core/folders.ts`, `folders-store.ts` | Carpetas: tipos, `categoryForPath`, validación de rutas, rutas reservadas y el contrato del almacén |
@@ -111,7 +120,8 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `/[tenant]/brain/historial/[...slug]` | Revisiones con autor, diff y restaurar |
 | `/[tenant]/brain/mapa` | Páginas más enlazadas, huérfanas y links rotos |
 | `/[tenant]/brain/raw/[...slug]` | Cuerpo vigente en texto plano, para el diff del aviso de conflicto |
-| `/[tenant]/brain/skills/files` | Archivos de una skill: `GET` los sirve (texto plano o descarga), `POST` sube un archivo o importa un zip |
+| `/[tenant]/brain/skills/files` | Archivos de una skill: `GET` los sirve (texto plano o descarga), `POST` sube un archivo suelto |
+| `/[tenant]/brain/skills/upload` | `POST` multipart para subir una skill desde un zip: acción `preview` (vista previa, no escribe) o `confirm` (escribe el borrador) |
 | `/[tenant]/brain/skills/package` | `GET ?slug=skills/...`: zip de la versión publicada de una skill (descarga) |
 | `/brain/[tenant]/mcp` | Endpoint MCP del brain |
 | `/.well-known/oauth-protected-resource/brain/[tenant]/mcp` | Metadata OAuth del recurso (RFC 9728) |
@@ -263,7 +273,7 @@ Pantallas sobre el núcleo de la 26.2a. No tiene migraciones ni tablas nuevas.
 - Una skill es una página de categoría `skill` bajo `skills/`; las dos cosas van juntas y lo exige `validateWrite` (`skillPlacementOk`). El borrador es la página más sus archivos (tabla `brain_skill_files`); el contenido de cada archivo va a un bucket privado, por hash (`<tenant_id>/<sha256>`), que calcula el servidor.
 - Edita quien es `editor` de la página; **publica** solo `tenant_admin` o `platform_admin` (`core/skills/publish.ts`). Publicar copia el borrador a `brain_skill_versions`, tabla solo de inserción: la función SQL arma la copia desde la fila bloqueada y la publicación va atada a la revisión y al hash de archivos que mostró la pantalla (si algo cambió, responde conflicto). Retirar y republicar son filas nuevas; una publicada no se borra sin retirarla antes.
 - `withoutSkills` va en las tools del agente, en el endpoint MCP y en el lector del canon de outreach: ningún asistente ve ni escribe nada bajo `skills/`. `withSkillView` va en el contexto del editor web: el editor de la skill ve el borrador y quien solo lee ve la copia publicada (revisión publicada, estado `activo`, sin etiquetas); sin versión vigente la skill no existe para esa persona.
-- Los archivos se sirven siempre por `/[tenant]/brain/skills/files`, como texto plano o descarga con `nosniff`. El `POST` verifica el origen a mano. El zip se lee con un parser propio (`adapters/skill-zip.ts`) que mira los tamaños declarados antes de descomprimir e infla cada entrada acotada a su tamaño.
+- Los archivos se sirven siempre por `/[tenant]/brain/skills/files`, como texto plano o descarga con `nosniff`. El `POST` verifica el origen a mano. El zip se lee con un parser propio (`adapters/skill-zip.ts`) que rechaza más de 4 MB, mira los tamaños declarados antes de descomprimir e infla cada entrada acotada a su tamaño. El `POST` de `files` sube un archivo suelto; el zip entra por `/[tenant]/brain/skills/upload` (24.6, más abajo).
 - El detalle y las garantías están en [lib/brain/README.md](../../lib/brain/README.md) (sección Skills). Falta el cierre en producción; ver la spec §12. Cómo se sirven por MCP, en la subsección siguiente.
 
 ### Skills por MCP (etapa 24.2a)
@@ -296,6 +306,32 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 
 `lib/brain/core/skills/draft.ts` es el único lugar que ve el borrador de una skill desde un asistente. El handler le pasa el proveedor con `withAccess` pero **sin** `withoutSkills`; las tres tools del brain siguen recibiendo el envuelto con la guardia. Las tools (`skill_create`, `skill_draft_read`, `skill_draft_edit`, `skill_draft_write_file`) se registran solo si el brain es del proveedor `wiki`, la categoría `skill` está habilitada y la persona puede editar algo bajo `skills/`, y todo cambio va al borrador: publicar es solo de la web (24.1 S5). Reusan `putSkillFile` y `readSkillFile` para el permiso de editor y los topes del paquete, y el guardado del brain para el `SKILL.md` (con `baseRevision`, o sin él para crear: el guardado sin `baseRevision` solo crea páginas nuevas, así que `skill_create` nunca pisa una página).
 
+### Subir una skill desde un zip (etapa 24.6)
+
+Un zip se sube en un paso a la carpeta de `skills/` que elige la persona, por la web y por MCP, y sirve igual para una skill nueva que para actualizar una existente. La lógica es un servicio puro, `core/skills/upload.ts` (`previewSkillUpload` y `commitSkillUpload`): recibe el zip ya descomprimido, el destino y el tenant y la persona del caller. La web y el MCP son adaptadores finos sobre él.
+
+- **Destino y modo.** La carpeta la elige la persona (`{ kind: "folder" }`, relativa a `skills/`, `""` es directo bajo `skills/`) o ya está dada por el panel de una skill (`{ kind: "skill" }`). Del `SKILL.md` sale solo el `name`, y es **obligatorio** y válido (minúsculas, dígitos y guiones, hasta 64 caracteres) en una subida nueva: si falta o no sirve, es un problema de la vista previa y no se puede confirmar (`planImport`). Subiendo a una carpeta, el `name` decide la ruta; si ya existe `skills/<carpeta>/<name>` es `reemplazar`, si no, `crear`. Desde el panel de una skill el `name` no renombra nada: si difiere, avisa sin bloquear. Las skills que ya estaban cargadas sin `name` siguen sirviéndose y publicándose.
+- **Permisos** (mismo criterio por la web y por MCP, resuelto con `resolveAccess`; no se tocó el modelo de permisos):
+
+| Situación | Resultado |
+|---|---|
+| Crear una skill nueva | Hace falta `administrador` sobre la carpeta destino (o la empresa) |
+| Reemplazar una existente | Hace falta `editor` de esa skill |
+| Cualquier otro caso | `not_found` ("No encontrado."), igual que ante una carpeta o skill que no existe: el canal no revela nombres |
+
+- **Vista previa y confirmación.** `preview` no escribe: devuelve modo, ruta, nombre, descripción, archivos con su tamaño, total y avisos (nombre repetido en otra carpeta que la persona ve, `name` distinto del de la skill), o **todos** los problemas juntos. `confirm` vuelve a planificar todo, permiso incluido, y escribe: crea la página (`Alta por subida de paquete`) si no existía y escribe texto y archivos con `importSkillPackage`. Todo o nada: un paquete inválido no cambia nada. **Todo va al borrador**: nunca publica ni retira.
+- **Por la web.** `POST /[tenant]/brain/skills/upload` (`app/[tenant]/brain/skills/upload/route.ts`) recibe un formulario con `action` (`preview` o `confirm`), `file` y exactamente un destino: `folder` o `slug`. Antes de leer el cuerpo verifica, en este orden, el tenant (inválido: 404), el origen (ajeno: 403) y el `Content-Length` (ausente o no numérico: 411; por encima del tope, zip de 4 MB más 64 KB de formulario por el límite de una función de Vercel: 413); después, que la persona sea miembro y que la categoría `skill` esté habilitada, y si falta cualquiera de las dos responde 404. No es una server action porque esas topean en 2 MB. El navegador conserva el archivo y lo manda dos veces, una por acción: no hay objeto de preparación en la web. Un zip malo da 422 con el mensaje; el éxito de `confirm` revalida el layout del brain.
+- **Dónde se ve en la interfaz.** En el árbol, **Subir skill…** en el menú de cada carpeta de `skills/` (incluida `skills/`) para quien la administra (`folderMenuItems`). Una subcarpeta implícita de `skills/`, sin fila en `brain_folders`, no la ofrece: la base rechaza una página nueva cuyo padre es una subcarpeta sin fila. Solo `skills/` misma la ofrece aunque sea implícita, porque sus páginas cuelgan de la raíz. En el panel de una skill, **Subir paquete (zip)…** (reemplaza el borrador y reemplazó al botón «Importar zip» con `window.confirm`) y una zona para **arrastrar archivos o una carpeta** (más **Elegir archivos…** y **Elegir carpeta…**). Los archivos sueltos no son una importación: cada uno es un pedido aparte a `skills/files`, sin vista previa ni todo-o-nada, con la ruta tomada de su ubicación relativa (sin la carpeta raíz arrastrada); al terminar se dice cuántos subieron y cuáles fallaron, y los archivos ocultos y el `SKILL.md` se omiten con un aviso. El diálogo es `components/brain/skills/upload-dialog.tsx`; la lógica de los sueltos, `components/brain/skills/loose-files.ts`.
+- **Por MCP** (`core/skills/upload-mcp.ts`). Un asistente no puede pasar un binario en los argumentos de una tool, así que son dos: `skill_upload_link` (`{ folder }`) y `skill_import` (`{ uploadId, confirm?, expectedMode?, expectedSlug? }`). `skill_upload_link` devuelve `uploadId`, la URL firmada, `method: "PUT"`, `contentType: "application/zip"`, `maxBytes` y `expiresIn`; el cliente sube el zip con un `PUT` y llama a `skill_import`, que sin `confirm` devuelve la vista previa y con `confirm: true` escribe el borrador y devuelve el `reviewUrl`. Al confirmar, `expectedMode` y `expectedSlug` (el `mode` y el `slug` de la vista previa, que el `confirmHint` le pide devolver al asistente) llegan a `commitSkillUpload` como `expect`: si al volver a planificar cambiaron, devuelve `conflict` sin escribir. La web hace lo mismo con los campos `expectedMode` y `expectedSlug` del formulario. Las dos se registran solo si el brain es `wiki`, la categoría `skill` está habilitada, la persona puede editar algo bajo `skills/` **y administra al menos una carpeta de `skills/`** (`uploadableSkillFolders`, que usa `creatableSkillFolders` con nivel `administrador`); quien administra solo carpetas puntuales tiene que pasar una de ellas en `folder` y la descripción de la tool se las lista. La carpeta se fija al pedir el link y viaja dentro del `uploadId`; `skill_import` no la recibe. En el límite por minuto, `skill_upload_link` y `skill_import` con `confirm` cuentan como escrituras, y `skill_import` sin `confirm`, como lectura.
+- **`uploadId` y vencimiento** (`core/skills/upload-id.ts`, puro). Es `<hora de emisión en base 36>.<aleatorio>.<carpeta con ~ por />`. Vence a los 600 segundos de emitido, **también entre la vista previa y la confirmación**: pasado ese tiempo hace falta un link nuevo, aunque el zip ya esté subido. No autoriza nada: el objeto se busca con el tenant y la persona del pedido (el `uploadId` de otra persona no existe) y el permiso se vuelve a mirar al importar.
+- **Objeto de preparación** (`adapters/skill-uploads.ts`, `uploadStaging`). Solo el camino MCP usa Storage: el zip queda en `imports/<tenant_id>/<user_id>/<uploadId>.zip` del bucket privado `skill-packages`, que ya admitía objetos de 26 MB (sin migración). La clave lleva el `uploadId` entero. Cada vez que se emite un link se barren, en el mejor esfuerzo, los objetos de esa persona con más de 24 horas; un fallo de la limpieza se registra y no frena la emisión. `skill_import` con `confirm` borra el objeto después de escribir; si ese borrado falla, no cambia el resultado y lo recoge el barrido. `skill_import` verifica el tamaño real (más de 4 MB se rechaza) antes de descomprimir.
+- **Topes.** Zip de **4 MB** (`MAX_ZIP_BYTES`); el contenido no cambió: 50 archivos, 4 MB por archivo, 20 MB descomprimido. `unzipOrProblem` (`adapters/skill-zip.ts`) devuelve el problema de un zip malo en lugar de lanzar.
+- **Evento `brain.skill_imported`.** Cada subida confirmada inserta una fila en `events` (`channel` `web` o `mcp`, `summary` = slug de la skill, `payload` con `mode`, `crear` o `reemplazar`, y `files`, la cantidad de archivos). Si la inserción falla, se registra en consola y la subida responde igual.
+- **Quién puede qué por MCP.** Un administrador de una carpeta ve `skill_upload_link` y `skill_import`; un editor que no administra ninguna carpeta no las ve (edita el borrador con `skill_draft_*`); un lector o quien no tiene reglas bajo `skills/` no ve ninguna tool de skills para escribir. Si las llama sin permiso, recibe lo mismo que ante una carpeta inexistente.
+- **Límite aceptado.** Solo sirve a clientes que ejecutan código y suben un archivo por HTTP (Claude Code, Codex, Cursor), como `skill_package`. En claude.ai y ChatGPT web siguen `skill_create` y `skill_draft_write_file` (texto) o la web.
+- **Verificado en local (2026-10-20)**, contra el Supabase local y un Chrome real: (1) la URL firmada de subida acepta un `PUT` crudo con `Content-Type: application/zip` (HTTP 200, objeto idéntico byte a byte) y un token alterado da 400. En esa verificación el link se firmaba con `upsert` y un segundo `PUT` lo sobrescribía; ahora se firma sin `upsert`, así que un segundo `PUT` a la misma URL se rechaza (el zip aprobado en la vista previa no se cambia) y para otro zip hace falta un link nuevo; (2) el selector de carpeta (`webkitdirectory`) y soltar una carpeta nativa en el panel de la skill suben 3 de 3 archivos con el anidado conservado y la carpeta raíz quitada, y una carpeta mezclada informó «Subieron 1 de 2» con los avisos del `SKILL.md` y de los archivos ocultos.
+- **Falta verificar** (el código está terminado y probado con tests): (1) el `PUT` crudo contra el Storage de producción; (2) un arrastre humano desde el Finder, Safari y Firefox, las carpetas de más de 100 entradas y los topes de 50 archivos y 20 MB; (3) el flujo completo de `skill_import` por MCP con un cliente real; (4) que el canal MCP de eve carga sin `next/*` (lo cuida un test estático, pero solo un deploy de preview de Vercel lo verifica de verdad). El cierre en producción está en la spec §1.
+
 ### Frontera core/adapters
 
 `lib/brain/core` no importa nada de afuera: solo `zod`, `yaml`, `@modelcontextprotocol/sdk`, `node:*` y, como tipo, `@supabase/supabase-js`. Los imports relativos llevan extensión `.ts` porque scripts con Node directo los recorren. Lo que el host tiene que proveer (`WikiStore`, `AccessStore`, `AccessRulesStore`, `unauthorized`, `SaveDeps`) está en la tabla del README del módulo.
@@ -310,6 +346,7 @@ El endpoint MCP suma cuatro tools, `skill_list`, `skill_load`, `skill_file` y `s
 | Borrado | `tests/brain/editor-delete.test.ts`, `delete-store.test.ts`, `delete-actions.test.ts`, `links-cleanup.test.ts`, `wikilinks-remove.test.ts` |
 | Editor: ida y vuelta del markdown | `npx vitest run tests/brain/editor-roundtrip.test.ts` (entorno `happy-dom`). Suma las páginas reales de `tests/fixtures/brain-real/`, que no se versiona porque el repo es público |
 | Skills | `tests/brain/skills-*.test.ts` (paquete, estados, vistas, publicar, archivos, zip, ruta, catálogo, `SKILL.md` y ruta de descarga `skills-package-route.test.ts`) y pgTAP `34_brain_skills` |
+| Subir una skill desde un zip (24.6) | `tests/brain/skills-upload.test.ts` (servicio), `skills-upload-id.test.ts`, `skills-upload-mcp.test.ts` (tools por MCP), `skills-upload-route.test.ts` (ruta web), `skill-uploads-adapter.test.ts` (Storage y evento), `skills-http.test.ts`, `skills-loose-files.test.ts`, `upload-dialog.test.ts` y `tree-row-menu.test.ts` |
 | Endpoint MCP | `tests/brain/mcp-server/` (acceso, handler, límites, producción, tools de skills) |
 | Canon como fuente | `tests/brain/canon-reflection.test.ts` y `tests/outreach/canon.test.ts` |
 | Reglas en el editor (26.2b) | `tests/brain/editor-reserved.test.ts`, `editor-rules-panel.test.ts`, `rules-panel.test.ts`, `rules-panel-hook.test.ts`, `reserved-notice.test.ts`, `page-list.test.ts`, `editor-page-category.test.ts`, `editor-new-page.test.ts`, `editor-adapter.test.ts`, `editor-delete.test.ts`, `rules-actions.test.ts`, `tree-row-menu.test.ts`, `access-tree.test.ts`, `wiki-folders.test.ts`. `tests/brain/client-safe.ts` es el seguidor de imports de cliente |
@@ -329,7 +366,8 @@ Specs y planes en `docs/superpowers/`:
 [etapa 24.1, skills de empresa](../superpowers/specs/2026-10-11-etapa-24-1-skills-paquete-publicacion-design.md) y [plan](../superpowers/plans/2026-10-11-etapa-24-1-skills-paquete-publicacion.md) ·
 [etapa 24.2a, skills por MCP](../superpowers/specs/2026-10-13-etapa-24-2a-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-13-etapa-24-2a-skills-por-mcp.md) ·
 [etapa 24.2b, paquete por MCP](../superpowers/specs/2026-10-14-etapa-24-2b-paquete-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-14-etapa-24-2b-paquete-por-mcp.md) ·
-[etapa 24.5, crear y editar skills por MCP](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-15-etapa-24-5-editar-skills-por-mcp.md).
+[etapa 24.5, crear y editar skills por MCP](../superpowers/specs/2026-10-15-etapa-24-5-editar-skills-por-mcp-design.md) y [plan](../superpowers/plans/2026-10-15-etapa-24-5-editar-skills-por-mcp.md) ·
+[etapa 24.6, subir una skill desde un zip](../superpowers/specs/2026-10-20-etapa-24-6-subir-skills-desde-zip-design.md) y [plan](../superpowers/plans/2026-10-20-etapa-24-6-subir-skills-desde-zip.md).
 
 Pull requests:
 
@@ -369,6 +407,21 @@ Decisiones de la 24.2b (P1 a P8 de la spec; P2 reemplaza a M6):
 - P6: cada link emitido deja un evento, por MCP y por web.
 - P7: límite aceptado: claude.ai y ChatGPT web no corren scripts siempre al día; la persona sube el zip a mano.
 - P8: no se limpian los zips de versiones retiradas o reemplazadas.
+
+Decisiones de la 24.6 (D1 a D12 de la spec):
+
+- D1: «Subir skill» es un ítem del menú de cada carpeta de `skills/`, para quien la administra.
+- D2: la carpeta destino la elige la persona, nunca el zip; del `SKILL.md` sale solo el `name`, obligatorio y válido en las subidas nuevas.
+- D3: nueva o actualización se decide por el destino (`skills/<carpeta>/<name>` existe o no).
+- D4: crear exige administrar la carpeta destino; reemplazar, ser editor de la skill. Queda una asimetría a sabiendas: `skill_create` (texto) deja crear a un editor de la carpeta y la subida de un zip no.
+- D5: vista previa sin escribir, con todos los problemas juntos.
+- D6: por la web el zip viaja en el pedido, dos veces (vista previa y confirmación); por MCP, por un objeto de preparación en Storage.
+- D7: tope del zip de 4 MB, decidido el 2026-10-20 para simplificar; subir a 10 MB exigiría subida directa a Storage desde la web.
+- D8: por MCP, `skill_upload_link` y `skill_import`, solo para clientes que ejecutan código y tienen red.
+- D9: todo va al borrador; la subida nunca publica.
+- D10: los archivos sueltos se arrastran, sin vista previa ni todo-o-nada.
+- D11: el panel de una skill usa el mismo flujo de vista previa y confirmación.
+- D12: sin migración.
 
 Discrepancias spec-versus-código:
 

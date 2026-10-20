@@ -6,6 +6,7 @@ import {
 	SkillPanel,
 	type SkillPanelProps,
 } from "@/components/brain/skills/skill-panel";
+import { UploadDialogBody } from "@/components/brain/skills/upload-dialog";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh() {} }) }));
 vi.mock("@/app/[tenant]/brain/skill-actions", () => ({
@@ -52,6 +53,29 @@ describe("PublishedFiles", () => {
 	});
 });
 
+describe("UploadDialogBody", () => {
+	const render = (target: Parameters<typeof UploadDialogBody>[0]["target"]) =>
+		renderToStaticMarkup(
+			createElement(UploadDialogBody, {
+				tenantSlug: "acme",
+				target,
+				onClose() {},
+			}),
+		);
+
+	it("al abrir pide un .zip y avisa del tope de 4 MB", () => {
+		const html = render({ kind: "folder", folder: "ventas" });
+		expect(html).toContain('type="file"');
+		expect(html).toContain("accept=");
+		expect(html).toContain(".zip");
+		expect(html).toContain("4 MB");
+		expect(html).toContain("Cancelar");
+		// Todavía no hay nada para confirmar.
+		expect(html).not.toContain("Revisando");
+		expect(html).not.toContain("Subiendo");
+	});
+});
+
 describe("SkillPanel", () => {
 	const props: SkillPanelProps = {
 		tenantSlug: "acme",
@@ -73,6 +97,27 @@ describe("SkillPanel", () => {
 	const render = (over: Partial<SkillPanelProps>) =>
 		renderToStaticMarkup(createElement(SkillPanel, { ...props, ...over }));
 
+	it("el zip se sube con el diálogo nuevo, no con el bloque viejo", () => {
+		const html = render({});
+		expect(html).toContain("Subir paquete (zip)…");
+		expect(html).not.toContain("Zip del paquete");
+		expect(html).not.toContain("Importar zip");
+	});
+
+	it("los archivos sueltos se arrastran o se eligen, y la ruta es un ajuste", () => {
+		const html = render({});
+		expect(html).toContain("Arrastrá archivos o una carpeta");
+		expect(html).toContain("Elegir archivos");
+		expect(html).toContain("Elegir carpeta");
+		expect(html).toMatch(/<input[^>]*webkitdirectory/);
+		expect(html).not.toContain(">Subir archivo<");
+		// La ruta queda dentro de un <details> cerrado.
+		const details = html.match(/<details>([\s\S]*?)<\/details>/)?.[1] ?? "";
+		expect(details).toContain("Cambiar la ruta");
+		expect(details).toContain("Ruta dentro del paquete");
+		expect(html).not.toMatch(/<details[^>]*open/);
+	});
+
 	it("un administrador ve publicar, retirar y republicar", () => {
 		const html = render({});
 		expect(html).toContain("Publicada v2, con cambios sin publicar");
@@ -88,7 +133,7 @@ describe("SkillPanel", () => {
 		expect(html).not.toContain(">Retirar<");
 		expect(html).not.toContain("Republicar");
 		expect(html).toContain("La publica un administrador");
-		expect(html).toContain("Subir archivo");
+		expect(html).toContain("Arrastrá archivos o una carpeta");
 	});
 
 	it("publicada sin cambios no ofrece publicar de nuevo", () => {

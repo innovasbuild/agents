@@ -11,7 +11,7 @@ import {
 	type Principal,
 } from "../access/types.ts";
 import { BrainConflict, BrainError, BrainNotFound } from "../errors.ts";
-import { type BrainPage, MAX_SLUG_LENGTH, SLUG_PATTERN } from "../types.ts";
+import { type BrainPage, MAX_SLUG_LENGTH } from "../types.ts";
 import { MAX_READABLE_BYTES } from "./catalog.ts";
 import {
 	type FilesDeps,
@@ -24,9 +24,11 @@ import { looksLikeText } from "./http.ts";
 import {
 	isSkillSlug,
 	isValidFilePath,
+	isValidSkillFolder,
+	isValidSkillName,
 	MAX_COMPATIBILITY,
 	MAX_DESCRIPTION,
-	MAX_SKILL_NAME,
+	normalizeSkillFolder,
 	SKILLS_PREFIX,
 	skillName,
 } from "./package.ts";
@@ -98,7 +100,7 @@ const encoder = new TextEncoder();
 // Igual que MCP_MAX_UPSERT_BODY_BYTES de server.ts.
 export const MAX_DRAFT_BODY_BYTES = 102_400;
 
-const DRAFT_NOTE =
+export const DRAFT_NOTE =
 	"El cambio quedó en el borrador: todavía no lo ven los demás. Un administrador lo publica desde la plataforma.";
 
 const invalid = (message: string) => new BrainError("validation", message);
@@ -247,13 +249,15 @@ export function canEditSkills(
 // "" es directo bajo skills/. Quien edita todo skills/ (un administrador de la
 // empresa, o un editor general) no necesita listarlas. Quien solo tiene reglas
 // sobre carpetas puntuales tiene que pasar `folder`, y el asistente no puede
-// adivinar cuál: por eso se le dice.
+// adivinar cuál: por eso se le dice. `min` es el nivel que hace falta: subir un
+// zip pide administrador (spec 24.6 D4).
 export function creatableSkillFolders(
 	rules: AccessRule[],
 	principal: Principal,
+	min: Level = "editor",
 ): string[] {
 	const edits = (path: string) =>
-		atLeast(resolveAccess(rules, principal, path), "editor");
+		atLeast(resolveAccess(rules, principal, path), min);
 	if (edits(`${SKILLS_PREFIX}x`)) return [""];
 	const found = new Set<string>();
 	for (const rule of rules) {
@@ -482,21 +486,14 @@ export function createSkillDrafts(deps: SkillDraftDeps): SkillDrafts {
 			const actor = await files.actor(tenantSlug);
 			if (!actor) throw notFound(input.name);
 			const name = input.name.trim();
-			// La carpeta es relativa a skills/: un "skills/" al principio se descarta.
-			const folder = input.folder
-				?.trim()
-				.replace(/^\/+|\/+$/g, "")
-				.replace(/^skills(\/|$)/, "")
-				.replace(/^\/+|\/+$/g, "");
+			const folder = normalizeSkillFolder(input.folder);
 			const slug = folder
 				? `${SKILLS_PREFIX}${folder}/${name}`
 				: `${SKILLS_PREFIX}${name}`;
 			if (
-				name.length === 0 ||
-				name.length > MAX_SKILL_NAME ||
-				name.includes("/") ||
-				slug.length > MAX_SLUG_LENGTH ||
-				!SLUG_PATTERN.test(slug)
+				!isValidSkillName(name) ||
+				!isValidSkillFolder(folder) ||
+				slug.length > MAX_SLUG_LENGTH
 			) {
 				throw invalid(
 					"El nombre y la carpeta usan minúsculas, dígitos y guiones (la carpeta puede tener subniveles separados por /). El nombre llega a 64 caracteres.",

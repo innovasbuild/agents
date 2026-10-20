@@ -15,8 +15,16 @@ import {
 	type SkillState,
 	skillStateLabel,
 } from "@/lib/brain/core/skills/state";
+import {
+	collectDropped,
+	type LooseEntry,
+	type LooseResult,
+	looseFilePath,
+	uploadLoose,
+} from "./loose-files";
 import { PublishDialog } from "./publish-dialog";
 import { formatSize } from "./published-files";
+import { UploadDialog } from "./upload-dialog";
 
 export interface SkillVersionRow {
 	id: number;
@@ -48,67 +56,77 @@ export function SkillPanel({
 }: SkillPanelProps) {
 	const router = useRouter();
 	const pathId = useId();
-	const fileInput = useRef<HTMLInputElement>(null);
-	const zipInput = useRef<HTMLInputElement>(null);
+	const filesInput = useRef<HTMLInputElement>(null);
+	const folderInput = useRef<HTMLInputElement>(null);
 	const [path, setPath] = useState("");
 	const [message, setMessage] = useState<string | null>(null);
 	const [publishing, setPublishing] = useState(false);
+	const [uploadingZip, setUploadingZip] = useState(false);
+	const [uploadingLoose, setUploadingLoose] = useState(false);
+	const [dragging, setDragging] = useState(false);
+	const [summary, setSummary] = useState<LooseResult | null>(null);
 	const [isPending, startTransition] = useTransition();
 
 	const endpoint = `/${tenantSlug}/brain/skills/files`;
 	const publishable = state.kind !== "publicada" || state.dirty;
+	// Una subida a la vez: un zip que reemplaza borra lo que el paquete no
+	// trae, y publicar congela lo que haya. Ninguno corre a mitad de un lote.
+	const looseBlocked = uploadingLoose || uploadingZip;
+	const busy = isPending || uploadingLoose;
 
-	async function upload(form: FormData) {
+	async function post(file: File, filePath: string) {
+		const form = new FormData();
+		form.set("slug", slug);
+		form.set("path", filePath);
+		form.set("file", file);
+		const response = await fetch(endpoint, { method: "POST", body: form });
+		return (await response.json()) as { ok: boolean; message?: string };
+	}
+
+	// Un pedido por archivo, de a uno: la ruta del servidor decide cada uno.
+	async function sendLoose(entries: LooseEntry[]) {
+		if (looseBlocked) return;
 		setMessage(null);
+		setSummary(null);
+		if (entries.length === 0) {
+			setMessage("No encontré archivos para subir.");
+			return;
+		}
+		// La ruta escrita a mano vale cuando se sube un solo archivo.
+		const override = path.trim();
+		const toSend =
+			entries.length === 1 && override
+				? [{ file: entries[0].file, path: override }]
+				: entries;
+		setUploadingLoose(true);
 		try {
-			const response = await fetch(endpoint, { method: "POST", body: form });
-			const result = (await response.json()) as {
-				ok: boolean;
-				message?: string;
-			};
-			if (!result.ok) {
-				setMessage(result.message ?? "No se pudo subir.");
-				return;
-			}
+			setSummary(await uploadLoose(toSend, post));
 			setPath("");
-			if (fileInput.current) fileInput.current.value = "";
-			if (zipInput.current) zipInput.current.value = "";
 			router.refresh();
+		} finally {
+			setUploadingLoose(false);
+		}
+	}
+
+	function pickFromInput(input: HTMLInputElement) {
+		const entries = Array.from(input.files ?? []).map((file) => ({
+			file,
+			path: looseFilePath(file),
+		}));
+		// Ya están leídos: se vacía el campo para poder elegir lo mismo otra vez.
+		input.value = "";
+		void sendLoose(entries);
+	}
+
+	async function onDrop(event: React.DragEvent) {
+		event.preventDefault();
+		setDragging(false);
+		if (looseBlocked) return;
+		try {
+			await sendLoose(await collectDropped(event.dataTransfer.items));
 		} catch {
-			setMessage("No se pudo subir. Probá de nuevo.");
+			setMessage("No pude leer lo que arrastraste. Probá con Elegir carpeta.");
 		}
-	}
-
-	function uploadFile() {
-		const file = fileInput.current?.files?.[0];
-		if (!file) {
-			setMessage("Elegí un archivo.");
-			return;
-		}
-		const form = new FormData();
-		form.set("slug", slug);
-		form.set("path", path.trim() || file.name);
-		form.set("file", file);
-		startTransition(() => upload(form));
-	}
-
-	function importZip() {
-		const file = zipInput.current?.files?.[0];
-		if (!file) {
-			setMessage("Elegí un zip.");
-			return;
-		}
-		if (
-			!window.confirm(
-				"Importar reemplaza el texto y los archivos del borrador por los del paquete. No publica nada.",
-			)
-		)
-			return;
-		const form = new FormData();
-		form.set("slug", slug);
-		form.set("kind", "zip");
-		form.set("file", file);
-		startTransition(() => upload(form));
 	}
 
 	function run(
@@ -155,7 +173,7 @@ export function SkillPanel({
 							<Button
 								type="button"
 								size="sm"
-								disabled={isPending}
+								disabled={busy}
 								onClick={() => setPublishing(true)}
 							>
 								Revisar y publicar
@@ -166,7 +184,7 @@ export function SkillPanel({
 								type="button"
 								size="sm"
 								variant="outline"
-								disabled={isPending}
+								disabled={busy}
 								onClick={() => {
 									const note = askNote(
 										"¿Por qué se retira? Queda en el registro.",
@@ -236,48 +254,125 @@ export function SkillPanel({
 					</ul>
 				)}
 
-				<label htmlFor={pathId} className="block space-y-1">
-					<span>Ruta dentro del paquete</span>
-					<Input
-						id={pathId}
-						value={path}
-						placeholder="scripts/calcular.py"
-						onChange={(e) => setPath(e.target.value)}
-					/>
-				</label>
-				<input ref={fileInput} type="file" aria-label="Archivo a subir" />
-				<Button
-					type="button"
-					size="sm"
-					variant="outline"
-					disabled={isPending}
-					onClick={uploadFile}
+				{/* biome-ignore lint/a11y/noStaticElementInteractions: la zona solo recibe lo que se suelta; elegir archivos y carpeta tienen sus botones */}
+				<div
+					className={`space-y-2 rounded-md border border-dashed p-3 ${
+						dragging ? "border-foreground bg-muted" : ""
+					}`}
+					onDragOver={(e) => {
+						e.preventDefault();
+						if (!looseBlocked) setDragging(true);
+					}}
+					onDragLeave={(e) => {
+						// Pasar de la zona a uno de sus botones también dispara dragleave.
+						if (e.currentTarget.contains(e.relatedTarget as Node | null))
+							return;
+						setDragging(false);
+					}}
+					onDrop={onDrop}
 				>
-					Subir archivo
-				</Button>
-				<p className="text-muted-foreground">
-					Hasta 4 MB por archivo, 50 archivos y 20 MB en total. Si la ruta queda
-					vacía se usa el nombre del archivo.
-				</p>
+					<p>Arrastrá archivos o una carpeta</p>
+					<div className="flex flex-wrap gap-2">
+						<Button
+							type="button"
+							size="sm"
+							className="min-h-11 lg:min-h-0"
+							variant="outline"
+							disabled={isPending || looseBlocked}
+							onClick={() => filesInput.current?.click()}
+						>
+							Elegir archivos…
+						</Button>
+						<Button
+							type="button"
+							size="sm"
+							className="min-h-11 lg:min-h-0"
+							variant="outline"
+							disabled={isPending || looseBlocked}
+							onClick={() => folderInput.current?.click()}
+						>
+							Elegir carpeta…
+						</Button>
+					</div>
+					<input
+						ref={filesInput}
+						type="file"
+						multiple
+						hidden
+						aria-label="Elegir archivos"
+						onChange={(e) => pickFromInput(e.target)}
+					/>
+					<input
+						ref={folderInput}
+						type="file"
+						multiple
+						hidden
+						aria-label="Elegir carpeta"
+						{...{ webkitdirectory: "" }}
+						onChange={(e) => pickFromInput(e.target)}
+					/>
+					{uploadingLoose && <p role="status">Subiendo…</p>}
+					<p className="text-muted-foreground">
+						Cada archivo se sube aparte, sin vista previa. Hasta 4 MB por
+						archivo, 50 archivos y 20 MB en total. La carpeta que arrastrás no
+						forma parte de la ruta.
+					</p>
+					<details>
+						<summary className="cursor-pointer">Cambiar la ruta</summary>
+						<label htmlFor={pathId} className="mt-2 block space-y-1">
+							<span>Ruta dentro del paquete</span>
+							<Input
+								id={pathId}
+								value={path}
+								placeholder="scripts/calcular.py"
+								onChange={(e) => setPath(e.target.value)}
+							/>
+						</label>
+						<p className="text-muted-foreground">
+							Vale cuando subís un solo archivo. Si queda vacía se usa su
+							nombre.
+						</p>
+					</details>
+				</div>
+				{summary && (
+					<div role="status" className="space-y-1">
+						<p>
+							Subieron {summary.sent} de {summary.total}
+						</p>
+						{summary.notices.map((notice) => (
+							<p key={notice} className="text-muted-foreground">
+								{notice}
+							</p>
+						))}
+						{summary.failures.length > 0 && (
+							<ul className="text-destructive">
+								{summary.failures.map((failure) => (
+									<li key={failure.path} className="break-all">
+										{failure.path}: {failure.reason}
+									</li>
+								))}
+							</ul>
+						)}
+					</div>
+				)}
 			</div>
 
 			<div className="space-y-2">
-				<h3 className="font-medium">Importar un paquete</h3>
-				<input
-					ref={zipInput}
-					type="file"
-					accept=".zip,application/zip"
-					aria-label="Zip del paquete"
-				/>
+				<h3 className="font-medium">Paquete</h3>
 				<Button
 					type="button"
 					size="sm"
+					className="min-h-11 lg:min-h-0"
 					variant="outline"
-					disabled={isPending}
-					onClick={importZip}
+					disabled={busy}
+					onClick={() => setUploadingZip(true)}
 				>
-					Importar zip
+					Subir paquete (zip)…
 				</Button>
+				<p className="text-muted-foreground">
+					Reemplaza el texto y los archivos del borrador. Antes ves qué trae y
+					no publica nada.
+				</p>
 			</div>
 
 			{versions.length > 0 && (
@@ -302,7 +397,7 @@ export function SkillPanel({
 										type="button"
 										size="sm"
 										variant="ghost"
-										disabled={isPending}
+										disabled={busy}
 										onClick={() => {
 											const note = askNote(
 												`¿Por qué se republica la v${row.version}? Queda en el registro.`,
@@ -330,6 +425,13 @@ export function SkillPanel({
 			)}
 
 			{message && <p className="text-destructive">{message}</p>}
+			{uploadingZip && (
+				<UploadDialog
+					tenantSlug={tenantSlug}
+					target={{ kind: "skill", slug }}
+					onClose={() => setUploadingZip(false)}
+				/>
+			)}
 			{publishing && (
 				<PublishDialog
 					tenantSlug={tenantSlug}

@@ -3,7 +3,7 @@ title: Conectar el brain por MCP
 category: guias
 status: activo
 tags: [brain, mcp]
-updated: 2026-10-14
+updated: 2026-10-20
 sources:
   - lib/brain/README.md
   - app/brain/[tenant]/mcp/route.ts
@@ -18,6 +18,8 @@ sources:
   - lib/brain/core/mcp-server/rate-limit.ts
   - lib/brain/core/skills/catalog.ts
   - lib/brain/core/skills/draft.ts
+  - lib/brain/core/skills/upload-mcp.ts
+  - docs/superpowers/specs/2026-10-20-etapa-24-6-subir-skills-desde-zip-design.md
   - app/[tenant]/brain/skills/package/route.ts
   - lib/brain/core/limits.ts
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -103,6 +105,7 @@ Cosas a saber:
 - Los scripts los corre tu asistente en su propio entorno. Claude Code, Codex y Cursor bajan el paquete solos y usan siempre la última versión. En claude.ai y ChatGPT el entorno no sale a internet por defecto: descargá el zip y subilo como skill, y volvé a subirlo cuando haya una versión nueva.
 - Cada `skill_load` deja un evento `brain.skill_loaded` con la persona, la skill, la versión y el canal. Listar y leer archivos no.
 - Cada `skill_package` deja un evento `brain.skill_package_issued`.
+- Cada subida confirmada de un zip (web o MCP) deja un evento `brain.skill_imported`; ver «Subir una skill desde un zip», más abajo.
 - Las cuatro cuentan como lecturas en el límite por minuto.
 
 Las skills se publican desde la plataforma; cómo, está en [el dominio brain](../dominios/brain.md).
@@ -124,6 +127,31 @@ Cosas a saber:
 - Si otra persona guardó la skill mientras editabas, el asistente recibe un conflicto y tiene que leer el borrador de nuevo. Una skill que no podés editar responde igual que una que no existe.
 - Los cambios al `SKILL.md` quedan en el historial de la página con tu nombre y `Edición por MCP: <motivo>` (la alta, con `Alta por MCP: <motivo>`). El motivo se guarda en el historial de la página solo para los cambios al `SKILL.md`: `skill_draft_write_file` no recibe motivo. Las escrituras cuentan como escrituras en el límite por minuto.
 - El encabezado del `SKILL.md` admite `name`, `description`, `license` y `compatibility`. Si una edición agrega otro campo, el asistente recibe un error en lugar de perderlo al guardar.
+
+### Subir una skill desde un zip
+
+Si **administrás una carpeta** de `skills/` (o la empresa), tu asistente tiene dos tools más para subir una skill entera desde un zip, en un paso. Aparecen solo para quien administra al menos una carpeta de skills y solo si la empresa tiene habilitada la categoría `skill`. Un editor que no administra carpetas no las ve y sigue con `skill_create` y `skill_draft_*`. Si las llama sin permiso, recibe lo mismo que ante una carpeta que no existe.
+
+- `skill_upload_link` (`{ folder }`): prepara la subida a una carpeta de skills. `folder` va relativa a `skills/` (`ventas`, no `skills/ventas`; vacía es directo en `skills/`). Devuelve un `uploadId`, una URL para subir el zip con un `PUT` y cuánto falta para que venza.
+- `skill_import` (`{ uploadId, confirm?, expectedMode?, expectedSlug? }`): lee el zip que subiste. Sin `confirm` devuelve la **vista previa** y no guarda nada; con `confirm: true` guarda la skill en el borrador y devuelve el link a su pantalla. Al confirmar, el asistente pasa en `expectedMode` y `expectedSlug` el `mode` y el `slug` de la vista previa: si cambiaron mientras tanto (por ejemplo, alguien creó esa skill), no guarda nada y hay que volver a mirar la vista previa.
+
+El flujo:
+
+1. Tu asistente pide el link con `skill_upload_link`.
+2. Sube el zip con un `PUT` a esa URL, con `Content-Type: application/zip` (hasta 4 MB).
+3. Llama a `skill_import` con el `uploadId` y te muestra la vista previa: si crea o reemplaza, la ruta, los archivos y los avisos, o todos los problemas del zip juntos.
+4. Si estás de acuerdo, vuelve a llamar con `confirm: true`. La skill queda en el borrador.
+
+Cosas a saber:
+
+- **Solo para clientes que ejecutan código y hacen una subida por HTTP**: Claude Code, Codex y Cursor. En claude.ai y ChatGPT web el asistente no puede armar ni subir un zip: usá `skill_create` y `skill_draft_write_file` para una skill de texto, o subí el zip desde la plataforma.
+- El zip pesa hasta **4 MB**. El `SKILL.md` tiene que traer `name` y `description`; el destino lo elegís vos con `folder`, no sale del zip (del `SKILL.md` sale solo el `name`, que define el nombre de la skill dentro de la carpeta).
+- El `uploadId` **vence a los 10 minutos de emitido el link**, también entre la vista previa y la confirmación: pasado ese tiempo hace falta un link nuevo, aunque el zip ya esté subido.
+- **Todo va al borrador.** Si en esa carpeta ya hay una skill con ese `name`, reemplaza el texto y los archivos de su borrador; si no, la crea. Un administrador la revisa y la publica desde la plataforma, y los demás siguen viendo la versión publicada.
+- Crear una skill nueva pide administrar la carpeta destino; reemplazar una existente, ser editor de esa skill.
+- Cada subida confirmada deja un evento `brain.skill_imported` con la persona, el canal (`mcp`), la skill, si creó o reemplazó y cuántos archivos.
+- `skill_upload_link` y `skill_import` con `confirm` cuentan como escrituras en el límite por minuto; `skill_import` sin `confirm`, como lectura.
+- El `PUT` crudo con ese `Content-Type` se verificó contra el Supabase local (acepta el zip). La URL acepta **una sola subida**: un segundo `PUT` a la misma URL se rechaza, así el zip que aprobaste en la vista previa no cambia después; para mandar otro zip hace falta un link nuevo; todavía falta confirmarlo en producción, así que si tu cliente recibe un rechazo al subir, avisá. El flujo completo de `skill_import` con un cliente real tampoco se probó todavía. El detalle del diseño está en [el dominio brain](../dominios/brain.md).
 
 ## Si algo falla
 
