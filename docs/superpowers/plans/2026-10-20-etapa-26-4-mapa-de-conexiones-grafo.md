@@ -6,7 +6,7 @@
 
 **Arquitectura:** un servicio puro en `lib/brain/core/` arma un payload compacto (nodos, aristas, rotos, huérfanas) desde lo que el proveedor ya filtró por permisos; un route handler lo sirve; un componente de cliente con Sigma.js (WebGL) lo dibuja. La lista actual queda como segunda vista. Antes de todo, se pagina la lectura del brain (hoy se corta en 1.000 páginas) y se corre un spike de rendimiento que decide si la librería sirve.
 
-**Tecnología:** Next.js 16 (App Router), React 19, Sigma.js v3, graphology, `graphology-layout-forceatlas2` (worker), Vitest (`environment: "node"`, solo `tests/**/*.test.ts`), Supabase/PostgREST.
+**Tecnología:** Next.js 16 (App Router), React 19, Sigma.js 4.0.3 (la versión medida en el spike; en Sigma 4 las opciones van dentro de `settings` y hace falta `itemSizesReference: "screen"` para que los nodos no se vean diminutos), graphology 0.26.0, `graphology-layout-forceatlas2` (worker), Vitest (`environment: "node"`, solo `tests/**/*.test.ts`), Supabase/PostgREST.
 
 **Spec:** `docs/superpowers/specs/2026-10-20-etapa-26-4-mapa-de-conexiones-grafo-design.md` (aprobada el 2026-10-20). Cada tarea cita las decisiones D1–D16.
 
@@ -16,7 +16,7 @@
 - `lib/brain/core/` no importa `@/`, `react` ni `next/*` (lo vigila `tests/brain/boundary.test.ts`). Lo que usa un componente de cliente no puede arrastrar `node:*` (`tests/brain/client-safe.ts`).
 - El grafo no muestra ni transporta nada que la persona no pueda ver: los permisos son los del proveedor (`ctx.provider`), sin un segundo filtro propio (spec §4).
 - Sin tablas nuevas. Migración solo si la Task 3 lo decide (D13).
-- Dependencias nuevas: `sigma`, `graphology`, `graphology-layout-forceatlas2`. Verificar las versiones vigentes al instalar (D3).
+- Dependencias nuevas: `sigma` 4.0.3 (no v3), `graphology` 0.26.0 y `graphology-layout-forceatlas2` 0.10.1, las versiones medidas en el spike (spec §2.1); se fijan al instalar.
 - Escala (D8): compuerta a 10.000 nodos y unas 30.000 aristas con ≥ 30 fps en zoom y paneo, nodos visibles en < 3 s desde que llega la respuesta y respuesta < 2 MB comprimida. A 50.000 es meta, con tope `GRAPH_MAX_NODES`.
 - Cada test nuevo abre con el bloque de cabecera del repo (`// Value: protects=… fails_when=… why_new=…; seam=none`), como `tests/brain/raw-route.test.ts`.
 - `npm run lint:fix` reformatea siempre cuatro archivos ajenos (`lib/connectors/leads/coldiq.openapi.ts`, `lib/connectors/leads/google-places.openapi.ts`, `lib/supabase/database.types.ts`, `tests/connectors/coldiq-openapi.test.ts`): revertirlos antes de commitear. Hay además un error preexistente en `tests/connectors/bindings.test.ts:18`.
@@ -48,11 +48,11 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 - Consume: la factoría `createSupabaseWikiStore(client)` y `META_COLUMNS` existentes.
 - Produce: `listMeta(tenantId)` devuelve **todas** las páginas del tenant, ordenadas por `slug`, aunque PostgREST corte cada respuesta. Misma firma que hoy.
 
-- [ ] **Paso 1: tests que fallan.** En `tests/brain/wiki-store.test.ts`, agregar al cliente falso `range(from, to)` sobre `rows[table]` con un `maxRows` configurable (por defecto 1.000) y un contador de llamadas. Tests: `listMeta devuelve 1.001 páginas`, `listMeta devuelve 2.500 páginas`, `listMeta sigue completo si el servidor corta en 500 por respuesta`, `listMeta con exactamente 1.000 páginas hace una consulta más y termina`, `listMeta pide siempre order por slug y filtra por tenant`.
-- [ ] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/wiki-store.test.ts` → FAIL (la consulta no usa `.range`).
-- [ ] **Paso 3: implementar.** Bucle `for (let from = 0; ; …)` con `.order("slug").range(from, from + 999)`; **avanza `from` por la cantidad de filas recibidas y corta cuando una respuesta viene vacía** (no por una página corta), según D9. Sigue el estilo del bucle de `listRulePages` en el mismo archivo.
-- [ ] **Paso 4: correr los tests del archivo y el resto de `tests/brain`.** `npx vitest run tests/brain` → PASS.
-- [ ] **Paso 5: commit.** `fix: listMeta pagina para no truncar brains de más de 1.000 páginas`.
+- [x] **Paso 1: tests que fallan.** En `tests/brain/wiki-store.test.ts`, agregar al cliente falso `range(from, to)` sobre `rows[table]` con un `maxRows` configurable (por defecto 1.000) y un contador de llamadas. Tests: `listMeta devuelve 1.001 páginas`, `listMeta devuelve 2.500 páginas`, `listMeta sigue completo si el servidor corta en 500 por respuesta`, `listMeta con exactamente 1.000 páginas hace una consulta más y termina`, `listMeta pide siempre order por slug y filtra por tenant`.
+- [x] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/wiki-store.test.ts` → FAIL (la consulta no usa `.range`).
+- [x] **Paso 3: implementar.** Bucle `for (let from = 0; ; …)` con `.order("slug").range(from, from + 999)`; **avanza `from` por la cantidad de filas recibidas y corta cuando una respuesta viene vacía** (no por una página corta), según D9. Sigue el estilo del bucle de `listRulePages` en el mismo archivo.
+- [x] **Paso 4: correr los tests del archivo y el resto de `tests/brain`.** `npx vitest run tests/brain` → PASS.
+- [x] **Paso 5: commit.** `fix: listMeta pagina para no truncar brains de más de 1.000 páginas`.
 
 ### Task 2: Paginar `listLinks`
 
@@ -64,11 +64,11 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 - Consume: RPC `brain_page_links(p_tenant_id uuid)` sin cambios (no recibe offset ni límite).
 - Produce: `listLinks(tenantId)` devuelve las filas de **todas** las páginas con links, paginando con `.rpc("brain_page_links", { p_tenant_id }).order("slug").range(from, to)` y la misma regla de corte de la Task 1.
 
-- [ ] **Paso 1: tests que fallan.** El `rpc` falso devuelve una cadena con `order` y `range`. Tests: `listLinks devuelve las filas de 2.500 páginas`, `listLinks sigue completo si el servidor corta en 500`, `listLinks normaliza igual que antes` (el test existente de la línea ~265 debe seguir pasando).
-- [ ] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/wiki-store.test.ts` → FAIL.
-- [ ] **Paso 3: implementar.** Mismo bucle que la Task 1; actualizar el comentario que dice "PostgREST corta en 1000 filas" para explicar que ahora se pagina.
-- [ ] **Paso 4: correr `npx vitest run tests/brain` y `npm run typecheck`.** → PASS.
-- [ ] **Paso 5: commit.** `fix: listLinks pagina el RPC de links`.
+- [x] **Paso 1: tests que fallan.** El `rpc` falso devuelve una cadena con `order` y `range`. Tests: `listLinks devuelve las filas de 2.500 páginas`, `listLinks sigue completo si el servidor corta en 500`, `listLinks normaliza igual que antes` (el test existente de la línea ~265 debe seguir pasando).
+- [x] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/wiki-store.test.ts` → FAIL.
+- [x] **Paso 3: implementar.** Mismo bucle que la Task 1; actualizar el comentario que dice "PostgREST corta en 1000 filas" para explicar que ahora se pagina.
+- [x] **Paso 4: correr `npx vitest run tests/brain` y `npm run typecheck`.** → PASS.
+- [x] **Paso 5: commit.** `fix: listLinks pagina el RPC de links`.
 
 ### Task 3: Spike de rendimiento (descartable) y decisión
 
@@ -79,14 +79,16 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 **Interfaces:**
 - Produce: tres decisiones escritas en la spec: (a) si Sigma pasa la compuerta de D8 a 10.000 nodos; (b) el valor de `GRAPH_MAX_NODES` (tope N); (c) si el costo de paginar `brain_page_links` obliga a una migración con keyset (D9, D13).
 
-- [ ] **Paso 1: instalar en la rama del spike** `sigma graphology graphology-layout-forceatlas2` y armar la página con un grafo sintético de 1.000, 10.000 y 50.000 nodos (aristas ≈ 3× nodos, distribución con algunos hubs).
-- [ ] **Paso 2: medir en el navegador** (notebook de gama media, build de producción `npm run build && npm start`): cuadros por segundo en zoom y paneo, tiempo hasta ver los nodos, memoria. Medir también el tamaño del JSON del payload comprimido (se estima con la forma de `GraphPayload` de la Task 5).
-- [ ] **Paso 3: medir el costo del RPC.** Sembrar 10.000 páginas con cuerpo y links en la base local (`npm run db:start`, necesita Docker) y cronometrar `listLinks` completo (varias respuestas de 1.000). Si tarda más de 5 s, la decisión (c) es "migración con parámetros `p_after text, p_limit int`".
-- [ ] **Paso 4: escribir los resultados** en la spec (tabla con 1.000 / 10.000 / 50.000) y las tres decisiones. Si no pasa a 10.000: **frenar y volver a la spec** (se evalúa otra librería); no seguir con la Task 5.
-- [ ] **Paso 5 (condicional, solo si la decisión (c) es sí):** crear la migración `supabase/migrations/<timestamp>_brain_page_links_keyset.sql` con los parámetros nuevos (la función vieja sigue existiendo hasta que el código nuevo esté en producción), adaptar `listLinks` y sus tests. **Orden de despliegue: migración antes que el código** (como en la 26.1a).
-- [ ] **Paso 6: commit** de la spec (y de la migración si aplica). `docs: resultados del spike del grafo`.
+- [x] **Paso 1: instalar en la rama del spike** `sigma graphology graphology-layout-forceatlas2` y armar la página con un grafo sintético de 1.000, 10.000 y 50.000 nodos (aristas ≈ 3× nodos, distribución con algunos hubs).
+- [x] **Paso 2: medir en el navegador** (notebook de gama media, build de producción `npm run build && npm start`): cuadros por segundo en zoom y paneo, tiempo hasta ver los nodos, memoria. Medir también el tamaño del JSON del payload comprimido (se estima con la forma de `GraphPayload` de la Task 5).
+- [x] **Paso 3: medir el costo del RPC.** Sembrar 10.000 páginas con cuerpo y links en la base local (`npm run db:start`, necesita Docker) y cronometrar `listLinks` completo (varias respuestas de 1.000). Si tarda más de 5 s, la decisión (c) es "migración con parámetros `p_after text, p_limit int`".
+- [x] **Paso 4: escribir los resultados** en la spec (tabla con 1.000 / 10.000 / 50.000) y las tres decisiones. Si no pasa a 10.000: **frenar y volver a la spec** (se evalúa otra librería); no seguir con la Task 5.
+- [x] **Paso 5 (condicional, solo si la decisión (c) es sí; no aplicó, sin migración en la 26.4a):** crear la migración `supabase/migrations/<timestamp>_brain_page_links_keyset.sql` con los parámetros nuevos (la función vieja sigue existiendo hasta que el código nuevo esté en producción), adaptar `listLinks` y sus tests. **Orden de despliegue: migración antes que el código** (como en la 26.1a).
+- [x] **Paso 6: commit** de la spec (y de la migración si aplica). `docs: resultados del spike del grafo`.
 
-**Cierre de la entrega 26.4a:** commitear también la spec y este plan (`docs: spec y plan de la etapa 26.4`), abrir el PR y agregar la 26.4 al roadmap (`docs/producto/roadmap.md`, Etapa 26, siguiendo el formato de la 26.1–26.3; ese archivo tiene cambios locales de la 24.6: no mezclarlos).
+**Resultado de la Task 3 (spec §2.1):** (a) Sigma pasa la compuerta a 10.000; (b) `GRAPH_MAX_NODES` = 20.000; (c) sin migración en la 26.4a, y la migración con keyset queda como decisión abierta para la 26.4b.
+
+**Cierre de la entrega 26.4a:** commitear también la spec y este plan (`docs: spec y plan de la etapa 26.4`), abrir el PR y agregar la 26.4 al roadmap (`docs/producto/roadmap.md`, Etapa 26, siguiendo el formato de la 26.1–26.3; ese archivo tiene cambios locales de la 24.6: no mezclarlos). **Hecho:** spec, plan, entrada del roadmap y fila de `decisiones/README.md` están commiteados en la rama; falta abrir el PR.
 
 ---
 
@@ -96,7 +98,7 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 
 **Archivos:** `package.json`, `package-lock.json`.
 
-- [ ] **Paso 1:** `npm install sigma graphology graphology-layout-forceatlas2` (más los tipos que falten) con las versiones validadas en el spike.
+- [ ] **Paso 1:** `npm install sigma@4.0.3 graphology@0.26.0 graphology-layout-forceatlas2@0.10.1` (más los tipos que falten), fijando esas versiones exactas: son las que midió el spike (Sigma 4, no v3).
 - [ ] **Paso 2:** `npm run typecheck`.
 - [ ] **Paso 3: commit.** `feat: dependencias del grafo del brain`.
 
@@ -171,7 +173,7 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 
 - [ ] **Paso 1: tests que fallan** (patrón de `tests/brain/raw-route.test.ts`): `404 sin contexto`; `404 si el contexto es no-brain o external`; `200 con el payload y cache-control private, no-store`; `relanza los errores del proveedor`; y el test de permisos del foco 5: con el arnés de `tests/brain/editor-access-chain.test.ts` y una persona sin acceso a una carpeta, ningún slug de esa carpeta aparece en el texto de la respuesta (ni en nodos, ni en aristas, ni en rotos).
 - [ ] **Paso 2: correr y ver que fallan.** `npx vitest run tests/brain/graph-route.test.ts` → FAIL.
-- [ ] **Paso 3: implementar el handler.** `Promise.all` de `loadBrainMeta` y `loadBrainLinkIndex`, `buildGraphPayload(pages, index, { maxNodes: GRAPH_MAX_NODES })`, `Response.json`.
+- [ ] **Paso 3: implementar el handler.** `Promise.all` de `loadBrainMeta` y `loadBrainLinkIndex`, `buildGraphPayload(pages, index, { maxNodes: GRAPH_MAX_NODES })` (`GRAPH_MAX_NODES` = 20.000, spec §2.1 b), `Response.json`.
 - [ ] **Paso 4:** `npx vitest run tests/brain` y `npm run typecheck` → PASS.
 - [ ] **Paso 5: commit.** `feat: endpoint de datos del grafo del brain`.
 
@@ -187,7 +189,7 @@ Entradas o condiciones que la spec implica y ninguna tarea ejercita por sí sola
 
 - [ ] **Paso 1: cargar y mostrar.** Pedir `/${tenantSlug}/brain/mapa/datos`; estados D16: cargando, brain sin páginas ("Todavía no hay páginas"), error o 404 ("No pudimos cargar el mapa" con botón "Reintentar").
 - [ ] **Paso 2: armar el `Graph`** de graphology (no dirigido, sin multi-aristas), con posición inicial de `seedPosition`, `size` de `nodeSize(degree, maxDegree)` y color de `categoryColors(palette, categories.length)`; las archivadas atenuadas.
-- [ ] **Paso 3: layout** con ForceAtlas2 en worker, `barnesHutOptimize` cuando hay más de ~2.000 nodos, detenido tras un tiempo acotado (el que haya validado el spike).
+- [ ] **Paso 3: layout** con ForceAtlas2 en worker, `barnesHutOptimize` cuando hay más de ~2.000 nodos, detenido tras un tiempo acotado (el que haya validado el spike) y **pausado cuando la persona interactúa** (zoom, paneo, clic): con la CPU 4× más lenta el layout bajó a 13 fps mientras corre (spec §2.1 a).
 - [ ] **Paso 4: Sigma** con zoom y paneo, etiquetas solo en los nodos grandes a poco zoom, y `import` dinámico (`next/dynamic`, `ssr: false`) desde donde se monte.
 - [ ] **Paso 5: verificar en el navegador** contra la base local: grafo visible, un hub claramente más grande que una hoja, colores por categoría en claro y oscuro, sin errores en consola. `npm run typecheck` y `npm run lint:fix` (revertir los 4 archivos ajenos).
 - [ ] **Paso 6: commit.** `feat: grafo del brain con Sigma (color y tamaño por conexiones)`.
