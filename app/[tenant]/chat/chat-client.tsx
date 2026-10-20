@@ -191,7 +191,7 @@ export function ChatClient({
 				    se estira al min-content de los títulos (que van con truncate, o
 				    sea whitespace-nowrap) en vez de truncarlos. Abajo de 768px eso
 				    empujaba el ⋯ fuera de la pantalla. */}
-				<aside className="min-w-0 space-y-4">
+				<aside className="min-w-0 space-y-4 rounded-xl border border-sidebar-border bg-sidebar p-3">
 					{/* Deshabilitado mientras ya estás en un chat nuevo: el hilo se crea
 					    al enviar, así que tocarlo de nuevo no puede abrir otro vacío. */}
 					<Button

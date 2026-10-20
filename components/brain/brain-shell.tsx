@@ -34,7 +34,9 @@ export function BrainShell({
 	);
 	return (
 		<div className="lg:grid lg:grid-cols-[260px_minmax(0,1fr)] lg:gap-8">
-			<aside className="hidden lg:block">{tree}</aside>
+			<aside className="hidden rounded-xl border border-sidebar-border bg-sidebar p-3 lg:block">
+				{tree}
+			</aside>
 			<div className="min-w-0">
 				<div className="mb-4 lg:hidden">
 					<Sheet open={open} onOpenChange={setOpen}>
