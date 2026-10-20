@@ -245,6 +245,19 @@ export function formatEditDate(iso: string): string {
 	return `${part("day")} ${part("month").replace(/\.$/, "")} ${part("year")}`;
 }
 
+export type MapView = "grafo" | "lista";
+
+// `?vista=` de /brain/mapa (D1). Cualquier otro valor, repetido o ausente
+// queda sin fijar: decide el ancho de la pantalla.
+export function parseMapView(value: unknown): MapView | undefined {
+	return value === "grafo" || value === "lista" ? value : undefined;
+}
+
+// La capa del grafo se abre si se pidió o, sin pedido, en pantalla ancha (D1).
+export function showsGraph(view: MapView | undefined, wide: boolean): boolean {
+	return view === "grafo" || (view === undefined && wide);
+}
+
 type Point = { x: number; y: number };
 type Size = { width: number; height: number };
 

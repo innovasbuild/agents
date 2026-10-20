@@ -1,11 +1,11 @@
 // Value: protects=la lógica pura del mapa de conexiones (grado fijo, tamaño por raíz cuadrada, colores por categoría sin
 //   colisión, atenuado de archivadas, entradas de graphology, tope del layout, posición sembrada, vecindario a N saltos,
-//   filtros combinados con Y, búsqueda sin tildes, fecha es-AR y dónde cae el popover) y que los componentes del grafo
-//   no arrastren node:*.
+//   filtros combinados con Y, búsqueda sin tildes, fecha es-AR, dónde cae el popover, `?vista=` normalizado y cuándo
+//   se abre la capa del grafo) y que los componentes del grafo no arrastren node:*.
 // fails_when=el tamaño no es monótono o se sale del rango, dos categorías dan el mismo color, una arista apunta a un
 //   slug que no existe o es un autoenlace, el layout deja de tener tope, el vecindario cruza más saltos de los pedidos,
-//   un filtro se combina con O en vez de Y, "Politica" deja de encontrar "Política", o el popover se sale del
-//   contenedor.
+//   un filtro se combina con O en vez de Y, "Politica" deja de encontrar "Política", el popover se sale del
+//   contenedor, un `?vista=` desconocido fija una vista o el celular abre el grafo sin pedirlo.
 // why_new=el cliente de Sigma (26.4b) depende de estas funciones y no tenían cobertura; seam=none
 
 import { describe, expect, it } from "vitest";
@@ -20,8 +20,10 @@ import {
 	matchesText,
 	neighborhood,
 	nodeSize,
+	parseMapView,
 	popoverPosition,
 	seedPosition,
+	showsGraph,
 	toGraphData,
 	visibleNodes,
 } from "@/lib/brain/core/graph-view";
@@ -385,6 +387,43 @@ describe("formatEditDate", () => {
 	});
 });
 
+describe("parseMapView", () => {
+	it("acepta grafo y lista tal cual", () => {
+		expect(parseMapView("grafo")).toBe("grafo");
+		expect(parseMapView("lista")).toBe("lista");
+	});
+
+	it("cualquier otro valor, repetido o ausente queda sin fijar", () => {
+		for (const value of [
+			undefined,
+			"",
+			"Grafo",
+			"mapa",
+			" lista",
+			["grafo"],
+			["grafo", "lista"],
+		])
+			expect(parseMapView(value)).toBeUndefined();
+	});
+});
+
+describe("showsGraph", () => {
+	it("?vista=grafo abre la capa en cualquier ancho", () => {
+		expect(showsGraph("grafo", true)).toBe(true);
+		expect(showsGraph("grafo", false)).toBe(true);
+	});
+
+	it("?vista=lista nunca la abre", () => {
+		expect(showsGraph("lista", true)).toBe(false);
+		expect(showsGraph("lista", false)).toBe(false);
+	});
+
+	it("sin ?vista la abre solo en pantalla ancha", () => {
+		expect(showsGraph(undefined, true)).toBe(true);
+		expect(showsGraph(undefined, false)).toBe(false);
+	});
+});
+
 describe("popoverPosition", () => {
 	const card = { width: 200, height: 100 };
 	const box = { width: 1000, height: 800 };
@@ -438,5 +477,6 @@ describe("graph-view en el cliente", () => {
 		expect(nodeBuiltins("components/brain/graph/graph-popover.tsx")).toEqual(
 			[],
 		);
+		expect(nodeBuiltins("components/brain/graph/mapa-vista.tsx")).toEqual([]);
 	});
 });
