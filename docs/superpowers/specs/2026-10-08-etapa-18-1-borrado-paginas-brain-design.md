@@ -22,7 +22,7 @@ Pedido de Matías: borrado de una página del wiki, que tiene que buscar links e
 
 | # | Decisión | Por qué |
 |---|---|---|
-| D1 | **Borrado real, solo desde la web.** La página y sus revisiones desaparecen. Reemplaza B8 ("nunca se borran páginas") por: "se borra solo desde la web, por un administrador del nodo; agente y MCP archivan" | Es lo pedido. Acota el riesgo a personas, a la web y a quien administra el nodo. No toca el contrato del agente ni del MCP |
+| D1 | **Borrado real, solo desde la web.** La página y sus revisiones desaparecen. Reemplaza B8 ("nunca se borran páginas") por: "se borra solo desde la web, por un administrador del nodo; agente y MCP archivan" | Es lo pedido. Acota el riesgo a personas, a la web y a quien administra el nodo. No toca el contrato del agente ni del MCP. **Superada para el MCP (2026-10-20):** quien administra una carpeta también puede borrar páginas con `brain_delete` y crear carpetas con `brain_folder_create`; el agente del chat sigue sin poder |
 | D2 | **Sin papelera ni deshacer.** La confirmación lo dice | Una papelera suma un estado nuevo en todas las superficies. Queda en §9 |
 | D3 | **Los links entrantes se limpian solos:** cada `[[slug\|alias]]` pasa a su texto. Nunca se bloquea el borrado por links ni se dejan rotos a propósito | Cumple "evitar links muertos" sin trabajo manual |
 | D4 | **Se limpian todas las páginas que enlazan, las vea o no quien borra.** La confirmación lista las visibles y, para el resto, muestra solo una cantidad | La limpieza no escribe contenido propio en una página ajena: saca un enlace que dejó de existir. Listar las ocultas revelaría rutas (A8 de la Etapa 17) |

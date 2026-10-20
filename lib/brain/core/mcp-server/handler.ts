@@ -8,7 +8,9 @@ import {
 	type Principal,
 } from "../access/types.ts";
 import { withAccess } from "../access/with-access.ts";
+import type { PageDeleter } from "../delete-store.ts";
 import { BrainNotFound } from "../errors.ts";
+import type { FolderWriter } from "../folders-store.ts";
 import type { BrainBinding } from "../resolve.ts";
 import {
 	EMPTY_RULES,
@@ -40,6 +42,11 @@ import {
 	type ClaimsVerifier,
 	resolveMcpAccess,
 } from "./access.ts";
+import {
+	administersAnything,
+	type BrainManage,
+	createBrainManage,
+} from "./manage.ts";
 import { createRateLimiter, type HitFn } from "./rate-limit.ts";
 import { buildBrainMcpServer, MCP_MAX_REQUEST_BYTES } from "./server.ts";
 
@@ -65,6 +72,11 @@ export interface McpSkillsDeps {
 	edit?: { store: SkillStore; blobs: BlobStore };
 }
 
+export interface McpManageDeps {
+	folders: FolderWriter;
+	deleter: PageDeleter;
+}
+
 export interface BrainMcpDeps {
 	verify: ClaimsVerifier;
 	store: AccessStore;
@@ -77,6 +89,8 @@ export interface BrainMcpDeps {
 	usesCanon: (tenantId: string) => Promise<boolean>;
 	/** Skills publicadas de la empresa (spec 24.2a). */
 	skills: McpSkillsDeps;
+	/** Crear carpetas y borrar páginas (reemplaza D1 de la 18.1). Sin esto no hay esas tools. */
+	manage?: McpManageDeps;
 	publicUrl: string;
 	/**
 	 * El pedido llegó por el dominio de una empresa: el recurso es /brain/mcp,
@@ -345,6 +359,30 @@ async function handleBrainMcpInner(
 		}
 	}
 
+	// Solo quien administra algo, en un brain propio. El permiso fino lo decide
+	// cada operación, con las mismas reglas que la web.
+	let manage: BrainManage | null = null;
+	if (
+		deps.manage &&
+		access.binding.provider === "wiki" &&
+		administersAnything(rules, principal)
+	) {
+		const raw = deps.provider(access.binding);
+		manage = createBrainManage({
+			tenantSlug: slug,
+			actor: {
+				tenantId: access.tenantId,
+				userId: access.userId,
+				role: access.role,
+			},
+			rules,
+			bindingId: access.binding.id,
+			pages: () => raw.list(),
+			folders: deps.manage.folders,
+			deleter: deps.manage.deleter,
+		});
+	}
+
 	const server = buildBrainMcpServer({
 		userId: access.userId,
 		categories: assistantCategories(access.binding.config.categories),
@@ -352,6 +390,7 @@ async function handleBrainMcpInner(
 		provider,
 		skills,
 		skillDrafts,
+		manage,
 		rules: visibleRules,
 		brainInstructions,
 		limiter: createRateLimiter({
