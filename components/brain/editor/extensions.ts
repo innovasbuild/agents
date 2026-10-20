@@ -117,11 +117,16 @@ export function bareAutolinks(markdown: string): string {
 	return out + bareLinks(markdown.slice(cursor));
 }
 
+// Se recortan también los saltos de línea del final: el primer toque al editor
+// hace que Tiptap agregue un párrafo vacío tras una lista o tabla final, y eso
+// suma "\n\n" y marca la página como modificada sin que nadie escriba. La línea
+// de base pasa por el mismo recorte.
 const BrainMarkdown = Markdown.extend({
 	onBeforeCreate(props) {
 		this.parent?.(props);
 		const original = this.editor.getMarkdown;
-		this.editor.getMarkdown = () => bareAutolinks(original());
+		this.editor.getMarkdown = () =>
+			bareAutolinks(original()).replace(/\n+$/, "");
 	},
 });
 

@@ -15,7 +15,13 @@ import { describeSkills, type SkillCatalog } from "../skills/catalog.ts";
 import type { SkillDrafts } from "../skills/draft.ts";
 import type { SkillUploads } from "../skills/upload-mcp.ts";
 import { rejectSkillWrite } from "../skills/view.ts";
-import type { BrainProvider, BrainWrite } from "../types.ts";
+import {
+	type BrainProvider,
+	type BrainWrite,
+	MAX_SLUG_LENGTH,
+} from "../types.ts";
+import type { BrainManage } from "./manage.ts";
+import { MAX_DELETE_PER_CALL, MAX_FOLDERS_PER_CALL } from "./manage.ts";
 import type { RateLimiter } from "./rate-limit.ts";
 
 export const MCP_MAX_REQUEST_BYTES = 1_048_576;
@@ -49,6 +55,21 @@ const DRAFT_INSTRUCTIONS =
 // Solo si skill_load y skill_file están registradas: no se nombran tools que no existen.
 const DRAFT_PUBLISHED_NOTE =
 	"skill_load y skill_file siguen devolviendo lo publicado, no el borrador.";
+
+export const MANAGE_TOOL_NAMES = {
+	createFolders: "brain_folder_create",
+	delete: "brain_delete",
+} as const;
+
+const MANAGE_INSTRUCTIONS =
+	"Administrás carpetas de este brain: podés crear carpetas con brain_folder_create y borrar páginas con brain_delete. Hacelo solo cuando la persona te lo pide con nombres explícitos; el borrado no tiene papelera ni deshacer.";
+
+const FOLDER_CREATE_DESCRIPTION = `Crea carpetas del brain donde administrás la carpeta de arriba. Pasá la estructura completa que la persona quiere armar, con las carpetas intermedias que falten (por ejemplo marketing/marca y marketing/marca/identidad-visual): se crean padre primero, hasta ${MAX_FOLDERS_PER_CALL} por llamada, y cada una informa su resultado. Usala cuando la persona ya sabe qué estructura quiere; después escribí las páginas con brain_upsert. Los nombres van en minúsculas, con guiones y sin espacios.`;
+
+const DELETE_DESCRIPTION = `BORRA páginas del brain, sin papelera ni deshacer; los links que las apuntaban quedan como texto. Llamala solo si la persona pidió el borrado nombrando la página o la carpeta ("borrá la página X", "borrá todas las páginas de la carpeta Y"); para retirar algo sin que lo pida, usá status archivado con brain_upsert. Con slug borra esa página. Con folder borra las páginas de esa carpeta, no la carpeta; las de sus subcarpetas solo con includeSubfolders: true, que solo va si la persona pidió también lo de adentro. Solo borra lo que administrás: lo demás vuelve en skipped con el motivo. Las 00-reglas y 00-plantilla se borran solo nombrándolas por slug; las skills no se borran por acá. Hasta ${MAX_DELETE_PER_CALL} páginas por llamada: si queda remaining, avisale a la persona y seguí con el mismo folder.`;
+
+const FOLDER_MISSING_NOTE =
+	"Si administrás la carpeta de arriba, creala con brain_folder_create (pasá también las carpetas intermedias que falten); si no, pedile a un administrador que la cree.";
 
 const MAX_LISTED_FOLDERS = 20;
 
@@ -102,11 +123,14 @@ export function buildBrainMcpServer(ctx: {
 	rules?: RulesSource | null;
 	/** Instrucciones del brain y carpetas, para el campo instructions. */
 	brainInstructions?: string | null;
+	/** Crear carpetas y borrar páginas; solo para quien administra algo. */
+	manage?: BrainManage | null;
 }): McpServer {
 	const skills = ctx.skills ?? null;
 	const drafts = ctx.skillDrafts ?? null;
 	const uploads = ctx.skillUploads ?? null;
 	const rules = ctx.rules ?? null;
+	const manage = ctx.manage ?? null;
 	const instructions = [
 		ctx.brainInstructions,
 		skills ? SKILL_INSTRUCTIONS : null,
@@ -115,6 +139,7 @@ export function buildBrainMcpServer(ctx: {
 					.filter((text): text is string => text !== null)
 					.join(" ")
 			: null,
+		manage ? MANAGE_INSTRUCTIONS : null,
 	]
 		.filter((text): text is string => Boolean(text))
 		.join("\n\n");
@@ -198,7 +223,9 @@ export function buildBrainMcpServer(ctx: {
 	server.registerTool(
 		BRAIN_TOOL_NAMES.upsert,
 		{
-			description: contract.upsert.description,
+			description: manage
+				? `${contract.upsert.description} Si la carpeta no existe, ${FOLDER_MISSING_NOTE}`
+				: contract.upsert.description,
 			inputSchema: contract.upsert.input,
 		},
 		async (input) =>
@@ -225,13 +252,84 @@ export function buildBrainMcpServer(ctx: {
 				) {
 					throw new BrainValidation(["body"]);
 				}
-				const written = await ctx.provider.upsert(write, {
-					kind: "user",
-					userId: ctx.userId,
-				});
-				return { ok: true, ...written };
+				try {
+					const written = await ctx.provider.upsert(write, {
+						kind: "user",
+						userId: ctx.userId,
+					});
+					return { ok: true, ...written };
+				} catch (error) {
+					// Quien administra puede crear la carpeta que falta: se lo dice.
+					if (
+						manage &&
+						error instanceof BrainValidation &&
+						error.fields.includes("folder")
+					) {
+						throw new BrainValidation(
+							error.fields,
+							`${error.message.replace(" Pedile a un administrador que la cree.", "")} ${FOLDER_MISSING_NOTE}`,
+						);
+					}
+					throw error;
+				}
 			}),
 	);
+
+	if (manage) {
+		server.registerTool(
+			MANAGE_TOOL_NAMES.createFolders,
+			{
+				description: FOLDER_CREATE_DESCRIPTION,
+				inputSchema: {
+					folders: z
+						.array(
+							z.object({
+								path: z
+									.string()
+									.min(1)
+									.max(MAX_SLUG_LENGTH)
+									.describe("Ruta de la carpeta, por ejemplo marketing/marca."),
+								description: z.string().max(300).optional(),
+							}),
+						)
+						.min(1)
+						.max(MAX_FOLDERS_PER_CALL),
+				},
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: false,
+					idempotentHint: false,
+				},
+			},
+			async (input) =>
+				run("write", async () => ({
+					ok: true,
+					...(await manage.createFolders(input)),
+				})),
+		);
+
+		server.registerTool(
+			MANAGE_TOOL_NAMES.delete,
+			{
+				description: DELETE_DESCRIPTION,
+				inputSchema: {
+					slug: z.string().min(1).max(MAX_SLUG_LENGTH).optional(),
+					folder: z.string().min(1).max(MAX_SLUG_LENGTH).optional(),
+					includeSubfolders: z.boolean().optional(),
+				},
+				annotations: {
+					readOnlyHint: false,
+					destructiveHint: true,
+					idempotentHint: false,
+				},
+			},
+			async (input) =>
+				run("write", async () => ({
+					ok: true,
+					...(await manage.delete(input)),
+				})),
+		);
+	}
 
 	if (skills) {
 		server.registerTool(

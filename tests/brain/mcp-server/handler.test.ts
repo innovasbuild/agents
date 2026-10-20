@@ -1748,3 +1748,166 @@ describe("handleBrainMcp · edición de skills", () => {
 		});
 	});
 });
+
+describe("handleBrainMcp · carpetas y borrado", () => {
+	const BRAIN_TOOLS = [
+		"brain_read",
+		"brain_rules",
+		"brain_search",
+		"brain_upsert",
+	];
+	const MANAGE_TOOLS = ["brain_delete", "brain_folder_create"];
+	const marketingAdmin = {
+		path: "marketing",
+		principal: "user" as const,
+		userId: "belisario",
+		level: "administrador" as const,
+	};
+	const manage = () => ({
+		folders: {
+			create: vi.fn(async () => {}),
+			describe: vi.fn(),
+			remove: vi.fn(),
+		},
+		deleter: {
+			delete: vi.fn(async () => ({
+				deletedRevisions: 1,
+				cleaned: 0,
+				rulesRemoved: 0,
+			})),
+		},
+	});
+	const names = async (client: Awaited<ReturnType<typeof connect>>) =>
+		(await client.listTools()).tools.map((t) => t.name).sort();
+	const withRules = (rules: BrainMcpDeps["rules"]) => ({ rules });
+
+	it("un administrador de la empresa las ve", async () => {
+		const client = await connect("admin", deps({ manage: manage() }));
+		expect(await names(client)).toEqual(
+			[...BRAIN_TOOLS, ...MANAGE_TOOLS].sort(),
+		);
+	});
+
+	it("un miembro que administra una carpeta las ve; uno que solo lee o edita no", async () => {
+		const admin = await connect(
+			"belisario",
+			deps({
+				manage: manage(),
+				...withRules({ load: async () => [marketingAdmin] }),
+			}),
+		);
+		expect(await names(admin)).toEqual(
+			[...BRAIN_TOOLS, ...MANAGE_TOOLS].sort(),
+		);
+
+		const editor = await connect(
+			"ana",
+			deps({
+				manage: manage(),
+				...withRules({
+					load: async () => [
+						{ ...marketingAdmin, userId: "ana", level: "editor" },
+					],
+				}),
+			}),
+		);
+		expect(await names(editor)).toEqual(BRAIN_TOOLS);
+	});
+
+	it("sin dependencias de gestión, o con un brain externo, no hay tools", async () => {
+		const sin = await connect("admin", deps());
+		expect(await names(sin)).toEqual(BRAIN_TOOLS);
+		const externo = await connect(
+			"admin",
+			deps({
+				manage: manage(),
+				store: {
+					...store,
+					brainBinding: async () => ({
+						...binding,
+						provider: "mcp",
+						connectorUid: "c1",
+						config: {
+							url: "https://brain.test/mcp",
+							tools: { search: "search", read: "read", upsert: "upsert" },
+							categories: ["comercial"],
+							timeoutMs: 5000,
+							mcpLimits: binding.config.mcpLimits,
+						},
+					}),
+				},
+			}),
+		);
+		expect(await names(externo)).toEqual(BRAIN_TOOLS);
+	});
+
+	it("crea carpetas anidadas donde administra la de arriba, con la persona como autora", async () => {
+		const m = manage();
+		const client = await connect(
+			"belisario",
+			deps({ manage: m, ...withRules({ load: async () => [marketingAdmin] }) }),
+		);
+		const result = await client.callTool({
+			name: "brain_folder_create",
+			arguments: {
+				folders: [
+					{ path: "marketing/marca/identidad-visual" },
+					{ path: "marketing/marca" },
+				],
+			},
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			results: [
+				{ path: "marketing/marca", ok: true },
+				{ path: "marketing/marca/identidad-visual", ok: true },
+			],
+		});
+		expect(m.folders.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				tenantId: "tenant-a",
+				actorUserId: "belisario",
+				path: "marketing/marca",
+			}),
+		);
+	});
+
+	it("borra las páginas de su carpeta y no las de otra", async () => {
+		const m = manage();
+		const d = deps({
+			manage: m,
+			...withRules({ load: async () => [marketingAdmin] }),
+		});
+		const mk = (slug: string): BrainPage => ({ ...page, slug, revision: 2 });
+		d.providerInstance.list = async () => [
+			mk("marketing/brief"),
+			mk("comercial/icp"),
+		];
+		const client = await connect("belisario", d);
+		const result = await client.callTool({
+			name: "brain_delete",
+			arguments: { folder: "marketing" },
+		});
+		expect(result.structuredContent).toMatchObject({
+			ok: true,
+			deleted: [{ slug: "marketing/brief" }],
+		});
+		expect(m.deleter.delete).toHaveBeenCalledTimes(1);
+		expect(m.deleter.delete).toHaveBeenCalledWith(
+			expect.objectContaining({
+				slug: "marketing/brief",
+				expectedRevision: 2,
+				actorUserId: "belisario",
+				bindingId: "b1",
+			}),
+		);
+
+		const other = await client.callTool({
+			name: "brain_delete",
+			arguments: { slug: "comercial/icp" },
+		});
+		expect(other.isError).toBe(true);
+		expect(other.structuredContent).toMatchObject({ error: "forbidden" });
+		expect(m.deleter.delete).toHaveBeenCalledTimes(1);
+	});
+});

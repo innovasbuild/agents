@@ -7,6 +7,8 @@ import { createAdminClient } from "../../supabase/admin";
 import type { RequestHostContext } from "../../tenants/host-store";
 import { fallbackPublicUrl } from "../../tenants/public-url";
 import { agentsNeedCanon } from "../../tenants/readiness";
+import { createSupabasePageDeleter } from "../core/delete-store.ts";
+import { createSupabaseFolderWriter } from "../core/folders-store.ts";
 import type {
 	BrainMcpDeps,
 	McpSkillsDeps,
@@ -114,6 +116,10 @@ export function productionDeps(
 		provider: getBrainProvider,
 		brainRules: getBrainRules,
 		skills: skillsDeps(),
+		manage: {
+			folders: createSupabaseFolderWriter(createAdminClient()),
+			deleter: createSupabasePageDeleter(createAdminClient()),
+		},
 		usesCanon: async (tenantId) => {
 			// Si no se puede leer, las descripciones de siempre (con canon): una
 			// empresa con outreach no pierde la guía por una lectura caída.

@@ -425,7 +425,7 @@ Decisiones de la 24.6 (D1 a D12 de la spec):
 
 Discrepancias spec-versus-código:
 
-- La spec del brain dice que las páginas nunca se borran (B8); desde #76 un administrador del nodo puede borrar desde la web. El agente y el MCP siguen sin poder.
+- La spec del brain dice que las páginas nunca se borran (B8); desde #76 un administrador del nodo puede borrar desde la web, y por MCP con `brain_delete` (quien administra una carpeta también crea carpetas con `brain_folder_create`). Los agentes del chat siguen sin poder.
 - El PR #55 entregó un formulario con pestañas Editar y Vista previa; #78 lo retiró (`page-form.tsx`) a favor del editor visual, y `/brain/editar/<slug>` ahora redirige.
 - El PR #55 dejaba escribir solo a `tenant_admin` y `platform_admin`; desde la 17.2 escribe quien tenga `editor` sobre la página.
 - El canal MCP del agente (`lib/agents/mcp-channel-auth.ts`) todavía no está alineado con la regla de `platform_admin` del dueño, según el README del módulo.
