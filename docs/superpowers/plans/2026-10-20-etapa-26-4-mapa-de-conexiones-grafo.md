@@ -226,7 +226,7 @@ Primera tarea de la 26.4b. La spec dejó la decisión (i)/(ii)/(iii) abierta par
 - Produce: `GraphPopover(props: { title: string; updatedAt: string; href: string; x: number; y: number; onClose: () => void })`: tarjeta absoluta (`role="dialog"`) anclada a la posición del nodo en pantalla, con **título, fecha de última edición y botón "Ver página"** (D6); se cierra con Esc, clic afuera o clic en el fondo, y sigue al nodo mientras se mueve la cámara. No usa un Popover de Radix (no existe en `components/ui` y anclar a un punto de canvas no lo justifica): usa los tokens `bg-popover` y `text-popover-foreground`.
 
 - [ ] **Paso 1:** cablear `clickNode` → abrir; `clickStage` y Esc → cerrar; `camera "updated"` → reposicionar.
-- [ ] **Paso 2:** hover resalta el nodo y sus vecinos y atenúa el resto (`nodeReducer` / `edgeReducer` + `sigma.refresh()`).
+- [ ] **Paso 2:** hover resalta el nodo y sus vecinos y atenúa el resto (`nodeReducer` / `edgeReducer` + `sigma.refresh()`). *Se hizo con el estado `isHighlighted` de Sigma 4 y reglas de estilo, no con reducers (ver Task 11).*
 - [ ] **Paso 3: verificar en el navegador:** clic en un nodo muestra título y fecha correctos; "Ver página" navega a `/${tenant}/brain/p/<slug>`; Esc y clic afuera cierran; con un título largo y con tildes no se rompe la tarjeta (foco 4). `npm run typecheck`.
 - [ ] **Paso 4: commit.** `feat: popover de nodo y resaltado de vecinos en el grafo`.
 
@@ -258,9 +258,9 @@ Primera tarea de la 26.4b. La spec dejó la decisión (i)/(ii)/(iii) abierta par
 
 **Interfaces:**
 - Consume: `GraphFilters`, `visibleNodes`, `matchesText` (Task 6); `GraphPayload.broken` (Task 5); `readGraphTheme().ghost` (Task 8).
-- Produce: estado de filtros del grafo, compartido entre la barra y el componente, con: categorías (varias; la leyenda de colores es clickeable y filtra), estados (activo y borrador prendidos, archivado apagado), tags, "Huérfanas", "Links rotos" (apagado) y un buscador de texto. Los filtros ocultan con `nodeReducer` / `edgeReducer` (sin reconstruir el grafo); el texto **resalta** las coincidencias, centra la cámara en la primera y abre su popover (D12). Con archivadas ocultas se ocultan también sus aristas. "Links rotos" agrega un nodo fantasma por destino distinto (D15): tamaño mínimo, color `ghost`, popover con el nombre tal como está escrito y "Esta página no existe", sin fecha y sin botón.
+- Produce: estado de filtros del grafo, compartido entre la barra y el componente, con: categorías (varias; la leyenda de colores es clickeable y filtra), estados (activo y borrador prendidos, archivado apagado), tags, "Huérfanas", "Links rotos" (apagado) y un buscador de texto. Los filtros ocultan con estados y reglas de estilo de Sigma 4 (por ejemplo, el estado `isHidden` con `setNodesState` / `setEdgesState`, o una regla `when` / `whenState` que lleve `visibility: "hidden"`), o con `setNodeAttribute` / `setSetting`, sin reconstruir el grafo. **No con `nodeReducer` / `edgeReducer`:** en Sigma 4.0.3 cualquier reducer apaga el refresco en el lugar (`refreshNodeState`) que usa el resaltado del hover y copia el objeto de cada nodo en cada actualización, también mientras corre el layout; el texto **resalta** las coincidencias, centra la cámara en la primera y abre su popover (D12). Con archivadas ocultas se ocultan también sus aristas. "Links rotos" agrega un nodo fantasma por destino distinto (D15): tamaño mínimo, color `ghost`, popover con el nombre tal como está escrito y "Esta página no existe", sin fecha y sin botón.
 
-- [ ] **Paso 1:** cablear la barra con `visibleNodes` y los reducers; el tamaño de los nodos **no cambia** al filtrar (grado fijo, D14).
+- [ ] **Paso 1:** cablear la barra con `visibleNodes` y estados de Sigma (sin reducers); el tamaño de los nodos **no cambia** al filtrar (grado fijo, D14).
 - [ ] **Paso 2:** buscador y fantasmas, con el popover del fantasma.
 - [ ] **Paso 3: verificar en el navegador:** cada filtro responde sin recargar; "Huérfanas" muestra las mismas páginas que la lista; con el tenant de prueba más grande, la barra no tapa el grafo a 375 px (en celular el grafo es opcional, pero no debe romperse). `npm run typecheck`.
 - [ ] **Paso 4: commit.** `feat: filtros, buscador y links rotos en el grafo`.
@@ -271,7 +271,7 @@ Primera tarea de la 26.4b. La spec dejó la decisión (i)/(ii)/(iii) abierta par
 
 **Interfaces:**
 - Consume: `neighborhood` y `GraphFilters.local` (Task 6).
-- Produce: con un nodo seleccionado, la barra ofrece "Vecindario" con 1, 2 o 3 saltos (el popover no cambia, D7); activa `filters.local`; un botón "Ver todo" la quita y vuelve a encuadrar la cámara.
+- Produce: con un nodo seleccionado, la barra ofrece "Vecindario" con 1, 2 o 3 saltos (el popover no cambia, D7); activa `filters.local`; un botón "Ver todo" la quita y vuelve a encuadrar la cámara. Oculta lo que queda afuera igual que los filtros de la Task 11: con estados y reglas de estilo de Sigma 4, no con reducers.
 
 - [ ] **Paso 1:** implementar y verificar en el navegador con un brain de prueba de al menos ~1.000 páginas (sembrado como en la Task 3): al activar 2 saltos solo quedan el nodo y sus vecinos; combinar con un filtro de categoría respeta ambos.
 - [ ] **Paso 2: commit.** `feat: vista local del grafo (vecindario a N saltos)`.
