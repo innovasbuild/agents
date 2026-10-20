@@ -135,7 +135,7 @@ Cosas a saber:
 - Crear una skill nueva pide administrar la carpeta destino; reemplazar una existente, ser editor de esa skill.
 - Cada subida confirmada deja un evento `brain.skill_imported` con la persona, el canal (`mcp`), la skill, si creó o reemplazó y cuántos archivos.
 - `skill_upload_link` y `skill_import` con `confirm` cuentan como escrituras en el límite por minuto; `skill_import` sin `confirm`, como lectura.
-- Todavía no está verificado en producción que la URL de subida acepte el `PUT` crudo con ese `Content-Type`; si tu cliente recibe un rechazo al subir, avisá. El detalle del diseño está en [el dominio brain](../dominios/brain.md).
+- El `PUT` crudo con ese `Content-Type` se verificó contra el Supabase local (acepta el zip y un segundo `PUT` a la misma URL lo sobrescribe); todavía falta confirmarlo en producción, así que si tu cliente recibe un rechazo al subir, avisá. El flujo completo de `skill_import` con un cliente real tampoco se probó todavía. El detalle del diseño está en [el dominio brain](../dominios/brain.md).
 
 ## Si algo falla
 
