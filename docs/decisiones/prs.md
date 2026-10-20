@@ -142,3 +142,5 @@ Las specs están en [README.md](README.md).
 | [126](https://github.com/innovasbuild/agents/pull/126) | 2026-10-20 | v0.5.0 feat: subir una skill desde un zip, por la web y por MCP (etapa 24.6) | [Brain](../dominios/brain.md) · [Conectar el brain por MCP](../guias/conectar-brain-por-mcp.md) |
 | [127](https://github.com/innovasbuild/agents/pull/127) | 2026-10-20 | docs: filas de los PR 114 a 125 en la wiki y prs.json refrescado | registro de las filas 114 a 125 en esta misma tabla; sin código ni contrato nuevo |
 | [128](https://github.com/innovasbuild/agents/pull/128) | 2026-10-20 | docs: el control 7 lee los PR mergeados del historial de git y todo PR deja su fila | [Cómo mantener la wiki](../guias/documentar.md) |
+| [129](https://github.com/innovasbuild/agents/pull/129) | 2026-10-20 | fix: el brain pagina listMeta y listLinks y deja la spec del mapa como grafo (etapa 26.4a) | [Brain](../dominios/brain.md) |
+| [130](https://github.com/innovasbuild/agents/pull/130) | 2026-10-20 | fix: list del wiki-store pagina y no trunca brains de más de 1.000 páginas | [Brain](../dominios/brain.md) |
