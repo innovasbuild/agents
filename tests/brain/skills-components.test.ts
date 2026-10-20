@@ -102,9 +102,20 @@ describe("SkillPanel", () => {
 		expect(html).toContain("Subir paquete (zip)…");
 		expect(html).not.toContain("Zip del paquete");
 		expect(html).not.toContain("Importar zip");
-		// La subida de archivos sueltos sigue como estaba (la rehace la tarea 6).
-		expect(html).toContain("Subir archivo");
-		expect(html).toContain("Ruta dentro del paquete");
+	});
+
+	it("los archivos sueltos se arrastran o se eligen, y la ruta es un ajuste", () => {
+		const html = render({});
+		expect(html).toContain("Arrastrá archivos o una carpeta");
+		expect(html).toContain("Elegir archivos");
+		expect(html).toContain("Elegir carpeta");
+		expect(html).toMatch(/<input[^>]*webkitdirectory/);
+		expect(html).not.toContain(">Subir archivo<");
+		// La ruta queda dentro de un <details> cerrado.
+		const details = html.match(/<details>([\s\S]*?)<\/details>/)?.[1] ?? "";
+		expect(details).toContain("Cambiar la ruta");
+		expect(details).toContain("Ruta dentro del paquete");
+		expect(html).not.toMatch(/<details[^>]*open/);
 	});
 
 	it("un administrador ve publicar, retirar y republicar", () => {
@@ -122,7 +133,7 @@ describe("SkillPanel", () => {
 		expect(html).not.toContain(">Retirar<");
 		expect(html).not.toContain("Republicar");
 		expect(html).toContain("La publica un administrador");
-		expect(html).toContain("Subir archivo");
+		expect(html).toContain("Arrastrá archivos o una carpeta");
 	});
 
 	it("publicada sin cambios no ofrece publicar de nuevo", () => {
