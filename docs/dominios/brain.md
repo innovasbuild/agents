@@ -120,6 +120,7 @@ El módulo está pensado para mudarse a su propio repo, por eso se divide en `co
 | `/[tenant]/brain/editar/[...slug]` | Redirige de forma permanente a `/brain/p/<slug>` (quedó por los links viejos) |
 | `/[tenant]/brain/historial/[...slug]` | Revisiones con autor, diff y restaurar |
 | `/[tenant]/brain/mapa` | Páginas más enlazadas, huérfanas y links rotos |
+| `/[tenant]/brain/mapa/datos` | `GET` del grafo del mapa: payload compacto (nodos, aristas, links rotos y huérfanas) armado con `buildGraphPayload` sobre lo que el proveedor deja ver a esa persona, sin un segundo filtro de permisos. `cache-control: private, no-store`; `404` si la empresa no tiene brain propio o la persona no tiene acceso. Tope de `GRAPH_MAX_NODES` = 20.000 nodos: pasado ese número quedan los más conectados y el payload marca `truncated` |
 | `/[tenant]/brain/raw/[...slug]` | Cuerpo vigente en texto plano, para el diff del aviso de conflicto |
 | `/[tenant]/brain/skills/files` | Archivos de una skill: `GET` los sirve (texto plano o descarga), `POST` sube un archivo suelto |
 | `/[tenant]/brain/skills/upload` | `POST` multipart para subir una skill desde un zip: acción `preview` (vista previa, no escribe) o `confirm` (escribe el borrador) |
