@@ -146,6 +146,28 @@ function storeError(error: PostgrestLikeError): WikiStoreError {
 	);
 }
 
+// PostgREST corta cada respuesta en max_rows (1000 en config.toml): se pagina
+// de a PAGE_SIZE y se avanza por las filas recibidas, no por PAGE_SIZE, así
+// sigue completo si el servidor corta más abajo. Corta en la respuesta vacía.
+const PAGE_SIZE = 1000;
+
+async function fetchAllPages(
+	fetchPage: (
+		from: number,
+		to: number,
+	) => PromiseLike<{ data: unknown; error: PostgrestLikeError | null }>,
+): Promise<Array<Record<string, unknown>>> {
+	const all: Array<Record<string, unknown>> = [];
+	for (let from = 0; ; ) {
+		const { data, error } = await fetchPage(from, from + PAGE_SIZE - 1);
+		if (error) throw storeError(error);
+		const rows = (data ?? []) as Array<Record<string, unknown>>;
+		if (rows.length === 0) return all;
+		all.push(...rows);
+		from += rows.length;
+	}
+}
+
 export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 	return {
 		async search(tenantId, input) {
@@ -191,33 +213,27 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 		},
 
 		async listMeta(tenantId) {
-			// PostgREST corta cada respuesta en max_rows (1000 en config.toml): se
-			// pagina y se avanza por las filas recibidas, no por 1000, así sigue
-			// completo si el servidor corta más abajo. Corta en la respuesta vacía.
-			const metas: BrainPageMeta[] = [];
-			for (let from = 0; ; ) {
-				const { data, error } = await client
+			const rows = await fetchAllPages((from, to) =>
+				client
 					.from("brain_pages")
 					.select(META_COLUMNS)
 					.eq("tenant_id", tenantId)
 					.order("slug")
-					.range(from, from + 999);
-				if (error) throw storeError(error);
-				const rows = (data ?? []) as Array<Record<string, unknown>>;
-				if (rows.length === 0) return metas;
-				for (const row of rows) metas.push(toMeta(row));
-				from += rows.length;
-			}
+					.range(from, to),
+			);
+			return rows.map(toMeta);
 		},
 
 		async listLinks(tenantId) {
-			// Una fila por página con links (no por link): PostgREST corta en 1000
-			// filas y un brain tiene más links que páginas.
-			const { data, error } = await client.rpc("brain_page_links", {
-				p_tenant_id: tenantId,
-			});
-			if (error) throw storeError(error);
-			return ((data ?? []) as Array<Record<string, unknown>>).map(toLinks);
+			// Una fila por página con links (no por link). El rpc recibe solo el
+			// tenant, así que se pagina desde el cliente, igual que listMeta.
+			const rows = await fetchAllPages((from, to) =>
+				client
+					.rpc("brain_page_links", { p_tenant_id: tenantId })
+					.order("slug")
+					.range(from, to),
+			);
+			return rows.map(toLinks);
 		},
 
 		async listRevisions(tenantId, slug) {

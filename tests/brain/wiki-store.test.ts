@@ -11,7 +11,8 @@ type Call = { table: string; filters: Record<string, unknown> };
 // cadena es "esperable" (devuelve todas las filas) o termina en maybeSingle.
 // Corta cada respuesta en maxRows como hace el servidor (1000 por defecto, el
 // max_rows de supabase/config.toml), con o sin range. `ranges` y `orders`
-// guardan, por consulta que terminó, el rango pedido y la columna de orden.
+// guardan, por consulta que terminó, el rango pedido y la columna de orden;
+// `rpcRanges` y `rpcOrders` hacen lo mismo con las llamadas a rpc.
 type DbError = { code: string; message: string; details: string | null };
 
 function fakeClient(
@@ -23,11 +24,37 @@ function fakeClient(
 	const ranges: Array<[number, number] | null> = [];
 	const orders: Array<string | null> = [];
 	const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
+	const rpcRanges: Array<[number, number] | null> = [];
+	const rpcOrders: Array<string | null> = [];
 	const selects: Array<string | undefined> = [];
 	const client = {
-		rpc: async (name: string, args: Record<string, unknown>) => {
-			rpcCalls.push({ name, args });
-			return { data: rows[name] ?? [], error: null };
+		// Igual que from(): la cadena del rpc es esperable y acepta order y range.
+		rpc(name: string, args: Record<string, unknown>) {
+			let range: [number, number] | null = null;
+			let orderBy: string | null = null;
+			const chain = {
+				order: (column: string) => {
+					orderBy = column;
+					return chain;
+				},
+				range: (from: number, to: number) => {
+					range = [from, to];
+					return chain;
+				},
+				// biome-ignore lint/suspicious/noThenProperty: la cadena de PostgREST es esperable
+				then: (resolve: (value: unknown) => void) => {
+					rpcCalls.push({ name, args });
+					rpcRanges.push(range);
+					rpcOrders.push(orderBy);
+					const [from, to] = range ?? [0, Number.POSITIVE_INFINITY];
+					const data = (rows[name] ?? []).slice(
+						from,
+						Math.min(to + 1, from + maxRows),
+					);
+					resolve({ data, error: errors[name] ?? null });
+				},
+			};
+			return chain;
 		},
 		from(table: string) {
 			const filters: Record<string, unknown> = {};
@@ -80,6 +107,8 @@ function fakeClient(
 		client: client as unknown as SupabaseClient,
 		calls,
 		rpcCalls,
+		rpcRanges,
+		rpcOrders,
 		selects,
 		ranges,
 		orders,
@@ -90,6 +119,13 @@ function pagesRows(count: number) {
 	return Array.from({ length: count }, (_, i) => ({
 		...pageRow,
 		slug: `p/${String(i).padStart(5, "0")}`,
+	}));
+}
+
+function linksRows(count: number) {
+	return Array.from({ length: count }, (_, i) => ({
+		slug: `p/${String(i).padStart(5, "0")}`,
+		links: [{ target: "marketing/voz", anchor: null, alias: null }],
 	}));
 }
 
@@ -183,6 +219,65 @@ describe("createSupabaseWikiStore.listMeta · paginado", () => {
 			[1000, 1999],
 			[1001, 2000],
 		]);
+	});
+});
+
+// Value: protects=listLinks devuelve las filas de todas las paginas con links aunque PostgREST corte cada respuesta del rpc en max_rows,
+//   y no depende de que max_rows sea 1000 (avanza por las filas recibidas y corta en la respuesta vacia).
+// fails_when=listLinks vuelve a un rpc sin paginar (trunca en 1000) o corta cuando una respuesta viene corta.
+// why_new=en un brain grande el mapa de conexiones perdia los links de las paginas que pasaban la fila 1.000; seam=none
+describe("createSupabaseWikiStore.listLinks · paginado", () => {
+	it("listLinks devuelve las filas de 2.500 páginas", async () => {
+		const { client } = fakeClient({ brain_page_links: linksRows(2500) });
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(links).toHaveLength(2500);
+		expect(new Set(links.map((l) => l.slug)).size).toBe(2500);
+	});
+
+	it("listLinks sigue completo si el servidor corta en 500", async () => {
+		const { client } = fakeClient(
+			{ brain_page_links: linksRows(1200) },
+			{},
+			{ maxRows: 500 },
+		);
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(links).toHaveLength(1200);
+		expect(new Set(links.map((l) => l.slug)).size).toBe(1200);
+	});
+
+	it("listLinks pide siempre el tenant, order por slug y el rango siguiente", async () => {
+		const { client, rpcCalls, rpcOrders, rpcRanges } = fakeClient({
+			brain_page_links: linksRows(1001),
+		});
+		await createSupabaseWikiStore(client).listLinks("tenant-a");
+		for (const call of rpcCalls) {
+			expect(call).toEqual({
+				name: "brain_page_links",
+				args: { p_tenant_id: "tenant-a" },
+			});
+		}
+		expect(rpcOrders.every((column) => column === "slug")).toBe(true);
+		expect(rpcRanges).toEqual([
+			[0, 999],
+			[1000, 1999],
+			[1001, 2000],
+		]);
+	});
+
+	it("listLinks propaga el error del rpc", async () => {
+		const { client } = fakeClient(
+			{},
+			{
+				brain_page_links: {
+					code: "42501",
+					message: "permiso denegado",
+					details: null,
+				},
+			},
+		);
+		await expect(
+			createSupabaseWikiStore(client).listLinks("tenant-a"),
+		).rejects.toMatchObject({ code: "42501" });
 	});
 });
 
@@ -365,7 +460,9 @@ describe("createSupabaseWikiStore · errores de la base", () => {
 			],
 		});
 		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		// Una página de datos y la consulta vacía que cierra el paginado.
 		expect(rpcCalls).toEqual([
+			{ name: "brain_page_links", args: { p_tenant_id: "tenant-a" } },
 			{ name: "brain_page_links", args: { p_tenant_id: "tenant-a" } },
 		]);
 		expect(links).toEqual([
