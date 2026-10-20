@@ -10,7 +10,13 @@ import {
 	type UploadTarget,
 } from "@/lib/brain/core/skills/upload";
 import { MAX_SLUG_LENGTH } from "@/lib/brain/core/types";
-import { bytes, members, setup, skillRow } from "./skills-fixtures";
+import {
+	bytes,
+	members,
+	setup,
+	setupCurrent,
+	skillRow,
+} from "./skills-fixtures";
 
 const VENTAS = "skills/ventas/facturacion";
 const ADMIN = [members("skills/ventas", "administrador")];
@@ -196,21 +202,50 @@ describe("previewSkillUpload", () => {
 		}
 	});
 
-	it("una skill del mismo nombre en otra carpeta avisa solo si la persona la ve", async () => {
+	describe("una skill del mismo nombre en otra carpeta avisa solo si la persona la ve", () => {
 		const otra = "skills/rrhh/facturacion";
-		const visible = deps({ rows: [skillRow(otra, "p9", null)] });
-		const seen = await previewSkillUpload("acme", FOLDER, pkg(), visible.deps);
-		if (!seen.ok) throw new Error(seen.message);
-		expect(seen.warnings).toHaveLength(1);
-		expect(seen.warnings[0]).toContain(otra);
+		const warningsOf = async (d: ReturnType<typeof setup>["deps"]) => {
+			const result = await previewSkillUpload("acme", FOLDER, pkg(), d);
+			if (!result.ok) throw new Error(result.message);
+			return result.warnings;
+		};
 
-		const invisible = deps({
-			rows: [skillRow(otra, "p9", null)],
-			rules: [...ADMIN, members("skills/rrhh", "ninguno")],
+		it("editor de esa carpeta: ve el borrador y se nombra", async () => {
+			const { deps: d } = deps({
+				rows: [skillRow(otra, "p9", null)],
+				rules: [...ADMIN, members("skills/rrhh", "editor")],
+			});
+			const warnings = await warningsOf(d);
+			expect(warnings).toHaveLength(1);
+			expect(warnings[0]).toContain(otra);
 		});
-		expect(
-			await previewSkillUpload("acme", FOLDER, pkg(), invisible.deps),
-		).toMatchObject({ ok: true, warnings: [] });
+
+		it("lector y la otra sin publicar: no se nombra", async () => {
+			const { deps: d } = deps({ rows: [skillRow(otra, "p9", null)] });
+			expect(await warningsOf(d)).toEqual([]);
+		});
+
+		it("lector y la otra publicada: se nombra", async () => {
+			const { deps: d } = deps({ rows: [skillRow(otra, "p9")] });
+			const warnings = await warningsOf(d);
+			expect(warnings).toHaveLength(1);
+			expect(warnings[0]).toContain(otra);
+		});
+
+		it("lector y la otra retirada: no se nombra", async () => {
+			const { deps: d } = deps({
+				rows: [skillRow(otra, "p9", { ...setupCurrent(), action: "retirar" })],
+			});
+			expect(await warningsOf(d)).toEqual([]);
+		});
+
+		it("sin acceso a esa carpeta (ninguno): no se nombra aunque esté publicada", async () => {
+			const { deps: d } = deps({
+				rows: [skillRow(otra, "p9")],
+				rules: [...ADMIN, members("skills/rrhh", "ninguno")],
+			});
+			expect(await warningsOf(d)).toEqual([]);
+		});
 	});
 
 	it("una carpeta inválida o una ruta demasiado larga: validación", async () => {

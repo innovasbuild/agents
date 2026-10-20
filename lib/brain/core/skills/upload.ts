@@ -27,6 +27,8 @@ import {
 	skillName,
 } from "./package.ts";
 import { type SkillActor, type SkillFailure, skillFail } from "./publish.ts";
+import { publishedSnapshot } from "./state.ts";
+import type { SkillOverviewRow } from "./store.ts";
 
 export type UploadTarget =
 	| { kind: "folder"; folder: string } // relativa a skills/, "" = directo bajo skills/
@@ -139,13 +141,21 @@ async function planUpload(
 			`El name del SKILL.md es «${plan.skill.name}» y la skill se llama «${name}»: se sube igual, pero la skill no se renombra.`,
 		);
 	}
-	// Solo lo que la persona ve: lo demás no se nombra.
+	// Solo lo que la persona ve: un borrador lo ve quien lo edita; quien lee,
+	// solo lo publicado. Lo demás no se nombra.
+	const sees = (row: SkillOverviewRow) => {
+		const level = levelOf(row.slug);
+		return (
+			atLeast(level, "editor") ||
+			(level !== null && publishedSnapshot(row) !== null)
+		);
+	};
 	for (const row of rows) {
 		if (
 			row.slug !== slug &&
 			isSkillSlug(row.slug) &&
 			skillName(row.slug) === name &&
-			levelOf(row.slug) !== null
+			sees(row)
 		) {
 			warnings.push(
 				`Ya hay otra skill llamada «${name}» en ${row.slug}: mientras una de las dos esté publicada, la otra no se va a poder publicar.`,
