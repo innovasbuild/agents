@@ -191,6 +191,9 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 			});
 		} catch (error) {
 			console.error("brain-graph: no pude armar el mapa", error);
+			// Sigma pudo haber agregado sus canvas antes de fallar: sin esto,
+			// "Reintentar" apila los nuevos sobre los viejos.
+			container.replaceChildren();
 			setState({ kind: "error" });
 			return;
 		}

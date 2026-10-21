@@ -59,13 +59,19 @@ function GraphLayer({ tenantSlug }: { tenantSlug: string }) {
 	const layerRef = useRef<HTMLElement>(null);
 
 	// Con la capa abierta, lo de atrás no scrollea ni recibe foco; al cerrar o
-	// desmontar vuelve como estaba.
+	// desmontar vuelve como estaba. Si el foco quedó afuera (el "Ver grafo" que
+	// abrió la capa ahora es inerte y el foco cayó a <body>), pasa a la vista
+	// actual de la capa: desde ahí Tab sigue a "Lista".
 	useEffect(() => {
 		const layer = layerRef.current;
 		if (!layer) return;
 		const overflow = document.body.style.overflow;
 		document.body.style.overflow = "hidden";
 		const restoreFocus = inertBehind(layer);
+		if (!layer.contains(document.activeElement))
+			layer
+				.querySelector<HTMLElement>('[aria-current="page"]')
+				?.focus({ preventScroll: true });
 		return () => {
 			document.body.style.overflow = overflow;
 			restoreFocus();
