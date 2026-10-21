@@ -4,7 +4,12 @@ import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { inviteToTenant } from "@/lib/invitations/invite";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { INVITE_WARNING, LOGO_WARNING } from "@/lib/tenants/create-warnings";
+import {
+	INVITE_WARNING,
+	LOGO_WARNING,
+	MODELS_WARNING,
+} from "@/lib/tenants/create-warnings";
+import { loadGatewayModels, starterModels } from "@/lib/tenants/gateway-models";
 import { originFrom } from "@/lib/tenants/origin";
 import { requirePlatformAdmin } from "@/lib/tenants/platform";
 import {
@@ -99,6 +104,24 @@ export async function createTenant(formData: FormData): Promise<CreateResult> {
 			} catch {
 				warnings.push(LOGO_WARNING);
 			}
+		}
+
+		// Arranca con el Sonnet y el Haiku más nuevos del gateway. Si el catálogo
+		// no responde, queda el default de la columna (modelos válidos pero
+		// quizás no los últimos) y se avisa.
+		try {
+			const starter = starterModels(await loadGatewayModels());
+			if (!starter) throw new Error("catálogo sin Sonnet o Haiku");
+			const { error: modelsError } = await admin.supabase
+				.from("tenants")
+				.update({
+					allowed_models: starter.allowed,
+					default_model: starter.defaultModel,
+				})
+				.eq("id", created);
+			if (modelsError) throw modelsError;
+		} catch {
+			warnings.push(MODELS_WARNING);
 		}
 
 		try {

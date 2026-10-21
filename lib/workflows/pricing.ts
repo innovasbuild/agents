@@ -6,6 +6,9 @@
 export const MODEL_PRICES: Record<string, { input: number; output: number }> = {
 	"anthropic/claude-haiku-4.5": { input: 1, output: 5 },
 	"anthropic/claude-sonnet-5": { input: 2, output: 10 },
+	"anthropic/claude-sonnet-5.5": { input: 2, output: 10 },
+	// Haiku 5.5 cobra por tramo; se toma el tramo caro (más de 100.000 tokens).
+	"anthropic/claude-haiku-5.5": { input: 0.5, output: 2.5 },
 	"anthropic/claude-opus-5": { input: 5, output: 25 },
 	"anthropic/claude-fable-5.1": { input: 10, output: 50 },
 	// Modelo de evaluación: la salida no se cobra por token.

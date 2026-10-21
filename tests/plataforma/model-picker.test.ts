@@ -14,6 +14,7 @@ const model = (id: string, input = 3, output = 15): GatewayModel => ({
 	vendor: id.split("/")[0],
 	inputPerMillion: input,
 	outputPerMillion: output,
+	released: null,
 });
 
 const CATALOG = [

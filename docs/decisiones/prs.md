@@ -145,3 +145,4 @@ Las specs están en [README.md](README.md).
 | [129](https://github.com/innovasbuild/agents/pull/129) | 2026-10-20 | fix: el brain pagina listMeta y listLinks y deja la spec del mapa como grafo (etapa 26.4a) | [Brain](../dominios/brain.md) |
 | [130](https://github.com/innovasbuild/agents/pull/130) | 2026-10-20 | fix: list del wiki-store pagina y no trunca brains de más de 1.000 páginas | [Brain](../dominios/brain.md) |
 | [133](https://github.com/innovasbuild/agents/pull/133) | 2026-10-21 | feat: modelos permitidos como casillas sobre el catálogo del AI Gateway | [Plataforma y settings por empresa](../dominios/plataforma.md) |
+| [134](https://github.com/innovasbuild/agents/pull/134) | 2026-10-21 | feat: las empresas nuevas arrancan con el Sonnet y el Haiku más nuevos | [Plataforma y settings por empresa](../dominios/plataforma.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |

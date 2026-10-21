@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatPrice, parseGatewayCatalog } from "@/lib/tenants/gateway-models";
+import {
+	formatPrice,
+	type GatewayModel,
+	parseGatewayCatalog,
+	starterModels,
+} from "@/lib/tenants/gateway-models";
 
 const catalog = {
 	data: [
@@ -62,5 +67,36 @@ describe("formatPrice", () => {
 	it("no inventa precio si el gateway no lo publica", () => {
 		const [sinPrecio] = parseGatewayCatalog(catalog);
 		expect(formatPrice(sinPrecio)).toBeNull();
+	});
+});
+
+describe("starterModels", () => {
+	const m = (id: string, released: number | null): GatewayModel => ({
+		id,
+		name: id,
+		vendor: "anthropic",
+		inputPerMillion: null,
+		outputPerMillion: null,
+		released,
+	});
+
+	it("elige el Sonnet y el Haiku lanzados más recientemente", () => {
+		expect(
+			starterModels([
+				m("anthropic/claude-sonnet-5.5", 300),
+				m("anthropic/claude-sonnet-5", 100),
+				m("anthropic/claude-haiku-4.5", 50),
+				m("anthropic/claude-haiku-5.5", 310),
+				m("anthropic/claude-opus-5.5", 400),
+			]),
+		).toEqual({
+			allowed: ["anthropic/claude-sonnet-5.5", "anthropic/claude-haiku-5.5"],
+			defaultModel: "anthropic/claude-sonnet-5.5",
+		});
+	});
+
+	it("devuelve null si falta alguna familia", () => {
+		expect(starterModels([m("anthropic/claude-sonnet-5.5", 300)])).toBeNull();
+		expect(starterModels([])).toBeNull();
 	});
 });
