@@ -22,6 +22,7 @@ Las páginas y los endpoints de `app/`.
 | `/[tenant]/brain/editar/[...slug]` | página | `app/[tenant]/brain/editar/[...slug]/page.tsx` |
 | `/[tenant]/brain/historial/[...slug]` | página | `app/[tenant]/brain/historial/[...slug]/page.tsx` |
 | `/[tenant]/brain/mapa` | página | `app/[tenant]/brain/mapa/page.tsx` |
+| `/[tenant]/brain/mapa/datos` | endpoint | `app/[tenant]/brain/mapa/datos/route.ts` |
 | `/[tenant]/brain/nueva` | página | `app/[tenant]/brain/nueva/page.tsx` |
 | `/[tenant]/brain/p/[...slug]` | página | `app/[tenant]/brain/p/[...slug]/page.tsx` |
 | `/[tenant]/brain/raw/[...slug]` | endpoint | `app/[tenant]/brain/raw/[...slug]/route.ts` |
