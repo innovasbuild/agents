@@ -63,7 +63,7 @@ Visibilidad por RLS: el `model_usd` es costo interno de INNOV.AS y las filas las
 
 ### `metered()`
 
-Ningún servicio conoce el libro. La **puerta** (tool, schedule o runner) envuelve la función `generate` que le inyecta al nodo con `metered(fn, { model, record, base })`, y cada llamada deja su asiento con `node`, `workflow` y `run_id`. El costo sale del gateway; si no lo informa, de `MODEL_PRICES` (`lib/workflows/pricing.ts`: Haiku 4.5, Sonnet 5, Opus 5, Fable 5.1 y Jev), y si el modelo no está en la tabla queda en cero con `source: sin_precio`. `meta.source` dice cuál fue (`gateway`, `tabla`, `sin_precio`). La tabla no descuenta tokens cacheados, así que cuando se usa sobreestima, que es el lado seguro para un tope.
+Ningún servicio conoce el libro. La **puerta** (tool, schedule o runner) envuelve la función `generate` que le inyecta al nodo con `metered(fn, { model, record, base })`, y cada llamada deja su asiento con `node`, `workflow` y `run_id`. El costo sale del gateway; si no lo informa, de `MODEL_PRICES` (`lib/workflows/pricing.ts`: Haiku 4.5 y 5.5, Sonnet 5 y 5.5, Opus 5, Fable 5.1 y Jev; Haiku 5.5 cobra por tramo y la tabla toma el caro), y si el modelo no está en la tabla queda en cero con `source: sin_precio`. `meta.source` dice cuál fue (`gateway`, `tabla`, `sin_precio`). La tabla no descuenta tokens cacheados, así que cuando se usa sobreestima, que es el lado seguro para un tope.
 
 Tres propiedades:
 

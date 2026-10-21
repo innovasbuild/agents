@@ -10,6 +10,8 @@ export interface GatewayModel {
 	/** USD por millón de tokens; null si el gateway no publica precio. */
 	inputPerMillion: number | null;
 	outputPerMillion: number | null;
+	/** Fecha de lanzamiento en segundos Unix; null si no viene. */
+	released: number | null;
 }
 
 interface RawModel {
@@ -17,6 +19,7 @@ interface RawModel {
 	name?: unknown;
 	owned_by?: unknown;
 	type?: unknown;
+	released?: unknown;
 	pricing?: { input?: unknown; output?: unknown };
 }
 
@@ -47,9 +50,34 @@ export function parseGatewayCatalog(json: unknown): GatewayModel[] {
 				vendor: typeof m.owned_by === "string" ? m.owned_by : id.split("/")[0],
 				inputPerMillion: perMillion(m.pricing?.input),
 				outputPerMillion: perMillion(m.pricing?.output),
+				released: typeof m.released === "number" ? m.released : null,
 			};
 		})
 		.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+const STARTER_FAMILIES = [
+	"anthropic/claude-sonnet-",
+	"anthropic/claude-haiku-",
+] as const;
+
+/**
+ * Con qué modelos arranca una empresa nueva: el Sonnet y el Haiku lanzados
+ * más recientemente, con Sonnet por defecto. Null si falta alguno: el alta
+ * deja entonces el default de la columna en la base.
+ */
+export function starterModels(
+	catalog: GatewayModel[],
+): { allowed: string[]; defaultModel: string } | null {
+	const latest = STARTER_FAMILIES.map(
+		(prefix) =>
+			catalog
+				.filter((m) => m.id.startsWith(prefix) && m.released !== null)
+				.sort((a, b) => (b.released ?? 0) - (a.released ?? 0))[0]?.id,
+	);
+	if (latest.some((id) => !id)) return null;
+	const allowed = latest as string[];
+	return { allowed, defaultModel: allowed[0] };
 }
 
 /** Si el gateway no responde, la pantalla sigue con los modelos ya elegidos. */

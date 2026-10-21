@@ -14,6 +14,8 @@ const state: {
 	uploads: string[];
 	uploadError: unknown;
 	updateError: unknown;
+	modelsError: unknown;
+	catalog: { id: string; released: number | null }[];
 	inviteThrows: boolean;
 	invite: { kind: string; allowedDomains?: string[] };
 	inviteCalls: Record<string, unknown>[];
@@ -26,6 +28,8 @@ const state: {
 	uploads: [],
 	uploadError: null,
 	updateError: null,
+	modelsError: null,
+	catalog: [],
 	inviteThrows: false,
 	invite: { kind: "ok" },
 	inviteCalls: [],
@@ -44,7 +48,11 @@ const supabase = {
 	from: () => ({
 		update(values: Record<string, unknown>) {
 			state.updates.push(values);
-			return { eq: async () => ({ error: state.updateError }) };
+			return {
+				eq: async () => ({
+					error: values.brand ? state.updateError : state.modelsError,
+				}),
+			};
 		},
 	}),
 	storage: {
@@ -73,12 +81,24 @@ vi.mock("@/lib/invitations/invite", () => ({
 		return state.invite;
 	},
 }));
+vi.mock("@/lib/tenants/gateway-models", async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	loadGatewayModels: async () =>
+		state.catalog.map((m) => ({
+			...m,
+			name: m.id,
+			vendor: "anthropic",
+			inputPerMillion: null,
+			outputPerMillion: null,
+		})),
+}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/headers", () => ({
 	headers: async () => new Headers({ origin: "https://app.test" }),
 }));
 
 const { createTenant } = await import("@/app/plataforma/nueva/actions");
+const { MODELS_WARNING } = await import("@/lib/tenants/create-warnings");
 
 function form(overrides: Record<string, string | File | null> = {}) {
 	const values: Record<string, string | File | null> = {
@@ -113,6 +133,13 @@ describe("createTenant", () => {
 		state.uploads = [];
 		state.uploadError = null;
 		state.updateError = null;
+		state.modelsError = null;
+		state.catalog = [
+			{ id: "anthropic/claude-sonnet-5", released: 100 },
+			{ id: "anthropic/claude-sonnet-5.5", released: 300 },
+			{ id: "anthropic/claude-haiku-4.5", released: 50 },
+			{ id: "anthropic/claude-haiku-5.5", released: 310 },
+		];
 		state.inviteThrows = false;
 		state.invite = { kind: "ok" };
 		state.inviteCalls = [];
@@ -342,5 +369,45 @@ describe("createTenant", () => {
 				"No se pudo mandar la invitación al administrador. Invitalo desde Usuarios.",
 			],
 		});
+	});
+});
+
+describe("createTenant: modelos iniciales", () => {
+	beforeEach(() => {
+		state.admin = true;
+		state.adminRedirects = false;
+		state.rpc = { data: NEW_ID, error: null };
+		state.updates = [];
+		state.modelsError = null;
+		state.inviteThrows = false;
+		state.invite = { kind: "ok" };
+	});
+
+	it("arranca con el Sonnet y el Haiku más nuevos, Sonnet por defecto", async () => {
+		const result = await createTenant(form());
+		expect(result).toEqual({ ok: true, slug: "acme", warnings: [] });
+		expect(state.updates).toContainEqual({
+			allowed_models: [
+				"anthropic/claude-sonnet-5.5",
+				"anthropic/claude-haiku-5.5",
+			],
+			default_model: "anthropic/claude-sonnet-5.5",
+		});
+	});
+
+	it("sin catálogo deja el default de la base y avisa", async () => {
+		state.catalog = [];
+		const result = await createTenant(form());
+		expect(result).toMatchObject({
+			ok: true,
+			warnings: [MODELS_WARNING],
+		});
+		expect(state.updates.some((u) => "allowed_models" in u)).toBe(false);
+	});
+
+	it("si falla la escritura, la empresa queda creada y avisa", async () => {
+		state.modelsError = { message: "boom" };
+		const result = await createTenant(form());
+		expect(result).toMatchObject({ ok: true, warnings: [MODELS_WARNING] });
 	});
 });
