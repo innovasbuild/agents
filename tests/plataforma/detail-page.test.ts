@@ -73,6 +73,9 @@ vi.mock("@/lib/outreach/canon", () => ({
 	loadMarco: async () => ({ ok: false, reason: "brain_caido", errors: [] }),
 }));
 vi.mock("@/lib/tenants/people", () => ({ loadPeople: async () => new Map() }));
+vi.mock("@/lib/tenants/gateway-models", () => ({
+	loadGatewayModels: async () => [],
+}));
 vi.mock("next/headers", () => ({
 	headers: async () => new Headers({ origin: "https://app.test" }),
 }));

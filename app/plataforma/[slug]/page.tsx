@@ -8,6 +8,7 @@ import { loadDnsInstructions } from "@/lib/domains/view";
 import { brainForTenant, loadIcpLevels, loadMarco } from "@/lib/outreach/canon";
 import { isAuthMethod } from "@/lib/tenants/auth-methods";
 import { knownWarnings } from "@/lib/tenants/create-warnings";
+import { loadGatewayModels } from "@/lib/tenants/gateway-models";
 import { originFrom } from "@/lib/tenants/origin";
 import { loadPeople } from "@/lib/tenants/people";
 import {
@@ -277,6 +278,7 @@ export default async function TenantDetailPage({
 						active: tenant.active,
 					}}
 					isOwner={tenant.slug === platformOwnerSlug()}
+					catalog={await loadGatewayModels()}
 				/>
 			</section>
 
