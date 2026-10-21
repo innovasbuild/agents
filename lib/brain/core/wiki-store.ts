@@ -63,7 +63,8 @@ function toMeta(row: Record<string, unknown>): BrainPageMeta {
 	};
 }
 
-// Lo que devuelve brain_page_links_after por cada match: los grupos crudos de
+// Lo que devuelve brain_page_links_after (o brain_page_links, en el fallback de
+// listLinks) por cada match: los grupos crudos de
 // WIKILINK_PATTERN. El recorte de espacios y el "#" del ancla se resuelven acá
 // igual que en parseWikilinks.
 function toLinks(row: Record<string, unknown>): BrainPageLinks {
@@ -198,7 +199,40 @@ async function fetchAllAfter(
 	}
 }
 
+// Fallback de listLinks: existe para desacoplar el orden de deploy (el código
+// puede llegar a producción antes que la migración de brain_page_links_after).
+// Si la función no existe (PGRST202 de PostgREST, 42883 de Postgres) se cae al
+// rpc viejo brain_page_links paginado por offset. Cualquier otro error se
+// propaga. Se borra junto con el retiro de brain_page_links.
+const KEYSET_MISSING_CODES = new Set(["PGRST202", "42883"]);
+const KEYSET_MISSING_TTL_MS = 60_000;
+
 export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
+	// Hasta cuándo no se vuelve a probar el rpc keyset en este store, para no
+	// pagar una llamada fallida por pedido mientras falta la migración.
+	let keysetMissingUntil = 0;
+
+	async function listLinksKeyset(tenantId: string) {
+		return fetchAllAfter((after) =>
+			client
+				.rpc("brain_page_links_after", {
+					p_tenant_id: tenantId,
+					p_after: after,
+					p_limit: PAGE_SIZE,
+				})
+				.order("slug"),
+		);
+	}
+
+	async function listLinksOffset(tenantId: string) {
+		return fetchAllPages((from, to) =>
+			client
+				.rpc("brain_page_links", { p_tenant_id: tenantId })
+				.order("slug")
+				.range(from, to),
+		);
+	}
+
 	return {
 		async search(tenantId, input) {
 			const { data, error } = await client.rpc("brain_search_pages", {
@@ -260,16 +294,23 @@ export function createSupabaseWikiStore(client: SupabaseClient): WikiStore {
 			// Una fila por página con "[[" (no por link), por keyset: la base acota
 			// la tanda antes de extraer los links. Las que no tienen ningún link
 			// válido vuelven con links nulo para que el cursor avance; acá se
-			// descartan.
-			const rows = await fetchAllAfter((after) =>
-				client
-					.rpc("brain_page_links_after", {
-						p_tenant_id: tenantId,
-						p_after: after,
-						p_limit: PAGE_SIZE,
-					})
-					.order("slug"),
-			);
+			// descartan. Sin la migración, el fallback de arriba.
+			let rows: Array<Record<string, unknown>>;
+			if (Date.now() < keysetMissingUntil) {
+				rows = await listLinksOffset(tenantId);
+			} else {
+				try {
+					rows = await listLinksKeyset(tenantId);
+				} catch (error) {
+					if (
+						!(error instanceof WikiStoreError) ||
+						!KEYSET_MISSING_CODES.has(error.code)
+					)
+						throw error;
+					keysetMissingUntil = Date.now() + KEYSET_MISSING_TTL_MS;
+					rows = await listLinksOffset(tenantId);
+				}
+			}
 			return rows.filter((row) => row.links != null).map(toLinks);
 		},
 

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	createSupabaseWikiStore,
 	WikiStoreError,
@@ -464,6 +464,139 @@ describe("createSupabaseWikiStore.listLinks · keyset", () => {
 		const result = createSupabaseWikiStore(client).listLinks("tenant-a");
 		await expect(result).rejects.toBeInstanceOf(WikiStoreError);
 		await expect(result).rejects.toMatchObject({ code: "42501" });
+	});
+});
+
+// Lo que devuelve supabase-js cuando la función no está en el schema cache de
+// PostgREST (la migración keyset sin aplicar) y lo que devuelve Postgres si la
+// llamada llega igual a la base.
+const rpcMissing: DbError = {
+	code: "PGRST202",
+	message:
+		"Could not find the function public.brain_page_links_after(p_after, p_limit, p_tenant_id) in the schema cache",
+	details:
+		"Searched for the function public.brain_page_links_after with parameters p_after, p_limit, p_tenant_id or with a single unnamed json/jsonb parameter, but no matches were found in the schema cache.",
+};
+const undefinedFunction: DbError = {
+	code: "42883",
+	message:
+		"function public.brain_page_links_after(uuid, text, integer) does not exist",
+	details: null,
+};
+
+// Value: protects=listLinks sigue andando si el código llega a producción antes que la migración de brain_page_links_after:
+//   cae al rpc viejo brain_page_links paginado por offset, devuelve los mismos links, y no paga una llamada fallida por pedido.
+// fails_when=listLinks tira cuando falta la función (todo /brain y /mapa en 500), el fallback se traga un error real de la base,
+//   el store vuelve a probar el rpc keyset en cada pedido dentro del TTL, o el camino feliz llama también al rpc viejo.
+// why_new=el orden de deploy (código antes que migración) dejaba caído el brain de todos los tenants wiki; seam=none
+describe("createSupabaseWikiStore.listLinks · fallback sin la migración keyset", () => {
+	it("con PGRST202 cae a brain_page_links paginado y devuelve los mismos links", async () => {
+		const { client, rpcCalls, rpcRanges, rpcOrders } = fakeClient(
+			{ brain_page_links: linksRows(1001) },
+			{ brain_page_links_after: rpcMissing },
+		);
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(links).toHaveLength(1001);
+		expect(links[0]).toEqual({
+			slug: "p/00000",
+			links: [{ target: "marketing/voz", anchor: null, alias: null }],
+		});
+		expect(rpcCalls.map((c) => c.name)).toEqual([
+			"brain_page_links_after",
+			"brain_page_links",
+			"brain_page_links",
+			"brain_page_links",
+		]);
+		expect(rpcCalls[1].args).toEqual({ p_tenant_id: "tenant-a" });
+		expect(rpcRanges.slice(1)).toEqual([
+			[0, 999],
+			[1000, 1999],
+			[1001, 2000],
+		]);
+		expect(rpcOrders.slice(1).every((column) => column === "slug")).toBe(true);
+	});
+
+	it("con 42883 también cae al rpc viejo", async () => {
+		const { client, rpcCalls } = fakeClient(
+			{ brain_page_links: linksRows(3) },
+			{ brain_page_links_after: undefinedFunction },
+		);
+		const links = await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(links.map((l) => l.slug)).toEqual(["p/00000", "p/00001", "p/00002"]);
+		expect(rpcCalls.map((c) => c.name)).toEqual([
+			"brain_page_links_after",
+			"brain_page_links",
+			"brain_page_links",
+		]);
+	});
+
+	it.each([
+		{ code: "XX000", message: "internal error", details: null },
+		{ code: "", message: "TypeError: fetch failed", details: null },
+		dbError,
+	])(
+		"otro error ($code) tira WikiStoreError y no llama al rpc viejo",
+		async (error) => {
+			const { client, rpcCalls } = fakeClient(
+				{ brain_page_links: linksRows(3) },
+				{ brain_page_links_after: error },
+			);
+			const result = createSupabaseWikiStore(client).listLinks("tenant-a");
+			await expect(result).rejects.toBeInstanceOf(WikiStoreError);
+			await expect(result).rejects.toMatchObject({ code: error.code });
+			expect(rpcCalls.map((c) => c.name)).toEqual(["brain_page_links_after"]);
+		},
+	);
+
+	it("dentro del TTL el mismo store no vuelve a probar el rpc keyset; pasado el TTL, sí", async () => {
+		vi.useFakeTimers();
+		try {
+			const { client, rpcCalls } = fakeClient(
+				{ brain_page_links: linksRows(3) },
+				{ brain_page_links_after: rpcMissing },
+			);
+			const store = createSupabaseWikiStore(client);
+			await store.listLinks("tenant-a");
+			rpcCalls.length = 0;
+
+			vi.advanceTimersByTime(59_000);
+			expect(await store.listLinks("tenant-b")).toHaveLength(3);
+			expect(rpcCalls.map((c) => c.name)).toEqual([
+				"brain_page_links",
+				"brain_page_links",
+			]);
+			rpcCalls.length = 0;
+
+			vi.advanceTimersByTime(2_000);
+			await store.listLinks("tenant-a");
+			expect(rpcCalls[0].name).toBe("brain_page_links_after");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("un store nuevo vuelve a probar el rpc keyset", async () => {
+		const { client, rpcCalls } = fakeClient(
+			{ brain_page_links: linksRows(3) },
+			{ brain_page_links_after: rpcMissing },
+		);
+		await createSupabaseWikiStore(client).listLinks("tenant-a");
+		rpcCalls.length = 0;
+		await createSupabaseWikiStore(client).listLinks("tenant-a");
+		expect(rpcCalls[0].name).toBe("brain_page_links_after");
+	});
+
+	it("con la migración aplicada nunca llama al rpc viejo", async () => {
+		const { client, rpcCalls } = fakeClient({
+			brain_page_links_after: linksRows(1500),
+			brain_page_links: linksRows(1500),
+		});
+		const store = createSupabaseWikiStore(client);
+		await store.listLinks("tenant-a");
+		await store.listLinks("tenant-a");
+		expect(rpcCalls.every((c) => c.name === "brain_page_links_after")).toBe(
+			true,
+		);
 	});
 });
 
