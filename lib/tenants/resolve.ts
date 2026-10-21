@@ -31,6 +31,8 @@ export interface TenantAccess {
 	displayName: string;
 	role: TenantRole;
 	userId: string;
+	/** Del JWT; puede faltar (por ejemplo, un login por teléfono). */
+	email?: string;
 	defaultModel: string;
 	allowedModels: string[];
 	brand: TenantBrand;
@@ -95,6 +97,7 @@ export const resolveTenantAccess = cache(
 				.maybeSingle(),
 		]);
 		const userId = claimsData?.claims?.sub;
+		const email = claimsData?.claims?.email;
 		if (!userId || !tenant) return null;
 
 		// Solo calienta el cache de loadEnabledAgents, que no rechaza (devuelve
@@ -149,6 +152,7 @@ export const resolveTenantAccess = cache(
 			displayName: tenant.display_name,
 			role,
 			userId,
+			...(typeof email === "string" && email ? { email } : {}),
 			defaultModel: tenant.default_model,
 			allowedModels: tenant.allowed_models,
 			brand: brandFromRow(tenant as TenantRow),

@@ -18,6 +18,7 @@ import {
 	resolveTenantAccess,
 } from "@/lib/tenants/resolve";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
+import { UserMenu } from "./user-menu";
 
 function brandLogoUrl(path: string | undefined): string | null {
 	return path
@@ -106,6 +107,13 @@ export default async function TenantLayout({
 							{ROLE_LABELS[tenant.role]}
 						</span>
 					)}
+					<div className="ml-auto shrink-0">
+						<UserMenu
+							slug={slug}
+							email={tenant.email}
+							roleLabel={ROLE_LABELS[tenant.role]}
+						/>
+					</div>
 				</div>
 				{/* La nav vive en su propia fila, no adentro del header: con cuatro
 				    destinos ya no entraba junto al logo y el nombre a 375px, y las
