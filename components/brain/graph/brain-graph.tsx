@@ -1,7 +1,7 @@
 "use client";
 
 // Mapa de conexiones del brain dibujado con Sigma (spec 26.4: D3, D4, D5, D6,
-// D7, D11, D16). Pide el payload compacto, arma el grafo con graphology, corre
+// D7, D8, D11, D16). Pide el payload compacto, arma el grafo con graphology, corre
 // ForceAtlas2 en un worker y dibuja con WebGL. Un clic en un nodo abre su
 // popover; pasar el mouse resalta al nodo y sus vecinos. Ocupa el alto y el
 // ancho de su contenedor. Quien lo monte lo carga con next/dynamic y ssr: false.
@@ -21,6 +21,7 @@ import {
 	type GraphNodeAttributes,
 	layoutBudgetMs,
 	toGraphData,
+	truncationNotice,
 } from "@/lib/brain/core/graph-view";
 import { GraphPopover } from "./graph-popover";
 import { readGraphTheme, watchColorScheme } from "./graph-theme";
@@ -324,6 +325,16 @@ export function BrainGraph({ tenantSlug }: { tenantSlug: string }) {
 			className="relative h-full w-full bg-background outline-none focus-visible:outline-2 focus-visible:outline-ring focus-visible:-outline-offset-2"
 		>
 			<div ref={containerRef} className="absolute inset-0" />
+			{payload?.truncated && (
+				// Arriba a la izquierda y sin capturar el mouse: no tapa el centro
+				// ni frena el paneo. Antes que el popover, que va encima.
+				<p
+					role="status"
+					className="pointer-events-none absolute top-3 left-3 max-w-[calc(100%-1.5rem)] rounded-md border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm"
+				>
+					{truncationNotice(payload.nodes.length, payload.total)}
+				</p>
+			)}
 			{sigma && graph && payload && popoverFor && (
 				<NodePopover
 					sigma={sigma}

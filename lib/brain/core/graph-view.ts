@@ -258,6 +258,13 @@ export function showsGraph(view: MapView | undefined, wide: boolean): boolean {
 	return view === "grafo" || (view === undefined && wide);
 }
 
+// Aviso de D8 cuando el brain pasa de GRAPH_MAX_NODES y el grafo muestra solo
+// las más conectadas.
+export function truncationNotice(shown: number, total: number): string {
+	const n = (value: number) => value.toLocaleString("es-AR");
+	return `Mostrando las ${n(shown)} páginas más conectadas de ${n(total)}.`;
+}
+
 type Point = { x: number; y: number };
 type Size = { width: number; height: number };
 

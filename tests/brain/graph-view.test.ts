@@ -25,6 +25,7 @@ import {
 	seedPosition,
 	showsGraph,
 	toGraphData,
+	truncationNotice,
 	visibleNodes,
 } from "@/lib/brain/core/graph-view";
 import { nodeBuiltins } from "./client-safe";
@@ -464,6 +465,24 @@ describe("popoverPosition", () => {
 		expect(
 			popoverPosition({ x: 100, y: 100 }, card, { width: 150, height: 90 }),
 		).toEqual({ left: 8, top: 8 });
+	});
+});
+
+// Value: protects=el aviso de D8 cuando el grafo muestra solo las N páginas más conectadas: cuántas se ven y de cuántas,
+//   con separador de miles es-AR.
+// fails_when=el aviso cambia de texto, invierte los números o los muestra sin separador de miles ("20000").
+// why_new=el payload traía truncated y total pero ninguna pantalla los leía (revisión final de la 26.4b); seam=none
+describe("truncationNotice", () => {
+	it("arma el texto con los dos números en es-AR", () => {
+		expect(truncationNotice(20_000, 25_000)).toBe(
+			"Mostrando las 20.000 páginas más conectadas de 25.000.",
+		);
+	});
+
+	it("con números chicos no agrega separador", () => {
+		expect(truncationNotice(3, 7)).toBe(
+			"Mostrando las 3 páginas más conectadas de 7.",
+		);
 	});
 });
 
