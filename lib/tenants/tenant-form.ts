@@ -51,7 +51,14 @@ export function readTenantForm(formData: FormData): unknown {
 		],
 		// Un checkbox sin marcar no viaja en el form.
 		selfSignupByDomain: formData.has("self_signup_by_domain"),
-		allowedModels: parseList(text(formData, "allowed_models")),
+		// Llega un valor por casilla marcada; se acepta también la lista en texto.
+		allowedModels: [
+			...new Set(
+				formData
+					.getAll("allowed_models")
+					.flatMap((v) => (typeof v === "string" ? parseList(v) : [])),
+			),
+		],
 		defaultModel: text(formData, "default_model"),
 		authMethods: readAuthMethods(formData),
 		primary: text(formData, "primary").trim(),

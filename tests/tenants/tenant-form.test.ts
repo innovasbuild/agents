@@ -134,6 +134,20 @@ describe("tenantInputSchema", () => {
 		);
 	});
 
+	it("toma un modelo por casilla marcada, sin repetir", () => {
+		const result = parse({
+			allowed_models: [
+				"anthropic/claude-sonnet-5",
+				"openai/gpt-5",
+				"openai/gpt-5",
+			],
+		});
+		expect(result.success && result.data.allowedModels).toEqual([
+			"anthropic/claude-sonnet-5",
+			"openai/gpt-5",
+		]);
+	});
+
 	it("rechaza la lista de modelos vacía", () => {
 		expect(message({ allowed_models: "" })).toBe(
 			"Tiene que haber al menos un modelo permitido.",

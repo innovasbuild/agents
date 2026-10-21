@@ -19,8 +19,9 @@ import {
 	AUTH_METHODS,
 	type AuthMethod,
 } from "@/lib/tenants/auth-methods";
-import { parseList } from "@/lib/tenants/tenant-form";
+import type { GatewayModel } from "@/lib/tenants/gateway-models";
 import { type TenantResult, updateTenant } from "./actions";
+import { ModelPicker } from "./model-picker";
 
 export interface TenantFormValues {
 	id: string;
@@ -46,9 +47,11 @@ export interface TenantFormValues {
 export function TenantForm({
 	tenant,
 	isOwner,
+	catalog,
 }: {
 	tenant: TenantFormValues;
 	isOwner: boolean;
+	catalog: GatewayModel[];
 }) {
 	const [result, setResult] = useState<TenantResult | null>(null);
 
@@ -57,6 +60,7 @@ export function TenantForm({
 			key={JSON.stringify(tenant)}
 			tenant={tenant}
 			isOwner={isOwner}
+			catalog={catalog}
 			result={result}
 			onResult={setResult}
 		/>
@@ -66,22 +70,22 @@ export function TenantForm({
 function TenantFormBody({
 	tenant,
 	isOwner,
+	catalog,
 	result,
 	onResult,
 }: {
 	tenant: TenantFormValues;
 	isOwner: boolean;
+	catalog: GatewayModel[];
 	result: TenantResult | null;
 	onResult: (result: TenantResult | null) => void;
 }) {
 	const formRef = useRef<HTMLFormElement>(null);
-	const [models, setModels] = useState(tenant.allowedModels.join("\n"));
+	const [modelOptions, setModelOptions] = useState(tenant.allowedModels);
 	const [defaultModel, setDefaultModel] = useState(tenant.defaultModel);
 	const [active, setActive] = useState(tenant.active);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [isPending, startTransition] = useTransition();
-
-	const modelOptions = parseList(models);
 
 	function save() {
 		const form = formRef.current;
@@ -151,21 +155,12 @@ function TenantFormBody({
 				dominios
 			</label>
 
-			<div className="space-y-1">
-				<label htmlFor="allowed_models" className="text-sm">
-					Modelos permitidos
-				</label>
-				<Textarea
-					id="allowed_models"
-					name="allowed_models"
-					rows={3}
-					value={models}
-					onChange={(event) => setModels(event.target.value)}
-				/>
-				<p className="text-muted-foreground text-xs">
-					Uno por línea, como proveedor/modelo.
-				</p>
-			</div>
+			<ModelPicker
+				catalog={catalog}
+				initial={tenant.allowedModels}
+				selected={modelOptions}
+				onChange={setModelOptions}
+			/>
 
 			<div className="space-y-1">
 				<label htmlFor="default_model" className="text-sm">

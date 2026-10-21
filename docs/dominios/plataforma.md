@@ -3,7 +3,7 @@ title: Plataforma y settings por empresa
 category: dominios
 status: activo
 tags: [plataforma, consola, tenants, marca, settings, presupuestos]
-updated: 2026-10-15
+updated: 2026-10-21
 sources:
   - app/plataforma
   - app/(auth)/login/[tenant]/page.tsx
@@ -51,6 +51,7 @@ Nada específico de una empresa está en el código: la diferencia entre empresa
 | `/plataforma/gasto` (`app/plataforma/gasto/`) | Gasto en modelos de todas las empresas y conciliación contra el AI Gateway (`page.tsx`, `reconcile-panel.tsx`, `actions.ts`) |
 | `app/plataforma/[slug]/console-actions.ts` | Server actions de la consola (agentes, brain, conectores, presupuestos) |
 | `app/plataforma/[slug]/actions.ts` | `updateTenant`: nombre, dominios, modelos, métodos de login, colores, logo, activo |
+| `app/plataforma/[slug]/model-picker.tsx`, `lib/tenants/gateway-models.ts` | Selector de modelos permitidos sobre el catálogo público del AI Gateway |
 | `/login/[tenant]` | Landing pública de login de cada empresa |
 | `/[tenant]/settings` | Settings del administrador del cliente |
 | `/[tenant]/settings/usuarios` | Usuarios e invitaciones: ver [invitaciones y usuarios](invitaciones-y-usuarios.md) |
@@ -83,6 +84,8 @@ El title y el favicon también salen de la marca: `tenantMetadata` (`lib/tenants
 ### Detalle de una empresa en la consola
 
 `/plataforma/[slug]` muestra, en orden: el formulario de la empresa, **Qué falta** (`tenantReadiness`: sin agentes, sin brain, faltan conectores, conectores sin verificar, falta el ICP o los hooks en el brain), **Agentes**, **Brain**, **Conectores**, **Dominio**, **Presupuestos** y **Usuarios**.
+
+En el formulario, **Modelos permitidos** es una lista de casillas. Los modelos que la empresa ya tiene quedan a la vista y marcados, con su precio de entrada y salida por millón de tokens; el resto del catálogo va plegado bajo "Ver más modelos", agrupado por proveedor y con buscador. El catálogo sale de `https://ai-gateway.vercel.sh/v1/models` (público, sin clave, cacheado un día): solo modelos `language` y sin las variantes `-batch`. Si el gateway no responde, se ven los modelos actuales y no se pueden sumar otros. El formulario envía un `allowed_models` por casilla marcada y `updateTenant` valida igual que antes (forma `proveedor/modelo`, al menos uno, el default entre los permitidos).
 
 - **Agentes** (`setAgent`): habilita o deshabilita un agente del catálogo y fija su acceso al brain (`none`, `read`, `read_write`) con `platform_set_agent` (evento `agent.updated`). Un agente que requiere brain no se habilita hasta que exista uno; al prenderse por primera vez se siembran las páginas del canon.
 - **Brain** (`createBrain`): crea el binding `brain/wiki` con la configuración por defecto (categorías `empresa`, `producto`, `comercial`, `operacion` y el frontmatter requerido) y una carpeta de primer nivel por categoría (`brain_folders_from_config`). Las categorías se muestran solo en lectura, con el link "Editar en el brain": son las carpetas de primer nivel y se crean y borran desde el árbol del brain (etapa 26.1a). **Habilitar skills** (`enableBrainSkills`): si las categorías no incluyen `skill`, la sección ofrece el botón "Habilitar skills", que llama a `platform_enable_brain_skills` (`security definer`, solo `service_role`). Bloquea el binding, crea la carpeta `skills` con `brain_ensure_folders`, sincroniza `config.categories` (suma `skill`) y deja el evento `brain.skills_enabled`. Es el único camino porque `skills` es una ruta reservada que `brain_create_folder` rechaza. Habilitar de nuevo no cambia nada ni deja otro evento; repone la categoría si la carpeta estaba pero la config no; falla con mensaje de consola si la empresa no tiene brain o ya tiene 20 carpetas de primer nivel. Deshabilitar skills no existe. El contenido del brain se explica en [brain](brain.md).
