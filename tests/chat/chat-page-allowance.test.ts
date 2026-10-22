@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
 	spent: 0,
-	plan: "free" as "free" | "pago",
+	plan: "free" as "free" | "pago" | "enterprise" | null,
+	suspended: null as string | null,
 }));
 
 vi.mock("../../lib/supabase/admin", () => ({
@@ -14,9 +15,9 @@ vi.mock("../../lib/supabase/admin", () => ({
 				maybeSingle: async () =>
 					table === "tenants"
 						? {
-								data: {
+								data: state.plan && {
 									plan: state.plan,
-									suspended_reason: null,
+									suspended_reason: state.suspended,
 									trial_ends_at: null,
 									ai_monthly_limit_usd: null,
 								},
@@ -35,6 +36,7 @@ import { chatAiBlock } from "../../lib/plans/chat-allowance";
 describe("chatAiBlock", () => {
 	beforeEach(() => {
 		state.plan = "free";
+		state.suspended = null;
 	});
 
 	it("devuelve limit:ai_credit cuando el Free gastó los USD 5", async () => {
@@ -49,6 +51,24 @@ describe("chatAiBlock", () => {
 
 	it("pago sin tope no se bloquea", async () => {
 		state.plan = "pago";
+		state.spent = 999;
+		expect(await chatAiBlock("t1")).toBeNull();
+	});
+
+	it("enterprise nunca se corta por presupuesto, aunque el gasto sea enorme", async () => {
+		state.plan = "enterprise";
+		state.spent = 999;
+		expect(await chatAiBlock("t1")).toBeNull();
+	});
+
+	it("enterprise suspendido se corta", async () => {
+		state.plan = "enterprise";
+		state.suspended = "trial_vencido";
+		expect(await chatAiBlock("t1")).toBe("suspended:trial_vencido");
+	});
+
+	it("sin plan no se bloquea", async () => {
+		state.plan = null;
 		state.spent = 999;
 		expect(await chatAiBlock("t1")).toBeNull();
 	});

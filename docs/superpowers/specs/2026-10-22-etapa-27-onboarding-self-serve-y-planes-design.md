@@ -134,7 +134,7 @@ Función SQL `self_serve_create_tenant(p_display_name, p_domain)`, `security def
 
 Después, la server action (con el cliente admin, como la de plataforma) crea el brain con `platform_bind_connection` (wiki) **con `categories: []`**: las carpetas raíz son las que la persona confirma en el paso 3, no el molde de cuatro de `DEFAULT_BRAIN_CONFIG`. En el mismo paso habilita las skills (`platform_enable_brain_skills`), porque P12 y la 27.3 las necesitan desde el día uno. Luego encola el research. Si el brain falla, la pantalla lo dice y ofrece reintentar; la empresa no queda sin brain en silencio.
 
-Presupuesto: Free no usa `tenant_budgets` (manda P19). Un solo módulo decide cuánto puede gastar una empresa, `lib/plans/ai-allowance.ts`: `free` por su crédito mensual, `pago` por `ai_monthly_limit_usd` (o sin tope), `enterprise` por `tenant_budgets` como hoy. Lo consultan el canal del chat antes de cada turno (nuevo: hoy el chat no se corta) y `budgetStatus` del runner (que hoy cortaría a una Free por "límite 0").
+Presupuesto: Free no usa `tenant_budgets` (manda P19). Un solo módulo decide cuánto puede gastar una empresa, `lib/plans/ai-allowance.ts`: `free` por su crédito mensual, `pago` por `ai_monthly_limit_usd` (o sin tope), `enterprise` por `tenant_budgets` como hoy. El chat se corta solo por suspensión (cualquier plan) y por el crédito Free / el tope Pago (`aiAllowanceForChat`); nunca por `tenant_budgets` de Enterprise (se mantiene G4 de la 21.5). El runner es el único consumidor de `tenant_budgets` (`aiAllowance` + `budgetStatus`; este último, que hoy cortaría a una Free por "límite 0", queda solo para enterprise).
 
 ### 5.2 Research de carpetas
 
@@ -172,7 +172,7 @@ Se diseñan en Pencil, un archivo por flujo, antes del plan: los seis pasos del 
 
 - Invitación: si `plan = 'free'`, `users + pending_invitations >= 3` (la pendiente reserva lugar; la cobranza cuenta solo activos) y no hay tarjeta cargada, `inviteToTenant` devuelve `limit:users`. Lo mismo `join_tenants_by_domain` (no aplica hasta 27.4, pero la función ya chequea).
 - Publicación: si `plan = 'free'` y `published_skills >= 5`, la publicación devuelve `limit:skills`.
-- Chat: antes de cada turno, el canal consulta `lib/plans/ai-allowance.ts`; si el crédito del mes está agotado, responde con un mensaje fijo (no una llamada al modelo) y la pantalla muestra el diálogo. El runner usa el mismo módulo.
+- Chat: antes de cada turno, un hook consulta `aiAllowanceForChat`; si la empresa está suspendida o el crédito Free / tope Pago del mes está agotado, el turno falla y la pantalla muestra el diálogo. Enterprise nunca se corta por `tenant_budgets`. El corte se implementa como un turno fallido (`ai_allowance:<motivo>` en `turn.failed`) y no como una respuesta fija, así que los turnos del canal MCP de una empresa cortada también fallan con un `turn.failed` pelado. El runner usa `aiAllowance` y conserva su presupuesto diario para enterprise.
 - Trial: un schedule diario (eve `schedules/`, mismo patrón que los que ya existen) pone `suspended_reason = 'trial_vencido'` a las Free con `trial_ends_at < now()` y deja el evento `tenant.suspended`. Aviso en la app desde 14 días antes, con la fecha.
 - Suspendida: cabecera con el aviso y el motivo; el diálogo de tope dice "Hablá con nosotros" hasta la 27.2.
 

@@ -69,3 +69,31 @@ export async function aiAllowance(
 		? { ok: false, reason: "limit:ai_credit", spent, limit }
 		: { ok: true, spent, limit };
 }
+
+/**
+ * Corte del CHAT (spec etapa 27 §5.5, ruling R12): solo por suspensión (todo
+ * plan) y por el crédito Free / tope Pago. Enterprise nunca se corta por
+ * tenant_budgets (G4 de la 21.5): ese presupuesto es solo del runner, así que
+ * acá no se lee ni gasto diario ni zona horaria.
+ */
+export async function aiAllowanceForChat(
+	input: { tenantId: string },
+	deps: { store: AllowanceStore; now: () => Date },
+): Promise<AiAllowance> {
+	const plan = await deps.store.tenantPlan(input.tenantId);
+	if (!plan) return { ok: true, spent: 0, limit: null };
+	const suspended = suspendedReasonOf(plan);
+	if (suspended) {
+		return {
+			ok: false,
+			reason: suspended as `suspended:${SuspendedReason}`,
+			spent: 0,
+			limit: null,
+		};
+	}
+	if (plan.plan !== "free" && plan.plan !== "pago") {
+		return { ok: true, spent: 0, limit: null };
+	}
+	// timezone solo importa para enterprise, que no llega hasta acá.
+	return aiAllowance({ ...input, timezone: "UTC" }, deps);
+}

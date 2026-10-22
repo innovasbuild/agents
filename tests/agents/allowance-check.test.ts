@@ -3,20 +3,23 @@ import {
 	allowanceReasonFrom,
 	checkTurnAllowance,
 } from "../../lib/agents/allowance-check";
-import type { AiAllowance } from "../../lib/plans/ai-allowance";
-import type { PlanStore } from "../../lib/plans/store";
+import type { AiAllowance, AllowanceStore } from "../../lib/plans/ai-allowance";
 
-const store = {} as PlanStore;
+const store = {} as AllowanceStore;
+const makeStore = () => store;
 const now = () => new Date("2026-10-22T12:00:00Z");
-const tz = "America/Argentina/Buenos_Aires";
 
-function run(tenantId: string | null, allowance: () => Promise<AiAllowance>) {
+function run(
+	tenantId: string | null,
+	allowance: () => Promise<AiAllowance>,
+	factory: () => AllowanceStore = makeStore,
+) {
 	const fn = vi.fn(allowance);
 	return {
 		fn,
 		done: checkTurnAllowance(
-			{ tenantId, timezone: tz },
-			{ allowance: fn as never, store, now },
+			{ tenantId },
+			{ allowance: fn as never, makeStore: factory, now },
 		),
 	};
 }
@@ -39,10 +42,7 @@ describe("checkTurnAllowance", () => {
 			limit: 5,
 		}));
 		await expect(done).resolves.toBeUndefined();
-		expect(fn).toHaveBeenCalledWith(
-			{ tenantId: "t1", timezone: tz },
-			{ store, now },
-		);
+		expect(fn).toHaveBeenCalledWith({ tenantId: "t1" }, { store, now });
 	});
 
 	it("sin empresa no consulta nada", async () => {
@@ -68,6 +68,22 @@ describe("checkTurnAllowance", () => {
 		const { done } = run("t1", async () => {
 			throw new Error("base caída");
 		});
+		await expect(done).resolves.toBeUndefined();
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
+	});
+});
+
+describe("checkTurnAllowance: fábrica del store", () => {
+	it("si crear el cliente tira, el turno pasa (fail open) y se loguea", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const { done } = run(
+			"t1",
+			async () => ({ ok: true, spent: 0, limit: null }),
+			() => {
+				throw new Error("falta SUPABASE_SERVICE_ROLE_KEY");
+			},
+		);
 		await expect(done).resolves.toBeUndefined();
 		expect(spy).toHaveBeenCalled();
 		spy.mockRestore();

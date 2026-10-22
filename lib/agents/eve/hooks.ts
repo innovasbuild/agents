@@ -3,9 +3,8 @@
 // Única excepción: allowanceHook, que tira a propósito para cortar el turno
 // cuando la empresa se quedó sin crédito de IA.
 import { defineHook } from "eve/hooks";
-import { aiAllowance } from "../../plans/ai-allowance";
+import { aiAllowanceForChat } from "../../plans/ai-allowance";
 import { createPlanStore } from "../../plans/store";
-import { tenantTimezone } from "../../plans/tenant-timezone";
 import { createAdminClient } from "../../supabase/admin";
 import { createUsageRecorder, resolveRunId } from "../../workflows/usage";
 import { checkTurnAllowance } from "../allowance-check";
@@ -208,12 +207,11 @@ export function allowanceHook() {
 				const auth = ctx.session.auth.current ?? ctx.session.auth.initiator;
 				const tenantId = attribute(auth?.attributes?.tenantId) || null;
 				if (!tenantId) return;
-				const admin = createAdminClient();
 				await checkTurnAllowance(
-					{ tenantId, timezone: await tenantTimezone(admin, tenantId) },
+					{ tenantId },
 					{
-						allowance: aiAllowance,
-						store: createPlanStore(admin),
+						allowance: aiAllowanceForChat,
+						makeStore: () => createPlanStore(createAdminClient()),
 						now: () => new Date(),
 					},
 				);
