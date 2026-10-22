@@ -45,6 +45,7 @@ const RESERVED_SEGMENTS = new Set([
 	"api",
 	"auth",
 	"brain",
+	"empezar",
 	"eve",
 	"login",
 	"oauth",

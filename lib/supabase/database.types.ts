@@ -945,6 +945,42 @@ export type Database = {
 					},
 				];
 			};
+			onboarding_research: {
+				Row: {
+					error: string | null;
+					hint: string | null;
+					result: Json | null;
+					status: string;
+					tenant_id: string;
+					updated_at: string;
+				};
+				ComputedFields: never;
+				Insert: {
+					error?: string | null;
+					hint?: string | null;
+					result?: Json | null;
+					status: string;
+					tenant_id: string;
+					updated_at?: string;
+				};
+				Update: {
+					error?: string | null;
+					hint?: string | null;
+					result?: Json | null;
+					status?: string;
+					tenant_id?: string;
+					updated_at?: string;
+				};
+				Relationships: [
+					{
+						foreignKeyName: "onboarding_research_tenant_id_fkey";
+						columns: ["tenant_id"];
+						isOneToOne: true;
+						referencedRelation: "tenants";
+						referencedColumns: ["id"];
+					},
+				];
+			};
 			queue_items: {
 				Row: {
 					ancla: Json | null;
@@ -1426,6 +1462,7 @@ export type Database = {
 			tenants: {
 				Row: {
 					active: boolean;
+					ai_monthly_limit_usd: number | null;
 					allowed_domains: string[];
 					allowed_models: string[];
 					auth_methods: string[];
@@ -1434,12 +1471,18 @@ export type Database = {
 					default_model: string;
 					display_name: string;
 					id: string;
+					onboarding_completed_at: string | null;
+					onboarding_step: string | null;
+					plan: string;
 					self_signup_by_domain: boolean;
 					slug: string;
+					suspended_reason: string | null;
+					trial_ends_at: string | null;
 				};
 				ComputedFields: never;
 				Insert: {
 					active?: boolean;
+					ai_monthly_limit_usd?: number | null;
 					allowed_domains?: string[];
 					allowed_models?: string[];
 					auth_methods?: string[];
@@ -1448,11 +1491,17 @@ export type Database = {
 					default_model?: string;
 					display_name: string;
 					id?: string;
+					onboarding_completed_at?: string | null;
+					onboarding_step?: string | null;
+					plan?: string;
 					self_signup_by_domain?: boolean;
 					slug: string;
+					suspended_reason?: string | null;
+					trial_ends_at?: string | null;
 				};
 				Update: {
 					active?: boolean;
+					ai_monthly_limit_usd?: number | null;
 					allowed_domains?: string[];
 					allowed_models?: string[];
 					auth_methods?: string[];
@@ -1461,8 +1510,13 @@ export type Database = {
 					default_model?: string;
 					display_name?: string;
 					id?: string;
+					onboarding_completed_at?: string | null;
+					onboarding_step?: string | null;
+					plan?: string;
 					self_signup_by_domain?: boolean;
 					slug?: string;
+					suspended_reason?: string | null;
+					trial_ends_at?: string | null;
 				};
 				Relationships: [];
 			};
@@ -1655,6 +1709,20 @@ export type Database = {
 				Returns: {
 					allowed: boolean;
 					retry_after_seconds: number;
+				}[];
+			};
+			brain_page_links: {
+				Args: { p_tenant_id: string };
+				Returns: {
+					links: Json;
+					slug: string;
+				}[];
+			};
+			brain_page_links_after: {
+				Args: { p_after: string; p_limit: number; p_tenant_id: string };
+				Returns: {
+					links: Json;
+					slug: string;
 				}[];
 			};
 			brain_publish_skill: {
@@ -1942,6 +2010,10 @@ export type Database = {
 			};
 			resolve_tenant_by_host: { Args: { p_host: string }; Returns: string };
 			run_cost_usd: { Args: { p_run: string }; Returns: number };
+			self_serve_create_tenant: {
+				Args: { p_display_name: string; p_domain: string };
+				Returns: Json;
+			};
 			set_approval: {
 				Args: {
 					p_agent: string;
@@ -1977,6 +2049,10 @@ export type Database = {
 				};
 				Returns: undefined;
 			};
+			set_onboarding_step: {
+				Args: { p_step: string; p_tenant: string };
+				Returns: undefined;
+			};
 			set_outreach_config: {
 				Args: { p_config: Json; p_tenant: string };
 				Returns: undefined;
@@ -1993,6 +2069,8 @@ export type Database = {
 				Returns: undefined;
 			};
 			settings_actor: { Args: { p_tenant: string }; Returns: string };
+			signup_route: { Args: Record<PropertyKey, never>; Returns: string };
+			slug_from_domain: { Args: { p_domain: string }; Returns: string };
 			tenant_allows_login: { Args: { p_tenant: string }; Returns: boolean };
 			tenant_budget_status: {
 				Args: { p_resources: string[]; p_since: string; p_tenant: string };
@@ -2002,6 +2080,8 @@ export type Database = {
 					spent: number;
 				}[];
 			};
+			tenant_counts: { Args: { p_tenant: string }; Returns: Json };
+			tenant_is_writable: { Args: { p_tenant: string }; Returns: boolean };
 			tenant_spend_report: {
 				Args: { p_from: string; p_tenant: string; p_to: string };
 				Returns: {

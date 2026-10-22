@@ -234,6 +234,7 @@ describe("landingPathFor", () => {
 			"/login/acme",
 			"/plataforma",
 			"/plataforma/acme",
+			"/empezar/x",
 			"/sin-acceso",
 			"/oauth/consent?x=1",
 			"/auth/callback",
