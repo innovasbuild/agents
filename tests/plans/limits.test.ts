@@ -88,18 +88,37 @@ describe("monthStartUtc", () => {
 });
 
 describe("limitMessage", () => {
-	it("tiene copy para cada razón", () => {
-		for (const r of [
-			"limit:users",
+	const cases = [
+		["limit:users", "Tu equipo creció", ["3 personas", "escribinos"]],
+		[
 			"limit:skills",
+			"Llegaste a las 5 skills del plan gratis",
+			["sexta", "escribinos"],
+		],
+		[
 			"limit:ai_credit",
+			"Se terminó el crédito de IA de este mes",
+			["USD 5", "El brain y las páginas siguen disponibles", "escribinos"],
+		],
+		[
 			"suspended:trial_vencido",
+			"Se terminaron los 3 meses del plan gratis",
+			["puede leer todo", "Escribinos"],
+		],
+		[
 			"suspended:pago_fallido",
+			"No pudimos cobrar el último pago",
+			["puede leer todo", "Escribinos"],
+		],
+		[
 			"suspended:cancelado",
-		] as const) {
-			const m = limitMessage(r);
-			expect(m.title.length).toBeGreaterThan(0);
-			expect(m.body.length).toBeGreaterThan(0);
-		}
+			"La suscripción está cancelada",
+			["puede leer todo", "Escribinos"],
+		],
+	] as const;
+	it.each(cases)("%s", (reason, title, phrases) => {
+		const m = limitMessage(reason);
+		expect(m.title).toBe(title);
+		for (const p of phrases) expect(m.body).toContain(p);
 	});
 });

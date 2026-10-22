@@ -88,16 +88,16 @@ export function monthStartUtc(now: Date): Date {
 const SUSPENDED_COPY: Record<SuspendedReason, { title: string; body: string }> =
 	{
 		trial_vencido: {
-			title: "Terminó tu prueba gratuita",
-			body: "Tu empresa quedó en pausa. Pasá al plan pago para volver a usar Central IA; tus datos siguen guardados.",
+			title: "Se terminaron los 3 meses del plan gratis",
+			body: "Tu equipo puede leer todo, pero no escribir ni usar IA hasta que carguen una tarjeta. Escribinos y lo activamos a mano.",
 		},
 		pago_fallido: {
-			title: "No pudimos cobrar tu suscripción",
-			body: "Tu empresa quedó en pausa. Actualizá el medio de pago para reactivarla; tus datos siguen guardados.",
+			title: "No pudimos cobrar el último pago",
+			body: "Tu equipo puede leer todo, pero no escribir ni usar IA hasta que se regularice el pago. Escribinos y lo resolvemos.",
 		},
 		cancelado: {
-			title: "Tu suscripción está cancelada",
-			body: "Tu empresa quedó en pausa. Podés reactivarla cuando quieras desde el plan pago.",
+			title: "La suscripción está cancelada",
+			body: "Tu equipo puede leer todo, pero no escribir ni usar IA. Escribinos si querés volver a activar el plan.",
 		},
 	};
 
@@ -108,18 +108,18 @@ export function limitMessage(reason: LimitReason): {
 	switch (reason) {
 		case "limit:users":
 			return {
-				title: "Llegaste al límite de personas",
-				body: "El plan gratuito incluye hasta 3 personas. Pasá al plan pago para invitar a más.",
+				title: "Tu equipo creció",
+				body: "El plan gratis incluye 3 personas. Estamos terminando el pago con tarjeta; mientras tanto, escribinos y lo activamos a mano.",
 			};
 		case "limit:skills":
 			return {
-				title: "Llegaste al límite de skills",
-				body: "El plan gratuito incluye hasta 5 skills publicadas. Pasá al plan pago para publicar más.",
+				title: "Llegaste a las 5 skills del plan gratis",
+				body: "Para publicar la sexta hace falta pasar al plan pago, donde las skills no tienen tope. Estamos terminando el pago con tarjeta; mientras tanto, escribinos y lo activamos a mano.",
 			};
 		case "limit:ai_credit":
 			return {
-				title: "Se agotó el crédito de IA del mes",
-				body: "El crédito se renueva el primer día del mes. Pasá al plan pago para seguir usando la IA sin cortes.",
+				title: "Se terminó el crédito de IA de este mes",
+				body: "El plan gratis incluye USD 5 de IA por mes y ya los usaron. El brain y las páginas siguen disponibles; solo el chat espera hasta el mes que viene o hasta que pasen al plan pago (escribinos y lo activamos a mano).",
 			};
 		default:
 			return SUSPENDED_COPY[
