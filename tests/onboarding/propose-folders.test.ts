@@ -182,4 +182,69 @@ describe("proposeFolders", () => {
 		});
 		expect(r.output).toBeUndefined();
 	});
+
+	it("g) sin lecturas y sin hint fuerza found=false; con hint lo deja", async () => {
+		const generateText = (async () => ({
+			output: proposal(nine),
+			steps: [],
+			usage: {},
+		})) as never;
+		const deps = { generateText, readPage: async (u: string) => okPage(u) };
+		const sin = await proposeFolders(input, deps);
+		expect(sin.output?.found).toBe(false);
+		const con = await proposeFolders({ ...input, hint: "autos" }, deps);
+		expect(con.output?.found).toBe(true);
+	});
+});
+
+describe("normalizeProposal (contrato 8 a 10)", () => {
+	it("el schema acepta 7 y 11", () => {
+		for (const n of [7, 11]) {
+			const folders = Array.from({ length: n }, (_, i) => folder(`c${i}`));
+			expect(folderProposalSchema.safeParse(proposal(folders)).success).toBe(
+				true,
+			);
+		}
+	});
+
+	it("rellena a 8 desde GENERIC_FOLDERS y pasa el schema", () => {
+		const n = normalizeProposal(
+			proposal([folder("direccion", true), folder("skills"), folder("x1")]),
+		);
+		expect(n.folders).toHaveLength(8);
+		expect(folderProposalSchema.safeParse(n).success).toBe(true);
+		expect(n.folders.find((f) => f.slug === "finanzas")?.restricted).toBe(true);
+	});
+
+	it("11 entran, 10 salen con dirección y finanzas", () => {
+		const folders = [
+			...Array.from({ length: 9 }, (_, i) => folder(`c${i}`)),
+			folder("direccion", true),
+			folder("finanzas", true),
+		];
+		const n = normalizeProposal(proposal(folders));
+		expect(n.folders).toHaveLength(10);
+		const slugs = n.folders.map((f) => f.slug);
+		expect(slugs).toContain("direccion");
+		expect(slugs).toContain("finanzas");
+	});
+
+	it("si faltan ambas, arranca direccion, finanzas", () => {
+		const n = normalizeProposal(
+			proposal(Array.from({ length: 8 }, (_, i) => folder(`c${i}`))),
+		);
+		expect(n.folders.slice(0, 2).map((f) => f.slug)).toEqual([
+			"direccion",
+			"finanzas",
+		]);
+		expect(n.folders.length).toBeLessThanOrEqual(10);
+	});
+
+	it("dedup insensible a mayúsculas y espacios", () => {
+		const n = normalizeProposal(
+			proposal([folder("Direccion"), folder("direccion "), ...nine.slice(1)]),
+		);
+		expect(n.folders.filter((f) => f.slug === "direccion")).toHaveLength(1);
+		expect(n.folders[0].restricted).toBe(true);
+	});
 });

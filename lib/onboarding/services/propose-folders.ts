@@ -59,8 +59,8 @@ export const folderProposalSchema = z.object({
 				restricted: z.boolean(),
 			}),
 		)
-		.min(8)
-		.max(10),
+		.min(1)
+		.max(20),
 });
 export type FolderProposal = z.infer<typeof folderProposalSchema>;
 
@@ -151,6 +151,10 @@ export async function proposeFolders(
 		if (!NoOutputGeneratedError.isInstance(error)) throw error;
 		output = undefined;
 	}
+	// Sitio que no respondió y sin texto de la persona: no hay de dónde sacar una
+	// propuesta propia, sin importar lo que diga el modelo (spec 27 §5.2).
+	if (output && pagesRead === 0 && !input.hint)
+		output = { ...output, found: false };
 	const spend = steps.spend();
 	return {
 		output,

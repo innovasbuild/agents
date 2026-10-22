@@ -56,25 +56,42 @@ export const GENERIC_FOLDERS: Folders = [
 	},
 ];
 
+const MIN_FOLDERS = 8;
 const MAX_FOLDERS = 10;
 // Siempre restringidas: lo que el modelo diga no las abre.
 const ALWAYS_RESTRICTED = ["direccion", "finanzas"];
 
+/** Dueño único del contrato 8 a 10: filtra, deduplica, rellena y recorta. */
 export function normalizeProposal(p: FolderProposal): FolderProposal {
 	const reserved: readonly string[] = RESERVED_TOP_FOLDERS;
 	const seen = new Set<string>();
 	const folders: Folders = [];
 	for (const f of p.folders) {
-		if (reserved.includes(f.slug) || seen.has(f.slug)) continue;
-		seen.add(f.slug);
+		const slug = f.slug.trim().toLowerCase();
+		if (reserved.includes(slug) || seen.has(slug)) continue;
+		seen.add(slug);
 		folders.push(
-			ALWAYS_RESTRICTED.includes(f.slug) ? { ...f, restricted: true } : f,
+			ALWAYS_RESTRICTED.includes(slug)
+				? { ...f, slug, restricted: true }
+				: { ...f, slug },
 		);
 	}
 	for (const slug of ALWAYS_RESTRICTED) {
 		if (seen.has(slug)) continue;
 		const generic = GENERIC_FOLDERS.find((g) => g.slug === slug);
-		if (generic) folders.unshift({ ...generic });
+		if (!generic) continue;
+		seen.add(slug);
+		const at =
+			slug === "direccion"
+				? 0
+				: folders.findIndex((f) => f.slug === "direccion") + 1;
+		folders.splice(at, 0, { ...generic });
+	}
+	for (const g of GENERIC_FOLDERS) {
+		if (folders.length >= MIN_FOLDERS) break;
+		if (seen.has(g.slug)) continue;
+		seen.add(g.slug);
+		folders.push({ ...g });
 	}
 	// Recorta de atrás para adelante sin tocar las restringidas obligatorias.
 	for (
