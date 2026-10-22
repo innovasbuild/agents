@@ -17,19 +17,19 @@ Lo que cambió respecto del texto del plan (el cuerpo no se reescribió; manda l
 - **R1.** `tenant_counts` funciona también con la service role (no exige `auth.uid()`).
 - **R2.** El SQL de perfil (`set_tenant_profile`, `set_tenant_auth_methods`, `set_ai_monthly_limit`) va en una segunda migración, `20261030120000_tenant_profile_settings.sql`.
 - **R3.** `canSignUpByDomain` recibe un parámetro de intención (`login` | `signup`).
-- **R4.** La propuesta de carpetas admite como máximo 19.
+- **R4.** La propuesta del research tiene de 8 a 10 carpetas (`normalizeProposal`); la persona puede confirmar hasta 19 después de editarla.
 - **R5.** El paso Equipo recibe los planes (para el tope al invitar).
 - **R6.** Un research con `hint` devuelve `found = true`.
 - **R7.** Un research `running` colgado se trata como error.
-- **R8.** Si no hay fila de research, la pantalla la crea con `ensureResearch`.
-- **R9.** Después de `folders_from_config`, las carpetas se concilian (reintentos, espera acotada, sin corridas dobles).
+- **R8.** Si no hay fila de research, la pantalla la crea con `ensureResearch`, que la reclama de forma atómica (upsert con `ignoreDuplicates`); `retryResearch` y `useGenericFolders` se niegan mientras una corrida fresca está en curso.
+- **R9.** La limpieza de carpetas corre después de `brain_folders_from_config` (así `folder_last` no puede dispararse): borra las carpetas raíz sobrantes de un intento anterior que no están en el conjunto confirmado, y un `BR409` (`folder_not_empty` / `folder_last`) de `brain_delete_folder` no es fatal: la carpeta queda y se registra en el log.
 - **R10.** La restricción al dominio del paso Acceso es una línea fija, sin interruptor.
 - **R11.** El tope de usuarios cuenta miembros activos más invitaciones pendientes al invitar; la cobranza cuenta solo activos.
 - **R12.** El chat se corta solo por suspensión y por el crédito Free o el tope Pago; nunca por los presupuestos `tenant_budgets` de Enterprise.
 
 ## Global Constraints
 
-- Free: 3 usuarios (membresías `tenant_admin` + `tenant_member`; invitaciones pendientes **no** cuentan), 5 skills publicadas, crédito de IA **USD 5** por mes calendario UTC, dura **3 meses** desde `created_at` (P2, P19, P25).
+- Free: 3 usuarios (membresías `tenant_admin` + `tenant_member`; invitaciones pendientes **no** cuentan; reemplazado por R11, ver Enmiendas), 5 skills publicadas, crédito de IA **USD 5** por mes calendario UTC, dura **3 meses** desde `created_at` (P2, P19, P25).
 - Tarjeta al mandar la cuarta invitación; en 27.1 el tope muestra "Hablá con nosotros" (`mailto:hola@innov.as`) (P6, §3).
 - Motivos de rechazo, textuales: `limit:users`, `limit:skills`, `limit:ai_credit`, `suspended:trial_vencido`, `suspended:pago_fallido`, `suspended:cancelado` (§3).
 - Correo de trabajo obligatorio: dominio en `is_public_email_domain` / `PUBLIC_EMAIL_DOMAINS` no crea empresa (P8).

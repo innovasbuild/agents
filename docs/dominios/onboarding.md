@@ -38,7 +38,7 @@ Los planes viven en `tenants.plan` y los topes se aplican en el servidor, nunca 
 | `/empezar` (`app/empezar/page.tsx`) | Paso 1, la cuenta: Google, Microsoft o correo. Con sesión, redirige según `signup_route` |
 | `/empezar/empresa` | Paso 2: nombre y dominio; llama a `self_serve_create_tenant`, arma el brain y encola el research |
 | `/empezar/dominio-tomado` | El dominio ya tiene empresa y no está abierto: "pedile a quien la administra que te invite", sin nombres |
-| `/empezar/[slug]/carpetas` | Paso 3: propuesta de carpetas (8 a 19), edición y confirmación |
+| `/empezar/[slug]/carpetas` | Paso 3: propuesta de 8 a 10 carpetas, edición (se pueden confirmar hasta 19) y confirmación |
 | `/empezar/[slug]/logo` | Paso 4: PNG, SVG o WebP hasta 1 MB, u omitir |
 | `/empezar/[slug]/acceso` | Paso 5: métodos de login y restricción al dominio |
 | `/empezar/[slug]/equipo` | Paso 6: invitar a dos personas y marcar el alta como terminada |
@@ -99,13 +99,13 @@ Antes de cada turno, el hook `allowance` del Asistente y de outreach consulta `a
 5. **Acceso.** Métodos de login (al menos uno) y la restricción al dominio de la empresa, que es una línea fija sin interruptor. "Todos los del dominio" no se ofrece: el ingreso abierto sigue deshabilitado fuera de Enterprise hasta la 27.4.
 6. **Equipo.** Invita a dos personas (o saltea) y marca `onboarding_completed_at`.
 
-`set_onboarding_step(tenant, step)` guarda el avance en `tenants.onboarding_step` (`logo`, `acceso`, `equipo`; `null` lo da por terminado). Con el alta sin completar, cualquier ruta de la empresa redirige al paso que falta (`step-gate`); el de carpetas se deduce de que no haya carpetas.
+`tenants.onboarding_step` guarda el avance. La columna nace en `carpetas` con `self_serve_create_tenant` (el RPC `set_onboarding_step` no acepta ese valor), y `set_onboarding_step` la avanza por `logo`, `acceso`, `equipo` y por último `null`, que además fija `onboarding_completed_at`. Con el alta sin completar, cualquier ruta de la empresa redirige al paso guardado (`gateForStep`).
 
 ### El research: nodo `onboarding/propose-folders`
 
 Nodo de efecto 1 y tier `barato`, registrado en `lib/workflows/registry.ts`. Entra `{ domain, displayName, hint? }` y sale `{ found, company, brand, folders }` con schema. Lee el sitio con `fetchPublicPage` (home y hasta 8 páginas enlazadas) y propone carpetas; siempre incluye dirección y finanzas, restringidas. `normalizeProposal` rellena hasta 8 con la plantilla genérica. Sin sitio legible devuelve `found = false`; con un `hint` (tres líneas del usuario) devuelve `found = true`.
 
-El research corre de fondo y se guarda en `onboarding_research` (una fila por empresa; estado, propuesta y código de error, no el mensaje crudo). Un research en `running` que quedó colgado cuenta como error; si no hay fila, la pantalla la crea (`ensureResearch`). Gasta con `metered()` y asienta en `usage_entries`, así que cuenta contra el crédito de Free.
+El research corre de fondo y se guarda en `onboarding_research` (una fila por empresa; estado, propuesta y código de error, no el mensaje crudo). Un research en `running` que quedó colgado cuenta como error; si no hay fila, la pantalla la crea (`ensureResearch`, con un upsert `ignoreDuplicates` que reclama la fila de forma atómica, así dos pestañas no lanzan dos corridas). `retryResearch` y `useGenericFolders` se niegan mientras haya una corrida fresca en curso, porque cada una gasta crédito de IA. Gasta con `metered()` y asienta en `usage_entries`, así que cuenta contra el crédito de Free.
 
 ### Configuración
 
