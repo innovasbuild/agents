@@ -26,6 +26,9 @@ const state: {
 	rpcCalls: [string, unknown][];
 	rpcError: { message: string } | null;
 	redirected: string | null;
+	aiBlock: string | null;
+	researchRuns: number;
+	usageFilters: [string, unknown][];
 } = {
 	access: null,
 	tenantRow: null,
@@ -36,6 +39,9 @@ const state: {
 	rpcCalls: [],
 	rpcError: null,
 	redirected: null,
+	aiBlock: null,
+	researchRuns: 0,
+	usageFilters: [],
 };
 
 const store = {
@@ -81,23 +87,43 @@ vi.mock("@/lib/supabase/admin", () => ({
 							}),
 						}),
 					}
-				: table === "brain_folders"
+				: table === "usage_entries"
 					? {
-							select: () => ({
-								eq: async () => ({
-									data: [{ path: "a" }, { path: "a/b" }],
-									error: null,
-								}),
-							}),
-						}
-					: {
-							upsert: (...args: unknown[]) => {
-								upsertClaim(...args);
-								return {
-									select: async () => ({ data: state.claimRows, error: null }),
+							select: (_cols: string, opts: unknown) => {
+								state.usageFilters.push(["select", opts]);
+								const q = {
+									eq: (col: string, val: unknown) => {
+										state.usageFilters.push([col, val]);
+										return q;
+									},
+									// biome-ignore lint/suspicious/noThenProperty: imita el builder de PostgREST
+									then: (
+										resolve: (v: { count: number; error: null }) => void,
+									) => resolve({ count: state.researchRuns, error: null }),
 								};
+								return q;
 							},
-						},
+						}
+					: table === "brain_folders"
+						? {
+								select: () => ({
+									eq: async () => ({
+										data: [{ path: "a" }, { path: "a/b" }],
+										error: null,
+									}),
+								}),
+							}
+						: {
+								upsert: (...args: unknown[]) => {
+									upsertClaim(...args);
+									return {
+										select: async () => ({
+											data: state.claimRows,
+											error: null,
+										}),
+									};
+								},
+							},
 	}),
 }));
 vi.mock("@/lib/onboarding/research-store", () => ({
@@ -112,6 +138,9 @@ vi.mock("@/lib/onboarding/folders-setup", async (orig) => ({
 	setupBrainFolders,
 }));
 vi.mock("@/lib/outreach/canon", () => ({ brainForTenant: async () => null }));
+vi.mock("@/lib/plans/chat-allowance", () => ({
+	chatAiBlock: async () => state.aiBlock,
+}));
 
 const {
 	confirmFolders,
@@ -164,6 +193,9 @@ beforeEach(() => {
 	state.rpcCalls = [];
 	state.rpcError = null;
 	state.redirected = null;
+	state.aiBlock = null;
+	state.researchRuns = 0;
+	state.usageFilters = [];
 	for (const fn of [
 		store.start,
 		store.finish,
@@ -485,5 +517,61 @@ describe("decideCarpetasView", () => {
 		expect(
 			decideCarpetasView({ ...base, research: row({ result: result(false) }) }),
 		).toEqual({ view: "sin-sitio", note: false });
+	});
+});
+
+describe("tope de gasto del research (R13 F2)", () => {
+	it("retryResearch se niega sin crédito de IA y no arranca nada", async () => {
+		state.row = { ...doneRow(), status: "error" };
+		state.aiBlock = "limit:ai_credit";
+		const r = await retryResearch("acme", "Molino de trigo.");
+		expect(r.ok).toBe(false);
+		expect(r.message).toMatch(/carpetas genéricas/);
+		expect(store.start).not.toHaveBeenCalled();
+		expect(runFolderResearch).not.toHaveBeenCalled();
+	});
+
+	it("retryResearch se niega con 6 corridas asentadas", async () => {
+		state.row = { ...doneRow(), status: "error" };
+		state.researchRuns = 6;
+		const r = await retryResearch("acme", "Molino de trigo.");
+		expect(r).toEqual({
+			ok: false,
+			message:
+				"Ya intentamos varias veces. Usá las carpetas genéricas y las ajustás después.",
+		});
+		expect(store.start).not.toHaveBeenCalled();
+		expect(runFolderResearch).not.toHaveBeenCalled();
+		expect(state.usageFilters).toEqual(
+			expect.arrayContaining([
+				["tenant_id", "t1"],
+				["node", "onboarding/propose-folders"],
+			]),
+		);
+	});
+
+	it("con 5 corridas y crédito el reintento sigue", async () => {
+		state.row = { ...doneRow(), status: "error" };
+		state.researchRuns = 5;
+		expect(await retryResearch("acme", "Molino de trigo.")).toEqual({
+			ok: true,
+		});
+		expect(runFolderResearch).toHaveBeenCalledTimes(1);
+	});
+
+	it("ensureResearch no reclama ni corre sin crédito", async () => {
+		state.row = null;
+		state.aiBlock = "limit:ai_credit";
+		expect(await ensureResearch("acme")).toEqual({ ok: false });
+		expect(upsertClaim).not.toHaveBeenCalled();
+		expect(runFolderResearch).not.toHaveBeenCalled();
+	});
+
+	it("ensureResearch no reclama ni corre con 6 corridas", async () => {
+		state.row = null;
+		state.researchRuns = 6;
+		expect(await ensureResearch("acme")).toEqual({ ok: false });
+		expect(upsertClaim).not.toHaveBeenCalled();
+		expect(runFolderResearch).not.toHaveBeenCalled();
 	});
 });

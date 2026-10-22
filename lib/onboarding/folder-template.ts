@@ -1,7 +1,10 @@
 // Plantilla genérica de carpetas del brain y normalización de la propuesta del
 // modelo (spec etapa 27 §5.2). Puro. Imports relativos: lo usan módulos de eve.
 import { RESERVED_TOP_FOLDERS } from "../brain/core/folders";
-import type { FolderProposal } from "./services/propose-folders";
+import {
+	COMPANY_LIMITS,
+	type FolderProposal,
+} from "./services/propose-folders";
 
 type Folders = FolderProposal["folders"];
 
@@ -101,5 +104,20 @@ export function normalizeProposal(p: FolderProposal): FolderProposal {
 	) {
 		if (!ALWAYS_RESTRICTED.includes(folders[i].slug)) folders.splice(i, 1);
 	}
-	return { ...p, folders };
+	return { ...p, company: clampCompany(p.company), folders };
+}
+
+/** Recorte defensivo de la ficha, por si algo llega sin pasar el schema. */
+function clampCompany(c: FolderProposal["company"]): FolderProposal["company"] {
+	const field = (v: string | null) =>
+		v === null ? null : v.slice(0, COMPANY_LIMITS.field);
+	return {
+		summary: c.summary.slice(0, COMPANY_LIMITS.summary),
+		industry: c.industry.slice(0, COMPANY_LIMITS.field),
+		sizeHint: field(c.sizeHint),
+		location: field(c.location),
+		products: c.products
+			.slice(0, COMPANY_LIMITS.products)
+			.map((p) => p.slice(0, COMPANY_LIMITS.product)),
+	};
 }

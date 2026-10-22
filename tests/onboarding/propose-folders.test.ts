@@ -248,3 +248,53 @@ describe("normalizeProposal (contrato 8 a 10)", () => {
 		expect(n.folders[0].restricted).toBe(true);
 	});
 });
+
+describe("topes de la ficha de la empresa (R13 M1)", () => {
+	const long = (n: number) => "x".repeat(n);
+	const bloated = (): FolderProposal => ({
+		...proposal(nine),
+		company: {
+			summary: long(1501),
+			industry: long(201),
+			sizeHint: long(201),
+			location: long(201),
+			products: Array.from({ length: 21 }, () => long(121)),
+		},
+	});
+
+	it("el schema rechaza una ficha desmedida", () => {
+		expect(folderProposalSchema.safeParse(bloated()).success).toBe(false);
+		const company = proposal(nine).company;
+		for (const patch of [
+			{ summary: long(1501) },
+			{ industry: long(201) },
+			{ sizeHint: long(201) },
+			{ location: long(201) },
+			{ products: Array.from({ length: 21 }, () => "p") },
+			{ products: [long(121)] },
+		])
+			expect(
+				folderProposalSchema.safeParse({
+					...proposal(nine),
+					company: { ...company, ...patch },
+				}).success,
+			).toBe(false);
+	});
+
+	it("normalizeProposal recorta y el resultado pasa el schema", () => {
+		const n = normalizeProposal(bloated());
+		expect(n.company.summary).toHaveLength(1500);
+		expect(n.company.industry).toHaveLength(200);
+		expect(n.company.sizeHint).toHaveLength(200);
+		expect(n.company.location).toHaveLength(200);
+		expect(n.company.products).toHaveLength(20);
+		expect(n.company.products.every((p) => p.length === 120)).toBe(true);
+		expect(folderProposalSchema.safeParse(n).success).toBe(true);
+	});
+
+	it("null en tamaño y ubicación sigue siendo null", () => {
+		const n = normalizeProposal(proposal(nine));
+		expect(n.company.sizeHint).toBeNull();
+		expect(n.company.location).toBeNull();
+	});
+});

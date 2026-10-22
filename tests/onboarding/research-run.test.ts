@@ -6,7 +6,10 @@ import {
 	createResearchStore,
 	type ResearchStore,
 } from "@/lib/onboarding/research-store";
-import type { FolderProposal } from "@/lib/onboarding/services/propose-folders";
+import type {
+	FolderProposal,
+	proposeFolders,
+} from "@/lib/onboarding/services/propose-folders";
 
 const folder = (slug: string, restricted = false) => ({
 	slug,
@@ -137,6 +140,28 @@ describe("runFolderResearch", () => {
 		const store = fakeStore();
 		await run(store, undefined);
 		expect(store.fail).toHaveBeenCalledWith("t1", "sin_salida");
+	});
+
+	it("pasa un abortSignal con tope para que no pase la regla de 3 minutos (R13 M2)", async () => {
+		const timeout = vi.spyOn(AbortSignal, "timeout");
+		const store = fakeStore();
+		const propose = vi.fn(async () => ({
+			output: proposal(true),
+			pagesRead: 1,
+			usage: undefined,
+			providerMetadata: undefined,
+		}));
+		await runFolderResearch(input, {
+			store,
+			propose: propose as unknown as typeof proposeFolders,
+			readPage,
+		});
+		const deps = (propose.mock.calls[0] as unknown[])[1] as {
+			abortSignal?: AbortSignal;
+		};
+		expect(deps.abortSignal).toBeInstanceOf(AbortSignal);
+		expect(timeout).toHaveBeenCalledWith(170_000);
+		timeout.mockRestore();
 	});
 
 	it("un store que tira no hace tirar la función", async () => {

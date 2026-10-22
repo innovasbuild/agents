@@ -17,6 +17,14 @@ import { attachSpend, createStepSpend } from "../../workflows/usage";
 
 export const PROPOSE_MAX_PAGES = 8;
 
+// Topes de la ficha de la empresa: el resumen va a la página inicial del brain.
+export const COMPANY_LIMITS = {
+	summary: 1500,
+	field: 200,
+	products: 20,
+	product: 120,
+} as const;
+
 export const PROPOSE_SYSTEM = `# Qué hacés
 
 Leés el sitio público de una empresa y proponés las carpetas raíz de su brain: la wiki donde va a vivir lo que la empresa sabe de sí misma. Devolvés también una ficha corta de la empresa (qué hace, rubro, tamaño, ubicación, productos) y, si lo podés leer en el texto de las páginas, su marca (colores, tipografías, logo). Lo que no podés confirmar queda vacío o en \`null\`.
@@ -39,11 +47,13 @@ Leés el sitio público de una empresa y proponés las carpetas raíz de su brai
 export const folderProposalSchema = z.object({
 	found: z.boolean(),
 	company: z.object({
-		summary: z.string(),
-		industry: z.string(),
-		sizeHint: z.string().nullable(),
-		location: z.string().nullable(),
-		products: z.array(z.string()),
+		summary: z.string().max(COMPANY_LIMITS.summary),
+		industry: z.string().max(COMPANY_LIMITS.field),
+		sizeHint: z.string().max(COMPANY_LIMITS.field).nullable(),
+		location: z.string().max(COMPANY_LIMITS.field).nullable(),
+		products: z
+			.array(z.string().max(COMPANY_LIMITS.product))
+			.max(COMPANY_LIMITS.products),
 	}),
 	brand: z.object({
 		colors: z.array(z.string()),

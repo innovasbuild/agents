@@ -8,6 +8,10 @@ import { normalizeProposal } from "./folder-template";
 import type { ResearchErrorCode, ResearchStore } from "./research-store";
 import type { proposeFolders } from "./services/propose-folders";
 
+// Una corrida corta antes de que la regla de 3 minutos (research-status.ts) la
+// dé por caída: así nunca hay dos corridas vivas para la misma empresa.
+export const RESEARCH_TIMEOUT_MS = 170_000;
+
 export async function runFolderResearch(
 	input: {
 		tenantId: string;
@@ -55,6 +59,7 @@ export async function runFolderResearch(
 				generateText: undefined as unknown as typeof generateText,
 				readPage: deps.readPage,
 				providerOptions: deps.providerOptions,
+				abortSignal: AbortSignal.timeout(RESEARCH_TIMEOUT_MS),
 			},
 		));
 	} catch (error) {

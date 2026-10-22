@@ -24,12 +24,14 @@ import {
 	createResearchStore,
 	type ResearchRow,
 } from "@/lib/onboarding/research-store";
+import { COMPANY_LIMITS } from "@/lib/onboarding/services/propose-folders";
 import {
 	onboardingGate as gate,
 	type OnboardingGate,
 } from "@/lib/onboarding/step-gate";
 import { stepPath } from "@/lib/onboarding/steps";
 import { brainForTenant } from "@/lib/outreach/canon";
+import { chatAiBlock } from "@/lib/plans/chat-allowance";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 // platform_enable_brain_skills agrega la carpeta skills y falla con 20 o más.
@@ -46,6 +48,28 @@ const folderSchema = z.object({
 });
 
 type Gate = OnboardingGate;
+
+// Cada corrida del research gasta crédito de IA (hasta 10 pasos sobre 8
+// páginas). Tope: la inicial más 5 reintentos, contadas en usage_entries.
+const RESEARCH_NODE = "onboarding/propose-folders";
+const MAX_RESEARCH_RUNS = 6;
+const NO_CREDIT =
+	"Tu plan no tiene crédito de IA para leer el sitio. Usá las carpetas genéricas y las ajustás después.";
+const TOO_MANY =
+	"Ya intentamos varias veces. Usá las carpetas genéricas y las ajustás después.";
+
+/** El motivo para no lanzar otra corrida, o null si se puede. */
+async function researchRefusal(g: Gate): Promise<string | null> {
+	const tenantId = g.access.id;
+	if (await chatAiBlock(tenantId)) return NO_CREDIT;
+	const { count, error } = await g.admin
+		.from("usage_entries")
+		.select("id", { count: "exact", head: true })
+		.eq("tenant_id", tenantId)
+		.eq("node", RESEARCH_NODE);
+	if (error) throw new Error(error.message);
+	return (count ?? 0) >= MAX_RESEARCH_RUNS ? TOO_MANY : null;
+}
 
 function scheduleResearch(g: Gate, hint: string | null) {
 	const input = {
@@ -88,6 +112,7 @@ export async function ensureResearch(slug: string): Promise<{ ok: boolean }> {
 		if (g?.step !== "carpetas") return { ok: false };
 		const tenantId = g.access.id;
 		if (await createResearchStore(g.admin).read(tenantId)) return { ok: true };
+		if (await researchRefusal(g)) return { ok: false };
 		const { data, error } = await g.admin
 			.from("onboarding_research")
 			.upsert(
@@ -129,6 +154,8 @@ export async function retryResearch(
 		const g = await gate(slug);
 		if (g?.step !== "carpetas") return { ok: false };
 		if (await inFlight(g)) return { ok: false, message: BUSY };
+		const refusal = await researchRefusal(g);
+		if (refusal) return { ok: false, message: refusal };
 		await createResearchStore(g.admin).start(g.access.id, clean);
 		scheduleResearch(g, clean);
 		return { ok: true };
@@ -215,7 +242,9 @@ export async function confirmFolders(
 				actorUserId: g.access.userId,
 				displayName: g.access.displayName,
 				folders: checked.folders,
-				companySummary: row?.result?.company.summary ?? null,
+				companySummary:
+					row?.result?.company.summary?.slice(0, COMPANY_LIMITS.summary) ??
+					null,
 			},
 			{
 				listTopFolders: async (id) => {
