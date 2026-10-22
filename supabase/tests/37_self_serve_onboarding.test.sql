@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(36);
+select plan(42);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -23,6 +23,17 @@ begin
   perform set_config('request.jwt.claims', format(
     '{"sub":"a7a7a7a7-0000-0000-0000-00000000000%s","role":"authenticated","amr":%s}',
     p_user, p_amr), true);
+end $$;
+
+-- Corre la sentencia y devuelve SQLSTATE y hint del error.
+create function pg_temp.err(p_sql text) returns text language plpgsql as $$
+declare v_state text; v_hint text;
+begin
+  execute p_sql;
+  return 'no error';
+exception when others then
+  get stacked diagnostics v_state = returned_sqlstate, v_hint = pg_exception_hint;
+  return v_state || ':' || coalesce(v_hint, '');
 end $$;
 
 -- 1-3: columnas, slug reservado, slug_from_domain.
@@ -50,14 +61,50 @@ select is((select count(*) from public.events e join public.tenants t on t.id = 
 
 -- 13-17: errores.
 select pg_temp.login_as(1, '[{"method":"otp","timestamp":10}]');
-select throws_ok($$ select public.self_serve_create_tenant('Otra', 'lagomarsino.com.ar') $$, '23514', null, 'dominio ya tomado');
-select throws_ok($$ select public.self_serve_create_tenant('X', 'gmail.com') $$, '23514', null, 'dominio público');
-select throws_ok($$ select public.self_serve_create_tenant('X', 'otro.com') $$, '23514', null, 'dominio distinto al del correo');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('Otra', 'lagomarsino.com.ar') $$), '23514:domain_taken', 'dominio ya tomado');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('X', 'gmail.com') $$), '23514:public_domain', 'dominio público');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('X', 'otro.com') $$), '23514:domain_mismatch', 'dominio distinto al del correo');
 select pg_temp.login_as(7, '[{"method":"oauth","timestamp":10}]');
-select throws_ok($$ select public.self_serve_create_tenant('X', 'algo.com') $$, '23514', null, 'método desconocido');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('X', 'algo.com') $$), '23514:login_method_unknown', 'método desconocido');
 reset role;
 select set_config('request.jwt.claims', '', true);
 select throws_ok($$ select public.self_serve_create_tenant('X', 'algo.com') $$, '42501', null, 'sin sesión');
+
+
+-- Nombre en blanco y correo sin confirmar.
+select pg_temp.login_as(1, '[{"method":"otp","timestamp":10}]');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('  ', 'nuevo2.com') $$), '23514:domain_mismatch', 'el dominio se valida antes que el nombre');
+reset role;
+insert into auth.users (id, aud, role, email, email_confirmed_at)
+values ('a7a7a7a7-0000-0000-0000-000000000008', 'authenticated', 'authenticated', 'sin@confirmar.com', null),
+       ('a7a7a7a7-0000-0000-0000-000000000009', 'authenticated', 'authenticated', 'ana@blanco.com', now());
+select pg_temp.login_as(8, '[{"method":"otp","timestamp":10}]');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('X', 'confirmar.com') $$), '23514:email_not_confirmed', 'correo sin confirmar');
+select pg_temp.login_as(9, '[{"method":"otp","timestamp":10}]');
+select is(pg_temp.err($$ select public.self_serve_create_tenant('   ', 'blanco.com') $$), '23514:name_required', 'nombre en blanco');
+reset role;
+
+-- Una empresa dada de baja no bloquea el dominio.
+insert into public.tenants (slug, display_name, allowed_domains, active)
+values ('blanco-viejo', 'Blanco viejo', '{blanco.com}', false);
+select pg_temp.login_as(9, '[{"method":"otp","timestamp":10}]');
+select is((public.self_serve_create_tenant('Blanco', 'blanco.com'))->>'slug', 'blanco', 'dominio de una empresa inactiva queda libre');
+reset role;
+
+-- accept_pending_invitations: la de la empresa suspendida se saltea sin tirar.
+insert into public.tenants (id, slug, display_name, auth_methods, active, suspended_reason)
+values ('a7a7a7a7-0000-0000-0000-0000000000a1', 'susp-t', 'Suspendida', '{email}', true, 'trial_vencido');
+insert into public.tenants (id, slug, display_name, auth_methods, active)
+values ('a7a7a7a7-0000-0000-0000-0000000000a2', 'sana-t', 'Sana', '{email}', true);
+update public.tenants set suspended_reason = null where slug = 'susp-t';
+insert into public.invitations (tenant_id, email, role, invited_by)
+values ('a7a7a7a7-0000-0000-0000-0000000000a1', 'ana@blanco.com', 'tenant_member', 'a7a7a7a7-0000-0000-0000-000000000009'),
+       ('a7a7a7a7-0000-0000-0000-0000000000a2', 'ana@blanco.com', 'tenant_member', 'a7a7a7a7-0000-0000-0000-000000000009');
+update public.tenants set suspended_reason = 'trial_vencido' where slug = 'susp-t';
+select pg_temp.login_as(9, '[{"method":"invite","timestamp":10}]');
+select is((select public.accept_pending_invitations()), 1, 'acepta solo la de la empresa sana');
+reset role;
+select is((select status::text from public.invitations where tenant_id = 'a7a7a7a7-0000-0000-0000-0000000000a1'), 'pending', 'la de la suspendida sigue pendiente');
 
 -- 18-19: sufijo -2.
 select pg_temp.login_as(2, '[{"method":"otp","timestamp":10}]');

@@ -150,20 +150,12 @@ begin
     raise exception 'no authenticated user' using errcode = '42501';
   end if;
 
-  v_method := public.current_login_method();
-  if v_method is null then
-    raise exception 'no se pudo determinar cómo ingresaste' using errcode = '23514', hint = 'login_method_unknown';
-  end if;
-
   select lower(btrim(u.email)) into v_email
   from auth.users u
   where u.id = v_user and u.email_confirmed_at is not null;
 
   if v_email is null or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+$' then
-    raise exception 'no se pudo determinar tu correo' using errcode = '23514', hint = 'login_method_unknown';
-  end if;
-  if v_name is null then
-    raise exception 'falta el nombre de la empresa' using errcode = '23514', hint = 'name_required';
+    raise exception 'tu correo no está confirmado' using errcode = '23514', hint = 'email_not_confirmed';
   end if;
   if public.is_public_email_domain(v_domain) then
     raise exception 'el dominio es de correo público' using errcode = '23514', hint = 'public_domain';
@@ -171,8 +163,22 @@ begin
   if v_domain = '' or v_domain <> split_part(v_email, '@', 2) then
     raise exception 'el dominio no es el de tu correo' using errcode = '23514', hint = 'domain_mismatch';
   end if;
-  if exists (select 1 from public.tenants t where v_domain = any (t.allowed_domains)) then
+
+  v_method := public.current_login_method();
+  if v_method is null then
+    raise exception 'no se pudo determinar cómo ingresaste' using errcode = '23514', hint = 'login_method_unknown';
+  end if;
+
+  -- Un doble envío para el mismo dominio se serializa: el segundo ve la empresa del primero.
+  perform pg_advisory_xact_lock(hashtext(v_domain));
+  if exists (
+    select 1 from public.tenants t where t.active and v_domain = any (t.allowed_domains)
+  ) then
     raise exception 'ya hay una empresa con ese dominio' using errcode = '23514', hint = 'domain_taken';
+  end if;
+
+  if v_name is null then
+    raise exception 'falta el nombre de la empresa' using errcode = '23514', hint = 'name_required';
   end if;
 
   v_base := public.slug_from_domain(v_domain);
@@ -270,3 +276,66 @@ $$;
 
 revoke execute on function public.signup_route() from public, anon;
 grant execute on function public.signup_route() to authenticated;
+
+-- 10. Una empresa suspendida no acepta invitaciones: el trigger tenant_writable_guard
+-- haría fallar la función entera, y con ella las invitaciones de las empresas sanas.
+create or replace function public.accept_pending_invitations()
+returns integer language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_method text;
+  v_email text;
+  v_count integer := 0;
+  r record;
+begin
+  if v_user is null then
+    raise exception 'no authenticated user';
+  end if;
+
+  v_method := public.current_login_method();
+  if v_method is null then
+    return 0;
+  end if;
+
+  select lower(u.email) into v_email
+  from auth.users u
+  where u.id = v_user and u.email_confirmed_at is not null;
+
+  if v_email is null then
+    return 0;
+  end if;
+
+  for r in
+    update public.invitations i
+       set status = 'accepted', accepted_at = now(), accepted_user_id = v_user
+      from public.tenants t
+     where t.id = i.tenant_id
+       and t.active
+       and t.suspended_reason is null
+       and v_method = any (t.auth_methods)
+       and i.email = v_email and i.status = 'pending' and i.expires_at > now()
+    returning i.id, i.tenant_id, i.role
+  loop
+    -- 20.2: una invitación es una decisión explícita y más nueva que el bloqueo.
+    delete from public.membership_blocks
+    where tenant_id = r.tenant_id and user_id = v_user;
+    if found then
+      insert into public.events (tenant_id, actor_user_id, type, summary, payload)
+      values (r.tenant_id, v_user, 'membership.unblocked', 'Bloqueo levantado por una invitación',
+              jsonb_build_object('user_id', v_user, 'invitation_id', r.id));
+    end if;
+
+    insert into public.memberships (tenant_id, user_id, role)
+    values (r.tenant_id, v_user, r.role)
+    on conflict (tenant_id, user_id) do nothing;
+
+    insert into public.events (tenant_id, actor_user_id, type, summary, payload)
+    values (r.tenant_id, v_user, 'invitation.accepted', 'Invitación aceptada',
+            jsonb_build_object('invitation_id', r.id, 'role', r.role));
+
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end;
+$$;
