@@ -7,6 +7,7 @@ import {
 	republishSkillAction,
 	withdrawSkillAction,
 } from "@/app/[tenant]/brain/skill-actions";
+import { LimitDialog } from "@/components/plan/limit-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { skillFileHref, skillPackageHref } from "@/lib/brain/core/skills/http";
@@ -15,6 +16,7 @@ import {
 	type SkillState,
 	skillStateLabel,
 } from "@/lib/brain/core/skills/state";
+import type { LimitReason } from "@/lib/plans/limits";
 import {
 	collectDropped,
 	type LooseEntry,
@@ -60,6 +62,7 @@ export function SkillPanel({
 	const folderInput = useRef<HTMLInputElement>(null);
 	const [path, setPath] = useState("");
 	const [message, setMessage] = useState<string | null>(null);
+	const [limit, setLimit] = useState<LimitReason | null>(null);
 	const [publishing, setPublishing] = useState(false);
 	const [uploadingZip, setUploadingZip] = useState(false);
 	const [uploadingLoose, setUploadingLoose] = useState(false);
@@ -130,7 +133,11 @@ export function SkillPanel({
 	}
 
 	function run(
-		action: () => Promise<{ ok: boolean; message?: string }>,
+		action: () => Promise<{
+			ok: boolean;
+			message?: string;
+			reason?: LimitReason;
+		}>,
 		failure: string,
 	) {
 		setMessage(null);
@@ -138,6 +145,10 @@ export function SkillPanel({
 			try {
 				const result = await action();
 				if (!result.ok) {
+					if (result.reason) {
+						setLimit(result.reason);
+						return;
+					}
 					setMessage(result.message ?? failure);
 					return;
 				}
@@ -425,6 +436,15 @@ export function SkillPanel({
 			)}
 
 			{message && <p className="text-destructive">{message}</p>}
+			{limit && (
+				<LimitDialog
+					onOpenChange={(open) => {
+						if (!open) setLimit(null);
+					}}
+					open
+					reason={limit}
+				/>
+			)}
 			{uploadingZip && (
 				<UploadDialog
 					tenantSlug={tenantSlug}

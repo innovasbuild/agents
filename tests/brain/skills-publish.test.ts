@@ -17,6 +17,11 @@ import type {
 	BrainRole,
 } from "@/lib/brain/core/types";
 import { WikiStoreError } from "@/lib/brain/core/wiki-store";
+import {
+	canPublishSkill,
+	limitMessage,
+	type TenantPlan,
+} from "@/lib/plans/limits";
 
 const SLUG = "skills/admin/facturacion";
 const file = (path: string, sha: string, size = 10) => ({
@@ -67,6 +72,41 @@ const revision = (n: number, author: string | null): BrainRevision => ({
 	createdAt: "2026-10-11T00:00:00Z",
 });
 
+const PUBLISHED_CURRENT: NonNullable<SkillOverviewRow["current"]> = {
+	action: "publicar",
+	version: 1,
+	pageRevision: 5,
+	filesDigest: "fd5",
+	title: "Facturación",
+	description: "Usar para facturar (v1).",
+	body: "cuerpo viejo",
+	frontmatter: {},
+	manifest: publishedAct.manifest,
+	digest: "dg1",
+	publishedAt: "2026-10-10T00:00:00Z",
+};
+const planOf = (over: Partial<TenantPlan>): TenantPlan => ({
+	plan: "free",
+	suspendedReason: null,
+	trialEndsAt: null,
+	aiMonthlyLimitUsd: 5,
+	...over,
+});
+const FREE = planOf({});
+const PAGO = planOf({ plan: "pago", aiMonthlyLimitUsd: null });
+const DRAFT_ROW: SkillOverviewRow = {
+	pageId: "p1",
+	slug: SLUG,
+	revision: 7,
+	draftFilesDigest: "fd7",
+	current: null,
+};
+const PUBLISH_INPUT = {
+	expectedRevision: 7,
+	expectedFilesDigest: "fd7",
+	note: "n",
+};
+
 function setup(
 	opts: {
 		role?: BrainRole;
@@ -75,6 +115,9 @@ function setup(
 		page?: BrainPage | null;
 		publishError?: unknown;
 		acts?: SkillAct[];
+		plan?: TenantPlan | null | "throws";
+		// Cuántas skills publicadas hay en la empresa (incluida o no esta).
+		othersPublished?: number;
 	} = {},
 ) {
 	const row: SkillOverviewRow | null =
@@ -99,13 +142,23 @@ function setup(
 					},
 				}
 			: opts.row;
+	const others: SkillOverviewRow[] = Array.from(
+		{ length: opts.othersPublished ?? 0 },
+		(_, i) => ({
+			pageId: `o${i}`,
+			slug: `skills/admin/otra-${i}`,
+			revision: 1,
+			draftFilesDigest: "x",
+			current: { ...(row?.current ?? PUBLISHED_CURRENT), action: "publicar" },
+		}),
+	);
 	const publish = vi.fn(async () => {
 		if (opts.publishError) throw opts.publishError;
 		return { version: 2, digest: "dg2" };
 	});
 	const withdraw = vi.fn(async () => true);
 	const store: SkillStore = {
-		overview: async () => (row ? [row] : []),
+		overview: async () => (row ? [row, ...others] : others),
 		files: async () => [
 			file("scripts/calc.py", "a2"),
 			file("references/guia.md", "c"),
@@ -130,6 +183,18 @@ function setup(
 			revision(5, "viejo"),
 		],
 		store,
+		// Misma lógica que el adaptador de producción, con el plan de la prueba.
+		skillLimit: async (_tenantId, publishedSkills) => {
+			if (opts.plan === "throws") throw new Error("db caída");
+			const plan = opts.plan === undefined ? PAGO : opts.plan;
+			if (!plan) return null;
+			const reason = canPublishSkill(plan, {
+				users: 0,
+				pendingInvitations: 0,
+				publishedSkills,
+			});
+			return reason ? { reason, message: limitMessage(reason).title } : null;
+		},
 	};
 	return { deps, publish, withdraw };
 }
@@ -396,5 +461,128 @@ describe("más casos de permisos y retiro", () => {
 			await republishSkill("acme", SLUG, { fromVersion: 1, note: "n" }, deps),
 		).toMatchObject({ ok: false, code: "forbidden" });
 		expect(publish).not.toHaveBeenCalled();
+	});
+});
+
+describe("tope de skills del plan", () => {
+	it("free con 5 publicadas y una sexta en borrador: límite, sin publicar", async () => {
+		const { deps, publish } = setup({
+			plan: FREE,
+			row: DRAFT_ROW,
+			othersPublished: 5,
+		});
+		const result = await publishSkill("acme", SLUG, PUBLISH_INPUT, deps);
+		expect(result).toMatchObject({
+			ok: false,
+			code: "limite",
+			reason: "limit:skills",
+		});
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("free con 5 publicadas: republicar una ya publicada pasa", async () => {
+		// La fila de SLUG es una de las 5.
+		const { deps, publish } = setup({ plan: FREE, othersPublished: 4 });
+		const result = await republishSkill(
+			"acme",
+			SLUG,
+			{ fromVersion: 1, note: "n" },
+			deps,
+		);
+		expect(result).toEqual({ ok: true, version: 2 });
+		expect(publish).toHaveBeenCalled();
+	});
+
+	it("free con 5 publicadas: publicar una versión nueva de una ya publicada pasa", async () => {
+		const { deps } = setup({ plan: FREE, othersPublished: 4 });
+		const result = await publishSkill("acme", SLUG, PUBLISH_INPUT, deps);
+		expect(result).toEqual({ ok: true, version: 2 });
+	});
+
+	it("free con 4 publicadas: la quinta pasa", async () => {
+		const { deps } = setup({
+			plan: FREE,
+			row: DRAFT_ROW,
+			othersPublished: 4,
+		});
+		expect(await publishSkill("acme", SLUG, PUBLISH_INPUT, deps)).toEqual({
+			ok: true,
+			version: 2,
+		});
+	});
+
+	it("una skill retirada que se vuelve a publicar cuenta como nueva", async () => {
+		const { deps, publish } = setup({
+			plan: FREE,
+			othersPublished: 5,
+			row: {
+				...DRAFT_ROW,
+				current: { ...PUBLISHED_CURRENT, action: "retirar" },
+			},
+		});
+		const result = await republishSkill(
+			"acme",
+			SLUG,
+			{ fromVersion: 1, note: "n" },
+			deps,
+		);
+		expect(result).toMatchObject({ ok: false, code: "limite" });
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("el plan pago no tiene tope", async () => {
+		const { deps } = setup({
+			plan: PAGO,
+			row: DRAFT_ROW,
+			othersPublished: 40,
+		});
+		expect(await publishSkill("acme", SLUG, PUBLISH_INPUT, deps)).toMatchObject(
+			{ ok: true },
+		);
+	});
+
+	it("sin fila de plan se permite", async () => {
+		const { deps } = setup({
+			plan: null,
+			row: DRAFT_ROW,
+			othersPublished: 9,
+		});
+		expect(await publishSkill("acme", SLUG, PUBLISH_INPUT, deps)).toMatchObject(
+			{ ok: true },
+		);
+	});
+
+	it("una empresa suspendida no republica ni siquiera una ya publicada", async () => {
+		const { deps, publish } = setup({
+			plan: planOf({ suspendedReason: "trial_vencido" }),
+		});
+		const result = await republishSkill(
+			"acme",
+			SLUG,
+			{ fromVersion: 1, note: "n" },
+			deps,
+		);
+		expect(result).toMatchObject({
+			ok: false,
+			code: "limite",
+			reason: "suspended:trial_vencido",
+		});
+		expect(publish).not.toHaveBeenCalled();
+	});
+
+	it("si el plan no se puede leer, se deja publicar y se registra", async () => {
+		// Disponibilidad antes que rigor: el trigger de la base sigue protegiendo
+		// a las empresas suspendidas.
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const { deps, publish } = setup({
+			plan: "throws",
+			row: DRAFT_ROW,
+			othersPublished: 5,
+		});
+		const result = await publishSkill("acme", SLUG, PUBLISH_INPUT, deps);
+		expect(result).toMatchObject({ ok: true });
+		expect(publish).toHaveBeenCalled();
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
 	});
 });
