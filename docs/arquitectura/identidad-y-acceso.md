@@ -3,7 +3,7 @@ title: Identidad y acceso
 category: arquitectura
 status: activo
 tags: [auth, supabase, oauth, mcp, login, memberships]
-updated: 2026-10-16
+updated: 2026-10-21
 sources:
   - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
   - lib/tenants/host.ts
@@ -53,7 +53,7 @@ Los clientes están en `lib/supabase/` (`browser.ts`, `server.ts`, `admin.ts`). 
 | Método | Cómo funciona |
 |---|---|
 | Google | `signInWithOAuth` (proveedor `google`), vuelve a `/auth/callback` |
-| Microsoft | `signInWithOAuth` con el proveedor de Supabase `azure` (`lib/auth/oauth-providers.ts`). Apagado en producción hasta completar el anexo A de la spec (claim `xms_edov` en Entra) |
+| Microsoft | `signInWithOAuth` con el proveedor de Supabase `azure` (`lib/auth/oauth-providers.ts`). Solo cuenta como sesión `microsoft` si el token trae el claim `xms_edov`; la app en Entra y el proveedor en Supabase se configuran a mano, una vez: [login con Microsoft](../guias/login-con-microsoft.md) |
 | Link por correo | `signInWithOtp`; el mail trae un link a `/auth/callback` |
 | Código de 6 dígitos | El mismo mail trae un código. Se acepta de 6 a 10 dígitos porque el largo es un ajuste del proyecto en Supabase |
 
@@ -61,6 +61,7 @@ Detalles que importan:
 
 - **El mensaje no revela quién tiene cuenta.** `requestMagicLink` (`lib/auth/magic-link.ts`) resuelve igual con un correo con acceso, sin acceso (Supabase responde 422) o con la red caída ([#83](https://github.com/innovasbuild/agents/pull/83)).
 - **El código se verifica en el navegador** (`verifyOtp`), no en el servidor, para que el límite por IP de Supabase cuente la IP de cada persona y no la del servidor. Después una server action, `completeLogin(next)` (`app/(auth)/login/actions.ts`), corre el tramo posterior y devuelve a dónde ir; navega el cliente. No usa `redirect()` porque en Next 16 eso rechaza la promesa de la acción. Si el tramo posterior falla, el cliente cierra la sesión que dejó `verifyOtp` (`lib/auth/email-code.ts`) ([#91](https://github.com/innovasbuild/agents/pull/91)).
+- **Cerrar sesión** es el menú de usuario arriba a la derecha (`app/[tenant]/user-menu.tsx`, con las iniciales del correo). La server action `signOut(slug)` (`app/[tenant]/session-actions.ts`) cierra solo la sesión de este dispositivo (`closeLocalSession`) y vuelve a `/login/<slug>`; en un dominio propio el proxy la convierte en `/login` ([#132](https://github.com/innovasbuild/agents/pull/132)).
 - **`next` es solo del mismo origen.** `safeNextPath` (`lib/auth/next-path.ts`) descarta cualquier otra cosa para evitar un open redirect.
 - **Rutas del flujo:**
 
