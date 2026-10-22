@@ -82,79 +82,63 @@ export default async function TenantLayout({
 							className="h-auto max-h-7 w-auto max-w-[140px] shrink-0"
 						/>
 					) : (
-						// min-w-0 + flex-1 es lo que deja truncar en vez de desbordar:
-						// un flex item sin esto no se achica más allá de su contenido, y
-						// un displayName largo empuja el badge y la nav fuera del header
-						// a 375px (rompe a varias líneas). flex-1 le da el espacio
-						// sobrante para que sea él, y no la nav, el que se angosta.
-						<span className="min-w-0 flex-1 truncate font-semibold tracking-display">
+						// min-w-0 + truncate deja que un displayName largo se corte en vez
+						// de desbordar; el tope de ancho le deja lugar a la nav, que es la
+						// que se lleva el espacio sobrante (flex-1).
+						<span className="min-w-0 max-w-[40%] shrink-0 truncate font-semibold tracking-display">
 							{tenant.displayName}
 						</span>
 					)}
-					{tenant.role === "platform_admin" ? (
-						// Visible también en mobile, a diferencia del badge de los otros
-						// roles: es la única entrada a la consola de plataforma.
-						<Link
-							href="/plataforma"
-							className="inline-flex min-h-11 shrink-0 items-center"
-						>
-							<span className="whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs transition-colors hover:border-input hover:text-foreground">
-								{ROLE_LABELS[tenant.role]}
-							</span>
-						</Link>
-					) : (
-						<span className="hidden shrink-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-muted-foreground text-xs sm:inline-block">
-							{ROLE_LABELS[tenant.role]}
-						</span>
-					)}
-					<div className="ml-auto shrink-0">
+					{/* La nav comparte fila con el logo. Si no entra (375px), la tira
+					    scrollea sola: min-w-0 + flex-1 la dejan angostarse sin empujar
+					    el menú de usuario fuera del header. */}
+					<nav className="min-w-0 flex-1 overflow-x-auto md:pl-4">
+						<ul className="flex items-center gap-5 whitespace-nowrap text-sm">
+							{visibleNav(tenant.role, enabledAgents).map((item) =>
+								"items" in item ? (
+									<li key={item.label}>
+										<DropdownMenu>
+											<DropdownMenuTrigger className="inline-flex min-h-11 items-center gap-1 text-muted-foreground hover:text-foreground data-[state=open]:text-foreground">
+												{item.label}
+												<ChevronDownIcon aria-hidden className="size-4" />
+											</DropdownMenuTrigger>
+											<DropdownMenuContent className="min-w-40">
+												{item.items.map((sub) => (
+													<DropdownMenuItem
+														asChild
+														className="py-2"
+														key={sub.href}
+													>
+														<Link href={`/${slug}${sub.href}`}>
+															{sub.label}
+														</Link>
+													</DropdownMenuItem>
+												))}
+											</DropdownMenuContent>
+										</DropdownMenu>
+									</li>
+								) : (
+									<li key={item.href}>
+										<Link
+											className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
+											href={`/${slug}${item.href}`}
+										>
+											{item.label}
+										</Link>
+									</li>
+								),
+							)}
+						</ul>
+					</nav>
+					<div className="shrink-0">
 						<UserMenu
 							slug={slug}
 							email={tenant.email}
 							roleLabel={ROLE_LABELS[tenant.role]}
+							isPlatformAdmin={tenant.role === "platform_admin"}
 						/>
 					</div>
 				</div>
-				{/* La nav vive en su propia fila, no adentro del header: con cuatro
-				    destinos ya no entraba junto al logo y el nombre a 375px, y las
-				    entregas que vienen suman tres más. El scroll horizontal es de
-				    esta tira, no de la página. */}
-				<nav className="mx-auto max-w-[1200px] overflow-x-auto px-4 md:px-6">
-					<ul className="flex items-center gap-5 whitespace-nowrap pb-2 text-sm">
-						{visibleNav(tenant.role, enabledAgents).map((item) =>
-							"items" in item ? (
-								<li key={item.label}>
-									<DropdownMenu>
-										<DropdownMenuTrigger className="inline-flex min-h-11 items-center gap-1 text-muted-foreground hover:text-foreground data-[state=open]:text-foreground">
-											{item.label}
-											<ChevronDownIcon aria-hidden className="size-4" />
-										</DropdownMenuTrigger>
-										<DropdownMenuContent className="min-w-40">
-											{item.items.map((sub) => (
-												<DropdownMenuItem
-													asChild
-													className="py-2"
-													key={sub.href}
-												>
-													<Link href={`/${slug}${sub.href}`}>{sub.label}</Link>
-												</DropdownMenuItem>
-											))}
-										</DropdownMenuContent>
-									</DropdownMenu>
-								</li>
-							) : (
-								<li key={item.href}>
-									<Link
-										className="inline-flex min-h-11 items-center text-muted-foreground hover:text-foreground"
-										href={`/${slug}${item.href}`}
-									>
-										{item.label}
-									</Link>
-								</li>
-							),
-						)}
-					</ul>
-				</nav>
 			</header>
 			<main className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-8">
 				{children}
