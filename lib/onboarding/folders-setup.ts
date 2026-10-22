@@ -95,7 +95,41 @@ export async function setupBrainFolders(
 		}
 	};
 
-	// Un reintento con otra lista: lo que sobra de la corrida anterior se borra.
+	type Call = [Step, string, Record<string, unknown>];
+	const bindCall: Call = [
+		"bind",
+		"platform_bind_connection",
+		{
+			p_actor: actorUserId,
+			p_tenant: tenantId,
+			p_capability: "brain",
+			p_provider: "wiki",
+			p_connector_uids: [],
+			p_config: {
+				categories: folders.map((f) => f.slug),
+				requiredFrontmatter: ["title", "category", "status", "updated"],
+				search: "fts",
+			},
+			p_verified_name: null,
+		},
+	];
+	const runAll = async (calls: Call[]) => {
+		for (const [step, fn, args] of calls) {
+			const failed = await rpc(step, fn, args);
+			if (failed) return failed;
+		}
+		return null;
+	};
+
+	const first = await runAll([
+		bindCall,
+		["folders", "brain_folders_from_config", { p_tenant: tenantId }],
+	]);
+	if (first) return first;
+
+	// Un reintento con otra lista: lo que sobra de la corrida anterior se borra,
+	// con las nuevas ya creadas (así nunca se borra la última). Una carpeta con
+	// páginas o la última no se puede borrar: queda y la persona la saca después.
 	let existing: string[];
 	try {
 		existing = await deps.listTopFolders(tenantId);
@@ -106,79 +140,89 @@ export async function setupBrainFolders(
 	const confirmed = new Set(folders.map((f) => f.slug));
 	for (const path of existing) {
 		if (confirmed.has(path) || path === "skills" || path === "skill") continue;
-		const failed = await rpc("folders", "brain_delete_folder", {
-			p_tenant: tenantId,
-			p_actor: actorUserId,
-			p_path: path,
-		});
-		if (failed) return failed;
+		try {
+			const { error } = await deps.rpc("brain_delete_folder", {
+				p_tenant: tenantId,
+				p_actor: actorUserId,
+				p_path: path,
+			});
+			if (!error) continue;
+			if (error.code === "BR409") {
+				console.error(
+					"alta: carpeta que sobra no se borró",
+					tenantId,
+					path,
+					error,
+				);
+				continue;
+			}
+			console.error("alta: brain_delete_folder", tenantId, path, error);
+			return {
+				ok: false,
+				step: "folders",
+				message: `brain_delete_folder: ${error.message}`,
+			};
+		} catch (error) {
+			console.error("alta: brain_delete_folder", tenantId, path, error);
+			return {
+				ok: false,
+				step: "folders",
+				message: "brain_delete_folder: falló la llamada",
+			};
+		}
 	}
 
-	const steps: [Step, string, Record<string, unknown>][] = [
-		[
-			"bind",
-			"platform_bind_connection",
-			{
-				p_actor: actorUserId,
-				p_tenant: tenantId,
-				p_capability: "brain",
-				p_provider: "wiki",
-				p_connector_uids: [],
-				p_config: {
-					categories: folders.map((f) => f.slug),
-					requiredFrontmatter: ["title", "category", "status", "updated"],
-					search: "fts",
+	const rest = await runAll([
+		...folders
+			.filter((f) => !f.restricted)
+			.map(
+				(f): Call => [
+					"folders",
+					"brain_remove_access_rule",
+					{
+						p_tenant_id: tenantId,
+						p_path: f.slug,
+						p_principal: "members",
+						p_user_id: null,
+						p_actor: actorUserId,
+					},
+				],
+			),
+		...folders.map(
+			(f): Call => [
+				"folders",
+				"brain_set_folder_description",
+				{
+					p_tenant: tenantId,
+					p_actor: actorUserId,
+					p_path: f.slug,
+					p_description: f.description,
 				},
-				p_verified_name: null,
-			},
-		],
-		["folders", "brain_folders_from_config", { p_tenant: tenantId }],
-		...folders.map((f): [Step, string, Record<string, unknown>] => [
-			"folders",
-			"brain_set_folder_description",
-			{
-				p_tenant: tenantId,
-				p_actor: actorUserId,
-				p_path: f.slug,
-				p_description: f.description,
-			},
-		]),
+			],
+		),
 		[
 			"skills",
 			"platform_enable_brain_skills",
 			{ p_actor: actorUserId, p_tenant: tenantId },
 		],
-		...folders.map((f): [Step, string, Record<string, unknown>] =>
-			f.restricted
-				? [
-						"folders",
-						"brain_set_access_rule",
-						{
-							p_tenant_id: tenantId,
-							p_path: f.slug,
-							p_principal: "members",
-							p_user_id: null,
-							p_level: "ninguno",
-							p_actor: actorUserId,
-						},
-					]
-				: [
-						"folders",
-						"brain_remove_access_rule",
-						{
-							p_tenant_id: tenantId,
-							p_path: f.slug,
-							p_principal: "members",
-							p_user_id: null,
-							p_actor: actorUserId,
-						},
-					],
-		),
-	];
-	for (const [step, fn, args] of steps) {
-		const failed = await rpc(step, fn, args);
-		if (failed) return failed;
-	}
+		...folders
+			.filter((f) => f.restricted)
+			.map(
+				(f): Call => [
+					"folders",
+					"brain_set_access_rule",
+					{
+						p_tenant_id: tenantId,
+						p_path: f.slug,
+						p_principal: "members",
+						p_user_id: null,
+						p_level: "ninguno",
+						p_actor: actorUserId,
+					},
+				],
+			),
+	]);
+	if (rest) return rest;
 
 	const write = async (
 		step: "rules" | "page",

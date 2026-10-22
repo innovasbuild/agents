@@ -35,7 +35,7 @@ const input = {
 	companySummary: "Hacemos harina.",
 };
 
-function fakes(failOn?: string, existing: string[] = []) {
+function fakes(failOn?: string, existing: string[] = [], code?: string) {
 	const rpcs: [string, Record<string, unknown>][] = [];
 	const pages: {
 		write: Parameters<FoldersSetupDeps["upsertPage"]>[0];
@@ -47,7 +47,7 @@ function fakes(failOn?: string, existing: string[] = []) {
 		},
 		async rpc(fn, args) {
 			rpcs.push([fn, args]);
-			return { error: fn === failOn ? { message: "boom" } : null };
+			return { error: fn === failOn ? { message: "boom", code } : null };
 		},
 		async upsertPage(write, author) {
 			pages.push({ write, author });
@@ -63,11 +63,11 @@ describe("setupBrainFolders", () => {
 		expect(rpcs.map(([fn]) => fn)).toEqual([
 			"platform_bind_connection",
 			"brain_folders_from_config",
+			"brain_remove_access_rule",
 			"brain_set_folder_description",
 			"brain_set_folder_description",
 			"brain_set_folder_description",
 			"platform_enable_brain_skills",
-			"brain_remove_access_rule",
 			"brain_set_access_rule",
 			"brain_set_access_rule",
 		]);
@@ -85,13 +85,13 @@ describe("setupBrainFolders", () => {
 			p_verified_name: null,
 		});
 		expect(rpcs[1][1]).toEqual({ p_tenant: "t1" });
-		expect(rpcs[2][1]).toEqual({
+		expect(rpcs[3][1]).toEqual({
 			p_tenant: "t1",
 			p_actor: "u1",
 			p_path: "comercial",
 			p_description: "Ventas.",
 		});
-		expect(rpcs[5][1]).toEqual({ p_actor: "u1", p_tenant: "t1" });
+		expect(rpcs[6][1]).toEqual({ p_actor: "u1", p_tenant: "t1" });
 	});
 
 	it("las restringidas llevan regla members/ninguno", async () => {
@@ -127,12 +127,13 @@ describe("setupBrainFolders", () => {
 			"finanzas",
 		]);
 		await setupBrainFolders(input, deps);
-		expect(rpcs[0]).toEqual([
+		expect(rpcs[2]).toEqual([
 			"brain_delete_folder",
 			{ p_tenant: "t1", p_actor: "u1", p_path: "vieja" },
 		]);
 		expect(rpcs.filter(([fn]) => fn === "brain_delete_folder")).toHaveLength(1);
-		expect(rpcs[1][0]).toBe("platform_bind_connection");
+		expect(rpcs[0][0]).toBe("platform_bind_connection");
+		expect(rpcs[1][0]).toBe("brain_folders_from_config");
 	});
 
 	it("con las mismas carpetas no borra nada", async () => {
@@ -158,6 +159,28 @@ describe("setupBrainFolders", () => {
 				p_actor: "u1",
 			},
 		]);
+	});
+
+	it("el borrado va después de folders_from_config y antes de skills", async () => {
+		const { rpcs, deps } = fakes(undefined, ["vieja"]);
+		await setupBrainFolders(input, deps);
+		const names = rpcs.map(([fn]) => fn);
+		const del = names.indexOf("brain_delete_folder");
+		expect(del).toBeGreaterThan(names.indexOf("brain_folders_from_config"));
+		expect(del).toBeLessThan(names.indexOf("platform_enable_brain_skills"));
+	});
+
+	it("una carpeta que sobra y no se puede borrar (BR409) no frena", async () => {
+		const { rpcs, pages, deps } = fakes(
+			"brain_delete_folder",
+			["direccion-vieja"],
+			"BR409",
+		);
+		expect(await setupBrainFolders(input, deps)).toEqual({ ok: true });
+		expect(rpcs.some(([fn]) => fn === "platform_enable_brain_skills")).toBe(
+			true,
+		);
+		expect(pages).toHaveLength(2);
 	});
 
 	it("si el borrado falla devuelve step folders", async () => {
