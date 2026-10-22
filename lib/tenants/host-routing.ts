@@ -24,6 +24,25 @@ const PASSTHROUGH = new Set([
 // Rutas de la plataforma: en el dominio de una empresa no existen.
 const PLATFORM_ONLY = new Set(["plataforma", "oauth", "empezar"]);
 
+// Primeros segmentos del host raíz que no son un slug de empresa.
+const ROOT_RESERVED = new Set([
+	...PASSTHROUGH,
+	...PLATFORM_ONLY,
+	"",
+	"login",
+	"brain",
+]);
+
+/**
+ * En el host raíz, el login de una empresa que se pide sin sesión: a la
+ * ruta /<slug>/... el layout le respondería 404, así que se manda a
+ * /login/<slug>. Devuelve null si el primer segmento no es de una empresa.
+ */
+export function rootLoginPath(pathname: string): string | null {
+	const first = pathname.split("/")[1] ?? "";
+	return ROOT_RESERVED.has(first) ? null : `/login/${first}`;
+}
+
 export function routeTenantPath(pathname: string, slug: string): TenantRouting {
 	const [, first = "", ...rest] = pathname.split("/");
 
