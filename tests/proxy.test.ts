@@ -173,6 +173,34 @@ describe("proxy en el dominio de una empresa, sin sesión", () => {
 	});
 });
 
+describe("proxy en el host raíz, sin sesión", () => {
+	beforeEach(() => {
+		getUser.mockResolvedValue({ data: { user: null } });
+	});
+
+	it.each([
+		["/innovas", "/login/innovas"],
+		["/innovas/chat?thread=1", "/login/innovas"],
+	])(
+		"%s redirige (307) al login de la empresa, no da 404",
+		async (path, to) => {
+			const response = await call(path, "agentes.innov.as");
+			expect(response.status).toBe(307);
+			expect(response.headers.get("location")).toBe(
+				`https://agentes.innov.as${to}`,
+			);
+		},
+	);
+
+	it.each(["/", "/login", "/login/innovas", "/plataforma", "/auth/callback"])(
+		"%s no se redirige",
+		async (path) => {
+			const response = await call(path, "agentes.innov.as");
+			expect(response.status).toBe(200);
+		},
+	);
+});
+
 describe("proxy en un host desconocido o con la base caída", () => {
 	it("un host que no es de nadie da 404 sin tocar Supabase", async () => {
 		binding = { kind: "unknown" };

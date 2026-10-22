@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
-import { routeTenantPath } from "@/lib/tenants/host-routing";
+import { rootLoginPath, routeTenantPath } from "@/lib/tenants/host-routing";
 import { resolveHostBinding } from "@/lib/tenants/host-store";
 
 /**
@@ -90,14 +90,19 @@ export async function proxy(request: NextRequest) {
 	// respondería 404 (nunca 403, para no confirmar que el cliente existe). En el
 	// dominio propio eso es la raíz misma, así que se manda al login. El login y
 	// el endpoint MCP (bearer) son públicos.
-	if (
-		!auth.user &&
-		rewriteTo &&
-		pathname !== "/login" &&
-		pathname !== "/brain/mcp"
-	) {
+	// En el host raíz pasa lo mismo con /<slug>/...: va al login de esa empresa.
+	const loginPath = !auth.user
+		? rewriteTo
+			? pathname !== "/login" && pathname !== "/brain/mcp"
+				? "/login"
+				: null
+			: binding.kind === "root"
+				? rootLoginPath(pathname)
+				: null
+		: null;
+	if (loginPath) {
 		const url = request.nextUrl.clone();
-		url.pathname = "/login";
+		url.pathname = loginPath;
 		url.search = "";
 		const redirect = NextResponse.redirect(url);
 		// Si Supabase limpió una cookie vencida, la respuesta tiene que llevarlo.
