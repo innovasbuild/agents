@@ -71,4 +71,22 @@ describe("IngresoForm", () => {
 		expect(html).not.toContain("<input");
 		expect(html).not.toContain("Guardar");
 	});
+
+	it("fuera de enterprise con el ingreso ya abierto muestra el interruptor para cerrarlo", () => {
+		const html = render({ open: true, domains: ["empresa.com"], plan: "free" });
+		expect(html).toContain(
+			"Este plan no incluye el ingreso abierto por dominio",
+		);
+		expect(html).toContain("Guardar");
+		expect(html).not.toContain("Hoy el ingreso es solo por invitación");
+		expect(radioDeTodos(html)).toContain("disabled");
+	});
+
+	it("enterprise no muestra la nota de plan, abierto o cerrado", () => {
+		for (const open of [true, false]) {
+			const html = render({ open, domains: ["empresa.com"] });
+			expect(html).not.toContain("Este plan no incluye");
+			expect(html).not.toContain("Disponible pronto");
+		}
+	});
 });

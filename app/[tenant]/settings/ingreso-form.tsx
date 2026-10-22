@@ -23,8 +23,10 @@ export function IngresoForm({
 	const [isPending, startTransition] = useTransition();
 	const sinDominios = domains.length === 0;
 
-	// Fuera de Enterprise el ingreso por dominio todavía no se ofrece.
-	if (plan !== "enterprise")
+	// Fuera de Enterprise el ingreso por dominio todavía no se ofrece; si ya
+	// quedó abierto, se muestra el formulario solo para poder cerrarlo.
+	const restringido = plan !== "enterprise";
+	if (restringido && !open)
 		return (
 			<div className="space-y-2 text-sm">
 				<p>
@@ -71,7 +73,7 @@ export function IngresoForm({
 					name="ingreso"
 					className="mt-1"
 					checked={value}
-					disabled={isPending || sinDominios}
+					disabled={isPending || sinDominios || restringido}
 					onChange={() => setValue(true)}
 				/>
 				<span>
@@ -82,6 +84,11 @@ export function IngresoForm({
 				</span>
 			</label>
 
+			{restringido ? (
+				<p className="text-muted-foreground text-sm">
+					Este plan no incluye el ingreso abierto por dominio. Podés cerrarlo.
+				</p>
+			) : null}
 			<p className="text-muted-foreground text-sm">
 				{sinDominios
 					? "Todavía no hay dominios cargados. Escribinos a hola@innov.as para que los carguemos."
