@@ -34,7 +34,6 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { allowanceReasonFrom } from "@/lib/agents/allowance-check";
 import {
 	type PendingInputRequest,
 	pendingInputRequests,
@@ -42,9 +41,11 @@ import {
 import { isEmailApproval, queuePreviewItems } from "@/lib/agents/mail-preview";
 import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
 import { mailText } from "@/lib/gmail/signature";
+import { lastFailedTurn, shouldCheckChatBlock } from "@/lib/plans/failed-turn";
 import { type LimitReason, limitMessage } from "@/lib/plans/limits";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import {
+	checkChatBlock,
 	createConversation,
 	deleteConversation,
 	renameConversation,
@@ -524,19 +525,35 @@ function Thread({
 	// El hook de crédito de IA corta el turno tirando en turn.started; el
 	// turn.failed trae el motivo. Cubre el crédito que se acaba con el hilo
 	// abierto, cuando la página todavía no sabía del corte.
-	const failedReason = useMemo(() => {
-		for (let i = agent.events.length - 1; i >= 0; i--) {
-			const event = agent.events[i];
-			if (event.type === "turn.failed") {
-				return allowanceReasonFrom(event.data.message);
-			}
-			if (event.type === "turn.completed") return null;
-		}
-		return null;
-	}, [agent.events]);
-	const blockReason = aiBlock ?? failedReason;
+	const failedTurn = useMemo(
+		() => lastFailedTurn(agent.events),
+		[agent.events],
+	);
+	const failedReason = failedTurn.kind === "limit" ? failedTurn.reason : null;
+	// Respaldo (R13 F4): si el turn.failed no trae el motivo (el texto llegó
+	// tapado o envuelto), se le pregunta al servidor una vez por turno fallido.
+	const [checkedReason, setCheckedReason] = useState<LimitReason | null>(null);
+	const lastCheck = useRef<{ turnId: string | null; at: number }>({
+		turnId: null,
+		at: 0,
+	});
 	const [limitOpen, setLimitOpen] = useState(false);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: solo cuando aparece un corte nuevo
+	useEffect(() => {
+		const now = Date.now();
+		if (!shouldCheckChatBlock(failedTurn, lastCheck.current, now)) return;
+		lastCheck.current = { turnId: failedTurn.turnId, at: now };
+		checkChatBlock(slug)
+			.then((reason) => {
+				setCheckedReason(reason);
+				if (reason) setLimitOpen(true);
+			})
+			.catch(() => {});
+	}, [failedTurn, slug]);
+	const blockReason =
+		aiBlock ??
+		failedReason ??
+		(failedTurn.kind === "unknown" ? checkedReason : null);
+	// Solo cuando aparece un corte nuevo.
 	useEffect(() => {
 		if (failedReason) setLimitOpen(true);
 	}, [failedReason]);

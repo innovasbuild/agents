@@ -48,9 +48,25 @@ vi.mock("@/lib/tenants/enabled-agents", () => ({
 // Crédito de IA del plan: null = hay crédito. Su cálculo tiene tests propios.
 const allowance = vi.hoisted(() => ({
 	block: null as "limit:ai_credit" | null,
+	asked: [] as string[],
 }));
 vi.mock("@/lib/plans/chat-allowance", () => ({
-	chatAiBlock: async () => allowance.block,
+	chatAiBlock: async (tenantId: string) => {
+		allowance.asked.push(tenantId);
+		return allowance.block;
+	},
+}));
+
+// Acceso a la empresa por slug: null = sin sesión, no es miembro o método no
+// permitido. resolveTenantAccess tiene sus propios tests.
+const access = vi.hoisted(() => ({
+	byslug: { acme: { id: "11111111-1111-4111-8111-111111111111" } } as Record<
+		string,
+		{ id: string }
+	>,
+}));
+vi.mock("@/lib/tenants/resolve", () => ({
+	resolveTenantAccess: async (slug: string) => access.byslug[slug] ?? null,
 }));
 
 vi.mock("next/cache", () => ({
@@ -112,8 +128,12 @@ vi.mock("../../lib/supabase/server", () => {
 	};
 });
 
-const { createConversation, deleteConversation, renameConversation } =
-	await import("@/app/[tenant]/chat/actions");
+const {
+	checkChatBlock,
+	createConversation,
+	deleteConversation,
+	renameConversation,
+} = await import("@/app/[tenant]/chat/actions");
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -138,6 +158,7 @@ beforeEach(() => {
 	gate.calls = [];
 	agents.enabled = ["asistente", "outreach"];
 	allowance.block = null;
+	allowance.asked = [];
 });
 
 describe("deleteConversation", () => {
@@ -370,5 +391,29 @@ describe("el método de la sesión en las actions del chat", () => {
 			expect(state.deletes).toBe(0);
 			error.mockRestore();
 		});
+	});
+});
+
+describe("checkChatBlock (R13 F4)", () => {
+	it("un miembro recibe el motivo del corte de su empresa", async () => {
+		allowance.block = "limit:ai_credit";
+		expect(await checkChatBlock("acme")).toBe("limit:ai_credit");
+		expect(allowance.asked).toEqual([TENANT_ID]);
+	});
+
+	it("con crédito devuelve null", async () => {
+		expect(await checkChatBlock("acme")).toBeNull();
+	});
+
+	it("quien no es miembro recibe null y no se consulta el crédito", async () => {
+		allowance.block = "limit:ai_credit";
+		expect(await checkChatBlock("ajena")).toBeNull();
+		expect(allowance.asked).toEqual([]);
+	});
+
+	it("un slug inválido devuelve null sin resolver nada", async () => {
+		allowance.block = "limit:ai_credit";
+		expect(await checkChatBlock("../x" as string)).toBeNull();
+		expect(allowance.asked).toEqual([]);
 	});
 });

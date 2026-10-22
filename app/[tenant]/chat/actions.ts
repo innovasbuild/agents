@@ -8,6 +8,7 @@ import type { LimitReason } from "@/lib/plans/limits";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
+import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
 // argumentos que quiera: se validan en el borde, igual que el inputSchema de
@@ -77,6 +78,25 @@ export async function createConversation(
 
 	revalidatePath(`/${slug}/chat`);
 	return data.id;
+}
+
+/**
+ * El motivo del corte de crédito de IA de la empresa, o null. Respaldo del
+ * cliente cuando un turn.failed no trae `ai_allowance:` (R13 F4). Cualquier
+ * miembro puede preguntar por su empresa; quien no lo es recibe null.
+ */
+export async function checkChatBlock(
+	slug: string,
+): Promise<LimitReason | null> {
+	if (!slugSchema.safeParse(slug).success) return null;
+	try {
+		const access = await resolveTenantAccess(slug);
+		if (!access) return null;
+		return await chatAiBlock(access.id);
+	} catch (error) {
+		console.error("checkChatBlock:", error);
+		return null;
+	}
 }
 
 export async function renameConversation(
