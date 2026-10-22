@@ -20,19 +20,14 @@ begin
   if jsonb_typeof(v_brand) <> 'object' then
     raise exception 'la marca tiene un formato inválido' using errcode = '23514', hint = 'settings';
   end if;
+  -- Se guardan solo primary, secondary y logo_url. Lo que viene arrastrado de la
+  -- marca anterior (claves viejas, colores cortos como #fff, valores no textuales)
+  -- se descarta sin frenar el guardado: lo que tipea la persona ya lo valida
+  -- saveProfile antes de llegar acá.
   for v_key, v_value in select * from jsonb_each(v_brand) loop
-    if v_key not in ('primary', 'secondary', 'logo_url') then
-      raise exception 'la marca solo lleva colores y logo' using errcode = '23514', hint = 'settings';
-    end if;
-    if jsonb_typeof(v_value) <> 'string' then
-      raise exception 'la marca tiene un formato inválido' using errcode = '23514', hint = 'settings';
-    end if;
-    if v_value #>> '{}' = '' then
-      continue;
-    end if;
-    if v_key in ('primary', 'secondary') and (v_value #>> '{}') !~ '^#[0-9a-fA-F]{6}$' then
-      raise exception 'los colores van como #RRGGBB' using errcode = '23514', hint = 'settings';
-    end if;
+    continue when v_key not in ('primary', 'secondary', 'logo_url');
+    continue when jsonb_typeof(v_value) <> 'string' or v_value #>> '{}' = '';
+    continue when v_key in ('primary', 'secondary') and (v_value #>> '{}') !~ '^#[0-9a-fA-F]{6}$';
     if v_key = 'logo_url' and char_length(v_value #>> '{}') > 500 then
       raise exception 'la dirección del logo es demasiado larga' using errcode = '23514', hint = 'settings';
     end if;

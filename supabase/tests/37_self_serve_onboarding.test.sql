@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(42);
+select plan(61);
 
 insert into auth.users (id, aud, role, email, email_confirmed_at)
 values
@@ -164,6 +164,81 @@ select throws_ok($$ update public.onboarding_research set status = 'error' $$, '
 select pg_temp.login_as(6, '[{"method":"otp","timestamp":10}]');
 select is((select count(*) from public.onboarding_research), 0::bigint, 'un miembro no la ve');
 reset role;
+
+-- R13 F1a: el ingreso por dominio es solo de Enterprise, también por PostgREST.
+insert into auth.users (id, aud, role, email, email_confirmed_at)
+values
+  ('a7a7a7a7-0000-0000-0000-0000000000f1', 'authenticated', 'authenticated', 'adm@frfree.test', now()),
+  ('a7a7a7a7-0000-0000-0000-0000000000f2', 'authenticated', 'authenticated', 'adm@frent.test', now()),
+  ('a7a7a7a7-0000-0000-0000-0000000000f3', 'authenticated', 'authenticated', 'ana@frabierto.test', now()),
+  ('a7a7a7a7-0000-0000-0000-0000000000f4', 'authenticated', 'authenticated', 'ana@frent.test', now()),
+  ('a7a7a7a7-0000-0000-0000-0000000000f5', 'authenticated', 'authenticated', 'ana@frsusp.test', now()),
+  ('a7a7a7a7-0000-0000-0000-0000000000f6', 'authenticated', 'authenticated', 'autor@frborrado.test', now());
+insert into public.tenants (id, slug, display_name, allowed_domains, auth_methods, plan, self_signup_by_domain, suspended_reason)
+values
+  ('a7a7a7a7-0000-0000-0000-0000000000b1', 'fr-free', 'FR Free', '{frfree.test}', '{email}', 'free', false, null),
+  ('a7a7a7a7-0000-0000-0000-0000000000b2', 'fr-ent', 'FR Ent', '{frent.test}', '{email}', 'enterprise', false, null),
+  ('a7a7a7a7-0000-0000-0000-0000000000b3', 'fr-abierto', 'FR Abierto', '{frabierto.test}', '{email}', 'free', true, null),
+  ('a7a7a7a7-0000-0000-0000-0000000000b4', 'fr-susp', 'FR Susp', '{frsusp.test}', '{email}', 'enterprise', true, 'pago_fallido');
+insert into public.memberships (tenant_id, user_id, role)
+values
+  ('a7a7a7a7-0000-0000-0000-0000000000b1', 'a7a7a7a7-0000-0000-0000-0000000000f1', 'tenant_admin'),
+  ('a7a7a7a7-0000-0000-0000-0000000000b2', 'a7a7a7a7-0000-0000-0000-0000000000f2', 'tenant_admin');
+
+create function pg_temp.login_id(p_user uuid) returns void language plpgsql as $$
+begin
+  perform set_config('role', 'authenticated', true);
+  perform set_config('request.jwt.claims', format(
+    '{"sub":"%s","role":"authenticated","amr":[{"method":"otp","timestamp":10}]}', p_user), true);
+end $$;
+
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f1');
+select is(pg_temp.err($$ update public.tenants set self_signup_by_domain = true where slug = 'fr-free' $$), '42501:settings', 'una free no abre el ingreso por dominio por PostgREST');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f2');
+select lives_ok($$ update public.tenants set self_signup_by_domain = true where slug = 'fr-ent' $$, 'una enterprise sí lo abre');
+reset role;
+select is((select self_signup_by_domain from public.tenants where slug = 'fr-ent'), true, 'y quedó abierto');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f3');
+select is(public.login_gate() ->> 'landing', null, 'login_gate no manda a la free abierta');
+select is(public.signup_route(), 'dominio_tomado', 'el dominio de la free abierta figura tomado');
+select is(public.join_tenants_by_domain(), 0, 'una free con el dominio abierto no une a nadie');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f5');
+select is(public.login_gate() ->> 'landing', null, 'login_gate no manda a la suspendida');
+select is(public.join_tenants_by_domain(), 0, 'una enterprise suspendida no une por dominio');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f4');
+select is(public.login_gate() ->> 'landing', 'fr-ent', 'login_gate manda a la enterprise abierta');
+select is(public.join_tenants_by_domain(), 1, 'una enterprise abierta sigue uniendo por dominio');
+reset role;
+
+-- R13 F1b: las invitaciones se crean solo por el servidor (canInvite), nunca directo.
+insert into public.invitations (tenant_id, email, role, invited_by)
+values ('a7a7a7a7-0000-0000-0000-0000000000b1', 'p1@frfree.test', 'tenant_member', 'a7a7a7a7-0000-0000-0000-0000000000f1'),
+       ('a7a7a7a7-0000-0000-0000-0000000000b1', 'p2@frfree.test', 'tenant_member', 'a7a7a7a7-0000-0000-0000-0000000000f1');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f1');
+select throws_ok($$ insert into public.invitations (tenant_id, email, role, invited_by)
+  values ('a7a7a7a7-0000-0000-0000-0000000000b1', 'p3@frfree.test', 'tenant_member', 'a7a7a7a7-0000-0000-0000-0000000000f1') $$,
+  '42501', null, 'el admin de una free no suma un cuarto lugar insertando directo');
+select lives_ok($$ update public.invitations set status = 'revoked' where email = 'p1@frfree.test' $$, 'el admin todavía revoca');
+select pg_temp.login_id('a7a7a7a7-0000-0000-0000-0000000000f2');
+select throws_ok($$ insert into public.invitations (tenant_id, email, role, invited_by)
+  values ('a7a7a7a7-0000-0000-0000-0000000000b2', 'p1@frent.test', 'tenant_member', 'a7a7a7a7-0000-0000-0000-0000000000f2') $$,
+  '42501', null, 'tampoco el admin de una enterprise');
+reset role;
+select is((select status::text from public.invitations where email = 'p1@frfree.test'), 'revoked', 'la revocación quedó');
+
+-- R13 F3: borrar a una persona no choca con la guarda de la empresa suspendida.
+insert into public.tenants (id, slug, display_name, auth_methods)
+values ('a7a7a7a7-0000-0000-0000-0000000000b5', 'fr-borrado', 'FR Borrado', '{email}');
+insert into public.brain_pages (tenant_id, slug, title, category, body, updated_by)
+values ('a7a7a7a7-0000-0000-0000-0000000000b5', 'nota', 'Nota', 'company', 'texto', 'a7a7a7a7-0000-0000-0000-0000000000f6');
+insert into public.brain_folders (tenant_id, path, created_by)
+values ('a7a7a7a7-0000-0000-0000-0000000000b5', 'company', 'a7a7a7a7-0000-0000-0000-0000000000f6');
+update public.tenants set suspended_reason = 'trial_vencido' where slug = 'fr-borrado';
+select lives_ok($$ delete from auth.users where id = 'a7a7a7a7-0000-0000-0000-0000000000f6' $$, 'se borra a quien escribió en una empresa suspendida');
+select is((select updated_by from public.brain_pages where tenant_id = 'a7a7a7a7-0000-0000-0000-0000000000b5'), null, 'la página quedó sin autor');
+select is((select created_by from public.brain_folders where tenant_id = 'a7a7a7a7-0000-0000-0000-0000000000b5'), null, 'la carpeta quedó sin autor');
+select throws_ok($$ update public.brain_pages set body = 'otro' where tenant_id = 'a7a7a7a7-0000-0000-0000-0000000000b5' $$, '42501', null, 'editar la página de la suspendida sigue frenado');
+select throws_ok($$ update public.brain_pages set updated_by = null where tenant_id = 'a7a7a7a7-0000-0000-0000-0000000000b5' $$, '42501', null, 'un update directo que solo anula sigue frenado');
 
 select * from finish();
 rollback;

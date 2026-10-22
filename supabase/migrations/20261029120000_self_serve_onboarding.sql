@@ -41,9 +41,19 @@ $$;
 revoke execute on function public.tenant_is_writable(uuid) from public, anon;
 grant execute on function public.tenant_is_writable(uuid) to authenticated, service_role;
 
+-- Una acción referencial (ON DELETE SET NULL al borrar una persona de auth.users)
+-- llega como UPDATE desde el trigger de la FK: pg_trigger_depth() > 1 y lo único
+-- que cambia son columnas que pasan a null. Ese caso pasa; un INSERT o un UPDATE
+-- directo, aunque solo anule, sigue frenado.
 create or replace function public.tenant_writable_guard()
 returns trigger language plpgsql security definer set search_path = '' as $$
 begin
+  if tg_op = 'UPDATE' and pg_trigger_depth() > 1 and not exists (
+    select 1 from jsonb_each(to_jsonb(new)) n
+    where n.value <> 'null'::jsonb and n.value is distinct from (to_jsonb(old) -> n.key)
+  ) then
+    return new;
+  end if;
   if not public.tenant_is_writable(new.tenant_id) then
     raise exception 'la empresa está suspendida' using errcode = '42501', hint = 'suspended';
   end if;
@@ -261,9 +271,12 @@ begin
   where u.id = v_user and u.email_confirmed_at is not null;
   v_domain := split_part(coalesce(v_email, ''), '@', 2);
 
+  -- Tomado: hay una empresa activa con el dominio que no la une sola (cerrada,
+  -- abierta sin ser Enterprise o suspendida; ver join_tenants_by_domain).
   if v_domain <> '' and exists (
     select 1 from public.tenants t
-    where t.active and not t.self_signup_by_domain and v_domain = any (t.allowed_domains)
+    where t.active and v_domain = any (t.allowed_domains)
+      and not (t.self_signup_by_domain and t.plan = 'enterprise' and t.suspended_reason is null)
   ) then
     return 'dominio_tomado';
   end if;
@@ -339,3 +352,190 @@ begin
   return v_count;
 end;
 $$;
+
+-- 11. El ingreso por dominio es solo de Enterprise, también para quien escribe
+-- directo por PostgREST: la guarda de columnas lo frena al abrirlo y la unión y
+-- la landing ignoran a las empresas que no son Enterprise o están suspendidas.
+create or replace function public.tenants_guard_columns()
+returns trigger language plpgsql set search_path = '' as $$
+begin
+  if current_user <> 'authenticated' then
+    return new;
+  end if;
+  if (select public.is_platform_admin()) then
+    return new;
+  end if;
+  if new.self_signup_by_domain and not old.self_signup_by_domain
+     and exists (
+       select 1 from unnest(new.allowed_domains) d
+       where public.is_public_email_domain(d)
+     ) then
+    raise exception 'no se puede abrir el ingreso con un dominio de correo público'
+      using errcode = '42501';
+  end if;
+  if new.self_signup_by_domain and not old.self_signup_by_domain
+     and new.plan <> 'enterprise' then
+    raise exception 'el ingreso por dominio es solo del plan Enterprise'
+      using errcode = '42501', hint = 'settings';
+  end if;
+  if (to_jsonb(new) - 'default_model' - 'self_signup_by_domain')
+     is distinct from (to_jsonb(old) - 'default_model' - 'self_signup_by_domain') then
+    raise exception 'solo plataforma puede cambiar estas columnas de tenants'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.join_tenants_by_domain()
+returns integer language plpgsql security definer set search_path = '' as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_method text;
+  v_email text;
+  v_domain text;
+  v_count integer := 0;
+  r record;
+begin
+  if v_user is null then
+    raise exception 'no authenticated user';
+  end if;
+
+  v_method := public.current_login_method();
+  if v_method is null then
+    return 0;
+  end if;
+
+  select lower(u.email) into v_email
+  from auth.users u
+  where u.id = v_user and u.email_confirmed_at is not null;
+
+  if v_email is null or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+$' then
+    return 0;
+  end if;
+
+  v_domain := split_part(v_email, '@', 2);
+
+  for r in
+    select t.id
+    from public.tenants t
+    where t.active
+      and t.self_signup_by_domain
+      and t.plan = 'enterprise'
+      and t.suspended_reason is null
+      and v_method = any (t.auth_methods)
+      and v_domain = any (select lower(d) from unnest(t.allowed_domains) d)
+      -- 20.2: el dominio abierto no vuelve a unir a una persona bloqueada.
+      and not exists (
+        select 1 from public.membership_blocks b
+        where b.tenant_id = t.id and b.user_id = v_user
+      )
+  loop
+    insert into public.memberships (tenant_id, user_id, role)
+    values (r.id, v_user, 'tenant_member')
+    on conflict (tenant_id, user_id) do nothing;
+
+    if found then
+      insert into public.events (tenant_id, actor_user_id, type, summary, payload)
+      values (r.id, v_user, 'membership.joined_by_domain', 'Ingreso por dominio',
+              jsonb_build_object('domain', v_domain));
+      v_count := v_count + 1;
+    end if;
+  end loop;
+
+  return v_count;
+end;
+$$;
+
+create or replace function public.login_gate()
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare
+  v_user uuid := (select auth.uid());
+  v_method text;
+  v_email text;
+  v_domain text;
+  v_landing text;
+begin
+  if v_user is null then
+    raise exception 'no authenticated user';
+  end if;
+
+  v_method := public.current_login_method();
+
+  if exists (
+    select 1
+    from public.memberships m
+    join public.tenants t on t.id = m.tenant_id
+    where m.user_id = v_user and t.active and v_method = any (t.auth_methods)
+  ) then
+    return jsonb_build_object('allowed', true, 'landing', null);
+  end if;
+
+  select lower(u.email) into v_email
+  from auth.users u
+  where u.id = v_user and u.email_confirmed_at is not null;
+
+  if v_email ~ '^[^@[:space:]]+@[^@[:space:]]+$' then
+    v_domain := split_part(v_email, '@', 2);
+  end if;
+
+  -- Las empresas que la esperan: donde ya es miembro, donde tiene una
+  -- invitación pendiente y donde su dominio está abierto. En ese orden.
+  select w.slug into v_landing
+  from (
+    select t.slug, 1 as ord
+    from public.memberships m
+    join public.tenants t on t.id = m.tenant_id
+    where m.user_id = v_user and t.active
+    union all
+    select t.slug, 2
+    from public.invitations i
+    join public.tenants t on t.id = i.tenant_id
+    where v_email is not null and i.email = v_email
+      and i.status = 'pending' and i.expires_at > now() and t.active
+    union all
+    select t.slug, 3
+    from public.tenants t
+    where v_domain is not null and t.active and t.self_signup_by_domain
+      and t.plan = 'enterprise' and t.suspended_reason is null
+      and v_domain = any (select lower(d) from unnest(t.allowed_domains) d)
+      -- 20.2: una empresa que la bloqueó no la espera por dominio.
+      and not exists (
+        select 1 from public.membership_blocks b
+        where b.tenant_id = t.id and b.user_id = v_user
+      )
+  ) w
+  order by w.ord, w.slug
+  limit 1;
+
+  if v_landing is null then
+    return jsonb_build_object('allowed', true, 'landing', null);
+  end if;
+  return jsonb_build_object('allowed', false, 'landing', v_landing);
+end;
+$$;
+
+-- 12. Las invitaciones nacen solo en el servidor (lib/invitations/invite.ts, con
+-- la service role y después de canInvite): un tenant_admin ya no las inserta
+-- directo por PostgREST salteando el tope del plan. Revocar y renovar siguen.
+revoke insert on public.invitations from authenticated;
+
+drop policy invitations_write on public.invitations;
+
+create policy invitations_update on public.invitations
+  for update to authenticated
+  using (
+    (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
+    or (select public.is_platform_admin())
+  )
+  with check (
+    (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
+    or (select public.is_platform_admin())
+  );
+
+create policy invitations_delete on public.invitations
+  for delete to authenticated
+  using (
+    (select public.has_tenant_role(tenant_id, array['tenant_admin']::public.tenant_role[]))
+    or (select public.is_platform_admin())
+  );

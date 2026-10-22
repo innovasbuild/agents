@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(33);
+select plan(39);
 
 -- Personas: 1 admin de tp-a, 2 miembro de tp-a, 3 admin de tp-b, 4 platform_admin (en tp-p).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -64,8 +64,16 @@ select lives_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-0000
 select is((select brand::text from public.tenants where slug = 'tp-a'), '{"secondary": "#abcdef"}', 'el color vacío no se guarda');
 select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', '', '{}')$$, '23514', null, 'nombre vacío');
 select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', repeat('a', 81), '{}')$$, '23514', null, 'nombre de 81 caracteres');
-select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'X', '{"otra":"cosa"}')$$, '23514', null, 'clave de marca desconocida');
-select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'X', '{"primary":"rojo"}')$$, '23514', null, 'color inválido');
+-- R13 F5: lo heredado de la marca (claves viejas, colores cortos) se descarta sin
+-- frenar el guardado; los colores que tipea la persona los valida saveProfile.
+select lives_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'Nuevo Nombre', '{"otra":"cosa","accent":"#000000","primary":"#112233"}')$$, 'una clave de marca desconocida no frena el guardado');
+select is((select brand::text from public.tenants where slug = 'tp-a'), '{"primary": "#112233"}', 'la clave desconocida se descarta y el color válido queda');
+select lives_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'Nuevo Nombre', '{"primary":"#fff","secondary":"rojo","logo_url":"t/logo.png"}')$$, 'un color heredado inválido no frena el guardado');
+select is((select brand::text from public.tenants where slug = 'tp-a'), '{"logo_url": "t/logo.png"}', '#fff y rojo se descartan, el logo queda');
+select lives_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'Nuevo Nombre', '{"primary":5,"logo_url":"t/logo.png"}')$$, 'un valor que no es texto se descarta');
+select is((select brand::text from public.tenants where slug = 'tp-a'), '{"logo_url": "t/logo.png"}', 'el valor no textual no se guarda');
+select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'X', '"marca"')$$, '23514', null, 'una marca que no es objeto sigue fallando');
+select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'X', jsonb_build_object('logo_url', repeat('a', 501)))$$, '23514', null, 'el logo sigue con tope de 500 caracteres');
 select is(pg_temp.hint_of($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', '', '{}')$$), 'settings', 'el error del perfil lleva hint settings');
 
 select lives_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft,email}')$$, 'el admin cambia los métodos conservando el propio');
