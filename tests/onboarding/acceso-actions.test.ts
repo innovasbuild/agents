@@ -135,7 +135,7 @@ describe("saveAccessStep", () => {
 	it("guarda los métodos, avanza a equipo y redirige", async () => {
 		const to = await redirects(() =>
 			actions.saveAccessStep("lagomarsino", {
-				methods: ["microsoft"]
+				methods: ["microsoft"],
 			}),
 		);
 		expect(state.rpcCalls).toEqual([
@@ -158,7 +158,7 @@ describe("saveAccessStep", () => {
 			hint: "settings",
 		};
 		const r = await actions.saveAccessStep("lagomarsino", {
-			methods: []
+			methods: [],
 		});
 		expect(r).toEqual({
 			ok: false,
@@ -171,7 +171,7 @@ describe("saveAccessStep", () => {
 		state.step = "logo";
 		const to = await redirects(() =>
 			actions.saveAccessStep("lagomarsino", {
-				methods: ["email"]
+				methods: ["email"],
 			}),
 		);
 		expect(to).toBe("/empezar/lagomarsino/logo");
@@ -181,7 +181,7 @@ describe("saveAccessStep", () => {
 	it("un miembro no cambia nada", async () => {
 		state.access = { ...state.access, role: "tenant_member" };
 		const r = await actions.saveAccessStep("lagomarsino", {
-			methods: ["email"]
+			methods: ["email"],
 		});
 		expect(r.ok).toBe(false);
 		expect(state.rpcCalls).toHaveLength(0);
@@ -189,10 +189,13 @@ describe("saveAccessStep", () => {
 
 	it("no deja sacar el método con el que entró la persona", async () => {
 		state.method = "email";
-		const r = await actions.saveAccessStep("lagomarsino", { methods: ["microsoft"] });
+		const r = await actions.saveAccessStep("lagomarsino", {
+			methods: ["microsoft"],
+		});
 		expect(r).toEqual({
 			ok: false,
-			message: "No podés sacar la forma de entrar con la que estás usando ahora.",
+			message:
+				"No podés sacar la forma de entrar con la que estás usando ahora.",
 		});
 		expect(state.rpcCalls).toHaveLength(0);
 	});
@@ -200,7 +203,9 @@ describe("saveAccessStep", () => {
 	it("con el método propio en la lista sigue", async () => {
 		state.method = "email";
 		await redirects(() =>
-			actions.saveAccessStep("lagomarsino", { methods: ["microsoft", "email"] }),
+			actions.saveAccessStep("lagomarsino", {
+				methods: ["microsoft", "email"],
+			}),
 		);
 		expect(state.rpcCalls[0]?.fn).toBe("set_tenant_auth_methods");
 	});

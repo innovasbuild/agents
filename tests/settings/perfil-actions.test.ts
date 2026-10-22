@@ -193,15 +193,23 @@ describe("saveAuthMethods", () => {
 		state.method = "google";
 		expect(await actions.saveAuthMethods("acme", ["email"])).toEqual({
 			ok: false,
-			message: "No podés sacar la forma de entrar con la que estás usando ahora.",
+			message:
+				"No podés sacar la forma de entrar con la que estás usando ahora.",
 		});
 		expect(state.rpcCalls).toHaveLength(0);
 	});
 
 	it("plataforma está exenta", async () => {
 		state.method = "google";
-		state.access = { id: TENANT, slug: "acme", role: "platform_admin", userId: "me" };
-		expect(await actions.saveAuthMethods("acme", ["email"])).toEqual({ ok: true });
+		state.access = {
+			id: TENANT,
+			slug: "acme",
+			role: "platform_admin",
+			userId: "me",
+		};
+		expect(await actions.saveAuthMethods("acme", ["email"])).toEqual({
+			ok: true,
+		});
 	});
 
 	it("métodos vacíos: devuelve el mensaje de la base (hint settings)", async () => {
