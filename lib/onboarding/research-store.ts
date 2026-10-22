@@ -12,10 +12,17 @@ export type ResearchRow = {
 	updatedAt: string;
 };
 
+/** Lo único que se guarda en la columna `error`: el detalle crudo va al log. */
+export type ResearchErrorCode =
+	| "sin_salida"
+	| "fallo_modelo"
+	| "fallo_lectura"
+	| "fallo_guardado";
+
 export interface ResearchStore {
 	start(tenantId: string, hint: string | null): Promise<void>;
 	finish(tenantId: string, result: FolderProposal): Promise<void>;
-	fail(tenantId: string, error: string): Promise<void>;
+	fail(tenantId: string, code: ResearchErrorCode): Promise<void>;
 	read(tenantId: string): Promise<ResearchRow | null>;
 }
 

@@ -5,7 +5,7 @@ import type { generateText } from "ai";
 import type { WebPageResult } from "../outreach/web-page";
 import type { GatewayOptions } from "../workflows/gateway-options";
 import { normalizeProposal } from "./folder-template";
-import type { ResearchStore } from "./research-store";
+import type { ResearchErrorCode, ResearchStore } from "./research-store";
 import type { proposeFolders } from "./services/propose-folders";
 
 export async function runFolderResearch(
@@ -25,16 +25,25 @@ export async function runFolderResearch(
 ): Promise<void> {
 	const { store } = deps;
 	const { tenantId } = input;
-	const fail = async (message: string) => {
+	const fail = async (code: ResearchErrorCode, detail?: unknown) => {
+		// El detalle crudo (Supabase, gateway, DNS) no va a la fila: un admin de
+		// la empresa la puede leer.
+		if (detail !== undefined)
+			console.error("onboarding_research:", tenantId, code, detail);
 		try {
-			await store.fail(tenantId, message);
+			await store.fail(tenantId, code);
 		} catch (error) {
-			console.error("onboarding_research:", error);
+			console.error("onboarding_research:", tenantId, error);
 		}
 	};
 	try {
 		await store.start(tenantId, input.hint);
-		const { output } = await deps.propose(
+	} catch (error) {
+		return await fail("fallo_guardado", error);
+	}
+	let output: Awaited<ReturnType<typeof proposeFolders>>["output"];
+	try {
+		({ output } = await deps.propose(
 			{
 				domain: input.domain,
 				displayName: input.displayName,
@@ -47,13 +56,17 @@ export async function runFolderResearch(
 				readPage: deps.readPage,
 				providerOptions: deps.providerOptions,
 			},
-		);
-		if (!output) return await fail("sin_salida");
-		// Con hint, las carpetas salen de las líneas de la persona: siempre sirve.
-		// Sin hint y sin sitio, `found: false` queda para que la pantalla lo pida.
-		const found = input.hint ? true : output.found;
+		));
+	} catch (error) {
+		return await fail("fallo_modelo", error);
+	}
+	if (!output) return await fail("sin_salida");
+	// Con hint, las carpetas salen de las líneas de la persona: siempre sirve.
+	// Sin hint y sin sitio, `found: false` queda para que la pantalla lo pida.
+	const found = input.hint ? true : output.found;
+	try {
 		await store.finish(tenantId, { ...normalizeProposal(output), found });
 	} catch (error) {
-		await fail(error instanceof Error ? error.message : String(error));
+		await fail("fallo_guardado", error);
 	}
 }

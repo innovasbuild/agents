@@ -107,11 +107,30 @@ describe("runFolderResearch", () => {
 		expect(GENERIC_FOLDERS.length).toBeGreaterThanOrEqual(8);
 	});
 
-	it("propose tira: fail con el mensaje y no tira", async () => {
+	it("propose tira: guarda el código, el mensaje crudo va al log", async () => {
 		const store = fakeStore();
-		await expect(run(store, new Error("boom"))).resolves.toBeUndefined();
-		expect(store.fail).toHaveBeenCalledWith("t1", "boom");
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await expect(
+			run(store, new Error("secret internal detail")),
+		).resolves.toBeUndefined();
+		expect(store.fail).toHaveBeenCalledWith("t1", "fallo_modelo");
+		expect(JSON.stringify(store.fail.mock.calls)).not.toContain("secret");
+		expect(
+			spy.mock.calls.some((c) =>
+				c.some((a) => String(a).includes("secret internal detail")),
+			),
+		).toBe(true);
 		expect(store.finish).not.toHaveBeenCalled();
+		spy.mockRestore();
+	});
+
+	it("finish tira: fail fallo_guardado", async () => {
+		const store = fakeStore();
+		store.finish.mockRejectedValue(new Error("pg detail"));
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+		await run(store, proposal(true));
+		expect(store.fail).toHaveBeenCalledWith("t1", "fallo_guardado");
+		spy.mockRestore();
 	});
 
 	it("output undefined: fail sin_salida", async () => {
