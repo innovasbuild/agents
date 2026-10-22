@@ -5,8 +5,8 @@ import { z } from "zod";
 import {
 	platformOwnerSlug,
 	requirePlatformAdmin,
-	type ServerSupabase,
 } from "@/lib/tenants/platform";
+import { sessionLoginMethod } from "@/lib/tenants/session-method";
 import {
 	mergeBrand,
 	readTenantForm,
@@ -35,29 +35,6 @@ const SIN_EL_METODO_PROPIO: Failure = {
 	message:
 		"No podés sacarle al tenant dueño el método con el que entraste: te quedarías sin acceso a la consola.",
 };
-
-/**
- * Método con el que se abrió la sesión de quien edita, según la base (nunca
- * llega por parámetro). `null` ante cualquier duda: error, excepción o un
- * valor que no es un texto. Los tipos generados dicen `string`, pero la
- * función devuelve null cuando no reconoce el método.
- */
-async function sessionLoginMethod(
-	supabase: ServerSupabase,
-): Promise<string | null> {
-	try {
-		const { data, error } = await supabase.rpc("current_login_method");
-		if (error) {
-			console.error("current_login_method falló:", error);
-			return null;
-		}
-		const method: unknown = data;
-		return typeof method === "string" && method !== "" ? method : null;
-	} catch (error) {
-		console.error("current_login_method falló:", error);
-		return null;
-	}
-}
 
 /**
  * Edita un tenant desde la consola de plataforma. El gate de la aplicación es

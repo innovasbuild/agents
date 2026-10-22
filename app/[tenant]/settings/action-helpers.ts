@@ -35,7 +35,12 @@ export type Supabase = Awaited<ReturnType<typeof createServerSupabase>>;
 export async function adminOf(
 	slug: string,
 ): Promise<
-	| { supabase: Supabase; tenantId: string; allowedModels: string[] }
+	| {
+			supabase: Supabase;
+			tenantId: string;
+			allowedModels: string[];
+			role: string;
+	  }
 	| ConfigResult
 > {
 	if (!slugSchema.safeParse(slug).success) return INVALIDO;
@@ -50,6 +55,7 @@ export async function adminOf(
 		supabase,
 		tenantId: tenant.id,
 		allowedModels: tenant.allowedModels ?? [],
+		role: tenant.role,
 	};
 }
 

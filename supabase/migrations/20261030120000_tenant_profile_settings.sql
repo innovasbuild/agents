@@ -53,6 +53,7 @@ create or replace function public.set_tenant_auth_methods(
 declare
   v_actor uuid := public.settings_actor(p_tenant);
   v_methods text[] := coalesce(p_methods, '{}');
+  v_current text := (select public.current_login_method());
 begin
   if cardinality(v_methods) < 1 then
     raise exception 'dejá al menos una forma de entrar' using errcode = '23514', hint = 'settings';
@@ -62,6 +63,12 @@ begin
   end if;
   if (select count(distinct m) from unnest(v_methods) m) <> cardinality(v_methods) then
     raise exception 'hay formas de entrar repetidas' using errcode = '23514', hint = 'settings';
+  end if;
+
+  -- Quien edita no puede sacar el método con el que entró: la próxima request
+  -- lo rebotaría a la landing. Plataforma queda exenta.
+  if v_current is not null and v_current <> all (v_methods) and not (select public.is_platform_admin()) then
+    raise exception 'No podés sacar la forma de entrar con la que estás usando ahora.' using errcode = '23514', hint = 'settings';
   end if;
 
   update public.tenants set auth_methods = v_methods where id = p_tenant;

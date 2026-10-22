@@ -12,6 +12,7 @@ const state = vi.hoisted(() => ({
 		defaultModel: "anthropic/claude-sonnet-5",
 	} as Record<string, string> | null,
 	step: "acceso" as string | null,
+	method: null as string | null,
 	rpcCalls: [] as { fn: string; args: Record<string, unknown> }[],
 	rpcError: null as { code?: string; message: string; hint?: string } | null,
 	uploads: [] as string[],
@@ -55,6 +56,8 @@ vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
 		auth: { getUser: async () => ({ data: { user: { id: "me" } } }) },
 		rpc: async (fn: string, args: Record<string, unknown>) => {
+			if (fn === "current_login_method")
+				return { data: state.method, error: null };
 			state.rpcCalls.push({ fn, args });
 			return { data: null, error: state.rpcError };
 		},
@@ -94,6 +97,7 @@ vi.mock("@/lib/invitations/invite", () => ({
 }));
 
 beforeEach(() => {
+	state.method = null;
 	state.access = {
 		id: TENANT,
 		slug: "lagomarsino",
@@ -131,8 +135,7 @@ describe("saveAccessStep", () => {
 	it("guarda los métodos, avanza a equipo y redirige", async () => {
 		const to = await redirects(() =>
 			actions.saveAccessStep("lagomarsino", {
-				methods: ["microsoft"],
-				restrictToDomain: true,
+				methods: ["microsoft"]
 			}),
 		);
 		expect(state.rpcCalls).toEqual([
@@ -155,8 +158,7 @@ describe("saveAccessStep", () => {
 			hint: "settings",
 		};
 		const r = await actions.saveAccessStep("lagomarsino", {
-			methods: [],
-			restrictToDomain: true,
+			methods: []
 		});
 		expect(r).toEqual({
 			ok: false,
@@ -169,8 +171,7 @@ describe("saveAccessStep", () => {
 		state.step = "logo";
 		const to = await redirects(() =>
 			actions.saveAccessStep("lagomarsino", {
-				methods: ["email"],
-				restrictToDomain: true,
+				methods: ["email"]
 			}),
 		);
 		expect(to).toBe("/empezar/lagomarsino/logo");
@@ -180,10 +181,27 @@ describe("saveAccessStep", () => {
 	it("un miembro no cambia nada", async () => {
 		state.access = { ...state.access, role: "tenant_member" };
 		const r = await actions.saveAccessStep("lagomarsino", {
-			methods: ["email"],
-			restrictToDomain: true,
+			methods: ["email"]
 		});
 		expect(r.ok).toBe(false);
 		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("no deja sacar el método con el que entró la persona", async () => {
+		state.method = "email";
+		const r = await actions.saveAccessStep("lagomarsino", { methods: ["microsoft"] });
+		expect(r).toEqual({
+			ok: false,
+			message: "No podés sacar la forma de entrar con la que estás usando ahora.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("con el método propio en la lista sigue", async () => {
+		state.method = "email";
+		await redirects(() =>
+			actions.saveAccessStep("lagomarsino", { methods: ["microsoft", "email"] }),
+		);
+		expect(state.rpcCalls[0]?.fn).toBe("set_tenant_auth_methods");
 	});
 });

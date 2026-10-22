@@ -10,14 +10,13 @@ import { createServerSupabase } from "@/lib/supabase/server";
 
 const inputSchema = z.object({
 	methods: z.array(z.string()).max(10),
-	restrictToDomain: z.boolean(),
 });
 
 const fail = (message: string) => ({ ok: false as const, message });
 
 export async function saveAccessStep(
 	slug: string,
-	input: { methods: string[]; restrictToDomain: boolean },
+	input: { methods: string[] },
 ): Promise<{ ok: true } | { ok: false; message: string }> {
 	const parsed = inputSchema.safeParse(input);
 	if (!parsed.success) return fail("No se pudo procesar el pedido.");
@@ -26,10 +25,9 @@ export async function saveAccessStep(
 
 	let done = false;
 	try {
-		// `restrictToDomain` queda como está: allowed_domains no se toca. La
-		// casilla "Solo correos @dominio" destildada solo avisa que la persona va
-		// a invitar a alguien de afuera, y eso se decide al invitar (tilde
-		// "Permitir correo externo", como hoy), no acá.
+		// La restricción de dominio es un dato fijo (allowed_domains + el chequeo
+		// de la invitación), no una opción de este paso.
+		// saveAuthMethods rechaza sacar el método de la sesión.
 		const saved = await saveAuthMethods(slug, parsed.data.methods);
 		if (!saved.ok) return saved;
 		const supabase = await createServerSupabase();

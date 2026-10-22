@@ -2,7 +2,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(30);
+select plan(33);
 
 -- Personas: 1 admin de tp-a, 2 miembro de tp-a, 3 admin de tp-b, 4 platform_admin (en tp-p).
 insert into auth.users (id, aud, role, email, email_confirmed_at)
@@ -68,13 +68,16 @@ select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-000
 select throws_ok($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', 'X', '{"primary":"rojo"}')$$, '23514', null, 'color inválido');
 select is(pg_temp.hint_of($$select public.set_tenant_profile('d7d7d7d7-0000-0000-0000-00000000000a', '', '{}')$$), 'settings', 'el error del perfil lleva hint settings');
 
-select lives_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft}')$$, 'el admin cambia los métodos');
-select is((select auth_methods from public.tenants where slug = 'tp-a'), '{microsoft}'::text[], 'guarda los métodos');
+select lives_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft,email}')$$, 'el admin cambia los métodos conservando el propio');
+select is((select auth_methods from public.tenants where slug = 'tp-a'), '{microsoft,email}'::text[], 'guarda los métodos');
 select is((select count(*)::int from public.events where tenant_id = 'd7d7d7d7-0000-0000-0000-00000000000a' and type = 'tenant.auth_methods_updated'), 1, 'deja el evento de métodos');
 select throws_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{}')$$, '23514', null, 'métodos vacíos');
 select throws_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{saml}')$$, '23514', null, 'método desconocido');
 select throws_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{email,email}')$$, '23514', null, 'métodos repetidos');
 select is(pg_temp.hint_of($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{}')$$), 'settings', 'el error de métodos lleva hint settings');
+
+select throws_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft}')$$, '23514', 'No podés sacar la forma de entrar con la que estás usando ahora.', 'no puede sacar el método de su sesión (otp = email)');
+select is(pg_temp.hint_of($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft}')$$), 'settings', 'ese error lleva hint settings');
 
 select lives_ok($$select public.set_ai_monthly_limit('d7d7d7d7-0000-0000-0000-00000000000a', 12.5)$$, 'el admin fija el tope');
 select is((select ai_monthly_limit_usd::text from public.tenants where slug = 'tp-a'), '12.50', 'guarda el tope');
@@ -83,6 +86,7 @@ select throws_ok($$select public.set_ai_monthly_limit('d7d7d7d7-0000-0000-0000-0
 
 select pg_temp.login_as(4);
 select lives_ok($$select public.set_ai_monthly_limit('d7d7d7d7-0000-0000-0000-00000000000a', null)$$, 'plataforma saca el tope');
+select lives_ok($$select public.set_tenant_auth_methods('d7d7d7d7-0000-0000-0000-00000000000a', '{microsoft}')$$, 'plataforma está exenta de la regla del método propio');
 
 select * from finish();
 rollback;

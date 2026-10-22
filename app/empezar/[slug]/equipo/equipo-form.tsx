@@ -29,6 +29,7 @@ export function EquipoForm({
 	);
 	const [error, setError] = useState<string | null>(null);
 	const [failed, setFailed] = useState<string[]>([]);
+	const [outside, setOutside] = useState<string[]>([]);
 	const [pending, startTransition] = useTransition();
 
 	const filled = rows.filter((r) => r.email.trim() !== "");
@@ -50,6 +51,7 @@ export function EquipoForm({
 				return;
 			}
 			setFailed(result.failed);
+			setOutside(result.outside);
 		});
 	}
 
@@ -59,13 +61,21 @@ export function EquipoForm({
 		});
 	}
 
-	if (failed.length > 0) {
+	if (failed.length > 0 || outside.length > 0) {
 		return (
 			<div className="space-y-4">
-				<p className="text-sm" role="alert">
-					No pudimos mandar el correo a {failed.join(", ")}. Podés volver a
-					invitar desde Configuración.
-				</p>
+				{outside.map((email) => (
+					<p className="text-sm" key={email} role="alert">
+						Ese correo no es de @{domain}. Podés invitarlo desde Configuración,
+						permitiendo correos de afuera. ({email})
+					</p>
+				))}
+				{failed.length > 0 ? (
+					<p className="text-sm" role="alert">
+						No pudimos mandar el correo a {failed.join(", ")}. Podés volver a
+						invitar desde Configuración.
+					</p>
+				) : null}
 				<Button asChild className="w-full" size="lg">
 					<a href={`/${slug}/chat`}>Ir al chat</a>
 				</Button>

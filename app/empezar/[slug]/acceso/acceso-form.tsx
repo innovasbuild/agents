@@ -15,13 +15,15 @@ export function AccesoForm({
 	slug,
 	domain,
 	initialMethods,
+	currentMethod,
 }: {
 	slug: string;
 	domain: string;
 	initialMethods: AuthMethod[];
+	/** Método con el que entró quien edita: no se puede sacar. */
+	currentMethod: AuthMethod | null;
 }) {
 	const [methods, setMethods] = useState<AuthMethod[]>(initialMethods);
-	const [restrictToDomain, setRestrictToDomain] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [pending, startTransition] = useTransition();
 
@@ -39,7 +41,7 @@ export function AccesoForm({
 		}
 		setError(null);
 		startTransition(async () => {
-			const result = await saveAccessStep(slug, { methods, restrictToDomain });
+			const result = await saveAccessStep(slug, { methods });
 			if (!result.ok) setError(result.message);
 		});
 	}
@@ -59,10 +61,16 @@ export function AccesoForm({
 					<label className="flex items-center gap-2 text-sm" key={o.value}>
 						<input
 							checked={methods.includes(o.value)}
+							disabled={o.value === currentMethod}
 							onChange={(e) => toggle(o.value, e.target.checked)}
 							type="checkbox"
 						/>
 						{o.label}
+						{o.value === currentMethod ? (
+							<span className="text-muted-foreground text-xs">
+								Es la que estás usando ahora.
+							</span>
+						) : null}
 					</label>
 				))}
 				{error ? (
@@ -71,19 +79,10 @@ export function AccesoForm({
 					</p>
 				) : null}
 			</fieldset>
-			<div className="space-y-1">
-				<label className="flex items-center gap-2 text-sm">
-					<input
-						checked={restrictToDomain}
-						onChange={(e) => setRestrictToDomain(e.target.checked)}
-						type="checkbox"
-					/>
-					Solo correos @{domain}
-				</label>
-				<p className="pl-6 text-muted-foreground text-xs">
-					Para invitar a alguien de afuera vas a tener que marcarlo a propósito.
-				</p>
-			</div>
+			<p className="text-muted-foreground text-sm">
+				Solo pueden entrar correos @{domain}. Para invitar a alguien de afuera,
+				hay que permitirlo a propósito desde Configuración, al invitar.
+			</p>
 			<fieldset className="space-y-3">
 				<legend className="mb-2 font-medium text-sm">
 					Quién puede sumarse

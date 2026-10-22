@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+	SIN_EL_METODO_ACTUAL,
+	sessionLoginMethod,
+} from "@/lib/tenants/session-method";
 import { mergeBrand, validateLogo } from "@/lib/tenants/tenant-form";
 import {
 	adminOf,
@@ -128,6 +132,13 @@ export async function saveAuthMethods(
 	if (!parsed.success) return INVALIDO;
 	const admin = await adminOf(slug);
 	if ("ok" in admin) return admin;
+	// Quien edita no puede sacar el método con el que entró (plataforma sí): la
+	// base lo vuelve a verificar, esto evita la llamada.
+	if (admin.role !== "platform_admin") {
+		const method = await sessionLoginMethod(admin.supabase);
+		if (method !== null && !parsed.data.includes(method))
+			return { ok: false, message: SIN_EL_METODO_ACTUAL };
+	}
 	// Lo desconocido viaja igual: la base lo rechaza con su mensaje.
 	const { error } = await admin.supabase.rpc("set_tenant_auth_methods", {
 		p_tenant: admin.tenantId,

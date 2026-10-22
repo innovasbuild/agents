@@ -158,8 +158,15 @@ describe("finishWithInvites", () => {
 		state.inviteOutcome = { "ana@lagomarsino.com": "mail_fallo" };
 		const r = await actions.finishWithInvites("lagomarsino", two);
 		expect(state.invites).toHaveLength(2);
-		expect(r).toEqual({ ok: true, failed: ["ana@lagomarsino.com"] });
+		expect(r).toEqual({ ok: true, failed: ["ana@lagomarsino.com"], outside: [] });
 		expect(stepCalls()).toHaveLength(1);
+		expect(state.redirected).toBeNull();
+	});
+
+	it("un correo de afuera del dominio va aparte, no como falla de envío", async () => {
+		state.inviteOutcome = { "ana@lagomarsino.com": "dominio_no_permitido" };
+		const r = await actions.finishWithInvites("lagomarsino", two);
+		expect(r).toEqual({ ok: true, failed: [], outside: ["ana@lagomarsino.com"] });
 		expect(state.redirected).toBeNull();
 	});
 

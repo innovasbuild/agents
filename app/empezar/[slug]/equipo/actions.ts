@@ -37,7 +37,10 @@ async function finish(tenantId: string): Promise<boolean> {
 export async function finishWithInvites(
 	slug: string,
 	invites: { email: string; role: "tenant_admin" | "tenant_member" }[],
-): Promise<{ ok: true; failed: string[] } | { ok: false; message: string }> {
+): Promise<
+	| { ok: true; failed: string[]; outside: string[] }
+	| { ok: false; message: string }
+> {
 	const parsed = invitesSchema.safeParse(invites);
 	if (!parsed.success)
 		return fail(
@@ -47,6 +50,8 @@ export async function finishWithInvites(
 	if (!g) return fail("No tenés permiso.");
 
 	const failed: string[] = [];
+	// Correos de afuera del dominio: tienen su propio mensaje en el formulario.
+	const outside: string[] = [];
 	try {
 		const admin = createAdminClient();
 		const origin = await invitationOrigin(
@@ -65,7 +70,8 @@ export async function finishWithInvites(
 					allowExternal: false,
 					origin,
 				});
-				if (outcome.kind !== "ok" && outcome.kind !== "ya_existe")
+				if (outcome.kind === "dominio_no_permitido") outside.push(email);
+				else if (outcome.kind !== "ok" && outcome.kind !== "ya_existe")
 					failed.push(email);
 			} catch (error) {
 				console.error("finishWithInvites: invitación falló", error);
@@ -79,8 +85,8 @@ export async function finishWithInvites(
 		return fail("No pudimos mandar las invitaciones. Probá de nuevo.");
 	}
 	// Si alguna no salió, la persona tiene que enterarse: no se redirige.
-	if (failed.length === 0) redirect(`/${slug}/chat`);
-	return { ok: true, failed };
+	if (failed.length === 0 && outside.length === 0) redirect(`/${slug}/chat`);
+	return { ok: true, failed, outside };
 }
 
 export async function finishWithoutInvites(slug: string): Promise<void> {

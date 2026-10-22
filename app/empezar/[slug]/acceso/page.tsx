@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { onboardingGate, stepRedirectPath } from "@/lib/onboarding/step-gate";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { isAuthMethod } from "@/lib/tenants/auth-methods";
+import { sessionLoginMethod } from "@/lib/tenants/session-method";
 import { StepIndicator } from "../../step-indicator";
 import { AccesoForm } from "./acceso-form";
 
@@ -25,6 +26,11 @@ export default async function AccesoPage({
 		.eq("id", g.access.id)
 		.single();
 	const methods = (tenant?.auth_methods ?? []).filter(isAuthMethod);
+	const current = await sessionLoginMethod(supabase);
+	const currentMethod = current && isAuthMethod(current) ? current : null;
+	// El método de la sesión siempre queda marcado: no se puede sacar.
+	if (currentMethod && !methods.includes(currentMethod))
+		methods.push(currentMethod);
 
 	return (
 		<main className="flex min-h-screen items-center justify-center px-4 py-16">
@@ -35,6 +41,7 @@ export default async function AccesoPage({
 				<div className="space-y-6 rounded-xl border bg-card p-6">
 					<StepIndicator step={5} />
 					<AccesoForm
+						currentMethod={currentMethod}
 						domain={g.domain}
 						initialMethods={methods.length > 0 ? methods : ["email", "google"]}
 						slug={slug}

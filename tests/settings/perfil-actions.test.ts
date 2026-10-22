@@ -16,6 +16,7 @@ const state = vi.hoisted(() => ({
 	rpc: { error: null } as {
 		error: { code?: string; message: string; hint?: string } | null;
 	},
+	method: null as string | null,
 	rpcCalls: [] as { fn: string; args: Record<string, unknown> }[],
 	uploads: [] as { path: string; type: string }[],
 	uploadError: null as { message: string } | null,
@@ -31,6 +32,8 @@ vi.mock("@/lib/tenants/login-check-server", () => ({
 vi.mock("@/lib/supabase/server", () => ({
 	createServerSupabase: async () => ({
 		rpc: async (fn: string, args: Record<string, unknown>) => {
+			if (fn === "current_login_method")
+				return { data: state.method, error: null };
 			state.rpcCalls.push({ fn, args });
 			return state.rpc;
 		},
@@ -67,6 +70,7 @@ const form = (f: File) => {
 };
 
 beforeEach(() => {
+	state.method = null;
 	state.access = {
 		id: TENANT,
 		slug: "acme",
@@ -183,6 +187,21 @@ describe("saveAuthMethods", () => {
 				args: { p_tenant: TENANT, p_methods: ["microsoft", "email"] },
 			},
 		]);
+	});
+
+	it("rechaza sacar el método de la sesión sin llamar a la base", async () => {
+		state.method = "google";
+		expect(await actions.saveAuthMethods("acme", ["email"])).toEqual({
+			ok: false,
+			message: "No podés sacar la forma de entrar con la que estás usando ahora.",
+		});
+		expect(state.rpcCalls).toHaveLength(0);
+	});
+
+	it("plataforma está exenta", async () => {
+		state.method = "google";
+		state.access = { id: TENANT, slug: "acme", role: "platform_admin", userId: "me" };
+		expect(await actions.saveAuthMethods("acme", ["email"])).toEqual({ ok: true });
 	});
 
 	it("métodos vacíos: devuelve el mensaje de la base (hint settings)", async () => {
