@@ -144,5 +144,7 @@ Las specs están en [README.md](README.md).
 | [128](https://github.com/innovasbuild/agents/pull/128) | 2026-10-20 | docs: el control 7 lee los PR mergeados del historial de git y todo PR deja su fila | [Cómo mantener la wiki](../guias/documentar.md) |
 | [129](https://github.com/innovasbuild/agents/pull/129) | 2026-10-20 | fix: el brain pagina listMeta y listLinks y deja la spec del mapa como grafo (etapa 26.4a) | [Brain](../dominios/brain.md) |
 | [130](https://github.com/innovasbuild/agents/pull/130) | 2026-10-20 | fix: list del wiki-store pagina y no trunca brains de más de 1.000 páginas | [Brain](../dominios/brain.md) |
+| [131](https://github.com/innovasbuild/agents/pull/131) | 2026-10-20 | feat: el mapa de conexiones del brain como grafo (etapa 26.4b) | [Brain](../dominios/brain.md) |
+| [132](https://github.com/innovasbuild/agents/pull/132) | 2026-10-21 | feat: menú de usuario arriba a la derecha con cerrar sesión | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
 | [133](https://github.com/innovasbuild/agents/pull/133) | 2026-10-21 | feat: modelos permitidos como casillas sobre el catálogo del AI Gateway | [Plataforma y settings por empresa](../dominios/plataforma.md) |
 | [134](https://github.com/innovasbuild/agents/pull/134) | 2026-10-21 | feat: las empresas nuevas arrancan con el Sonnet y el Haiku más nuevos | [Plataforma y settings por empresa](../dominios/plataforma.md) · [Modelos y costos](../arquitectura/modelos-y-costos.md) |
