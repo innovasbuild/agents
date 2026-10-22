@@ -9,6 +9,7 @@ import { emailDomain } from "@/lib/invitations/domain";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { originFrom } from "@/lib/tenants/origin";
+import { isPublicEmailDomain } from "@/lib/tenants/public-email-domains";
 
 const emailSchema = z.email().max(254);
 
@@ -21,13 +22,20 @@ const NO_TERMINO = { ok: false as const, message: LOGIN_INCOMPLETE_ERROR };
  * abierto en alguna empresa activa (spec ingreso por dominio, D9). La
  * pantalla nunca muestra el resultado: el mensaje es el mismo siempre.
  * Cualquier error responde false, que es el comportamiento de antes.
+ *
+ * Con intent "signup" (la pantalla /empezar, spec 27 §4) alcanza con un correo
+ * válido de dominio no público: ahí la persona viene a crear su empresa.
  */
-export async function canSignUpByDomain(email: string): Promise<boolean> {
+export async function canSignUpByDomain(
+	email: string,
+	intent: "login" | "signup" = "login",
+): Promise<boolean> {
 	if (typeof email !== "string") return false;
 	const parsed = emailSchema.safeParse(email.trim());
 	if (!parsed.success) return false;
 	const domain = emailDomain(parsed.data);
 	if (!domain) return false;
+	if (intent === "signup") return !isPublicEmailDomain(domain);
 
 	try {
 		const { data, error } = await createAdminClient()

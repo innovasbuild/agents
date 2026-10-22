@@ -88,4 +88,24 @@ describe("canSignUpByDomain", () => {
 		state.throws = true;
 		expect(await canSignUpByDomain("ana@empresa.com")).toBe(false);
 	});
+
+	describe("intent signup", () => {
+		it("true para un dominio de empresa sin tenant abierto", async () => {
+			expect(await canSignUpByDomain("ana@nuevo.com", "signup")).toBe(true);
+			expect(state.filters).toEqual([]);
+		});
+
+		it("false para un dominio público", async () => {
+			expect(await canSignUpByDomain("x@gmail.com", "signup")).toBe(false);
+		});
+
+		it("false para algo que no es un correo", async () => {
+			expect(await canSignUpByDomain("ana", "signup")).toBe(false);
+		});
+
+		it("con intent login, un dominio sin tenant abierto sigue en false", async () => {
+			expect(await canSignUpByDomain("ana@nuevo.com", "login")).toBe(false);
+			expect(await canSignUpByDomain("ana@nuevo.com")).toBe(false);
+		});
+	});
 });
