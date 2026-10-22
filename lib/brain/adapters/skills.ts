@@ -1,7 +1,11 @@
 // Cablea las skills con la plataforma (spec etapa 24.1 §9): sesión, binding,
 // reglas, cliente admin y Storage. Los permisos los deciden core/skills/
 // publish.ts y files.ts.
+
 import { loadTenantBindings } from "@/lib/connectors/bindings";
+import { canPublishSkill, limitMessage } from "@/lib/plans/limits";
+import { createPlanStore } from "@/lib/plans/store";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveTenantAccess } from "@/lib/tenants/resolve";
 import { resolveAccess } from "../core/access/resolve-access";
 import { isAdminRole, type Principal } from "../core/access/types";
@@ -61,6 +65,18 @@ function shared() {
 export function publishDeps(): PublishDeps {
 	return {
 		...shared(),
+		async skillLimit(tenantId, publishedSkills) {
+			const plan = await createPlanStore(createAdminClient()).tenantPlan(
+				tenantId,
+			);
+			if (!plan) return null;
+			const reason = canPublishSkill(plan, {
+				users: 0,
+				pendingInvitations: 0,
+				publishedSkills,
+			});
+			return reason ? { reason, message: limitMessage(reason).title } : null;
+		},
 		async revisions(tenantId, slug) {
 			const binding = await wikiBinding(tenantId);
 			if (!binding) return [];

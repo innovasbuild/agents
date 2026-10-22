@@ -32,10 +32,13 @@ export type Supabase = Awaited<ReturnType<typeof createServerSupabase>>;
  * navegador. La base vuelve a verificar el rol: esto evita la llamada y da el
  * mensaje. También mira el método de login (spec etapa 20, L10 a L12).
  */
-export async function adminOf(
-	slug: string,
-): Promise<
-	| { supabase: Supabase; tenantId: string; allowedModels: string[] }
+export async function adminOf(slug: string): Promise<
+	| {
+			supabase: Supabase;
+			tenantId: string;
+			allowedModels: string[];
+			role: string;
+	  }
 	| ConfigResult
 > {
 	if (!slugSchema.safeParse(slug).success) return INVALIDO;
@@ -50,6 +53,7 @@ export async function adminOf(
 		supabase,
 		tenantId: tenant.id,
 		allowedModels: tenant.allowedModels ?? [],
+		role: tenant.role,
 	};
 }
 

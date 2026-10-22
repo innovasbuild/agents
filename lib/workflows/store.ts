@@ -1,6 +1,7 @@
 // WorkflowStore sobre Supabase, con el cliente admin (las tablas de
 // orquestación no aceptan escritura de authenticated). Imports relativos.
 
+import { createPlanStore } from "../plans/store";
 import type { WorkflowHealth } from "./alerts";
 import type { RunnerStore } from "./runner";
 import type { WorkItem } from "./types";
@@ -37,7 +38,12 @@ export function createSupabaseWorkflowStore(
 	closeAbandonedRuns(before: Date, at: Date): Promise<number>;
 	workflowHealth(tenantId: string, since: Date): Promise<WorkflowHealth>;
 } {
+	// Plan y gasto del mes: los mismos que lee el chat (lib/plans/store.ts).
+	const plans = createPlanStore(admin);
 	return {
+		tenantPlan: plans.tenantPlan,
+		monthSpendUsd: plans.monthSpendUsd,
+
 		async insertWorkItem(row) {
 			const { error } = await admin.from("work_items").insert({
 				tenant_id: row.tenantId,

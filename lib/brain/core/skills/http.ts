@@ -15,6 +15,7 @@ const STATUS: Record<SkillFailure["code"], number> = {
 	validation: 422,
 	unsupported: 422,
 	name_taken: 409,
+	limite: 409,
 };
 
 export function statusFor(code: SkillFailure["code"]): number {

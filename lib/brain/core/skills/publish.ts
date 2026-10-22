@@ -17,6 +17,14 @@ import {
 import { type SkillState, skillState } from "./state.ts";
 import type { SkillOverviewRow, SkillStore } from "./store.ts";
 
+// Mismo conjunto que LimitReason de lib/plans/limits.ts: el núcleo no importa
+// de afuera del módulo, así que lo repite (TypeScript los trata como iguales).
+export type SkillLimitReason =
+	| "limit:users"
+	| "limit:skills"
+	| "limit:ai_credit"
+	| `suspended:${"trial_vencido" | "pago_fallido" | "cancelado"}`;
+
 export interface SkillActor {
 	tenantId: string;
 	userId: string;
@@ -30,6 +38,12 @@ export interface PublishDeps {
 	page(tenantId: string, slug: string): Promise<BrainPage | null>;
 	revisions(tenantId: string, slug: string): Promise<BrainRevision[]>;
 	store: SkillStore;
+	// Tope del plan (spec etapa 27 §3): con las skills ya publicadas de la
+	// empresa, devuelve por qué no se puede publicar una más, o null.
+	skillLimit(
+		tenantId: string,
+		publishedSkills: number,
+	): Promise<{ reason: SkillLimitReason; message: string } | null>;
 }
 
 export type SkillFailure = {
@@ -40,8 +54,11 @@ export type SkillFailure = {
 		| "conflict"
 		| "validation"
 		| "unsupported"
-		| "name_taken";
+		| "name_taken"
+		| "limite";
 	message: string;
+	// Solo con code "limite": qué tope o suspensión frenó la publicación.
+	reason?: SkillLimitReason;
 };
 
 export interface PublishPreview {
@@ -98,6 +115,32 @@ async function authorize(
 	);
 	if (!row) return skillFail("not_found", NOT_FOUND);
 	return { ok: true, actor, row };
+}
+
+// Tope del plan al publicar. Una skill ya publicada no suma al contador (una
+// versión nueva no ocupa lugar), pero una empresa suspendida no publica nada.
+// Si el plan o el listado fallan se deja pasar y se registra: preferimos
+// disponibilidad a rigor, y el trigger tenant_writable_guard de la base sigue
+// frenando las escrituras de una empresa suspendida.
+async function planLimit(
+	tenantId: string,
+	row: SkillOverviewRow,
+	deps: PublishDeps,
+): Promise<SkillFailure | null> {
+	try {
+		const alreadyPublished = row.current?.action === "publicar";
+		const publishedSkills = alreadyPublished
+			? 0
+			: (await deps.store.overview(tenantId)).filter(
+					(item) => item.current?.action === "publicar",
+				).length;
+		const limit = await deps.skillLimit(tenantId, publishedSkills);
+		if (!limit) return null;
+		return { ok: false, code: "limite", ...limit };
+	} catch (error) {
+		console.error("No se pudo comprobar el tope de skills del plan", error);
+		return null;
+	}
 }
 
 function cleanNote(note: string): string | null {
@@ -249,6 +292,9 @@ export async function publishSkill(
 		);
 	}
 
+	const limited = await planLimit(actor.tenantId, row, deps);
+	if (limited) return limited;
+
 	try {
 		const out = await deps.store.publish({
 			tenantId: actor.tenantId,
@@ -275,6 +321,9 @@ export async function republishSkill(
 	if (!auth.ok) return auth;
 	const note = cleanNote(input.note);
 	if (!note) return skillFail("validation", NOTE_REQUIRED);
+
+	const limited = await planLimit(auth.actor.tenantId, auth.row, deps);
+	if (limited) return limited;
 
 	try {
 		const out = await deps.store.publish({

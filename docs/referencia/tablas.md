@@ -30,6 +30,7 @@ Las tablas de `public` y la migración que cada una crea.
 | `invitations` | `supabase/migrations/20260912192841_invitations.sql` |
 | `membership_blocks` | `supabase/migrations/20261014120000_member_blocks.sql` |
 | `memberships` | `supabase/migrations/20260912192239_tenants_memberships.sql` |
+| `onboarding_research` | `supabase/migrations/20261029120000_self_serve_onboarding.sql` |
 | `queue_items` | `supabase/migrations/20260914224230_outreach_core.sql` |
 | `runs` | `supabase/migrations/20260912194530_runs_events.sql` |
 | `search_focuses` | `supabase/migrations/20260922090000_search_focuses.sql` |

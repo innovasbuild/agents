@@ -5,6 +5,7 @@ import {
 	defaultChatAgent,
 } from "@/lib/agents/chat-agents";
 import { executorSignature } from "@/lib/outreach/signature-preview";
+import { chatAiBlock } from "@/lib/plans/chat-allowance";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
 	loadEnabledAgents,
@@ -27,6 +28,9 @@ export default async function ChatPage({
 	await requireChatAgent(tenant.id);
 
 	const supabase = await createServerSupabase();
+	// Crédito de IA del plan: con el tope alcanzado el chat se muestra bloqueado
+	// con el aviso, en vez de dejar que el turno falle (spec etapa 27 §5.5).
+	const aiBlockPromise = chatAiBlock(tenant.id);
 
 	// loadEnabledAgents está cacheada por request: es la misma lectura que ya
 	// hizo requireChatAgent.
@@ -92,6 +96,7 @@ export default async function ChatPage({
 	return (
 		<ChatClient
 			active={active}
+			aiBlock={await aiBlockPromise}
 			agents={chatAgentIds.map((id) => ({
 				id,
 				name: AGENT_CATALOG[id].name,

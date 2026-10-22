@@ -6,7 +6,7 @@ const state: {
 	user: { id: string } | null;
 	membership: { role: string } | null;
 	platformAdmin: boolean;
-	outcome: { kind: string; allowedDomains?: string[] };
+	outcome: { kind: string; allowedDomains?: string[]; reason?: string };
 	calls: Record<string, unknown>[];
 } = {
 	user: { id: "u1" },
@@ -48,6 +48,9 @@ vi.mock("@/lib/tenants/login-check-server", () => ({
 	},
 }));
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({}) }));
+vi.mock("@/lib/plans/store", () => ({
+	createPlanStore: () => ({ fake: "plans" }),
+}));
 const origin = vi.hoisted(() => ({
 	calls: [] as { tenantId: string; fallback: string }[],
 	value: null as string | null,
@@ -202,7 +205,30 @@ describe("POST /api/invitations", () => {
 	it("409 si ya hay una invitación pendiente", async () => {
 		state.outcome = { kind: "duplicada" };
 
-		expect((await POST(request(valid))).status).toBe(409);
+		const response = await POST(request(valid));
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: "ya hay una invitación pendiente",
+		});
+	});
+
+	it("409 con error limite y el motivo cuando el plan no deja invitar", async () => {
+		state.outcome = { kind: "limite", reason: "limit:users" };
+
+		const response = await POST(request(valid));
+
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: "limite",
+			reason: "limit:users",
+		});
+	});
+
+	it("le pasa al helper el store de planes", async () => {
+		await POST(request(valid));
+
+		expect(state.calls[0]).toMatchObject({ plans: { fake: "plans" } });
 	});
 
 	it("502 si no salió el mail", async () => {

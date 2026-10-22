@@ -69,3 +69,5 @@ Las migraciones de `supabase/migrations`, en orden.
 | `20261026120000_platform_enable_brain_skills` | `supabase/migrations/20261026120000_platform_enable_brain_skills.sql` |
 | `20261027120000_brain_page_links` | `supabase/migrations/20261027120000_brain_page_links.sql` |
 | `20261028120000_brain_page_links_keyset` | `supabase/migrations/20261028120000_brain_page_links_keyset.sql` |
+| `20261029120000_self_serve_onboarding` | `supabase/migrations/20261029120000_self_serve_onboarding.sql` |
+| `20261030120000_tenant_profile_settings` | `supabase/migrations/20261030120000_tenant_profile_settings.sql` |

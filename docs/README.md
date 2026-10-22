@@ -36,6 +36,7 @@ Cómo se mantiene todo esto (y qué verifica el harness) está en [Cómo mantene
 - [Conectores](dominios/conectores.md): proveedores, Vercel Connect, bindings y la página Conectar.
 - [Plataforma y settings por empresa](dominios/plataforma.md): la consola `/plataforma`, alta de empresas y settings del cliente.
 - [Invitaciones y usuarios](dominios/invitaciones-y-usuarios.md): invitaciones, roles, bloqueo por persona.
+- [Alta self-serve y planes](dominios/onboarding.md): `/empezar`, planes Free/Pago/Enterprise, topes, suspensión y research de carpetas.
 - [Gmail](dominios/gmail.md): lectura y envío de mail desde el agente.
 
 ## Guías

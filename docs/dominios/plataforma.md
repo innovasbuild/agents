@@ -3,7 +3,7 @@ title: Plataforma y settings por empresa
 category: dominios
 status: activo
 tags: [plataforma, consola, tenants, marca, settings, presupuestos]
-updated: 2026-10-21
+updated: 2026-10-22
 sources:
   - app/plataforma
   - app/(auth)/login/[tenant]/page.tsx
@@ -15,6 +15,7 @@ sources:
   - lib/tenants/tenant-create.ts
   - lib/tenants/tenant-form.ts
   - lib/tenants/auth-methods.ts
+  - docs/superpowers/specs/2026-10-22-etapa-27-onboarding-self-serve-y-planes-design.md
   - lib/brand/contrast.ts
   - lib/domains
   - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
@@ -56,6 +57,7 @@ Nada específico de una empresa está en el código: la diferencia entre empresa
 | `/[tenant]/settings` | Settings del administrador del cliente |
 | `/[tenant]/settings/usuarios` | Usuarios e invitaciones: ver [invitaciones y usuarios](invitaciones-y-usuarios.md) |
 | `/[tenant]/settings/outreach` | Configuración del agente de outreach |
+| `/[tenant]/settings/plan`, `/[tenant]/settings/perfil` | Plan y topes de la empresa; nombre, logo, colores, métodos de login y tope de IA (ver [alta self-serve y planes](onboarding.md)) |
 | `/[tenant]/settings/gasto` | Gasto del mes en modelos de IA de la empresa (solo administrador) |
 | `lib/tenants/platform.ts`, `platform-owner.ts` | `requirePlatformAdmin`, `platformOwnerSlug` |
 | `lib/tenants/public.ts` | `loadPublicTenant` (landing) y `loadOfferedMethods` (`/login`) |
@@ -74,6 +76,10 @@ La consola es solo para quien tenga el rol `platform_admin` **en el tenant dueñ
 `/plataforma/nueva` recibe nombre, slug (`^[a-z][a-z0-9-]{1,38}$`, con slugs reservados como `plataforma`), dominios, métodos de login, colores, logo, correo del primer administrador y los agentes del catálogo. La función `platform_create_tenant` crea la fila de `tenants` y una fila de `tenant_agents` por agente, en una sola transacción, y deja el evento `tenant.created`. Lo que no es transaccional va aparte y, si falla, la empresa queda creada y la pantalla lo informa como advertencia: la subida del logo y la invitación al primer administrador (`inviteToTenant`, rol `tenant_admin`; ver [invitaciones y usuarios](invitaciones-y-usuarios.md)). El alta exige al menos un agente; después la empresa puede quedar solo con brain y sin agentes habilitados (`tenantReadiness` lo contempla).
 
 Toda empresa nueva arranca con el Sonnet y el Haiku lanzados más recientemente en el catálogo del AI Gateway (`starterModels` en `lib/tenants/gateway-models.ts`, por la fecha `released`), con Sonnet por defecto. Se escriben después del alta; si el catálogo no responde o la escritura falla, quedan los de la columna en la base (`anthropic/claude-sonnet-5` y `anthropic/claude-haiku-4.5`) y la pantalla lo avisa. Después plataforma los cambia desde el detalle y el administrador del cliente elige el default entre los permitidos.
+
+### Empresas self-serve y plan
+
+Desde la Etapa 27.1 `tenants` tiene `plan` (`free`, `pago`, `enterprise`; las existentes quedaron en `enterprise`), `trial_ends_at`, `suspended_reason`, `onboarding_step`, `onboarding_completed_at` y `ai_monthly_limit_usd`. Plataforma sigue dando de alta a las Enterprise con `platform_create_tenant`; las Free se crean solas con `self_serve_create_tenant` (ver [alta self-serve y planes](onboarding.md)). Las columnas nuevas nacen cerradas para el `tenant_admin`: `plan`, `trial_ends_at`, `suspended_reason` y `onboarding_completed_at` solo las escriben funciones propias o la service role. Lo que el admin sí edita (nombre, marca, métodos de login, tope de IA) va por `set_tenant_profile`, `set_tenant_auth_methods` y `set_ai_monthly_limit`, con `settings_actor`. El slug `empezar` quedó reservado.
 
 ### Marca por empresa y landing
 

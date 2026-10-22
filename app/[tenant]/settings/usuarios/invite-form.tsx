@@ -2,8 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { LimitDialog } from "@/components/plan/limit-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { LimitReason } from "@/lib/plans/limits";
 import { ROLE_LABELS } from "@/lib/tenants/role-labels";
 
 export function InviteForm({ tenantId }: { tenantId: string }) {
@@ -13,6 +15,7 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 		"tenant_member",
 	);
 	const [message, setMessage] = useState<string | null>(null);
+	const [limit, setLimit] = useState<LimitReason | null>(null);
 
 	async function invite(allowExternal: boolean) {
 		setMessage(null);
@@ -32,6 +35,16 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 				"Ese mail está fuera de los dominios del cliente. ¿Invitar igual?",
 			);
 			return;
+		}
+		if (response.status === 409) {
+			const body = (await response.json().catch(() => null)) as {
+				error?: string;
+				reason?: LimitReason;
+			} | null;
+			if (body?.error === "limite" && body.reason) {
+				setLimit(body.reason);
+				return;
+			}
 		}
 		if (!response.ok) {
 			setMessage("No se pudo invitar. Revisá el mail e intentá de nuevo.");
@@ -87,6 +100,15 @@ export function InviteForm({ tenantId }: { tenantId: string }) {
 						</button>
 					) : null}
 				</p>
+			) : null}
+			{limit ? (
+				<LimitDialog
+					onOpenChange={(open) => {
+						if (!open) setLimit(null);
+					}}
+					open
+					reason={limit}
+				/>
 			) : null}
 		</section>
 	);

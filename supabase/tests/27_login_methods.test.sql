@@ -36,7 +36,7 @@ values
   ('f8f8f8f8-0000-0000-0000-00000000000a', 'lm-g', 'LM G', '{lm-a.test}', true, '{google}', true),
   ('f8f8f8f8-0000-0000-0000-00000000000b', 'lm-m', 'LM M', '{}', false, '{microsoft}', true),
   ('f8f8f8f8-0000-0000-0000-00000000000c', 'lm-eg', 'LM EG', '{}', false, '{email,google}', true),
-  ('f8f8f8f8-0000-0000-0000-00000000000d', 'lm-off', 'LM OFF', '{}', false, '{email}', false);
+  ('f8f8f8f8-0000-0000-0000-00000000000d', 'lm-off', 'LM OFF', '{}', false, '{email}', true);
 
 -- Caro es miembro de la empresa solo Microsoft y de la de correo+Google.
 insert into public.memberships (tenant_id, user_id, role)
@@ -50,6 +50,10 @@ insert into public.invitations (tenant_id, email, role, invited_by)
 values
   ('f8f8f8f8-0000-0000-0000-00000000000b', 'ines@otra.test', 'tenant_admin', 'e8e8e8e8-0000-0000-0000-000000000003'),
   ('f8f8f8f8-0000-0000-0000-00000000000d', 'ines@otra.test', 'tenant_member', 'e8e8e8e8-0000-0000-0000-000000000003');
+
+-- Una empresa inactiva no recibe escrituras (tenant_writable_guard): se la
+-- desactiva recién después de cargarle la invitación.
+update public.tenants set active = false where slug = 'lm-off';
 
 -- Arma los claims de una sesión. p_amr es el jsonb del claim amr.
 create function pg_temp.login_as(p_user int, p_amr text) returns void language plpgsql as $$

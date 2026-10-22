@@ -3,9 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
+import { chatAiBlock } from "@/lib/plans/chat-allowance";
+import type { LimitReason } from "@/lib/plans/limits";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
+import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
 // Una server action la puede invocar cualquier cliente autenticado con los
 // argumentos que quiera: se validan en el borde, igual que el inputSchema de
@@ -37,7 +40,7 @@ export async function createConversation(
 	slug: string,
 	model: string,
 	agent: string,
-): Promise<string | null> {
+): Promise<string | { blocked: LimitReason } | null> {
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) return null;
@@ -52,6 +55,11 @@ export async function createConversation(
 	if (!isCatalogAgent(agent) || !AGENT_CATALOG[agent].chat) return null;
 	const enabled = await loadEnabledAgents(tenantId);
 	if (enabled && !enabled.includes(agent)) return null;
+
+	// Sin crédito de IA no se abre el hilo: el cliente muestra el diálogo del
+	// plan con este motivo (spec etapa 27 §5.5).
+	const blocked = await chatAiBlock(tenantId);
+	if (blocked) return { blocked };
 
 	// La fila se crea ANTES de send(): el canal valida contra ella y el hook
 	// bind-session le escribe después el eve_session_id.
@@ -70,6 +78,25 @@ export async function createConversation(
 
 	revalidatePath(`/${slug}/chat`);
 	return data.id;
+}
+
+/**
+ * El motivo del corte de crédito de IA de la empresa, o null. Respaldo del
+ * cliente cuando un turn.failed no trae `ai_allowance:` (R13 F4). Cualquier
+ * miembro puede preguntar por su empresa; quien no lo es recibe null.
+ */
+export async function checkChatBlock(
+	slug: string,
+): Promise<LimitReason | null> {
+	if (!slugSchema.safeParse(slug).success) return null;
+	try {
+		const access = await resolveTenantAccess(slug);
+		if (!access) return null;
+		return await chatAiBlock(access.id);
+	} catch (error) {
+		console.error("checkChatBlock:", error);
+		return null;
+	}
 }
 
 export async function renameConversation(

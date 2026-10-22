@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { invitationOrigin } from "@/lib/domains/origin";
 import { inviteToTenant } from "@/lib/invitations/invite";
+import { createPlanStore } from "@/lib/plans/store";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
@@ -56,8 +57,10 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "sin permiso" }, { status: 403 });
 	}
 
+	const admin = createAdminClient();
 	const outcome = await inviteToTenant({
-		admin: createAdminClient(),
+		admin,
+		plans: createPlanStore(admin),
 		tenantId,
 		email,
 		role,
@@ -86,6 +89,12 @@ export async function POST(request: Request) {
 		case "duplicada":
 			return NextResponse.json(
 				{ error: "ya hay una invitación pendiente" },
+				{ status: 409 },
+			);
+		case "limite":
+			// Mismo 409 que duplicada pero con otro cuerpo: la UI distingue por error.
+			return NextResponse.json(
+				{ error: "limite", reason: outcome.reason },
 				{ status: 409 },
 			);
 		case "mail_fallo":

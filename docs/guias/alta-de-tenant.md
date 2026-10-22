@@ -3,7 +3,7 @@ title: Alta de una empresa nueva
 category: guias
 status: activo
 tags: [tenant, alta, consola, plataforma, onboarding]
-updated: 2026-10-13
+updated: 2026-10-22
 sources:
   - app/plataforma/nueva/page.tsx
   - app/plataforma/nueva/actions.ts
@@ -22,6 +22,8 @@ sources:
 ---
 
 # Alta de una empresa nueva
+
+> **Esta guía es para las empresas Enterprise.** Desde la Etapa 27.1 una persona con correo de trabajo puede crear sola su empresa (plan Free) desde `/empezar`, sin pasar por plataforma: ver [alta self-serve y planes](../dominios/onboarding.md). El alta de plataforma sigue siendo el camino para Enterprise, es decir, empresas con acompañamiento, presupuesto fijado a mano, ingreso abierto por dominio o conectores propios.
 
 Se hace entera desde el navegador, como administrador de plataforma (`platform_admin` del tenant dueño de la plataforma, `PLATFORM_OWNER_TENANT_SLUG`), sin terminal. La consola está en `/plataforma`; el alta, en `/plataforma/nueva`; el detalle de cada empresa, en `/plataforma/[slug]`. Qué hace cada rol y cómo se aíslan las empresas está en [plataforma](../dominios/plataforma.md), [tenancy](../arquitectura/tenancy.md) e [identidad y acceso](../arquitectura/identidad-y-acceso.md).
 

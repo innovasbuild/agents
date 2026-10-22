@@ -214,6 +214,85 @@ describe("runWorkflowPass", () => {
 		expect(store.runs[0]).toMatchObject({ status: "budget_exhausted" });
 	});
 
+	it("free con el crédito de IA del mes agotado: corrida cerrada y los ítems intactos", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.plan = {
+			plan: "free",
+			suspendedReason: null,
+			trialEndsAt: null,
+			aiMonthlyLimitUsd: null,
+		};
+		store.monthSpend = 5;
+		const runItem = vi.fn(async () => ({ ok: true as const }));
+
+		const result = await pass(store, { runItem });
+
+		expect(result).toMatchObject({
+			status: "budget_exhausted",
+			claimed: 0,
+			stoppedBy: "presupuesto",
+		});
+		expect(runItem).not.toHaveBeenCalled();
+		expect(store.items[0]).toMatchObject({ status: "pending", attempts: 0 });
+		expect(store.runs[0]).toMatchObject({
+			status: "budget_exhausted",
+			error: "limit:ai_credit",
+		});
+	});
+
+	it("free con crédito corre aunque no tenga fila en tenant_budgets", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.limits.clear();
+		store.plan = {
+			plan: "free",
+			suspendedReason: null,
+			trialEndsAt: null,
+			aiMonthlyLimitUsd: null,
+		};
+		store.monthSpend = 1;
+
+		const result = await pass(store, okImpl);
+
+		expect(result).toMatchObject({ status: "ok", ok: 1 });
+	});
+
+	it("una empresa suspendida no corre", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.plan = {
+			plan: "pago",
+			suspendedReason: "pago_fallido",
+			trialEndsAt: null,
+			aiMonthlyLimitUsd: null,
+		};
+
+		const result = await pass(store, okImpl);
+
+		expect(result).toMatchObject({ status: "budget_exhausted", claimed: 0 });
+		expect(store.runs[0]).toMatchObject({ error: "suspended:pago_fallido" });
+	});
+
+	it("enterprise sigue con el presupuesto diario y su mensaje por recurso", async () => {
+		const store = createFakeWorkflowStore(now);
+		store.add("acc-1");
+		store.plan = {
+			plan: "enterprise",
+			suspendedReason: null,
+			trialEndsAt: null,
+			aiMonthlyLimitUsd: null,
+		};
+		store.limits.set("model_usd", 0);
+
+		const result = await pass(store, okImpl);
+
+		expect(result).toMatchObject({ status: "budget_exhausted", claimed: 0 });
+		expect(store.runs[0]).toMatchObject({
+			error: expect.stringContaining("model_usd"),
+		});
+	});
+
 	it("corta al llegar al tope de ítems por tick", async () => {
 		const store = createFakeWorkflowStore(now);
 		for (let i = 0; i < 4; i++) store.add(`acc-${i}`);

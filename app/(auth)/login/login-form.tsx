@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,8 +8,10 @@ import { closeLocalSession } from "@/lib/auth/close-session";
 import { enterWithEmailCode } from "@/lib/auth/email-code";
 import { requestMagicLink } from "@/lib/auth/magic-link";
 import { OAUTH_PROVIDERS, type OAuthMethod } from "@/lib/auth/oauth-providers";
+import { emailDomain } from "@/lib/invitations/domain";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import type { AuthMethod } from "@/lib/tenants/auth-methods";
+import { isPublicEmailDomain } from "@/lib/tenants/public-email-domains";
 import { canSignUpByDomain, completeLogin } from "./actions";
 
 function callbackUrl(next: string | null): string {
@@ -48,6 +51,17 @@ export function ResendCodeButton({
 	);
 }
 
+/** Error inline del paso 1 (copy-deck): vacío, formato o dominio público. */
+export function signupEmailProblem(email: string): string | null {
+	const value = email.trim();
+	if (!value) return "Escribí tu correo de trabajo.";
+	const domain = emailDomain(value);
+	if (!domain || !domain.includes(".")) return "Ese correo no parece válido.";
+	if (isPublicEmailDomain(domain))
+		return `Necesitás un correo de tu empresa para crear una cuenta. Con ${domain} no podemos armar tu espacio. Si te invitaron, entrá por el link de la invitación.`;
+	return null;
+}
+
 /**
  * Un solo formulario para /login y para la landing de cada empresa. La
  * landing pasa solo los métodos permitidos; un método que no viene no se
@@ -56,10 +70,14 @@ export function ResendCodeButton({
 export function LoginForm({
 	methods,
 	next,
+	mode = "login",
 }: {
 	methods: AuthMethod[];
 	next: string | null;
+	/** "signup": pantalla /empezar (spec 27 paso 1); cambia copys y la regla del correo. */
+	mode?: "login" | "signup";
 }) {
+	const signup = mode === "signup";
 	const supabase = createBrowserSupabase();
 	const [email, setEmail] = useState("");
 	const [sent, setSent] = useState(false);
@@ -68,6 +86,7 @@ export function LoginForm({
 	const [checking, setChecking] = useState(false);
 	const [sending, setSending] = useState(false);
 	const [secondsLeft, setSecondsLeft] = useState(0);
+	const [emailError, setEmailError] = useState<string | null>(null);
 
 	useEffect(() => {
 		if (secondsLeft <= 0) return;
@@ -92,12 +111,19 @@ export function LoginForm({
 	async function pedirCodigo(event: React.SyntheticEvent) {
 		event.preventDefault();
 		if (sending) return;
+		if (signup) {
+			const problem = signupEmailProblem(email);
+			setEmailError(problem);
+			if (problem) return;
+		}
 		setSending(true);
 		try {
 			await requestMagicLink({
 				email,
 				redirectTo: callbackUrl(next),
-				canSignUpByDomain,
+				canSignUpByDomain: signup
+					? (value) => canSignUpByDomain(value, "signup")
+					: canSignUpByDomain,
 				signInWithOtp: (args) => supabase.auth.signInWithOtp(args),
 			});
 		} finally {
@@ -137,6 +163,15 @@ export function LoginForm({
 
 	return (
 		<div className="space-y-6 rounded-lg border bg-card p-6">
+			{signup ? (
+				<div className="space-y-2">
+					<h1 className="text-2xl leading-tight">Creá tu cuenta</h1>
+					<p className="text-muted-foreground text-sm">
+						Gratis para equipos de hasta 3 personas, con un crédito mensual de
+						IA incluido. Sin tarjeta.
+					</p>
+				</div>
+			) : null}
 			{oauthMethods.map((method, index) => (
 				<Button
 					className="w-full"
@@ -146,7 +181,9 @@ export function LoginForm({
 					type="button"
 					variant={index === 0 ? "default" : "outline"}
 				>
-					{OAUTH_PROVIDERS[method].label}
+					{signup
+						? `Continuar con ${OAUTH_PROVIDERS[method].label.replace(/^Entrar con /, "")}`
+						: OAUTH_PROVIDERS[method].label}
 				</Button>
 			))}
 
@@ -158,19 +195,35 @@ export function LoginForm({
 			) : null}
 
 			{showEmail && !sent ? (
-				<form className="space-y-3" onSubmit={pedirCodigo}>
+				<form className="space-y-3" noValidate={signup} onSubmit={pedirCodigo}>
 					<label className="block text-sm" htmlFor="email">
-						Mail
+						{signup ? "Correo de trabajo" : "Mail"}
 					</label>
 					<Input
+						aria-invalid={emailError ? true : undefined}
 						autoComplete="email"
 						id="email"
 						onChange={(event) => setEmail(event.target.value)}
-						placeholder="tu@empresa.com"
+						placeholder={signup ? "vos@tuempresa.com" : "tu@empresa.com"}
 						required
 						type="email"
 						value={email}
 					/>
+					{emailError ? (
+						<p
+							className="flex items-start gap-2 text-destructive text-sm"
+							role="alert"
+						>
+							<CircleAlert className="mt-0.5 size-4 shrink-0" />
+							{emailError}
+						</p>
+					) : null}
+					{signup ? (
+						<p className="text-muted-foreground text-xs">
+							Te mandamos un código para entrar. Usá el correo de tu empresa:
+							con él armamos tu espacio.
+						</p>
+					) : null}
 					<Button
 						className="w-full"
 						disabled={sending}
@@ -224,6 +277,11 @@ export function LoginForm({
 						</button>
 					</div>
 				</form>
+			) : null}
+			{signup ? (
+				<p className="text-muted-foreground text-xs">
+					Al crear la cuenta aceptás los términos y la política de privacidad.
+				</p>
 			) : null}
 		</div>
 	);

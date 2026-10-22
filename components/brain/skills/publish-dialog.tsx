@@ -7,6 +7,7 @@ import {
 	publishSkillAction,
 } from "@/app/[tenant]/brain/skill-actions";
 import { DiffView } from "@/components/brain/diff-view";
+import { LimitDialog } from "@/components/plan/limit-dialog";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -25,6 +26,7 @@ import {
 	type SkillFile,
 } from "@/lib/brain/core/skills/package";
 import type { PublishPreview } from "@/lib/brain/core/skills/publish";
+import type { LimitReason } from "@/lib/plans/limits";
 import { formatSize } from "./published-files";
 
 type Loaded = { preview: PublishPreview };
@@ -89,6 +91,7 @@ export function PublishDialog({
 	const [note, setNote] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [limit, setLimit] = useState<LimitReason | null>(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -124,6 +127,10 @@ export function PublishDialog({
 				onClose();
 				return;
 			}
+			if ("reason" in result && result.reason) {
+				setLimit(result.reason);
+				return;
+			}
 			setError(result.message);
 		} catch {
 			setError("No se pudo publicar. Probá de nuevo.");
@@ -139,6 +146,19 @@ export function PublishDialog({
 			preview.files.changed.length +
 			preview.files.removed.length >
 			0;
+
+	// El tope del plan reemplaza a la revisión: un solo diálogo a la vez.
+	if (limit) {
+		return (
+			<LimitDialog
+				onOpenChange={(open) => {
+					if (!open) onClose();
+				}}
+				open
+				reason={limit}
+			/>
+		);
+	}
 
 	return (
 		<AlertDialog open onOpenChange={(open) => !open && onClose()}>

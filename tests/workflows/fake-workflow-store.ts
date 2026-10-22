@@ -1,3 +1,4 @@
+import type { TenantPlan } from "@/lib/plans/limits";
 import type { RunnerStore } from "@/lib/workflows/runner";
 import type { WorkItem } from "@/lib/workflows/types";
 
@@ -22,6 +23,9 @@ export interface FakeWorkflowStore extends RunnerStore {
 	spent: Map<string, number>;
 	limits: Map<string, number>;
 	runSpent: number;
+	/** Plan del tenant; null = sin fila (comportamiento previo a los planes). */
+	plan: TenantPlan | null;
+	monthSpend: number;
 	enabled: Set<string>;
 	policies: Map<string, "always" | "once" | "auto">;
 	lastRun: Date | null;
@@ -41,6 +45,8 @@ export function createFakeWorkflowStore(now: () => Date): FakeWorkflowStore {
 		spent: new Map(),
 		limits: new Map([["model_usd", 100]]),
 		runSpent: 0,
+		plan: null,
+		monthSpend: 0,
 		enabled: new Set(["refresh-fichas"]),
 		policies: new Map(),
 		lastRun: null,
@@ -75,6 +81,13 @@ export function createFakeWorkflowStore(now: () => Date): FakeWorkflowStore {
 			const item = store.add(row.subjectId, row.workflow, row.inputHash);
 			item.tenantId = row.tenantId;
 			return "inserted";
+		},
+
+		async tenantPlan() {
+			return store.plan;
+		},
+		async monthSpendUsd() {
+			return store.monthSpend;
 		},
 
 		async usageSince(_tenantId, resource, _since, runId) {

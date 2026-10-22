@@ -99,3 +99,33 @@ describe("ResendCodeButton", () => {
 		expect(RESEND_COOLDOWN_SECONDS).toBe(60);
 	});
 });
+
+describe("LoginForm mode signup", () => {
+	const renderSignup = () =>
+		renderToStaticMarkup(
+			createElement(LoginForm, {
+				methods: ["microsoft", "google", "email"],
+				next: "/empezar",
+				mode: "signup",
+			}),
+		);
+
+	it("usa los copys del paso 1", () => {
+		const html = renderSignup();
+		expect(html).toContain("Creá tu cuenta");
+		expect(html).toContain("Continuar con Microsoft");
+		expect(html).toContain("Continuar con Google");
+		expect(html).toContain("Correo de trabajo");
+		expect(html).toContain("vos@tuempresa.com");
+		expect(html).toContain("Mandarme un código");
+		expect(html).toContain("Al crear la cuenta aceptás");
+	});
+
+	it("el modo login no cambia", () => {
+		const html = renderToStaticMarkup(
+			createElement(LoginForm, { methods: ["email"], next: null }),
+		);
+		expect(html).not.toContain("Creá tu cuenta");
+		expect(html).toContain("tu@empresa.com");
+	});
+});

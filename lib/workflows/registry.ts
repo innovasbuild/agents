@@ -8,6 +8,7 @@ import type { NodeInfo, WorkflowInfo } from "./types";
 export const NODES: Record<string, NodeInfo> = {
 	"outreach/import-contacts": { effect: 0, tier: null },
 	"outreach/research": { effect: 1, tier: "barato" },
+	"onboarding/propose-folders": { effect: 1, tier: "barato" },
 	"outreach/draft": { effect: 1, tier: "fuerte" },
 	"outreach/queue": { effect: 0, tier: null },
 	// Le llega a una persona: nunca desde un workflow desatendido.

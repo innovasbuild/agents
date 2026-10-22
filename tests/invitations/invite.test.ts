@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inviteToTenant, sendInvitationMail } from "@/lib/invitations/invite";
+import type { TenantCounts, TenantPlan } from "@/lib/plans/limits";
+import type { PlanStore } from "@/lib/plans/store";
 
 const TENANT_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -138,6 +140,103 @@ describe("inviteToTenant", () => {
 		state.tenant = null;
 
 		expect(await inviteToTenant(base)).toEqual({ kind: "tenant_inexistente" });
+	});
+});
+
+const freePlan: TenantPlan = {
+	plan: "free",
+	suspendedReason: null,
+	trialEndsAt: null,
+	aiMonthlyLimitUsd: 5,
+};
+const counts = (over: Partial<TenantCounts> = {}): TenantCounts => ({
+	users: 1,
+	pendingInvitations: 0,
+	publishedSkills: 0,
+	...over,
+});
+const plansOf = (plan: TenantPlan | null, c: TenantCounts | Error): PlanStore =>
+	({
+		tenantPlan: async () => plan,
+		counts: async () => {
+			if (c instanceof Error) throw c;
+			return c;
+		},
+	}) as unknown as PlanStore;
+
+describe("inviteToTenant con topes del plan", () => {
+	beforeEach(() => {
+		state.tenant = { slug: "acme", allowed_domains: ["acme.test"] };
+		state.insertError = null;
+		state.inviteError = null;
+		state.inserts = [];
+		state.invites = [];
+	});
+
+	it("plan free con 3 usuarios: limite y no escribe ni manda mail", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(freePlan, counts({ users: 3 })),
+		});
+		expect(result).toEqual({ kind: "limite", reason: "limit:users" });
+		expect(state.inserts).toHaveLength(0);
+		expect(state.invites).toHaveLength(0);
+	});
+
+	it("empresa suspendida: limite con el motivo de la suspensión", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(
+				{ ...freePlan, suspendedReason: "trial_vencido" },
+				counts(),
+			),
+		});
+		expect(result).toEqual({
+			kind: "limite",
+			reason: "suspended:trial_vencido",
+		});
+		expect(state.inserts).toHaveLength(0);
+	});
+
+	it("las invitaciones pendientes reservan lugar", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(freePlan, counts({ users: 1, pendingInvitations: 2 })),
+		});
+		expect(result).toEqual({ kind: "limite", reason: "limit:users" });
+		expect(state.inserts).toHaveLength(0);
+	});
+
+	it("1 miembro y 1 pendiente todavía deja invitar", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(freePlan, counts({ users: 1, pendingInvitations: 1 })),
+		});
+		expect(result).toEqual({ kind: "ok" });
+		expect(state.inserts).toHaveLength(1);
+	});
+
+	it("sin plans no hay tope", async () => {
+		expect(await inviteToTenant(base)).toEqual({ kind: "ok" });
+	});
+
+	it("si el plan es desconocido (null) deja invitar", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(null, counts({ users: 50 })),
+		});
+		expect(result).toEqual({ kind: "ok" });
+	});
+
+	it("si falla la lectura del plan, deja invitar y lo registra", async () => {
+		const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(freePlan, new Error("db caída")),
+		});
+		expect(result).toEqual({ kind: "ok" });
+		expect(spy).toHaveBeenCalled();
+		spy.mockRestore();
 	});
 });
 

@@ -1,12 +1,15 @@
+// Hooks de eve de los agentes de chat. Regla general: observan y nunca tumban un
+// turno (un hook que tira termina en turn.failed), así que van en try/catch.
+// Única excepción: allowanceHook, que tira a propósito para cortar el turno
+// cuando la empresa se quedó sin crédito de IA.
 import { defineHook } from "eve/hooks";
+import { aiAllowanceForChat } from "../../plans/ai-allowance";
+import { createPlanStore } from "../../plans/store";
 import { createAdminClient } from "../../supabase/admin";
 import { createUsageRecorder, resolveRunId } from "../../workflows/usage";
+import { checkTurnAllowance } from "../allowance-check";
 import { resolveModelForTenant } from "../model";
-import {
-	bindSessionToConversation,
-	closeRun,
-	openRun,
-} from "../session-store";
+import { bindSessionToConversation, closeRun, openRun } from "../session-store";
 import { stepUsageEntry } from "../step-usage";
 import { attribute } from "./attribute";
 
@@ -47,8 +50,7 @@ export function runsHook() {
 
 					await openRun({
 						tenantId,
-						conversationId:
-							attribute(auth?.attributes?.conversationId) || null,
+						conversationId: attribute(auth?.attributes?.conversationId) || null,
 						agent: ctx.agent.name,
 						sessionId: ctx.session.id,
 						turnId: event.data.turnId,
@@ -186,6 +188,33 @@ export function usageHook() {
 				} catch (error) {
 					console.error("usage hook (step.completed):", error);
 				}
+			},
+		},
+	});
+}
+
+/**
+ * Corta el turno si la empresa no tiene crédito de IA (spec etapa 27 §3 y
+ * §5.5). Es la ÚNICA excepción a "los hooks solo observan": tira a propósito
+ * en `turn.started`, y ese turn.failed (mensaje `ai_allowance:<motivo>`) es el
+ * corte; el cliente lo mapea al diálogo del plan. Sin try/catch por eso. La
+ * falla de lectura de facturación sí se traga (fail open en checkTurnAllowance).
+ */
+export function allowanceHook() {
+	return defineHook({
+		events: {
+			async "turn.started"(_event, ctx) {
+				const auth = ctx.session.auth.current ?? ctx.session.auth.initiator;
+				const tenantId = attribute(auth?.attributes?.tenantId) || null;
+				if (!tenantId) return;
+				await checkTurnAllowance(
+					{ tenantId },
+					{
+						allowance: aiAllowanceForChat,
+						makeStore: () => createPlanStore(createAdminClient()),
+						now: () => new Date(),
+					},
+				);
 			},
 		},
 	});

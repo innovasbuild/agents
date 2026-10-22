@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { signupRoute, signupRoutePath } from "@/lib/tenants/signup-route";
 
 // El cliente Supabase no está tipado contra database.types.ts (Task 7 no lo
 // generó todavía), así que el query builder no puede ver que memberships →
@@ -35,7 +36,10 @@ export default async function HomePage() {
 		m.tenants ? [m.tenants] : [],
 	);
 
-	if (tenants.length === 0) redirect("/sin-acceso");
+	// Sin empresa: la base decide si arma una (/empezar), si su dominio ya está
+	// tomado o si no hay nada para ella (spec 27 §4).
+	if (tenants.length === 0)
+		redirect(signupRoutePath(await signupRoute(supabase), null));
 	if (tenants.length === 1) redirect(`/${tenants[0].slug}`);
 
 	return (

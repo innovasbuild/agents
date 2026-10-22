@@ -22,7 +22,7 @@ const PASSTHROUGH = new Set([
 ]);
 
 // Rutas de la plataforma: en el dominio de una empresa no existen.
-const PLATFORM_ONLY = new Set(["plataforma", "oauth"]);
+const PLATFORM_ONLY = new Set(["plataforma", "oauth", "empezar"]);
 
 export function routeTenantPath(pathname: string, slug: string): TenantRouting {
 	const [, first = "", ...rest] = pathname.split("/");

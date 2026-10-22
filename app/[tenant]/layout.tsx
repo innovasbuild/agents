@@ -1,8 +1,10 @@
 import { ChevronDownIcon } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
+import { InviteDialog } from "@/components/plan/invite-dialog";
+import { TenantBanner } from "@/components/plan/tenant-banner";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,6 +12,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { brandStyle } from "@/lib/brand/contrast";
+import { stepPath } from "@/lib/onboarding/steps";
 import { tenantMetadata } from "@/lib/tenants/brand-metadata";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { visibleNav } from "@/lib/tenants/nav";
@@ -56,6 +59,11 @@ export default async function TenantLayout({
 
 	// 404 y no 403: un 403 le confirma a cualquiera que el cliente existe.
 	if (!tenant) notFound();
+	// Alta a medias: quien administra vuelve al paso que le falta. La
+	// plataforma y los miembros no se redirigen.
+	if (tenant.role === "tenant_admin" && tenant.onboardingStep !== null) {
+		redirect(stepPath(slug, tenant.onboardingStep));
+	}
 	const enabledAgents = await loadEnabledAgents(tenant.id);
 
 	const logoUrl = brandLogoUrl(tenant.brand.logoUrl);
@@ -130,6 +138,11 @@ export default async function TenantLayout({
 							)}
 						</ul>
 					</nav>
+					{tenant.role === "tenant_admin" ? (
+						<div className="shrink-0">
+							<InviteDialog slug={slug} tenantId={tenant.id} />
+						</div>
+					) : null}
 					<div className="shrink-0">
 						<UserMenu
 							slug={slug}
@@ -140,6 +153,13 @@ export default async function TenantLayout({
 					</div>
 				</div>
 			</header>
+			<TenantBanner
+				isAdmin={tenant.role === "tenant_admin"}
+				plan={tenant.plan}
+				slug={slug}
+				suspendedReason={tenant.suspendedReason}
+				trialEndsAt={tenant.trialEndsAt}
+			/>
 			<main className="mx-auto max-w-[1200px] px-4 py-6 md:px-6 md:py-8">
 				{children}
 			</main>
