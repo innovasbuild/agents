@@ -16,6 +16,7 @@ import {
 	useState,
 	useTransition,
 } from "react";
+import { LimitDialog } from "@/components/plan/limit-dialog";
 import {
 	AlertDialog,
 	AlertDialogCancel,
@@ -33,6 +34,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { allowanceReasonFrom } from "@/lib/agents/allowance-check";
 import {
 	type PendingInputRequest,
 	pendingInputRequests,
@@ -40,6 +42,7 @@ import {
 import { isEmailApproval, queuePreviewItems } from "@/lib/agents/mail-preview";
 import { runningToolLabel, thinkingLabel } from "@/lib/agents/running-tool";
 import { mailText } from "@/lib/gmail/signature";
+import { type LimitReason, limitMessage } from "@/lib/plans/limits";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import {
 	createConversation,
@@ -101,6 +104,7 @@ function useAttachment() {
 export function ChatClient({
 	active,
 	agents,
+	aiBlock,
 	allowedModels,
 	defaultAgent,
 	defaultModel,
@@ -111,6 +115,8 @@ export function ChatClient({
 }: {
 	active: Thread | null;
 	agents: AgentOption[];
+	/** Motivo por el que el plan corta el chat (crédito de IA, suspensión), o null. */
+	aiBlock: LimitReason | null;
 	allowedModels: string[];
 	defaultAgent: string;
 	defaultModel: string;
@@ -129,6 +135,11 @@ export function ChatClient({
 	// envío que llegue antes y evita crear dos hilos.
 	const creatingRef = useRef(false);
 	const [openError, setOpenError] = useState<string | null>(null);
+	// Corte del plan: viene del servidor, o lo devuelve createConversation si el
+	// crédito se acabó con la página abierta.
+	const [createBlock, setCreateBlock] = useState<LimitReason | null>(null);
+	const [limitOpen, setLimitOpen] = useState(false);
+	const blockReason = aiBlock ?? createBlock;
 	// Si el agente elegido se deshabilitó con la página abierta, vale el default.
 	const selected = agents.some((a) => a.id === agent) ? agent : defaultAgent;
 	// Con un solo agente no hay nada que elegir ni que rotular (spec 22.1 C5).
@@ -162,6 +173,10 @@ export function ChatClient({
 	}, [creating, activeId]);
 
 	async function startChat() {
+		if (blockReason) {
+			setLimitOpen(true);
+			return;
+		}
 		if (creatingRef.current) return;
 		creatingRef.current = true;
 		const message = text.trim();
@@ -169,6 +184,13 @@ export function ChatClient({
 		setOpenError(null);
 		try {
 			const id = await createConversation(tenantId, slug, model, selected);
+			if (id !== null && typeof id === "object") {
+				setCreateBlock(id.blocked);
+				setLimitOpen(true);
+				creatingRef.current = false;
+				setCreating(false);
+				return;
+			}
 			if (!id) {
 				setOpenError("No se pudo abrir el chat. Probá de nuevo.");
 				creatingRef.current = false;
@@ -249,6 +271,7 @@ export function ChatClient({
 					<Fragment key={active.id}>
 						<Thread
 							agentName={showAgents ? agentName(active.agent) : null}
+							aiBlock={aiBlock}
 							slug={slug}
 							thread={active}
 						/>
@@ -296,10 +319,22 @@ export function ChatClient({
 								placeholder="Escribí un mensaje para el agente"
 								text={text}
 							/>
+							{blockReason ? (
+								<p className="text-destructive text-sm" role="alert">
+									{limitMessage(blockReason).title}
+								</p>
+							) : null}
 							{openError ? (
 								<p className="text-destructive text-sm" role="alert">
 									{openError}
 								</p>
+							) : null}
+							{blockReason ? (
+								<LimitDialog
+									onOpenChange={setLimitOpen}
+									open={limitOpen}
+									reason={blockReason}
+								/>
 							) : null}
 						</div>
 					</div>
@@ -436,10 +471,12 @@ function fileToDataUrl(file: File): Promise<string> {
 
 function Thread({
 	agentName,
+	aiBlock,
 	slug,
 	thread,
 }: {
 	agentName: string | null;
+	aiBlock: LimitReason | null;
 	slug: string;
 	thread: Thread;
 }) {
@@ -483,6 +520,26 @@ function Thread({
 			void supabase.auth.stopAutoRefresh();
 		};
 	}, []);
+
+	// El hook de crédito de IA corta el turno tirando en turn.started; el
+	// turn.failed trae el motivo. Cubre el crédito que se acaba con el hilo
+	// abierto, cuando la página todavía no sabía del corte.
+	const failedReason = useMemo(() => {
+		for (let i = agent.events.length - 1; i >= 0; i--) {
+			const event = agent.events[i];
+			if (event.type === "turn.failed") {
+				return allowanceReasonFrom(event.data.message);
+			}
+			if (event.type === "turn.completed") return null;
+		}
+		return null;
+	}, [agent.events]);
+	const blockReason = aiBlock ?? failedReason;
+	const [limitOpen, setLimitOpen] = useState(false);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: solo cuando aparece un corte nuevo
+	useEffect(() => {
+		if (failedReason) setLimitOpen(true);
+	}, [failedReason]);
 
 	const isBusy = agent.status === "submitted" || agent.status === "streaming";
 	const isResuming = agent.status === "resuming";
@@ -558,6 +615,10 @@ function Thread({
 	}
 
 	function submit() {
+		if (blockReason) {
+			setLimitOpen(true);
+			return;
+		}
 		const message = text.trim();
 		void send(message, attachment.file, isBusy);
 		if (!thread.title && message)
@@ -710,6 +771,20 @@ function Thread({
 					) : null}
 				</fieldset>
 			))}
+
+			{blockReason ? (
+				<p className="text-destructive text-sm" role="alert">
+					{limitMessage(blockReason).title}
+				</p>
+			) : null}
+
+			{blockReason ? (
+				<LimitDialog
+					onOpenChange={setLimitOpen}
+					open={limitOpen}
+					reason={blockReason}
+				/>
+			) : null}
 
 			{agent.status === "error" ? (
 				<p className="text-destructive text-sm" role="alert">

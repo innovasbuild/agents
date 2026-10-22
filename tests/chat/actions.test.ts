@@ -45,6 +45,14 @@ vi.mock("@/lib/tenants/enabled-agents", () => ({
 	loadEnabledAgents: async () => agents.enabled,
 }));
 
+// Crédito de IA del plan: null = hay crédito. Su cálculo tiene tests propios.
+const allowance = vi.hoisted(() => ({
+	block: null as "limit:ai_credit" | null,
+}));
+vi.mock("@/lib/plans/chat-allowance", () => ({
+	chatAiBlock: async () => allowance.block,
+}));
+
 vi.mock("next/cache", () => ({
 	revalidatePath: (path: string) => {
 		state.revalidated.push(path);
@@ -129,6 +137,7 @@ beforeEach(() => {
 	gate.allows = true;
 	gate.calls = [];
 	agents.enabled = ["asistente", "outreach"];
+	allowance.block = null;
 });
 
 describe("deleteConversation", () => {
@@ -225,6 +234,15 @@ describe("el método de la sesión en las actions del chat", () => {
 					model: "modelo",
 				},
 			]);
+		});
+
+		it("sin crédito de IA no crea el hilo y devuelve el motivo", async () => {
+			allowance.block = "limit:ai_credit";
+
+			expect(
+				await createConversation(TENANT_ID, "acme", "modelo", "asistente"),
+			).toEqual({ blocked: "limit:ai_credit" });
+			expect(state.inserts).toEqual([]);
 		});
 
 		it("no crea nada si la empresa no permite el método", async () => {

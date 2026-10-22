@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AGENT_CATALOG, isCatalogAgent } from "@/lib/agents/catalog";
+import { chatAiBlock } from "@/lib/plans/chat-allowance";
+import type { LimitReason } from "@/lib/plans/limits";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { actionAllowsLogin } from "@/lib/tenants/login-check-server";
@@ -37,7 +39,7 @@ export async function createConversation(
 	slug: string,
 	model: string,
 	agent: string,
-): Promise<string | null> {
+): Promise<string | { blocked: LimitReason } | null> {
 	const supabase = await createServerSupabase();
 	const { data: auth } = await supabase.auth.getUser();
 	if (!auth.user) return null;
@@ -52,6 +54,11 @@ export async function createConversation(
 	if (!isCatalogAgent(agent) || !AGENT_CATALOG[agent].chat) return null;
 	const enabled = await loadEnabledAgents(tenantId);
 	if (enabled && !enabled.includes(agent)) return null;
+
+	// Sin crédito de IA no se abre el hilo: el cliente muestra el diálogo del
+	// plan con este motivo (spec etapa 27 §5.5).
+	const blocked = await chatAiBlock(tenantId);
+	if (blocked) return { blocked };
 
 	// La fila se crea ANTES de send(): el canal valida contra ella y el hook
 	// bind-session le escribe después el eve_session_id.

@@ -1,6 +1,8 @@
 // Una pasada de un workflow para un tenant (spec orquestación §5.2 y §6.5).
 // Función pura con dependencias inyectadas: el schedule dispatch.ts es una
 // puerta fina que le arma las reales. Acá itera el código, nunca el modelo.
+import { aiAllowance } from "../plans/ai-allowance";
+import type { PlanStore } from "../plans/store";
 import { type BudgetStore, budgetStatus } from "./budget";
 import type { TenantWorkflowConfig } from "./config";
 import { type EnqueueStore, enqueue } from "./enqueue";
@@ -10,7 +12,10 @@ import { type ItemOutcome, MAX_ATTEMPTS, type WorkItem } from "./types";
 /** Espera antes del reintento N+1. Al tercer fallo no hay reintento: failed. */
 export const RETRY_DELAYS_MINUTES: readonly number[] = [5, 30];
 
-export interface RunnerStore extends EnqueueStore, BudgetStore {
+export interface RunnerStore
+	extends EnqueueStore,
+		BudgetStore,
+		Pick<PlanStore, "tenantPlan" | "monthSpendUsd"> {
 	openRun(row: {
 		tenantId: string;
 		agent: string;
@@ -144,13 +149,33 @@ export async function runWorkflowPass(
 	// entere igual de que la pasada no terminó bien.
 	let stoppedBy: PassResult["stoppedBy"] = "sin_trabajo";
 	try {
+		// Crédito de IA del plan antes de tocar nada (spec etapa 27 §3): free y
+		// pago cortan por gasto del mes, y una empresa suspendida no corre. Para
+		// enterprise manda el presupuesto diario de abajo (misma cuenta, pero con
+		// el mensaje por recurso), así que su corte por crédito no se adelanta.
+		const [allowance, plan] = await Promise.all([
+			aiAllowance(
+				{ tenantId, timezone: input.tenant.timezone },
+				{ store, now: deps.now },
+			),
+			store.tenantPlan(tenantId),
+		]);
+		if (
+			!allowance.ok &&
+			!(plan?.plan === "enterprise" && allowance.reason === "limit:ai_credit")
+		) {
+			return close("budget_exhausted", "presupuesto", allowance.reason);
+		}
+		// El gasto de modelo de un free o pago ya lo cubre el tope mensual: sin
+		// fila en tenant_budgets su presupuesto diario sería 0 y no correrían nunca.
+		const planCuts = plan?.plan === "free" || plan?.plan === "pago";
+		const resources = planCuts
+			? info.resources.filter((r) => r !== "model_usd")
+			: info.resources;
+
 		// Presupuesto antes de tocar nada: agotado, los ítems quedan intactos.
 		const budgets = await budgetStatus(
-			{
-				tenantId,
-				resources: info.resources,
-				timezone: input.tenant.timezone,
-			},
+			{ tenantId, resources, timezone: input.tenant.timezone },
 			{ store, now: deps.now },
 		);
 		const agotado = budgets.find((b) => b.exhausted);

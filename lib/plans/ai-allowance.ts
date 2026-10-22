@@ -9,6 +9,12 @@ import {
 } from "./limits";
 import type { PlanStore } from "./store";
 
+/** Lo que lee aiAllowance: el runner de workflows no necesita `counts`. */
+export type AllowanceStore = Pick<
+	PlanStore,
+	"tenantPlan" | "monthSpendUsd" | "usageSince" | "dailyLimit"
+>;
+
 export type AiAllowance =
 	| { ok: true; spent: number; limit: number | null }
 	| {
@@ -20,7 +26,7 @@ export type AiAllowance =
 
 export async function aiAllowance(
 	input: { tenantId: string; timezone: string },
-	deps: { store: PlanStore; now: () => Date },
+	deps: { store: AllowanceStore; now: () => Date },
 ): Promise<AiAllowance> {
 	const { store } = deps;
 	const plan = await store.tenantPlan(input.tenantId);
