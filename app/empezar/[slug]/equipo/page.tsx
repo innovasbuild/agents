@@ -20,11 +20,11 @@ export default async function EquipoPage({
 	if (g.step !== "equipo") redirect(stepRedirectPath(slug, g.step));
 
 	let users = 1;
+	let pendingInvitations = 0;
 	try {
-		users = Math.max(
-			1,
-			(await createPlanStore(g.admin).counts(g.access.id)).users,
-		);
+		const counts = await createPlanStore(g.admin).counts(g.access.id);
+		users = Math.max(1, counts.users);
+		pendingInvitations = counts.pendingInvitations;
 	} catch (error) {
 		console.error("equipo: no pude contar los usuarios", error);
 	}
@@ -37,7 +37,12 @@ export default async function EquipoPage({
 				</p>
 				<div className="space-y-6 rounded-xl border bg-card p-6">
 					<StepIndicator step={6} />
-					<EquipoForm domain={g.domain} slug={slug} users={users} />
+					<EquipoForm
+						domain={g.domain}
+						slug={slug}
+						users={users}
+						pendingInvitations={pendingInvitations}
+					/>
 				</div>
 			</div>
 		</main>

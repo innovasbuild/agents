@@ -56,8 +56,10 @@ export function suspendedReasonOf(t: TenantPlan): LimitReason | null {
 export function canInvite(t: TenantPlan, c: TenantCounts): LimitReason | null {
 	const suspended = suspendedReasonOf(t);
 	if (suspended) return suspended;
-	// Las invitaciones pendientes no ocupan lugar: cuenta quien ya es miembro.
-	if (c.users >= PLAN_LIMITS[t.plan].users) return "limit:users";
+	// Al invitar, una invitación pendiente reserva lugar (R11). La cobranza, en
+	// cambio, cuenta solo a los miembros activos.
+	if (c.users + c.pendingInvitations >= PLAN_LIMITS[t.plan].users)
+		return "limit:users";
 	return null;
 }
 

@@ -26,9 +26,25 @@ describe("canInvite", () => {
 	it("free con 3 usuarios corta", () => {
 		expect(canInvite(free, counts({ users: 3 }))).toBe("limit:users");
 	});
-	it("las invitaciones pendientes no cuentan", () => {
+	it("una invitación pendiente reserva lugar", () => {
+		expect(canInvite(free, counts({ users: 2, pendingInvitations: 1 }))).toBe(
+			"limit:users",
+		);
 		expect(
-			canInvite(free, counts({ users: 2, pendingInvitations: 5 })),
+			canInvite(free, counts({ users: 1, pendingInvitations: 1 })),
+		).toBeNull();
+	});
+	it("con 1 miembro y 2 pendientes, la cuarta persona corta", () => {
+		expect(canInvite(free, counts({ users: 1, pendingInvitations: 2 }))).toBe(
+			"limit:users",
+		);
+	});
+	it("enterprise no tiene tope aunque haya pendientes", () => {
+		expect(
+			canInvite(
+				{ ...free, plan: "enterprise" },
+				counts({ users: 50, pendingInvitations: 50 }),
+			),
 		).toBeNull();
 	});
 	it("pago no tiene tope", () => {

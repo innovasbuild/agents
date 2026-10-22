@@ -48,7 +48,7 @@ Las tomó Matías en la conversación, salvo las marcadas **(mi criterio)**, que
 | P20 | **(mi criterio)** Pago sin tope de IA por defecto; el admin puede fijarse un tope mensual propio desde su configuración | Quien paga por consumo decide cuánto; el tope evita sustos |
 | P21 | **(mi criterio)** El slug sale del dominio (`lagomarsino.com.ar` → `lagomarsino`), con sufijo numérico si está tomado. No se pregunta | Una pregunta menos; el slug casi no se ve una vez que hay dominio propio (21.6) |
 | P22 | **(mi criterio)** El `tenant_admin` pasa a poder editar `display_name`, `brand`, `auth_methods` y su tope de IA desde su configuración, por funciones `security definer` con `settings_actor`, el patrón de la 21.2. El trigger `tenants_guard_columns` no se abre. `allowed_domains` sigue siendo solo de plataforma; el dominio inicial lo fija el alta a partir del correo verificado | Sin esto, "dejar el logo para después" no tiene dónde. Los dominios siguen cerrados por la razón de D1 del ingreso por dominio. Hoy conviven el trigger y las funciones; se elige el patrón más nuevo |
-| P25 | Para el tope y para Stripe, "usuarios" son las filas de `memberships` con rol `tenant_admin` o `tenant_member`. La tarjeta se pide al mandar la cuarta invitación, pero la invitación pendiente no ocupa lugar ni se cobra: la licencia corre cuando la persona acepta y queda activa. Las filas `platform_admin` (soporte de INNOV.AS) no cuentan ni se facturan **(esto último, mi criterio)** | Decidido por Matías el 2026-10-22. Quien crea la empresa es 1 de 3 |
+| P25 | Para el tope y para Stripe, "usuarios" son las filas de `memberships` con rol `tenant_admin` o `tenant_member`. El chequeo del tope al invitar cuenta miembros activos más invitaciones pendientes (una invitación pendiente reserva lugar para el tope); la cobranza de Stripe cuenta solo miembros activos (la licencia corre cuando la persona acepta y queda activa). Por eso la tarjeta se pide al mandar la invitación que sería la cuarta persona. El ingreso por dominio sigue deshabilitado fuera de enterprise (27.4), así que aceptar no suma lugares más allá de los reservados al invitar; dos invitaciones simultáneas pueden pasarse por un lugar (tope blando aceptado). Las filas `platform_admin` (soporte de INNOV.AS) no cuentan ni se facturan **(esto último, mi criterio)** | Decidido por Matías el 2026-10-22. Quien crea la empresa es 1 de 3 |
 | P26 | **(mi criterio)** El setup de contenido (27.3) corre como workflow con un dispatcher de plataforma que despacha por `work_items` pendientes, no por agente, y la action que encola dispara el primer tick enseguida con `after()` | El único dispatcher de hoy lista tenants con outreach habilitado; una empresa self-serve no lo tiene. Un tick inmediato evita esperar al cron para el aviso del chat |
 | P27 | **(mi criterio)** La cantidad de licencias en Stripe se concilia: un schedule cada hora compara `tenant_counts` con la suscripción y la corrige. Checkout nace ya con la cantidad correcta (incluida la invitación que chocó con el tope) | Las membresías se crean dentro de Postgres al entrar; llamar a Stripe desde cada punto es frágil. Stripe prorratea por tiempo, así que una hora de desfase no cambia la factura |
 | P23 | **(mi criterio)** Una empresa self-serve nace con el agente Asistente (22.1) y el brain; no con outreach | Outreach necesita conectores y configuración que un equipo que recién entra no tiene |
@@ -58,7 +58,7 @@ Las tomó Matías en la conversación, salvo las marcadas **(mi criterio)**, que
 
 | | Free | Pago | Enterprise |
 |---|---|---|---|
-| Usuarios | hasta 3 membresías; la cuarta invitación pide tarjeta | sin tope; USD 10 por usuario activo por mes | sin tope |
+| Usuarios | hasta 3 lugares (miembros activos + invitaciones pendientes); la invitación que sería la cuarta persona pide tarjeta | sin tope; USD 10 por usuario activo por mes | sin tope |
 | Skills publicadas | hasta 5 | sin tope | sin tope |
 | IA | crédito USD 5 por mes calendario | por consumo, en la factura; tope mensual opcional | presupuesto diario de plataforma, como hoy |
 | Duración | 3 meses desde el alta | mientras pague | — |
@@ -170,7 +170,7 @@ Se diseñan en Pencil, un archivo por flujo, antes del plan: los seis pasos del 
 
 ### 5.5 Topes en 27.1
 
-- Invitación: si `plan = 'free'`, `users >= 3` y no hay tarjeta cargada, `inviteToTenant` devuelve `limit:users`. Lo mismo `join_tenants_by_domain` (no aplica hasta 27.4, pero la función ya chequea).
+- Invitación: si `plan = 'free'`, `users + pending_invitations >= 3` (la pendiente reserva lugar; la cobranza cuenta solo activos) y no hay tarjeta cargada, `inviteToTenant` devuelve `limit:users`. Lo mismo `join_tenants_by_domain` (no aplica hasta 27.4, pero la función ya chequea).
 - Publicación: si `plan = 'free'` y `published_skills >= 5`, la publicación devuelve `limit:skills`.
 - Chat: antes de cada turno, el canal consulta `lib/plans/ai-allowance.ts`; si el crédito del mes está agotado, responde con un mensaje fijo (no una llamada al modelo) y la pantalla muestra el diálogo. El runner usa el mismo módulo.
 - Trial: un schedule diario (eve `schedules/`, mismo patrón que los que ya existen) pone `suspended_reason = 'trial_vencido'` a las Free con `trial_ends_at < now()` y deja el evento `tenant.suspended`. Aviso en la app desde 14 días antes, con la fecha.

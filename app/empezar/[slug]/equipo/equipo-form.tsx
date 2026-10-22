@@ -4,9 +4,9 @@ import { UsersIcon } from "lucide-react";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FREE_SEATS, maxInviteRows, seatsUsed } from "@/lib/onboarding/seats";
 import { finishWithInvites, finishWithoutInvites } from "./actions";
 
-const FREE_SEATS = 3;
 type Role = "tenant_admin" | "tenant_member";
 type Row = { email: string; role: Role };
 
@@ -14,13 +14,15 @@ export function EquipoForm({
 	slug,
 	domain,
 	users,
+	pendingInvitations,
 }: {
 	slug: string;
 	domain: string;
 	users: number;
+	pendingInvitations: number;
 }) {
 	// Lugares libres del plan gratis, hasta 2 filas.
-	const maxRows = Math.min(2, Math.max(0, FREE_SEATS - users));
+	const maxRows = maxInviteRows({ users, pendingInvitations });
 	const [rows, setRows] = useState<Row[]>(
 		Array.from({ length: maxRows }, () => ({
 			email: "",
@@ -37,7 +39,11 @@ export function EquipoForm({
 	const [pending, startTransition] = useTransition();
 
 	const filled = rows.filter((r) => r.email.trim() !== "");
-	const taken = users + filled.length;
+	const taken = seatsUsed({
+		users,
+		pendingInvitations,
+		filledRows: filled.length,
+	});
 
 	function update(index: number, patch: Partial<Row>) {
 		setRows((current) =>

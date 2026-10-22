@@ -198,10 +198,19 @@ describe("inviteToTenant con topes del plan", () => {
 		expect(state.inserts).toHaveLength(0);
 	});
 
-	it("las invitaciones pendientes no ocupan lugar", async () => {
+	it("las invitaciones pendientes reservan lugar", async () => {
 		const result = await inviteToTenant({
 			...base,
-			plans: plansOf(freePlan, counts({ users: 2, pendingInvitations: 5 })),
+			plans: plansOf(freePlan, counts({ users: 1, pendingInvitations: 2 })),
+		});
+		expect(result).toEqual({ kind: "limite", reason: "limit:users" });
+		expect(state.inserts).toHaveLength(0);
+	});
+
+	it("1 miembro y 1 pendiente todavía deja invitar", async () => {
+		const result = await inviteToTenant({
+			...base,
+			plans: plansOf(freePlan, counts({ users: 1, pendingInvitations: 1 })),
 		});
 		expect(result).toEqual({ kind: "ok" });
 		expect(state.inserts).toHaveLength(1);
