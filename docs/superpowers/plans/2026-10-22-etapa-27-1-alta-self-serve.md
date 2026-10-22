@@ -26,6 +26,14 @@ Lo que cambió respecto del texto del plan (el cuerpo no se reescribió; manda l
 - **R10.** La restricción al dominio del paso Acceso es una línea fija, sin interruptor.
 - **R11.** El tope de usuarios cuenta miembros activos más invitaciones pendientes al invitar; la cobranza cuenta solo activos.
 - **R12.** El chat se corta solo por suspensión y por el crédito Free o el tope Pago; nunca por los presupuestos `tenant_budgets` de Enterprise.
+- **R13.** Ronda final de la revisión de la rama:
+  - F1. El ingreso por dominio es solo de Enterprise también en SQL: `tenants_guard_columns` frena abrirlo fuera de Enterprise (`42501`, hint `settings`), y `join_tenants_by_domain`, `login_gate` y `signup_route` ignoran empresas no Enterprise o suspendidas. Las invitaciones se insertan solo con la service role (se revoca `INSERT` a `authenticated`; la política queda en update y delete), así nadie saltea `canInvite`.
+  - F2. `retryResearch` y `ensureResearch` no lanzan otra corrida sin crédito de IA (`chatAiBlock`) ni con 6 corridas asentadas en `usage_entries` (la inicial más 5 reintentos).
+  - F3. `tenant_writable_guard` deja pasar el `ON DELETE SET NULL` de una FK (`pg_trigger_depth() > 1` y solo columnas que pasan a null): borrar a una persona no choca con una empresa suspendida.
+  - F4. Si un `turn.failed` no trae `ai_allowance:`, el chat consulta `checkChatBlock(slug)` una vez por turno, con 10 s entre llamadas.
+  - F5. `set_tenant_profile` descarta claves de marca desconocidas y colores heredados que no son `#RRGGBB`, en vez de rechazar el guardado.
+  - M1. La ficha de la empresa del research tiene topes (resumen 1500, campos 200, hasta 20 productos de 120) y `normalizeProposal` recorta.
+  - M2. Cada corrida del research lleva `AbortSignal.timeout(170 s)`, antes de la regla de 3 minutos.
 
 ## Global Constraints
 
