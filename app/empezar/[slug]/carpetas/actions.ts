@@ -24,19 +24,18 @@ import {
 	createResearchStore,
 	type ResearchRow,
 } from "@/lib/onboarding/research-store";
+import {
+	onboardingGate as gate,
+	type OnboardingGate,
+} from "@/lib/onboarding/step-gate";
 import { stepPath } from "@/lib/onboarding/steps";
 import { brainForTenant } from "@/lib/outreach/canon";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { resolveTenantAccess } from "@/lib/tenants/resolve";
 
-// Por defecto de la columna tenants.default_model, si no se pudo leer.
-const FALLBACK_MODEL = "anthropic/claude-sonnet-5";
 // platform_enable_brain_skills agrega la carpeta skills y falla con 20 o más.
 const MAX_CONFIRMED_FOLDERS = 19;
 const MAX_HINT = 2000;
 
-const SLUG = /^[a-z0-9-]{1,63}$/;
 const NOT_ALLOWED = "No tenés permiso.";
 
 const folderSchema = z.object({
@@ -46,28 +45,7 @@ const folderSchema = z.object({
 	restricted: z.boolean(),
 });
 
-/** La empresa sale del slug resuelto con la sesión; nunca el id del navegador. */
-async function gate(slug: string) {
-	if (!SLUG.test(slug)) return null;
-	const access = await resolveTenantAccess(slug);
-	if (!access || access.role === "tenant_member") return null;
-	const admin = createAdminClient();
-	const { data, error } = await admin
-		.from("tenants")
-		.select("onboarding_step, allowed_domains, default_model")
-		.eq("id", access.id)
-		.single();
-	if (error || !data) return null;
-	return {
-		access,
-		admin,
-		step: data.onboarding_step as string | null,
-		domain: data.allowed_domains?.[0] ?? "",
-		model: data.default_model || access.defaultModel || FALLBACK_MODEL,
-	};
-}
-
-type Gate = NonNullable<Awaited<ReturnType<typeof gate>>>;
+type Gate = OnboardingGate;
 
 function scheduleResearch(g: Gate, hint: string | null) {
 	const input = {

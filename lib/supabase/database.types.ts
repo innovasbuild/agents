@@ -2014,6 +2014,10 @@ export type Database = {
 				Args: { p_display_name: string; p_domain: string };
 				Returns: Json;
 			};
+			set_ai_monthly_limit: {
+				Args: { p_limit: number; p_tenant: string };
+				Returns: undefined;
+			};
 			set_approval: {
 				Args: {
 					p_agent: string;
@@ -2058,6 +2062,14 @@ export type Database = {
 				Returns: undefined;
 			};
 			set_run_cost: { Args: { p_run: string }; Returns: number };
+			set_tenant_auth_methods: {
+				Args: { p_methods: string[]; p_tenant: string };
+				Returns: undefined;
+			};
+			set_tenant_profile: {
+				Args: { p_brand: Json; p_display_name: string; p_tenant: string };
+				Returns: undefined;
+			};
 			set_workflow: {
 				Args: {
 					p_cadence_minutes: number;
