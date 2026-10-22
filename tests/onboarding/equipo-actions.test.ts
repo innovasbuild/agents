@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
 	redirected: null as string | null,
 	invites: [] as Record<string, unknown>[],
 	inviteOutcome: {} as Record<string, string>,
+	inviteReason: "limit:users" as string,
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
@@ -78,6 +79,9 @@ vi.mock("@/lib/supabase/server", () => ({
 		},
 	}),
 }));
+vi.mock("@/lib/plans/store", () => ({
+	createPlanStore: () => ({ fake: "plans" }),
+}));
 vi.mock("@/lib/domains/origin", () => ({
 	invitationOrigin: async (_t: string, fallback: string) =>
 		`origin:${fallback}`,
@@ -89,7 +93,8 @@ vi.mock("next/headers", () => ({
 vi.mock("@/lib/invitations/invite", () => ({
 	inviteToTenant: async (params: Record<string, unknown>) => {
 		state.invites.push(params);
-		return { kind: state.inviteOutcome[String(params.email)] ?? "ok" };
+		const kind = state.inviteOutcome[String(params.email)] ?? "ok";
+		return kind === "limite" ? { kind, reason: state.inviteReason } : { kind };
 	},
 }));
 
@@ -158,7 +163,12 @@ describe("finishWithInvites", () => {
 		state.inviteOutcome = { "ana@lagomarsino.com": "mail_fallo" };
 		const r = await actions.finishWithInvites("lagomarsino", two);
 		expect(state.invites).toHaveLength(2);
-		expect(r).toEqual({ ok: true, failed: ["ana@lagomarsino.com"], outside: [] });
+		expect(r).toEqual({
+			ok: true,
+			failed: ["ana@lagomarsino.com"],
+			outside: [],
+			limited: null,
+		});
 		expect(stepCalls()).toHaveLength(1);
 		expect(state.redirected).toBeNull();
 	});
@@ -166,7 +176,33 @@ describe("finishWithInvites", () => {
 	it("un correo de afuera del dominio va aparte, no como falla de envío", async () => {
 		state.inviteOutcome = { "ana@lagomarsino.com": "dominio_no_permitido" };
 		const r = await actions.finishWithInvites("lagomarsino", two);
-		expect(r).toEqual({ ok: true, failed: [], outside: ["ana@lagomarsino.com"] });
+		expect(r).toEqual({
+			ok: true,
+			failed: [],
+			outside: ["ana@lagomarsino.com"],
+			limited: null,
+		});
+		expect(state.redirected).toBeNull();
+	});
+
+	it("le pasa el store de planes a la invitación", async () => {
+		await actions.finishWithInvites("lagomarsino", [two[0]]).catch(() => null);
+		expect(state.invites[0]).toMatchObject({ plans: { fake: "plans" } });
+	});
+
+	it("un limite no rompe: se avisa con su mensaje, no como falla de envío, y se cierra el alta", async () => {
+		state.inviteOutcome = { "ana@lagomarsino.com": "limite" };
+		const r = await actions.finishWithInvites("lagomarsino", two);
+		expect(r).toEqual({
+			ok: true,
+			failed: [],
+			outside: [],
+			limited: {
+				emails: ["ana@lagomarsino.com"],
+				message: expect.stringContaining("Tu equipo creció"),
+			},
+		});
+		expect(stepCalls()).toHaveLength(1);
 		expect(state.redirected).toBeNull();
 	});
 

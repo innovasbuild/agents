@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isAllowedDomain } from "@/lib/invitations/domain";
+import { canInvite, type LimitReason } from "@/lib/plans/limits";
+import type { PlanStore } from "@/lib/plans/store";
 
 export type InviteRole = "tenant_admin" | "tenant_member";
 
@@ -9,7 +11,8 @@ export type InviteOutcome =
 	| { kind: "dominio_no_permitido"; allowedDomains: string[] }
 	| { kind: "duplicada" }
 	| { kind: "mail_fallo" }
-	| { kind: "tenant_inexistente" };
+	| { kind: "tenant_inexistente" }
+	| { kind: "limite"; reason: LimitReason };
 
 export type InvitationMailOutcome = "ok" | "ya_existe" | "mail_fallo";
 
@@ -60,6 +63,8 @@ export async function inviteToTenant(params: {
 	allowExternal: boolean;
 	origin: string;
 	next?: string;
+	/** Si viene, se aplica el tope del plan antes de escribir. La consola de plataforma no lo pasa. */
+	plans?: PlanStore;
 }): Promise<InviteOutcome> {
 	const email = params.email.trim().toLowerCase();
 
@@ -76,6 +81,24 @@ export async function inviteToTenant(params: {
 			kind: "dominio_no_permitido",
 			allowedDomains: tenant.allowed_domains,
 		};
+
+	if (params.plans) {
+		try {
+			const plan = await params.plans.tenantPlan(params.tenantId);
+			// Plan desconocido: no hay con qué comparar, se deja invitar.
+			if (plan) {
+				const reason = canInvite(
+					plan,
+					await params.plans.counts(params.tenantId),
+				);
+				if (reason) return { kind: "limite", reason };
+			}
+		} catch (error) {
+			// Disponibilidad antes que rigor: si no se puede leer el plan o los
+			// conteos, se deja invitar. El tope es comercial, no de seguridad.
+			console.error("inviteToTenant: no se pudo leer el plan", error);
+		}
+	}
 
 	const { error: insertError } = await params.admin.from("invitations").insert({
 		tenant_id: params.tenantId,

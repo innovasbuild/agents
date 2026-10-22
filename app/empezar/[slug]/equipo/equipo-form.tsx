@@ -30,6 +30,10 @@ export function EquipoForm({
 	const [error, setError] = useState<string | null>(null);
 	const [failed, setFailed] = useState<string[]>([]);
 	const [outside, setOutside] = useState<string[]>([]);
+	const [limited, setLimited] = useState<{
+		emails: string[];
+		message: string;
+	} | null>(null);
 	const [pending, startTransition] = useTransition();
 
 	const filled = rows.filter((r) => r.email.trim() !== "");
@@ -52,6 +56,7 @@ export function EquipoForm({
 			}
 			setFailed(result.failed);
 			setOutside(result.outside);
+			setLimited(result.limited);
 		});
 	}
 
@@ -61,7 +66,7 @@ export function EquipoForm({
 		});
 	}
 
-	if (failed.length > 0 || outside.length > 0) {
+	if (failed.length > 0 || outside.length > 0 || limited) {
 		return (
 			<div className="space-y-4">
 				{outside.map((email) => (
@@ -70,6 +75,11 @@ export function EquipoForm({
 						permitiendo correos de afuera. ({email})
 					</p>
 				))}
+				{limited ? (
+					<p className="text-sm" role="alert">
+						{limited.message} Quedaron sin invitar: {limited.emails.join(", ")}.
+					</p>
+				) : null}
 				{failed.length > 0 ? (
 					<p className="text-sm" role="alert">
 						No pudimos mandar el correo a {failed.join(", ")}. Podés volver a
