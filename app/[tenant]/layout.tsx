@@ -15,7 +15,7 @@ import { brandStyle } from "@/lib/brand/contrast";
 import { stepPath } from "@/lib/onboarding/steps";
 import { tenantMetadata } from "@/lib/tenants/brand-metadata";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
-import { visibleNav } from "@/lib/tenants/nav";
+import { visibleNav, visibleUserNav } from "@/lib/tenants/nav";
 import {
 	prefetchEnabledAgentsWithAccess,
 	resolveTenantAccess,
@@ -147,6 +147,7 @@ export default async function TenantLayout({
 						<UserMenu
 							slug={slug}
 							email={tenant.email}
+							links={visibleUserNav(tenant.role, enabledAgents)}
 							roleLabel={ROLE_LABELS[tenant.role]}
 							isPlatformAdmin={tenant.role === "platform_admin"}
 						/>

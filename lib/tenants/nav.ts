@@ -27,10 +27,14 @@ export const NAV: NavEntry[] = [
 			{ href: "/contactos", label: "Contactos", agent: "outreach" },
 			{ href: "/cuentas", label: "Cuentas", agent: "outreach" },
 			{ href: "/focos", label: "Focos", agent: "outreach" },
+			{ href: "/metricas", label: "Métricas", agent: "outreach" },
 		],
 	},
 	{ href: "/brain", label: "Brain" },
-	{ href: "/metricas", label: "Métricas", agent: "outreach" },
+];
+
+// Lo que cuelga del menú de la persona (arriba a la derecha), no de la tira.
+export const USER_NAV: NavLink[] = [
 	{ href: "/conectar", label: "Conectar" },
 	{ href: "/mis-cuentas", label: "Mis cuentas", agent: "outreach" },
 	// /settings hace notFound() para tenant_member: el link no se muestra,
@@ -39,16 +43,27 @@ export const NAV: NavEntry[] = [
 ];
 
 /** `enabledAgents` en null (no se pudo leer) no oculta nada. */
-export function visibleNav(
-	role: TenantRole,
-	enabledAgents: readonly string[] | null,
-): NavEntry[] {
-	const show = (link: NavLink) =>
+function visibility(role: TenantRole, enabledAgents: readonly string[] | null) {
+	return (link: NavLink) =>
 		(!link.adminOnly || role !== "tenant_member") &&
 		(!link.agent ||
 			enabledAgents === null ||
 			enabledAgents.includes(link.agent)) &&
 		(!link.chat || enabledAgents === null || hasChatAgent(enabledAgents));
+}
+
+export function visibleUserNav(
+	role: TenantRole,
+	enabledAgents: readonly string[] | null,
+): NavLink[] {
+	return USER_NAV.filter(visibility(role, enabledAgents));
+}
+
+export function visibleNav(
+	role: TenantRole,
+	enabledAgents: readonly string[] | null,
+): NavEntry[] {
+	const show = visibility(role, enabledAgents);
 
 	return NAV.flatMap((entry): NavEntry[] => {
 		if (!("items" in entry)) return show(entry) ? [entry] : [];
