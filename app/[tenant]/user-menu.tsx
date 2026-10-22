@@ -12,21 +12,24 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { userInitials } from "@/lib/auth/user-initials";
+import type { NavLink } from "@/lib/tenants/nav";
 import { signOut } from "./session-actions";
 
 /**
  * El menú de la persona, arriba a la derecha. Muestra quién es y con qué
- * rol, la entrada a la consola de plataforma (solo platform_admin) y el
+ * rol, sus entradas (Conectar, Mis cuentas, Configuración), la entrada a la consola de plataforma (solo platform_admin) y el
  * cierre de sesión.
  */
 export function UserMenu({
 	slug,
 	email,
+	links,
 	roleLabel,
 	isPlatformAdmin,
 }: {
 	slug: string;
 	email: string | undefined;
+	links: NavLink[];
 	roleLabel: string;
 	isPlatformAdmin: boolean;
 }) {
@@ -53,6 +56,16 @@ export function UserMenu({
 					</span>
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
+				{links.length > 0 ? (
+					<>
+						{links.map((link) => (
+							<DropdownMenuItem asChild className="py-2" key={link.href}>
+								<Link href={`/${slug}${link.href}`}>{link.label}</Link>
+							</DropdownMenuItem>
+						))}
+						<DropdownMenuSeparator />
+					</>
+				) : null}
 				{isPlatformAdmin ? (
 					<>
 						<DropdownMenuItem asChild className="py-2">
