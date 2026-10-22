@@ -23,3 +23,37 @@ export function effectiveResearch(
 		? row
 		: { ...row, status: "error", error: "tiempo_agotado" };
 }
+
+export type CarpetasView = {
+	view: "investigando" | "sin-sitio" | "propuesta";
+	/** SinSitio avisa que no se pudo leer el sitio. */
+	note: boolean;
+};
+
+/**
+ * Qué pantalla muestra el paso de carpetas. Sin fila no se espera para
+ * siempre: si ensureResearch falló, o pasaron 3 minutos sin fila, se pide el
+ * dato a la persona.
+ */
+export function decideCarpetasView(input: {
+	research: ResearchRow | null;
+	ensureFailed: boolean;
+	nullSince: number;
+	now: Date;
+}): CarpetasView {
+	const { research, now } = input;
+	if (!research) {
+		const stuck =
+			input.ensureFailed ||
+			now.getTime() - input.nullSince > RUNNING_TIMEOUT_MS;
+		return stuck
+			? { view: "sin-sitio", note: true }
+			: { view: "investigando", note: false };
+	}
+	const status = effectiveResearchStatus(research, now);
+	if (status === "running") return { view: "investigando", note: false };
+	if (status === "error") return { view: "sin-sitio", note: true };
+	if (research.result && (research.result.found || research.hint))
+		return { view: "propuesta", note: false };
+	return { view: "sin-sitio", note: !research.result };
+}

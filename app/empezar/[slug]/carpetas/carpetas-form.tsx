@@ -11,6 +11,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { decideCarpetasView } from "@/lib/onboarding/research-status";
 import type { ResearchRow } from "@/lib/onboarding/research-store";
 import {
 	confirmFolders,
@@ -54,20 +55,34 @@ export function CarpetasForm({
 	initial: ResearchRow | null;
 }) {
 	const [research, setResearch] = useState<ResearchRow | null>(initial);
+	const [ensureFailed, setEnsureFailed] = useState(false);
+	const [now, setNow] = useState(() => new Date());
 	const started = useRef(false);
+	const mountedAt = useRef(Date.now());
 
-	const waiting = research === null || research.status === "running";
+	const { view, note } = decideCarpetasView({
+		research,
+		ensureFailed,
+		nullSince: mountedAt.current,
+		now,
+	});
+	const waiting = view === "investigando";
 
 	// Sin fila (el paso anterior no pudo agendar el research): se pide una vez.
 	useEffect(() => {
 		if (research !== null || started.current) return;
 		started.current = true;
-		void ensureResearch(slug);
+		ensureResearch(slug)
+			.then((result) => {
+				if (!result.ok) setEnsureFailed(true);
+			})
+			.catch(() => setEnsureFailed(true));
 	}, [research, slug]);
 
 	useEffect(() => {
 		if (!waiting) return;
 		const timer = setInterval(async () => {
+			setNow(new Date());
 			try {
 				const row = await readResearch(slug);
 				if (row) setResearch(row);
@@ -78,14 +93,13 @@ export function CarpetasForm({
 		return () => clearInterval(timer);
 	}, [waiting, slug]);
 
-	if (waiting) return <Investigando domain={domain} />;
-	const found = research.status === "done" && research.result;
-	if (found && (research.result?.found || research.hint)) {
+	if (view === "investigando") return <Investigando domain={domain} />;
+	if (view === "propuesta") {
 		return (
 			<Propuesta
 				displayName={displayName}
 				domain={domain}
-				initial={research.result?.folders ?? []}
+				initial={research?.result?.folders ?? []}
 				slug={slug}
 			/>
 		);
@@ -93,16 +107,18 @@ export function CarpetasForm({
 	return (
 		<SinSitio
 			domain={domain}
-			note={research.status === "error"}
-			onRunning={() =>
+			note={note}
+			onRunning={() => {
+				setEnsureFailed(false);
+				setNow(new Date());
 				setResearch({
 					status: "running",
 					hint: null,
 					result: null,
 					error: null,
 					updatedAt: new Date().toISOString(),
-				})
-			}
+				});
+			}}
 			onDone={async () => {
 				const row = await readResearch(slug);
 				if (row) setResearch(row);
@@ -155,7 +171,7 @@ function SinSitio({
 		startTransition(async () => {
 			const result = await retryResearch(slug, hint);
 			if (result.ok) onRunning();
-			else setError("No pudimos seguir. Probá de nuevo.");
+			else setError(result.message ?? "No pudimos seguir. Probá de nuevo.");
 		});
 	}
 
@@ -164,7 +180,7 @@ function SinSitio({
 		startTransition(async () => {
 			const result = await genericFolders(slug);
 			if (result.ok) await onDone();
-			else setError("No pudimos seguir. Probá de nuevo.");
+			else setError(result.message ?? "No pudimos seguir. Probá de nuevo.");
 		});
 	}
 

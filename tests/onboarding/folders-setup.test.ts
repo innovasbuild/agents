@@ -35,13 +35,16 @@ const input = {
 	companySummary: "Hacemos harina.",
 };
 
-function fakes(failOn?: string) {
+function fakes(failOn?: string, existing: string[] = []) {
 	const rpcs: [string, Record<string, unknown>][] = [];
 	const pages: {
 		write: Parameters<FoldersSetupDeps["upsertPage"]>[0];
 		author: Parameters<FoldersSetupDeps["upsertPage"]>[1];
 	}[] = [];
 	const deps: FoldersSetupDeps = {
+		async listTopFolders() {
+			return existing;
+		},
 		async rpc(fn, args) {
 			rpcs.push([fn, args]);
 			return { error: fn === failOn ? { message: "boom" } : null };
@@ -64,6 +67,7 @@ describe("setupBrainFolders", () => {
 			"brain_set_folder_description",
 			"brain_set_folder_description",
 			"platform_enable_brain_skills",
+			"brain_remove_access_rule",
 			"brain_set_access_rule",
 			"brain_set_access_rule",
 		]);
@@ -112,6 +116,56 @@ describe("setupBrainFolders", () => {
 				p_actor: "u1",
 			},
 		]);
+	});
+
+	it("un reintento sin una carpeta la borra", async () => {
+		const { rpcs, deps } = fakes(undefined, [
+			"comercial",
+			"vieja",
+			"skills",
+			"direccion",
+			"finanzas",
+		]);
+		await setupBrainFolders(input, deps);
+		expect(rpcs[0]).toEqual([
+			"brain_delete_folder",
+			{ p_tenant: "t1", p_actor: "u1", p_path: "vieja" },
+		]);
+		expect(rpcs.filter(([fn]) => fn === "brain_delete_folder")).toHaveLength(1);
+		expect(rpcs[1][0]).toBe("platform_bind_connection");
+	});
+
+	it("con las mismas carpetas no borra nada", async () => {
+		const { rpcs, deps } = fakes(undefined, [
+			"comercial",
+			"direccion",
+			"finanzas",
+		]);
+		await setupBrainFolders(input, deps);
+		expect(rpcs.some(([fn]) => fn === "brain_delete_folder")).toBe(false);
+	});
+
+	it("una carpeta abierta pierde su regla; las restringidas no", async () => {
+		const { rpcs, deps } = fakes();
+		await setupBrainFolders(input, deps);
+		const removed = rpcs.filter(([fn]) => fn === "brain_remove_access_rule");
+		expect(removed.map(([, a]) => a)).toEqual([
+			{
+				p_tenant_id: "t1",
+				p_path: "comercial",
+				p_principal: "members",
+				p_user_id: null,
+				p_actor: "u1",
+			},
+		]);
+	});
+
+	it("si el borrado falla devuelve step folders", async () => {
+		const { deps } = fakes("brain_delete_folder", ["vieja"]);
+		expect(await setupBrainFolders(input, deps)).toMatchObject({
+			ok: false,
+			step: "folders",
+		});
 	});
 
 	it("escribe 00-reglas y la página de la empresa como import", async () => {

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GENERIC_FOLDERS } from "@/lib/onboarding/folder-template";
-import { effectiveResearchStatus } from "@/lib/onboarding/research-status";
+import {
+	decideCarpetasView,
+	effectiveResearchStatus,
+} from "@/lib/onboarding/research-status";
 
 const state: {
 	access: {
@@ -78,14 +81,23 @@ vi.mock("@/lib/supabase/admin", () => ({
 							}),
 						}),
 					}
-				: {
-						upsert: (...args: unknown[]) => {
-							upsertClaim(...args);
-							return {
-								select: async () => ({ data: state.claimRows, error: null }),
-							};
+				: table === "brain_folders"
+					? {
+							select: () => ({
+								eq: async () => ({
+									data: [{ path: "a" }, { path: "a/b" }],
+									error: null,
+								}),
+							}),
+						}
+					: {
+							upsert: (...args: unknown[]) => {
+								upsertClaim(...args);
+								return {
+									select: async () => ({ data: state.claimRows, error: null }),
+								};
+							},
 						},
-					},
 	}),
 }));
 vi.mock("@/lib/onboarding/research-store", () => ({
@@ -106,7 +118,7 @@ const {
 	ensureResearch,
 	readResearch,
 	retryResearch,
-	useGenericFolders,
+	useGenericFolders: genericFolders,
 } = await import("@/app/empezar/[slug]/carpetas/actions");
 
 const ok = [
@@ -281,9 +293,44 @@ describe("retryResearch", () => {
 	});
 });
 
+describe("corrida en curso", () => {
+	const fresh = () => ({
+		status: "running",
+		hint: null,
+		result: null,
+		error: null,
+		updatedAt: new Date().toISOString(),
+	});
+	const stale = () => ({
+		...fresh(),
+		updatedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+	});
+	it("retryResearch y useGenericFolders se niegan con un running fresco", async () => {
+		state.row = fresh();
+		expect(await retryResearch("acme", "algo")).toMatchObject({
+			ok: false,
+			message: expect.any(String),
+		});
+		expect(await genericFolders("acme")).toMatchObject({
+			ok: false,
+			message: expect.any(String),
+		});
+		expect(store.start).not.toHaveBeenCalled();
+		expect(store.finish).not.toHaveBeenCalled();
+		expect(runFolderResearch).not.toHaveBeenCalled();
+	});
+	it("con running viejo o error se permiten", async () => {
+		for (const row of [stale(), { ...fresh(), status: "error" }]) {
+			state.row = row;
+			expect(await retryResearch("acme", "algo")).toEqual({ ok: true });
+			expect(await genericFolders("acme")).toEqual({ ok: true });
+		}
+	});
+});
+
 describe("useGenericFolders", () => {
 	it("termina con las carpetas genéricas", async () => {
-		expect(await useGenericFolders("acme")).toEqual({ ok: true });
+		expect(await genericFolders("acme")).toEqual({ ok: true });
 		expect(store.finish).toHaveBeenCalledWith(
 			"t1",
 			expect.objectContaining({ found: true, folders: GENERIC_FOLDERS }),
@@ -377,5 +424,66 @@ describe("effectiveResearchStatus", () => {
 		expect(
 			effectiveResearchStatus({ status: "error", updatedAt: at(60) }, now),
 		).toBe("error");
+	});
+});
+
+describe("decideCarpetasView", () => {
+	const now = new Date("2026-10-22T12:00:00Z");
+	const ago = (m: number) => new Date(now.getTime() - m * 60_000).toISOString();
+	const row = (over: Record<string, unknown>) =>
+		({
+			status: "done",
+			hint: null,
+			result: null,
+			error: null,
+			updatedAt: ago(0),
+			...over,
+		}) as never;
+	const base = { ensureFailed: false, nullSince: now.getTime() - 60_000, now };
+	it("sin fila y ensure falló: sin sitio con nota", () => {
+		expect(
+			decideCarpetasView({ ...base, research: null, ensureFailed: true }),
+		).toEqual({ view: "sin-sitio", note: true });
+	});
+	it("sin fila por más de 3 minutos: sin sitio", () => {
+		expect(
+			decideCarpetasView({
+				...base,
+				research: null,
+				nullSince: now.getTime() - 4 * 60_000,
+			}).view,
+		).toBe("sin-sitio");
+		expect(decideCarpetasView({ ...base, research: null }).view).toBe(
+			"investigando",
+		);
+	});
+	it("running fresco investiga; running viejo pide el dato", () => {
+		expect(
+			decideCarpetasView({
+				...base,
+				research: row({ status: "running", updatedAt: ago(1) }),
+			}).view,
+		).toBe("investigando");
+		expect(
+			decideCarpetasView({
+				...base,
+				research: row({ status: "running", updatedAt: ago(4) }),
+			}),
+		).toEqual({ view: "sin-sitio", note: true });
+	});
+	it("done con found propone; sin found y sin hint pide el dato", () => {
+		const result = (found: boolean) => ({
+			found,
+			company: {},
+			brand: {},
+			folders: [],
+		});
+		expect(
+			decideCarpetasView({ ...base, research: row({ result: result(true) }) })
+				.view,
+		).toBe("propuesta");
+		expect(
+			decideCarpetasView({ ...base, research: row({ result: result(false) }) }),
+		).toEqual({ view: "sin-sitio", note: false });
 	});
 });

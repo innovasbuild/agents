@@ -14,6 +14,8 @@ export interface ConfirmedFolder {
 }
 
 export interface FoldersSetupDeps {
+	/** Carpetas de primer nivel que ya tiene el brain (sin skills/skill). */
+	listTopFolders(tenantId: string): Promise<string[]>;
 	rpc(
 		fn: string,
 		args: Record<string, unknown>,
@@ -93,6 +95,25 @@ export async function setupBrainFolders(
 		}
 	};
 
+	// Un reintento con otra lista: lo que sobra de la corrida anterior se borra.
+	let existing: string[];
+	try {
+		existing = await deps.listTopFolders(tenantId);
+	} catch (error) {
+		console.error("alta: no pude leer las carpetas", tenantId, error);
+		return { ok: false, step: "folders", message: "No pude leer las carpetas" };
+	}
+	const confirmed = new Set(folders.map((f) => f.slug));
+	for (const path of existing) {
+		if (confirmed.has(path) || path === "skills" || path === "skill") continue;
+		const failed = await rpc("folders", "brain_delete_folder", {
+			p_tenant: tenantId,
+			p_actor: actorUserId,
+			p_path: path,
+		});
+		if (failed) return failed;
+	}
+
 	const steps: [Step, string, Record<string, unknown>][] = [
 		[
 			"bind",
@@ -127,20 +148,32 @@ export async function setupBrainFolders(
 			"platform_enable_brain_skills",
 			{ p_actor: actorUserId, p_tenant: tenantId },
 		],
-		...folders
-			.filter((f) => f.restricted)
-			.map((f): [Step, string, Record<string, unknown>] => [
-				"folders",
-				"brain_set_access_rule",
-				{
-					p_tenant_id: tenantId,
-					p_path: f.slug,
-					p_principal: "members",
-					p_user_id: null,
-					p_level: "ninguno",
-					p_actor: actorUserId,
-				},
-			]),
+		...folders.map((f): [Step, string, Record<string, unknown>] =>
+			f.restricted
+				? [
+						"folders",
+						"brain_set_access_rule",
+						{
+							p_tenant_id: tenantId,
+							p_path: f.slug,
+							p_principal: "members",
+							p_user_id: null,
+							p_level: "ninguno",
+							p_actor: actorUserId,
+						},
+					]
+				: [
+						"folders",
+						"brain_remove_access_rule",
+						{
+							p_tenant_id: tenantId,
+							p_path: f.slug,
+							p_principal: "members",
+							p_user_id: null,
+							p_actor: actorUserId,
+						},
+					],
+		),
 	];
 	for (const [step, fn, args] of steps) {
 		const failed = await rpc(step, fn, args);

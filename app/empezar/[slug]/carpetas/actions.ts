@@ -16,7 +16,10 @@ import {
 } from "@/lib/onboarding/folders-setup";
 import { folderResearchDeps } from "@/lib/onboarding/research-deps";
 import { runFolderResearch } from "@/lib/onboarding/research-run";
-import { effectiveResearch } from "@/lib/onboarding/research-status";
+import {
+	effectiveResearch,
+	effectiveResearchStatus,
+} from "@/lib/onboarding/research-status";
 import {
 	createResearchStore,
 	type ResearchRow,
@@ -130,15 +133,24 @@ export async function ensureResearch(slug: string): Promise<{ ok: boolean }> {
 	}
 }
 
+const BUSY = "Todavía estamos leyendo el sitio. Esperá un momento.";
+
+/** Una corrida en curso no se pisa: cada una gasta crédito de IA. */
+async function inFlight(g: Gate): Promise<boolean> {
+	const row = await createResearchStore(g.admin).read(g.access.id);
+	return !!row && effectiveResearchStatus(row) === "running";
+}
+
 export async function retryResearch(
 	slug: string,
 	hint: string,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; message?: string }> {
 	try {
 		const clean = typeof hint === "string" ? hint.trim() : "";
 		if (clean.length < 1 || clean.length > MAX_HINT) return { ok: false };
 		const g = await gate(slug);
 		if (g?.step !== "carpetas") return { ok: false };
+		if (await inFlight(g)) return { ok: false, message: BUSY };
 		await createResearchStore(g.admin).start(g.access.id, clean);
 		scheduleResearch(g, clean);
 		return { ok: true };
@@ -150,10 +162,11 @@ export async function retryResearch(
 
 export async function useGenericFolders(
 	slug: string,
-): Promise<{ ok: boolean }> {
+): Promise<{ ok: boolean; message?: string }> {
 	try {
 		const g = await gate(slug);
 		if (g?.step !== "carpetas") return { ok: false };
+		if (await inFlight(g)) return { ok: false, message: BUSY };
 		await createResearchStore(g.admin).finish(g.access.id, {
 			found: true,
 			company: {
@@ -227,6 +240,16 @@ export async function confirmFolders(
 				companySummary: row?.result?.company.summary ?? null,
 			},
 			{
+				listTopFolders: async (id) => {
+					const { data, error } = await g.admin
+						.from("brain_folders")
+						.select("path")
+						.eq("tenant_id", id);
+					if (error) throw new Error(error.message);
+					return (data ?? [])
+						.map((r) => r.path)
+						.filter((p) => !p.includes("/"));
+				},
 				rpc: async (fn, args) => g.admin.rpc(fn as never, args as never),
 				upsertPage: async (write, author) => {
 					const brain = await brainForTenant(tenantId);
