@@ -38,6 +38,10 @@ describe("resolveTenantAccess", () => {
 		default_model: "anthropic/claude-sonnet-5",
 		allowed_models: ["anthropic/claude-sonnet-5"],
 		brand: {},
+		plan: "free",
+		suspended_reason: null,
+		trial_ends_at: "2027-01-01T00:00:00Z",
+		onboarding_step: "logo",
 	};
 
 	async function resolveWith(opts: {
@@ -135,6 +139,19 @@ describe("resolveTenantAccess", () => {
 		).access;
 
 		expect(access?.role).toBe("tenant_member");
+	});
+
+	it("devuelve plan, suspensión, fin de prueba y paso del alta", async () => {
+		const access = await (
+			await resolveWith({ ownerAdmin: false, localRole: "tenant_admin" })
+		).access;
+
+		expect(access).toMatchObject({
+			plan: "free",
+			suspendedReason: null,
+			trialEndsAt: "2027-01-01T00:00:00Z",
+			onboardingStep: "logo",
+		});
 	});
 
 	it("sin ser dueño ni miembro no hay acceso", async () => {

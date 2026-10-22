@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import type { OnboardingStep } from "@/lib/onboarding/steps";
+import type { Plan, SuspendedReason } from "@/lib/plans/limits";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { loadEnabledAgents } from "@/lib/tenants/enabled-agents";
 import { allowsLogin, methodLanding } from "@/lib/tenants/login-check";
@@ -23,6 +25,10 @@ export interface TenantRow {
 	default_model: string;
 	allowed_models: string[];
 	brand: Record<string, unknown>;
+	plan: Plan;
+	suspended_reason: SuspendedReason | null;
+	trial_ends_at: string | null;
+	onboarding_step: OnboardingStep | null;
 }
 
 export interface TenantAccess {
@@ -36,6 +42,10 @@ export interface TenantAccess {
 	defaultModel: string;
 	allowedModels: string[];
 	brand: TenantBrand;
+	plan: Plan;
+	suspendedReason: SuspendedReason | null;
+	trialEndsAt: string | null;
+	onboardingStep: OnboardingStep | null;
 }
 
 function readString(
@@ -91,7 +101,9 @@ export const resolveTenantAccess = cache(
 			supabase.auth.getClaims(),
 			supabase
 				.from("tenants")
-				.select("id, slug, display_name, default_model, allowed_models, brand")
+				.select(
+					"id, slug, display_name, default_model, allowed_models, brand, plan, suspended_reason, trial_ends_at, onboarding_step",
+				)
 				.eq("slug", slug)
 				.eq("active", true)
 				.maybeSingle(),
@@ -156,6 +168,10 @@ export const resolveTenantAccess = cache(
 			defaultModel: tenant.default_model,
 			allowedModels: tenant.allowed_models,
 			brand: brandFromRow(tenant as TenantRow),
+			plan: tenant.plan as Plan,
+			suspendedReason: tenant.suspended_reason as SuspendedReason | null,
+			trialEndsAt: tenant.trial_ends_at,
+			onboardingStep: tenant.onboarding_step as OnboardingStep | null,
 		};
 	},
 );
