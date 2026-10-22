@@ -10,6 +10,23 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-22-etapa-27-onboarding-self-serve-y-planes-design.md` (§3, §4, §5). Diseño de pantallas: `/Users/mok/AI-Memory/innov/diseno/central-ia.pen`, fila "Alta / …" (y=4000) y "Topes / Variantes".
 
+## Enmiendas durante la ejecución
+
+Lo que cambió respecto del texto del plan (el cuerpo no se reescribió; manda lo que dice la spec y el código):
+
+- **R1.** `tenant_counts` funciona también con la service role (no exige `auth.uid()`).
+- **R2.** El SQL de perfil (`set_tenant_profile`, `set_tenant_auth_methods`, `set_ai_monthly_limit`) va en una segunda migración, `20261030120000_tenant_profile_settings.sql`.
+- **R3.** `canSignUpByDomain` recibe un parámetro de intención (`login` | `signup`).
+- **R4.** La propuesta de carpetas admite como máximo 19.
+- **R5.** El paso Equipo recibe los planes (para el tope al invitar).
+- **R6.** Un research con `hint` devuelve `found = true`.
+- **R7.** Un research `running` colgado se trata como error.
+- **R8.** Si no hay fila de research, la pantalla la crea con `ensureResearch`.
+- **R9.** Después de `folders_from_config`, las carpetas se concilian (reintentos, espera acotada, sin corridas dobles).
+- **R10.** La restricción al dominio del paso Acceso es una línea fija, sin interruptor.
+- **R11.** El tope de usuarios cuenta miembros activos más invitaciones pendientes al invitar; la cobranza cuenta solo activos.
+- **R12.** El chat se corta solo por suspensión y por el crédito Free o el tope Pago; nunca por los presupuestos `tenant_budgets` de Enterprise.
+
 ## Global Constraints
 
 - Free: 3 usuarios (membresías `tenant_admin` + `tenant_member`; invitaciones pendientes **no** cuentan), 5 skills publicadas, crédito de IA **USD 5** por mes calendario UTC, dura **3 meses** desde `created_at` (P2, P19, P25).

@@ -15,6 +15,7 @@ Lo que declara `lib/workflows/registry.ts`. Las reglas para crear uno están en 
 
 | Nodo | Nivel de efecto | Tier | Modelo fijo |
 | --- | --- | --- | --- |
+| `onboarding/propose-folders` | 1 | barato | — |
 | `outreach/crm-record` | 2 | — | — |
 | `outreach/crm-sync` | 0 | — | — |
 | `outreach/draft` | 1 | fuerte | — |

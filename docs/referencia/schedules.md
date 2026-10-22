@@ -18,3 +18,4 @@ Los procesos programados de `agents/*/schedules/`.
 | `outreach/domain-sweep` | `agents/outreach/schedules/domain-sweep.ts` |
 | `outreach/followups` | `agents/outreach/schedules/followups.ts` |
 | `outreach/morning-sweep` | `agents/outreach/schedules/morning-sweep.ts` |
+| `outreach/trial-expiry` | `agents/outreach/schedules/trial-expiry.ts` |

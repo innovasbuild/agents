@@ -3,7 +3,7 @@ title: Roadmap de etapas
 category: producto
 status: activo
 tags: [roadmap, etapas]
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # Roadmap de etapas
@@ -691,6 +691,26 @@ Agregada el 2026-10-14 a pedido de Matías, a partir del brain de O'Keefe: las c
   **Supuestos a confirmar.** El límite de 4,5 MB de Vercel para el cuerpo de una función rige sobre la respuesta sin comprimir: confirmarlo con una respuesta real en un deploy de preview (pendiente 3; si rigiera sobre el comprimido, `GRAPH_MAX_NODES` puede subir hasta 30.000). `GRAPH_MAX_NODES` = 20.000 (3,37 MB sin comprimir a 20.000; 5,10 MB a 30.000 queda afuera). El `max_rows` de producción: confirmarlo (pendiente 2); la corrección no depende de eso, porque el bucle de paginación funciona con cualquier `max_rows`, y solo cambia el costo (cuántas respuestas hacen falta). La 26.4b instala y fija Sigma 4.0.3 (no v3, como decía D3), `graphology` 0.26.0 y `graphology-layout-forceatlas2` 0.10.1, y acota en tiempo el layout y lo pausa al interactuar: con la CPU frenada 4× baja a 13 fps mientras corre.
 
 **Terminado cuando:** en `okeefe`, se ven las ocho categorías aunque estén vacías y un renombre real deja los enlaces bien; por MCP, una escritura en `talento/personal` sin reglas leídas se rechaza con la cascada y la segunda entra; y una ficha sin `reporta_a` se rechaza (spec §1.2).
+
+---
+
+## Etapa 27 · Onboarding self-serve y planes — `[~]`
+
+**Objetivo.** Que una empresa pueda probar Central IA sin hablar con INNOV.AS: crea su cuenta y su empresa sola con un correo de trabajo, tiene un brain con carpetas pensadas para ella, y se topa con los límites de un plan Free (3 usuarios, 5 skills, USD 5 por mes de IA, 3 meses) antes de pasar a Pago (USD 10 por usuario por mes) o a Enterprise (a mano, como hoy).
+
+**Spec:** `docs/superpowers/specs/2026-10-22-etapa-27-onboarding-self-serve-y-planes-design.md` · **Plan 27.1:** `docs/superpowers/plans/2026-10-22-etapa-27-1-alta-self-serve.md` · **Página:** `docs/dominios/onboarding.md`. El login con Microsoft ya estaba en `main` (Etapa 20.1); falta solo configurarlo en Azure y Supabase, y la guía es el PR 135.
+
+- [~] **27.1 · Alta self-serve.** `/empezar` en seis pasos (cuenta, empresa, carpetas, logo, acceso, equipo), research de carpetas desde el sitio (`onboarding/propose-folders`), planes y topes en el servidor, estado "suspendida", schedule `trial-expiry`, hook `allowance` y pestañas Plan y Perfil en Configuración. Implementada en la rama `feat/etapa-27-1-alta-self-serve`; falta el PR y el cierre en producción.
+- [ ] **27.2 · Cobro con Stripe.** Checkout, Customer Portal, webhook, licencias conciliadas cada hora y consumo de IA medido; hasta acá cada tope dice "Hablá con nosotros".
+- [ ] **27.3 · Setup automático de contenido.** Workflow `onboarding-setup`: página de la empresa, 3 a 5 ejemplos, skill de design system con el logo y página de agentes.
+- [ ] **27.4 · Ingreso abierto con aprobación.** "Todos los del dominio" para empresas self-serve, con aprobación de quien administra; reemplaza la pantalla "dominio tomado" por "Pedir acceso".
+
+**Pasos de producción pendientes de la 27.1.**
+1. `supabase migration list`, confirmar que solo están pendientes las de la 27.1 y `db push` de `20261029120000` y `20261030120000` **antes** del código.
+2. No hay variables de entorno nuevas. Lo único por configurar es Azure y Supabase para Microsoft, según la guía del PR 135.
+3. Verificaciones manuales: un alta real con un correo de trabajo ajeno a INNOV.AS; comprobar en vivo que el `turn.failed` de eve trae el texto `ai_allowance:`; confirmar que existe la casilla `hola@innov.as` que usa el mailto de "Hablá con nosotros".
+
+**Terminado cuando** (spec §1): en producción, una persona ajena a INNOV.AS crea su empresa desde el link del sitio, llega al chat con el brain armado, invita a dos personas, intenta invitar a la cuarta, carga la tarjeta en Stripe y la cuarta entra; a fin de mes Stripe emite una factura con 4 licencias y el consumo de IA del período. Para la 27.1 sola (§5): una persona con un correo de trabajo que nunca estuvo en Central IA crea su empresa desde `/empezar`, confirma carpetas propuestas a partir de su sitio, llega al chat, invita a dos personas que entran, y al invitar a la cuarta ve el tope; el evento `tenant.created` con `origin = 'self_serve'` queda en `events`.
 
 ---
 

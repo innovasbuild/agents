@@ -3,7 +3,7 @@ title: Orquestación
 category: arquitectura
 status: activo
 tags: [orquestacion, nodos, workflows]
-updated: 2026-10-14
+updated: 2026-10-22
 sources:
   - docs/superpowers/specs/2026-09-20-orquestacion-plataforma-design.md
   - docs/superpowers/specs/2026-09-20-etapa-13-pipeline-gtm-design.md
@@ -60,7 +60,7 @@ Tres preguntas para ubicar algo nuevo:
 
 ### Lo que existe hoy
 
-El registro (`lib/workflows/registry.ts`) lista quince nodos y cinco workflows, todos del agente `outreach`. El agente `asistente` no tiene nodos ni workflows: conversa con el brain y nada más.
+El registro (`lib/workflows/registry.ts`) lista dieciséis nodos y cinco workflows; los cinco workflows y quince de los nodos son del agente `outreach`, y el nodo `onboarding/propose-folders` (alta self-serve, Etapa 27.1) es de plataforma y no lo despacha ningún workflow: lo corre el research de fondo del alta. El agente `asistente` no tiene nodos ni workflows: conversa con el brain y nada más.
 
 | Workflow | Reclama → deja | Nodos | Recursos | Topes (ítems · USD por pasada) | Entrada |
 |---|---|---|---|---|---|
@@ -89,6 +89,7 @@ Las cuatro últimas forman la cadena del pipeline de GTM (Etapa 13): un foco de 
 | `outreach/verify-fact` | 1 | fijo `typesafe-ai/jev` | Relee la fuente del ancla y le pregunta a Jev si la respalda |
 | `outreach/crm-record` | 2 | — | Escribe en el CRM del tenant |
 | `outreach/send` | 3 | — | Manda el mail; nunca desde un workflow |
+| `onboarding/propose-folders` | 1 | `barato` | Lee el sitio de una empresa nueva y propone sus carpetas del brain; ver [alta self-serve y planes](../dominios/onboarding.md) |
 
 Un nodo con modelo fijo declara `model` en `NodeInfo` y no elige entre los tiers (enmienda de la Etapa 12 a la spec, §9.1). Hoy `tier` es una etiqueta del registro que el runner no resuelve a un modelo: los modelos reales salen de `config.models` por rol y del default del tenant, ver [modelos y costos](modelos-y-costos.md).
 
@@ -100,6 +101,7 @@ Un nodo con modelo fijo declara `model` en `NodeInfo` y no elige entre los tiers
 | `morning-sweep` | `0 10 * * 1-5` | Barre Gmail y confirma envíos inciertos (`outreach/sweep` y `outreach/reconcile`, vía `lib/outreach/services/sweep.ts`) |
 | `followups` | `0 11 * * 1-5` | Redacta follow-ups y deja la pieza `pending` (nodo `outreach/followups`) |
 | `crm-sync` | `0 12,21 * * *` | Sincroniza HubSpot hacia la base propia (nodo `outreach/crm-sync`) |
+| `trial-expiry` | `15 6 * * *` | Suspende (`trial_vencido`) las empresas Free cuyo trial ya venció (`lib/plans/trial.ts`). Es de plataforma y vive en este agente por la misma razón que `domain-sweep`; ver [alta self-serve y planes](../dominios/onboarding.md). No toca Gmail |
 | `domain-sweep` | `*/10 * * * *` | Activa los dominios propios de empresa que esperan DNS (`lib/domains/service.ts`, ver [dominio de un cliente](../guias/dominio-de-un-cliente.md)). Es de plataforma, no de outreach: vive en este agente porque es el único con schedules desplegados. No hace nada sin las APIs de Vercel y de Supabase |
 
 Ninguno manda mail: la garantía es estructural, no hay una dependencia de envío debajo (`domain-sweep` tampoco: no toca Gmail).

@@ -3,7 +3,7 @@ title: Identidad y acceso
 category: arquitectura
 status: activo
 tags: [auth, supabase, oauth, mcp, login, memberships]
-updated: 2026-10-21
+updated: 2026-10-22
 sources:
   - docs/superpowers/specs/2026-10-14-etapa-21-6-dominio-por-empresa-design.md
   - lib/tenants/host.ts
@@ -11,6 +11,10 @@ sources:
   - lib/tenants/public-url.ts
   - lib/domains/supabase-auth.ts
   - app/.well-known/oauth-protected-resource/brain/mcp
+  - docs/superpowers/specs/2026-10-22-etapa-27-onboarding-self-serve-y-planes-design.md
+  - lib/tenants/signup-route.ts
+  - lib/tenants/session-method.ts
+  - supabase/migrations/20261029120000_self_serve_onboarding.sql
   - docs/superpowers/specs/2026-10-09-etapa-20-login-design.md
   - docs/superpowers/specs/2026-10-09-ingreso-por-dominio-design.md
   - docs/superpowers/specs/2026-09-24-etapa-11-brain-mcp-design.md
@@ -81,6 +85,12 @@ Detalles que importan:
 3. Si el corte dice que no, `closeLocalSession` cierra **solo** la sesión recién abierta (`signOut({ scope: "local" })`; el global revocaría la que la persona tenga en otro dispositivo) y manda a `/login/<slug>?error=metodo`.
 
 Las altas de membresía solo existen como funciones `security definer`: `authenticated` no puede insertar ni cambiar `user_id` o `tenant_id` en `memberships`, solo el `role` ([#80](https://github.com/innovasbuild/agents/pull/80)). Un tenant_admin ya no puede meter a un usuario ajeno en su empresa.
+
+### Quien entra sin empresa: `signup_route`
+
+Si la persona no tiene membresía (ni invitación ni dominio abierto que se la den), la raíz (`app/page.tsx`) y `/empezar` consultan `signup_route()` (`lib/tenants/signup-route.ts`), que lee el correo **verificado** de `auth.users` y responde: `chat` (ya tiene empresa), `dominio_tomado` (su dominio está en los `allowed_domains` de una empresa activa que no está abierta: ve "pedile a quien la administra que te invite", sin nombres), `sin_acceso` (correo público) o `empezar` (correo de trabajo sin empresa: crea la suya, ver [alta self-serve y planes](../dominios/onboarding.md)). Ante cualquier error responde `sin_acceso`.
+
+**Correo de trabajo obligatorio.** Crear una empresa exige un correo verificado de un dominio que no esté en `is_public_email_domain` y que coincida con el dominio que se declara. `canSignUpByDomain` (`app/(auth)/login/actions.ts`) recibe un parámetro de intención: para el alta (`signup`) permite crear la cuenta con cualquier dominio que no sea público, así Supabase crea el usuario por código de correo; para el ingreso por dominio sigue valiendo solo un dominio abierto. Google y Microsoft ya crean el usuario y el corte sigue en el gate. El método con que se abrió la sesión (`current_login_method()`, `lib/tenants/session-method.ts`) se graba como el primer método de la empresa; si es desconocido, `self_serve_create_tenant` falla con `login_method_unknown`. El ingreso por dominio sigue deshabilitado para las empresas que no son Enterprise hasta la 27.4.
 
 ## Orden de las lecturas en una pantalla del cliente
 
