@@ -8,11 +8,12 @@ vi.mock("@/app/[tenant]/settings/actions", () => ({
 
 const { IngresoForm } = await import("@/app/[tenant]/settings/ingreso-form");
 
-const render = (props: { open: boolean; domains: string[] }) =>
+const render = (props: { open: boolean; domains: string[]; plan?: string }) =>
 	renderToStaticMarkup(
 		createElement(IngresoForm, {
 			tenantId: "11111111-1111-4111-8111-111111111111",
 			slug: "acme",
+			plan: "enterprise",
 			...props,
 		}),
 	);
@@ -57,5 +58,17 @@ describe("IngresoForm", () => {
 		expect(render({ open: false, domains: ["acme.com"] })).not.toContain(
 			"no le impide volver a entrar",
 		);
+	});
+
+	it("fuera de enterprise oculta el interruptor y dice Disponible pronto", () => {
+		const html = render({
+			open: false,
+			domains: ["empresa.com"],
+			plan: "free",
+		});
+		expect(html).toContain("Disponible pronto");
+		expect(html).toContain("solo por invitación");
+		expect(html).not.toContain("<input");
+		expect(html).not.toContain("Guardar");
 	});
 });

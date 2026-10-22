@@ -101,6 +101,21 @@ export async function updateSignupMode(
 	if (!(await sessionAllowed(supabase, tenantId))) return sinPermiso;
 
 	if (open) {
+		// El plan se lee acá, nunca viene del cliente: abrir el ingreso por dominio
+		// es solo de Enterprise por ahora (spec 27.1, P19).
+		const { data: planRow } = await supabase
+			.from("tenants")
+			.select("plan")
+			.eq("id", tenantId)
+			.maybeSingle();
+		if (!planRow) return sinPermiso;
+		if (planRow.plan !== "enterprise")
+			return {
+				ok: false,
+				message:
+					"Disponible pronto: por ahora el ingreso es solo por invitación.",
+			};
+
 		const { data: current } = await supabase
 			.from("tenants")
 			.select("allowed_domains")

@@ -6,7 +6,9 @@ const state: {
 	current: { allowed_domains: string[] } | null;
 	updates: unknown[];
 	updateResult: { data: unknown; error: unknown };
+	plan: string;
 } = {
+	plan: "enterprise",
 	user: { id: "u1" },
 	reads: 0,
 	current: null,
@@ -19,7 +21,14 @@ vi.mock("@/lib/supabase/server", () => ({
 		auth: { getUser: async () => ({ data: { user: state.user } }) },
 		from() {
 			return {
-				select: () => {
+				select: (cols?: string) => {
+					if (cols === "plan") {
+						return {
+							eq: () => ({
+								maybeSingle: async () => ({ data: { plan: state.plan } }),
+							}),
+						};
+					}
 					state.reads += 1;
 					return {
 						eq: () => ({ maybeSingle: async () => ({ data: state.current }) }),
@@ -65,6 +74,7 @@ describe("updateSignupMode", () => {
 		state.reads = 0;
 		state.current = { allowed_domains: ["empresa.com"] };
 		state.updates = [];
+		state.plan = "enterprise";
 		state.updateResult = { data: { id: TENANT_ID }, error: null };
 		gate.allows = true;
 		gate.calls = [];
@@ -176,5 +186,33 @@ describe("updateSignupMode", () => {
 		const result = await updateSignupMode(TENANT_ID, false, "acme");
 
 		expect(result.ok).toBe(false);
+	});
+
+	it.each(["free", "pago"])(
+		"en el plan %s rechaza abrirlo y no escribe",
+		async (plan) => {
+			state.plan = plan;
+
+			const result = await updateSignupMode(TENANT_ID, true, "acme");
+
+			expect(result).toEqual({
+				ok: false,
+				message:
+					"Disponible pronto: por ahora el ingreso es solo por invitación.",
+			});
+			expect(state.updates).toHaveLength(0);
+		},
+	);
+
+	it("enterprise puede abrirlo", async () => {
+		const result = await updateSignupMode(TENANT_ID, true, "acme");
+		expect(result).toEqual({ ok: true });
+	});
+
+	it("en free cerrarlo se permite", async () => {
+		state.plan = "free";
+		const result = await updateSignupMode(TENANT_ID, false, "acme");
+		expect(result).toEqual({ ok: true });
+		expect(state.updates).toEqual([{ self_signup_by_domain: false }]);
 	});
 });

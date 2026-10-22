@@ -10,16 +10,35 @@ export function IngresoForm({
 	slug,
 	open,
 	domains,
+	plan,
 }: {
 	tenantId: string;
 	slug: string;
 	open: boolean;
 	domains: string[];
+	plan: string;
 }) {
 	const [value, setValue] = useState(open);
 	const [message, setMessage] = useState<string | null>(null);
 	const [isPending, startTransition] = useTransition();
 	const sinDominios = domains.length === 0;
+
+	// Fuera de Enterprise el ingreso por dominio todavía no se ofrece.
+	if (plan !== "enterprise")
+		return (
+			<div className="space-y-2 text-sm">
+				<p>
+					<strong>Todos los del dominio</strong>{" "}
+					<span className="rounded-full border px-2 py-0.5 text-xs">
+						Disponible pronto
+					</span>
+				</p>
+				<p className="text-muted-foreground">
+					Hoy el ingreso es solo por invitación: entra únicamente quien recibió
+					una.
+				</p>
+			</div>
+		);
 
 	return (
 		<form

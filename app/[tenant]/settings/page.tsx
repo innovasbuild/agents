@@ -186,6 +186,7 @@ export default async function SettingsPage({
 						tenantId={tenant.id}
 						slug={slug}
 						open={signupResult.data?.self_signup_by_domain ?? false}
+						plan={tenant.plan}
 						domains={
 							(signupResult.data?.allowed_domains as string[] | undefined) ?? []
 						}
@@ -265,10 +266,22 @@ export default async function SettingsPage({
 				Usuarios →
 			</Link>
 			<Link
-				className="inline-block text-sm underline underline-offset-4"
+				className="mr-6 inline-block text-sm underline underline-offset-4"
 				href={`/${slug}/settings/gasto`}
 			>
 				Gasto →
+			</Link>
+			<Link
+				className="mr-6 inline-block text-sm underline underline-offset-4"
+				href={`/${slug}/settings/plan`}
+			>
+				Plan →
+			</Link>
+			<Link
+				className="inline-block text-sm underline underline-offset-4"
+				href={`/${slug}/settings/perfil`}
+			>
+				Perfil →
 			</Link>
 		</div>
 	);

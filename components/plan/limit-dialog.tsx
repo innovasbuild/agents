@@ -10,9 +10,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog";
+import { PLAN_CONTACT_HREF } from "@/lib/plans/contact";
 import { type LimitReason, limitMessage } from "@/lib/plans/limits";
-
-const DEFAULT_CONTACT = "mailto:hola@innov.as?subject=Plan%20de%20Central%20IA";
 
 export type LimitIconName = "users" | "sparkles" | "zap" | "triangle-alert";
 
@@ -60,7 +59,7 @@ export function LimitDialogBody({
 					Ahora no
 				</Button>
 				<Button asChild>
-					<a href={contactHref ?? DEFAULT_CONTACT}>Hablá con nosotros</a>
+					<a href={contactHref ?? PLAN_CONTACT_HREF}>Hablá con nosotros</a>
 				</Button>
 			</DialogFooter>
 		</>

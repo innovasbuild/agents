@@ -1,15 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { LoginMethodsField } from "@/components/auth/login-methods-field";
 import { Button } from "@/components/ui/button";
 import type { AuthMethod } from "@/lib/tenants/auth-methods";
 import { saveAccessStep } from "./actions";
-
-const OPTIONS: { value: AuthMethod; label: string }[] = [
-	{ value: "microsoft", label: "Microsoft" },
-	{ value: "google", label: "Google" },
-	{ value: "email", label: "Correo con código" },
-];
 
 export function AccesoForm({
 	slug,
@@ -57,22 +52,11 @@ export function AccesoForm({
 			</div>
 			<fieldset className="space-y-3">
 				<legend className="mb-2 font-medium text-sm">Formas de entrar</legend>
-				{OPTIONS.map((o) => (
-					<label className="flex items-center gap-2 text-sm" key={o.value}>
-						<input
-							checked={methods.includes(o.value)}
-							disabled={o.value === currentMethod}
-							onChange={(e) => toggle(o.value, e.target.checked)}
-							type="checkbox"
-						/>
-						{o.label}
-						{o.value === currentMethod ? (
-							<span className="text-muted-foreground text-xs">
-								Es la que estás usando ahora.
-							</span>
-						) : null}
-					</label>
-				))}
+				<LoginMethodsField
+					currentMethod={currentMethod}
+					methods={methods}
+					onToggle={toggle}
+				/>
 				{error ? (
 					<p className="text-destructive text-sm" role="alert">
 						{error}
