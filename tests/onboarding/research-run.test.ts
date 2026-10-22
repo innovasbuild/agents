@@ -182,7 +182,7 @@ describe("createResearchStore", () => {
 		const store = createResearchStore(admin as any);
 		await store.start("t1", "hint");
 		await store.finish("t1", proposal(true));
-		await store.fail("t1", "boom");
+		await store.fail("t1", "fallo_modelo");
 		expect(calls[0]).toMatchObject({
 			op: "upsert",
 			payload: {
@@ -200,7 +200,7 @@ describe("createResearchStore", () => {
 		});
 		expect(calls[2]).toMatchObject({
 			op: "update",
-			payload: { status: "error", error: "boom" },
+			payload: { status: "error", error: "fallo_modelo" },
 		});
 	});
 
