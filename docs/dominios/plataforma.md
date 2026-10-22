@@ -37,7 +37,7 @@ sources:
 
 ## 1. Qué es y para qué
 
-Hay dos niveles de administración. **Plataforma** es quien opera el producto: da de alta empresas (tenants), les habilita agentes, les crea el brain, les asocia conectores, les fija presupuestos y les carga la marca. Vive en la consola `/plataforma`. **El administrador del cliente** configura su propia empresa desde `/[tenant]/settings`: modelo, ingreso por dominio, ejecutores, aprobaciones, conectores propios y la configuración de outreach. La separación se sostiene en la base, no en la pantalla: las tablas no se escriben directo desde la sesión y cada cambio pasa por una función `security definer` que verifica el rol y deja un evento en `events`.
+Hay dos niveles de administración. **Plataforma** es quien opera el producto: da de alta empresas (tenants), les habilita agentes, les crea el brain, les asocia conectores, les fija presupuestos y les carga la marca. Vive en la consola `/plataforma`, a la que se entra desde el menú del usuario, arriba a la derecha ("Administrar la Plataforma", visible solo para `platform_admin`). **El administrador del cliente** configura su propia empresa desde `/[tenant]/settings`: modelo, ingreso por dominio, ejecutores, aprobaciones, conectores propios y la configuración de outreach. La separación se sostiene en la base, no en la pantalla: las tablas no se escriben directo desde la sesión y cada cambio pasa por una función `security definer` que verifica el rol y deja un evento en `events`.
 
 Nada específico de una empresa está en el código: la diferencia entre empresas es una fila en `tenants` y su brain. La marca (colores y logo) y la landing de login se derivan de esa fila.
 

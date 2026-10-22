@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOutIcon, UserIcon } from "lucide-react";
+import { LogOutIcon, ShieldIcon, UserIcon } from "lucide-react";
+import Link from "next/link";
 import { useTransition } from "react";
 import {
 	DropdownMenu,
@@ -14,17 +15,20 @@ import { userInitials } from "@/lib/auth/user-initials";
 import { signOut } from "./session-actions";
 
 /**
- * El menú de la persona, arriba a la derecha. Hoy solo cierra sesión; los
- * links al perfil se suman como DropdownMenuItem antes del separador.
+ * El menú de la persona, arriba a la derecha. Muestra quién es y con qué
+ * rol, la entrada a la consola de plataforma (solo platform_admin) y el
+ * cierre de sesión.
  */
 export function UserMenu({
 	slug,
 	email,
 	roleLabel,
+	isPlatformAdmin,
 }: {
 	slug: string;
 	email: string | undefined;
 	roleLabel: string;
+	isPlatformAdmin: boolean;
 }) {
 	const [pending, startTransition] = useTransition();
 	const initials = userInitials(email);
@@ -49,6 +53,17 @@ export function UserMenu({
 					</span>
 				</DropdownMenuLabel>
 				<DropdownMenuSeparator />
+				{isPlatformAdmin ? (
+					<>
+						<DropdownMenuItem asChild className="py-2">
+							<Link href="/plataforma">
+								<ShieldIcon aria-hidden />
+								Administrar la Plataforma
+							</Link>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+					</>
+				) : null}
 				<DropdownMenuItem
 					className="py-2"
 					disabled={pending}
