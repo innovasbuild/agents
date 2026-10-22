@@ -17,7 +17,6 @@ export type CreateCompanyResult =
 			code:
 				| "public_domain"
 				| "domain_mismatch"
-				| "domain_taken"
 				| "login_method_unknown"
 				| "invalid"
 				| "brain_failed"
@@ -32,7 +31,6 @@ const MESSAGES: Record<FailureCode, string> = {
 	public_domain:
 		"Necesitás un correo de tu empresa para crear una cuenta. Con ese dominio no podemos armar tu espacio.",
 	domain_mismatch: "El dominio tiene que ser el de tu correo.",
-	domain_taken: "Tu empresa ya está en Central IA.",
 	login_method_unknown:
 		"No pudimos confirmar con qué cuenta entraste. Cerrá sesión y volvé a entrar.",
 	invalid: "Revisá los datos e intentá de nuevo.",
@@ -49,7 +47,6 @@ const fail = (code: FailureCode, message?: string): Failure => ({
 const HINT_CODES: Record<string, FailureCode> = {
 	public_domain: "public_domain",
 	domain_mismatch: "domain_mismatch",
-	domain_taken: "domain_taken",
 	login_method_unknown: "login_method_unknown",
 	email_not_confirmed: "login_method_unknown",
 	name_required: "invalid",
@@ -92,55 +89,72 @@ export async function createCompany(
 	const { displayName, domain } = parsed.data;
 	if (isPublicEmailDomain(domain)) return fail("public_domain");
 
-	let created: { id: string; slug: string };
+	let created: { id: string; slug: string } | null = null;
+	let taken = false;
 	try {
 		const supabase = await createServerSupabase();
 		const { data, error } = await supabase.rpc("self_serve_create_tenant", {
 			p_display_name: displayName,
 			p_domain: domain,
 		});
-		if (error) {
+		if (error?.hint === "domain_taken") {
+			// Segundo envío o segunda pestaña: "/" resuelve la membresía o el
+			// aviso de dominio tomado. No es un error para la persona.
+			taken = true;
+		} else if (error) {
+			if (error.code === "42501") return fail("login_method_unknown");
 			const code = HINT_CODES[error.hint ?? ""];
 			if (code) return fail(code);
 			console.error("self_serve_create_tenant failed", error);
 			return fail("generic");
 		}
-		const row = data as { id?: unknown; slug?: unknown } | null;
-		if (typeof row?.id !== "string" || typeof row?.slug !== "string") {
-			console.error("self_serve_create_tenant: respuesta inesperada", data);
-			return fail("generic");
-		}
-		created = { id: row.id, slug: row.slug };
-
-		const { data: tenant, error: modelError } = await createAdminClient()
-			.from("tenants")
-			.select("default_model")
-			.eq("id", created.id)
-			.single();
-		if (modelError || !tenant) {
-			console.error("lectura de default_model falló", modelError);
-			return fail("generic");
-		}
-
-		const input = {
-			tenantId: created.id,
-			domain,
-			displayName,
-			hint: null,
-			model: tenant.default_model,
-		};
-		after(async () => {
-			try {
-				await runFolderResearch(input, folderResearchDeps(created.id));
-			} catch (error) {
-				console.error("runFolderResearch falló", error);
+		if (!taken) {
+			const row = data as { id?: unknown; slug?: unknown } | null;
+			if (typeof row?.id !== "string" || typeof row?.slug !== "string") {
+				console.error("self_serve_create_tenant: respuesta inesperada", data);
+				return fail("generic");
 			}
-		});
+			created = { id: row.id, slug: row.slug };
+		}
 	} catch (error) {
 		console.error("createCompany failed", error);
 		return fail("generic");
 	}
 
 	// Fuera del try: redirect() tira y un catch lo taparía.
+	if (taken || !created) redirect("/");
+
+	// Desde acá la empresa existe: siempre se avanza. Si no se puede leer el
+	// modelo no se agenda el research (la pantalla de carpetas lo trata como
+	// "falta investigar").
+	const tenantId = created.id;
+	try {
+		const { data: tenant, error: modelError } = await createAdminClient()
+			.from("tenants")
+			.select("default_model")
+			.eq("id", tenantId)
+			.single();
+		if (modelError || !tenant) {
+			console.error("lectura de default_model falló", tenantId, modelError);
+		} else {
+			const input = {
+				tenantId,
+				domain,
+				displayName,
+				hint: null,
+				model: tenant.default_model,
+			};
+			after(async () => {
+				try {
+					await runFolderResearch(input, folderResearchDeps(tenantId));
+				} catch (error) {
+					console.error("runFolderResearch falló", error);
+				}
+			});
+		}
+	} catch (error) {
+		console.error("no se pudo agendar el research", tenantId, error);
+	}
+
 	redirect(stepPath(created.slug, "carpetas"));
 }

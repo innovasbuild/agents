@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const state: {
-	rpc: { data: unknown; error: { code?: string; hint?: string } | null };
+	rpc: {
+		data: unknown;
+		error: { code?: string; hint?: string; message?: string } | null;
+	};
 	rpcCalls: [string, unknown][];
 	user: { id: string } | null;
 	redirected: string | null;
+	adminThrows: boolean;
 } = {
 	rpc: { data: null, error: null },
 	rpcCalls: [],
 	user: { id: "u1" },
 	redirected: null,
+	adminThrows: false,
 };
 
 const after = vi.fn((fn: () => unknown) => {
@@ -35,16 +40,19 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@/lib/supabase/admin", () => ({
 	createAdminClient: () => ({
-		from: () => ({
-			select: () => ({
-				eq: () => ({
-					single: async () => ({
-						data: { default_model: "anthropic/claude-sonnet" },
-						error: null,
+		from: () => {
+			if (state.adminThrows) throw new Error("admin caído");
+			return {
+				select: () => ({
+					eq: () => ({
+						single: async () => ({
+							data: { default_model: "anthropic/claude-sonnet" },
+							error: null,
+						}),
 					}),
 				}),
-			}),
-		}),
+			};
+		},
 	}),
 }));
 vi.mock("@/lib/onboarding/research-run", () => ({ runFolderResearch }));
@@ -66,6 +74,7 @@ describe("createCompany", () => {
 		state.rpcCalls = [];
 		state.user = { id: "u1" };
 		state.redirected = null;
+		state.adminThrows = false;
 		after.mockClear();
 		runFolderResearch.mockClear();
 	});
@@ -95,14 +104,46 @@ describe("createCompany", () => {
 		expect(state.redirected).toBe("/empezar/acme/carpetas");
 	});
 
-	it("hint domain_taken → code domain_taken", async () => {
+	it("hint domain_taken → redirect a / (no error inline)", async () => {
 		state.rpc = { data: null, error: { code: "23514", hint: "domain_taken" } };
-		const result = await createCompany(
-			form({ display_name: "Acme", domain: "acme.com" }),
-		);
-		expect(result).toMatchObject({ ok: false, code: "domain_taken" });
+		await expect(
+			createCompany(form({ display_name: "Acme", domain: "acme.com" })),
+		).rejects.toThrow("NEXT_REDIRECT");
+		expect(state.redirected).toBe("/");
 		expect(after).not.toHaveBeenCalled();
 	});
+
+	it("rpc ok pero falla la lectura de default_model: avanza sin research", async () => {
+		state.adminThrows = true;
+		const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+		await expect(
+			createCompany(form({ display_name: "Acme", domain: "acme.com" })),
+		).rejects.toThrow("NEXT_REDIRECT");
+		expect(state.redirected).toBe("/empezar/acme/carpetas");
+		expect(after).not.toHaveBeenCalled();
+		expect(log).toHaveBeenCalled();
+		log.mockRestore();
+	});
+
+	it.each([
+		["public_domain", "23514", "public_domain"],
+		["domain_mismatch", "23514", "domain_mismatch"],
+		["login_method_unknown", "23514", "login_method_unknown"],
+		["email_not_confirmed", "23514", "login_method_unknown"],
+		["name_required", "23514", "invalid"],
+		[undefined, "42501", "login_method_unknown"],
+	])(
+		"hint %s / %s → code %s con mensaje fijo",
+		async (hint, code, expected) => {
+			state.rpc = { data: null, error: { code, hint, message: "RAW DB TEXT" } };
+			const result = await createCompany(
+				form({ display_name: "Acme", domain: "acme.com" }),
+			);
+			expect(result).toMatchObject({ ok: false, code: expected });
+			expect((result as { message: string }).message).not.toContain("RAW");
+			expect(after).not.toHaveBeenCalled();
+		},
+	);
 
 	it("hint desconocido → generic", async () => {
 		state.rpc = { data: null, error: { code: "XX000" } };
