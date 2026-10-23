@@ -67,3 +67,31 @@ export function pendingInputRequests(
 		}),
 	);
 }
+
+/**
+ * Motivo por el que la política de aprobación de la tool rechazó la respuesta,
+ * por requestId. eve deja la tarjeta pendiente y su reducer ignora el evento
+ * `approval.candidate`, así que sin esto el botón parece no hacer nada. Si
+ * después alguien la aprueba, `approval.settled` saca el pedido de pendientes y
+ * el motivo deja de mostrarse solo.
+ */
+export function approvalRefusals(
+	events: readonly { type: string; data?: unknown }[],
+): Map<string, string> {
+	const refusals = new Map<string, string>();
+	for (const event of events) {
+		if (event.type !== "approval.candidate") continue;
+		const data = event.data as {
+			outcome?: string;
+			requestId?: string;
+			reason?: string;
+		};
+		if (data.outcome === "rejected" && data.requestId) {
+			refusals.set(
+				data.requestId,
+				data.reason ?? "No tenés permiso para aprobar esto.",
+			);
+		}
+	}
+	return refusals;
+}

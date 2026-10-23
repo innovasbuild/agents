@@ -1,6 +1,9 @@
 import type { EveMessage } from "eve/client";
 import { describe, expect, it } from "vitest";
-import { pendingInputRequests } from "@/lib/agents/input-requests";
+import {
+	approvalRefusals,
+	pendingInputRequests,
+} from "@/lib/agents/input-requests";
 
 // Forma real de los pedidos de eve 0.54.2: approval-input-requests.js arma
 // las opciones approve/cancel; una pregunta (ctx.ask) trae las que definió la tool.
@@ -264,5 +267,40 @@ describe("pendingInputRequests", () => {
 			{ id: "continue", label: "Seguir con más presupuesto", style: "primary" },
 			{ id: "stop", label: "Frenar acá", style: "danger" },
 		]);
+	});
+});
+
+describe("approvalRefusals", () => {
+	it("devuelve el motivo del rechazo de la política por requestId", () => {
+		const refusals = approvalRefusals([
+			{ type: "turn.started", data: {} },
+			{
+				type: "approval.candidate",
+				data: { outcome: "pending", requestId: "r0" },
+			},
+			{
+				type: "approval.candidate",
+				data: {
+					outcome: "rejected",
+					requestId: "r1",
+					reason: "Solo un administrador del cliente puede aprobar.",
+				},
+			},
+		]);
+
+		expect(refusals.get("r1")).toBe(
+			"Solo un administrador del cliente puede aprobar.",
+		);
+		expect(refusals.has("r0")).toBe(false);
+	});
+
+	it("usa un texto por defecto si el rechazo no trae motivo", () => {
+		const refusals = approvalRefusals([
+			{
+				type: "approval.candidate",
+				data: { outcome: "rejected", requestId: "r2" },
+			},
+		]);
+		expect(refusals.get("r2")).toMatch(/permiso/);
 	});
 });

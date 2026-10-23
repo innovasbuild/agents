@@ -154,3 +154,4 @@ Las specs están en [README.md](README.md).
 | [138](https://github.com/innovasbuild/agents/pull/138) | 2026-10-22 | fix: sin sesión, /<slug> en el host raíz redirige al login de la empresa | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
 | [139](https://github.com/innovasbuild/agents/pull/139) | 2026-10-22 | feat: Métricas pasa al desplegable de Outreach y Conectar, Mis cuentas y Configuración al menú del usuario | [Identidad y acceso](../arquitectura/identidad-y-acceso.md) |
 | [140](https://github.com/innovasbuild/agents/pull/140) | 2026-10-23 | feat: el archivo adjunto se muestra como tarjeta en el chat | [Agentes eve](../dominios/agentes-eve.md) |
+| [141](https://github.com/innovasbuild/agents/pull/141) | 2026-10-23 | fix: el chat crea subcarpetas del brain y la tarjeta de aprobación avisa por qué falla | [Brain](../dominios/brain.md) |
