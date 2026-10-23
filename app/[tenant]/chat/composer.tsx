@@ -1,13 +1,6 @@
 "use client";
 
-import {
-	ArrowUpIcon,
-	BotIcon,
-	ChevronDownIcon,
-	FileIcon,
-	PlusIcon,
-	XIcon,
-} from "lucide-react";
+import { ArrowUpIcon, BotIcon, ChevronDownIcon, PlusIcon } from "lucide-react";
 import type { ChangeEvent, RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { canSendMessage } from "@/lib/agents/chat-composer";
+import { AttachmentCard } from "./attachment-card";
 
 /**
  * Un valor que se muestra en el compositor: con `options` se puede cambiar
@@ -146,18 +140,12 @@ export function Composer({
 			}}
 		>
 			{file ? (
-				<p className="flex items-center gap-2 text-muted-foreground text-sm">
-					<FileIcon aria-hidden="true" className="size-4 shrink-0" />
-					<span className="truncate">{file.name}</span>
-					<button
-						aria-label="Quitar archivo adjunto"
-						className="text-muted-foreground hover:text-foreground"
-						onClick={onClearFile}
-						type="button"
-					>
-						<XIcon className="size-3.5" />
-					</button>
-				</p>
+				<AttachmentCard
+					filename={file.name}
+					mediaType={file.type}
+					onRemove={onClearFile}
+					size={file.size}
+				/>
 			) : null}
 			{fileError ? (
 				<p className="text-destructive text-sm" role="alert">
