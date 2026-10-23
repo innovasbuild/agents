@@ -58,12 +58,23 @@ describe("carpetas en el proveedor wiki", () => {
 		);
 	});
 
-	it("rechaza una página nueva en una subcarpeta que no existe y nombra la más cercana", async () => {
+	it("el agente crea una página en una subcarpeta que no existe: la base la crea", async () => {
 		const s = store(["comercial"]);
-		const result = provider(s).upsert(write("comercial/sucursales/centro"), {
+		await provider(s).upsert(write("comercial/sucursales/centro"), {
 			kind: "agent",
 			userId: null,
 			sessionId: "s",
+		});
+		expect(s.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ slug: "comercial/sucursales/centro" }),
+		);
+	});
+
+	it("una persona sigue sin poder crear una página en una subcarpeta que no existe y nombra la más cercana", async () => {
+		const s = store(["comercial"]);
+		const result = provider(s).upsert(write("comercial/sucursales/centro"), {
+			kind: "user",
+			userId: "u",
 		});
 		await expect(result).rejects.toBeInstanceOf(BrainValidation);
 		await expect(result).rejects.toThrow(

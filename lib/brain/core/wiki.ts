@@ -189,10 +189,12 @@ export function createWikiProvider(
 					"Una página nueva va dentro de una carpeta: usá una ruta como categoria/nombre.",
 				);
 			}
-			// Las subcarpetas se validan acá y la de primer nivel más abajo; el
-			// import no, porque la base crea las que falten.
+			// Las subcarpetas se validan acá y la de primer nivel más abajo. El
+			// import y el agente del chat no: la base crea las que falten
+			// (brain_ensure_folders). El agente solo escribe con la aprobación de
+			// un administrador, que ve la ruta completa en la tarjeta.
 			const parent = parentPath(write.slug);
-			if (isNew && author.kind !== "import" && parent?.includes("/")) {
+			if (isNew && author.kind === "user" && parent?.includes("/")) {
 				const folders = new Set(
 					(await store.listFolders(tenantId)).map((f) => f.path),
 				);

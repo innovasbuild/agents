@@ -116,7 +116,7 @@ function buildBrainUpsertTool(
 	// Un asistente no ve la categoría skill (spec 24.1 S6).
 	const categories = assistantCategories(binding.config.categories);
 	return defineTool({
-		description: `${contract.upsert.description} Siempre la aprueba un administrador. Vos no escribís páginas 00-reglas ni 00-plantilla: si hace falta un cambio ahí, proponelo en la conversación.`,
+		description: `${contract.upsert.description} Siempre la aprueba un administrador. Si la subcarpeta de la ruta no existe, se crea junto con la página (por ejemplo comercial/embolsado/leeme crea comercial/embolsado): así se arma una carpeta nueva, con su primera página. Las carpetas de primer nivel no se crean por acá: esas las crea un administrador. Vos no escribís páginas 00-reglas ni 00-plantilla: si hace falta un cambio ahí, proponelo en la conversación.`,
 		inputSchema: brainContract(categories).upsert.input,
 		approval: {
 			request: always(),
