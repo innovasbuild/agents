@@ -27,6 +27,7 @@ sources:
   - lib/agents/assistant-instructions.ts
   - lib/agents/chat-agents.ts
   - lib/agents/chat-composer.ts
+  - lib/agents/attachment.ts
   - app/[tenant]/chat/composer.tsx
   - lib/agents/catalog.ts
   - lib/agents/session-store.ts
@@ -80,7 +81,8 @@ El agente es de la plataforma, no de un cliente: la diferencia entre empresas es
 | `lib/agents/input-requests.ts` | Pedidos de input pendientes (aprobaciones, límites, preguntas) |
 | `lib/agents/mail-preview.ts` | Qué muestra el chat como "el mail tal cual sale" |
 | `lib/agents/model.ts`, `eval-auth.ts` | Modelo por tenant; principal fijo para evals locales |
-| `app/[tenant]/chat/` | Pantalla `/[tenant]/chat` (cliente, acciones, adjuntos) |
+| `lib/agents/attachment.ts` | Cómo se rotula un adjunto en la tarjeta del chat (tipo, tamaño) y cómo se separa del texto la línea `[file: nombre]` del resumen provisorio |
+| `app/[tenant]/chat/` | Pantalla `/[tenant]/chat` (cliente, acciones, adjuntos). El adjunto se muestra como tarjeta (`attachment-card.tsx`) en el compositor y arriba del mensaje enviado; el archivo no se guarda, solo viaja a eve |
 
 ## 3. Cómo funciona
 

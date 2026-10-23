@@ -34,6 +34,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { splitFileMarkers } from "@/lib/agents/attachment";
 import {
 	type PendingInputRequest,
 	pendingInputRequests,
@@ -50,6 +51,7 @@ import {
 	deleteConversation,
 	renameConversation,
 } from "./actions";
+import { AttachmentCard } from "./attachment-card";
 import { Composer } from "./composer";
 
 interface Thread {
@@ -667,13 +669,7 @@ function Thread({
 			<div className="space-y-4">
 				{agent.data.messages.map((message) =>
 					message.role === "user" ? (
-						<article
-							className="ml-auto w-fit max-w-[85%] whitespace-pre-wrap rounded-lg bg-muted px-4 py-2.5"
-							key={message.id}
-						>
-							<span className="sr-only">Vos: </span>
-							<MessageText message={message} />
-						</article>
+						<UserMessage key={message.id} message={message} />
 					) : (
 						<article
 							className="max-w-[85%] whitespace-pre-wrap leading-relaxed"
@@ -1067,6 +1063,53 @@ function FreeformAnswer({
 				Responder
 			</Button>
 		</form>
+	);
+}
+
+// Mensaje del usuario: los archivos que adjuntó quedan a la vista arriba del
+// texto (como en Claude), y la burbuja solo aparece si hay texto. Hasta que eve
+// confirma el turno el mensaje es solo el resumen aplanado, con el adjunto como
+// línea `[file: nombre]`: se la convierte en la misma tarjeta para que no
+// cambie de forma al llegar las partes `file`.
+function UserMessage({ message }: { message: EveMessage }) {
+	const fileParts = message.parts.filter((part) => part.type === "file");
+	const joined = message.parts
+		.map((part) => (part.type === "text" ? part.text : ""))
+		.join("");
+	const { text, filenames } =
+		fileParts.length > 0
+			? { text: joined, filenames: [] }
+			: splitFileMarkers(joined);
+	const files = [
+		...fileParts.map((part) => ({
+			filename: part.filename,
+			mediaType: part.mediaType,
+			size: part.size,
+		})),
+		...filenames.map((filename) => ({
+			filename,
+			mediaType: undefined,
+			size: undefined,
+		})),
+	];
+	return (
+		<article className="ml-auto flex w-fit max-w-[85%] flex-col items-end gap-2">
+			<span className="sr-only">Vos: </span>
+			{files.map((file, index) => (
+				<AttachmentCard
+					filename={file.filename}
+					// biome-ignore lint/suspicious/noArrayIndexKey: el orden de los adjuntos de un mensaje no cambia
+					key={`${message.id}-file-${index}`}
+					mediaType={file.mediaType}
+					size={file.size}
+				/>
+			))}
+			{text.length > 0 ? (
+				<div className="whitespace-pre-wrap rounded-lg bg-muted px-4 py-2.5">
+					{text}
+				</div>
+			) : null}
+		</article>
 	);
 }
 
