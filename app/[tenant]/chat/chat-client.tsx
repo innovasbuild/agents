@@ -36,6 +36,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { splitFileMarkers } from "@/lib/agents/attachment";
 import {
+	approvalRefusals,
 	type PendingInputRequest,
 	pendingInputRequests,
 } from "@/lib/agents/input-requests";
@@ -566,6 +567,26 @@ function Thread({
 	// Aprobaciones de tools y preguntas de workflow tools (ctx.ask) llegan igual;
 	// cada una se responde con el id de sus propias opciones.
 	const pendingRequests = pendingInputRequests(agent.data.messages);
+	const refusals = approvalRefusals(agent.events);
+	// agent.respond rechaza (no avisa de otra forma) si el pedido falla: sin
+	// esto el botón parece no hacer nada.
+	const [respondError, setRespondError] = useState<string | null>(null);
+	async function answer(
+		responses: Parameters<typeof agent.respond>[0],
+	): Promise<boolean> {
+		setRespondError(null);
+		try {
+			await agent.respond(responses);
+			return true;
+		} catch (error) {
+			setRespondError(
+				error instanceof Error
+					? error.message
+					: "No se pudo enviar la respuesta.",
+			);
+			return false;
+		}
+	}
 
 	// Mientras haya una autorización pendiente, el turno está parqueado: se
 	// muestra el botón y se bloquea el input (guides/client/streaming.mdx).
@@ -758,27 +779,36 @@ function Thread({
 						askReasonOnReject={request.kind === "tool-approval"}
 						canAnswer={canAnswer}
 						onAnswer={(optionId) =>
-							void agent.respond([{ requestId: request.requestId, optionId }])
+							void answer([{ requestId: request.requestId, optionId }])
 						}
 						onReject={(optionId, reason) => {
 							void (async () => {
-								await agent.respond([
-									{ requestId: request.requestId, optionId },
-								]);
+								if (
+									!(await answer([{ requestId: request.requestId, optionId }]))
+								)
+									return;
 								const trimmed = reason.trim();
 								if (trimmed) await agent.send(trimmed, { turnPolicy: "steer" });
 							})();
 						}}
 						options={request.options}
 					/>
+					{respondError ? (
+						<p className="text-destructive text-sm" role="alert">
+							No se pudo enviar la respuesta: {respondError}
+						</p>
+					) : null}
+					{refusals.has(request.requestId) ? (
+						<p className="text-destructive text-sm" role="alert">
+							{refusals.get(request.requestId)}
+						</p>
+					) : null}
 					{request.allowFreeform ? (
 						<FreeformAnswer
 							disabled={!canAnswer}
 							hasOptions={request.options.length > 0}
-							onAnswer={(answer) =>
-								void agent.respond([
-									{ requestId: request.requestId, text: answer },
-								])
+							onAnswer={(text) =>
+								void answer([{ requestId: request.requestId, text }])
 							}
 						/>
 					) : null}
